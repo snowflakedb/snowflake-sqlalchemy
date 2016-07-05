@@ -23,7 +23,7 @@ def _url(**db_parameters):
         raise exc.ArgumentError("account parameter must be specified.")
 
     if 'host' in db_parameters:
-        ret = 'snowflake://{user}:{password}@{host}:{port}'.format(
+        ret = 'snowflake://{user}:{password}@{host}:{port}/'.format(
             user=db_parameters['user'],
             password=quote_plus(db_parameters['password']),
             host=db_parameters['host'],
@@ -31,14 +31,14 @@ def _url(**db_parameters):
         )
         specified_parameters += ['user', 'password', 'host', 'port']
     else:
-        ret = 'snowflake://{user}:{password}@{account}'.format(
+        ret = 'snowflake://{user}:{password}@{account}/'.format(
             account=db_parameters['account'],
             user=db_parameters['user'],
             password=db_parameters['password'],
         )
         specified_parameters += ['user', 'password', 'account']
     if 'database' in db_parameters:
-        ret += '/' + quote_plus(db_parameters['database'])
+        ret += quote_plus(db_parameters['database'])
         specified_parameters += ['database']
         if 'schema' in db_parameters:
             ret += '/' + quote_plus(db_parameters['schema'])

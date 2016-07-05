@@ -3,7 +3,11 @@ from snowflake.sqlalchemy import URL
 
 def test_url():
     assert URL(account='testaccount', user='admin',
-               password='test') == "snowflake://admin:test@testaccount"
+               password='test', warehouse='testwh') == \
+           "snowflake://admin:test@testaccount/?warehouse=testwh"
+
+    assert URL(account='testaccount', user='admin',
+               password='test') == "snowflake://admin:test@testaccount/"
 
     assert URL(account='testaccount', user='admin',
                password='test', database='testdb') == \

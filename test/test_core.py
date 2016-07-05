@@ -103,6 +103,19 @@ def test_connect_args():
     finally:
         engine.dispose()
 
+    engine = create_engine(URL(
+        user=CONNECTION_PARAMETERS2['user'],
+        password=CONNECTION_PARAMETERS2['password'],
+        account=CONNECTION_PARAMETERS2['account'],
+        warehouse='testwh'
+    )
+    )
+    try:
+        results = engine.execute('select current_version()').fetchone()
+        assert results is not None
+    finally:
+        engine.dispose()
+
 
 def test_simple_sql(engine_testaccount):
     """
