@@ -4,6 +4,9 @@ http://www.sqlalchemy.org/
 Snowflake Documentation is available at:
 https://docs.snowflake.net/
 
+Source code is also available at:
+https://github.com/snowflakedb/snowflake-sqlalchemy
+
 Release Notes
 -------------------------------------------------------------------------------
 
