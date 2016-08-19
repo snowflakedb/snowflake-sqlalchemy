@@ -47,8 +47,7 @@ DEFAULT_PARAMETERS = {
 @pytest.fixture()
 def db_parameters():
     """
-    Parses JDBC connect string in SF_JDBC_CONNECT_STRING environment
-    variable
+    Sets the db connection parameters
     """
     ret = {}
     os.environ['TZ'] = 'UTC'
