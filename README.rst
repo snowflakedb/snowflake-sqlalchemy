@@ -1,6 +1,12 @@
 Snowflake SQLAlchemy
 ********************************************************************************
 
+.. image:: https://travis-ci.org/snowflakedb/spark-snowflakedb.svg?branch=master
+    :target: https://travis-ci.org/snowflakedb/spark-snowflakedb
+
+.. image:: http://img.shields.io/:license-Apache%202-brightgreen.svg
+    :target: http://www.apache.org/licenses/LICENSE-2.0.txt
+    
 Snowflake SQLAlchemy runs on the top of the Snowflake Connector for Python as a `dialect <http://docs.sqlalchemy.org/en/latest/dialects/>`_ to bridge a Snowflake database and SQLAlchemy applications.
 
 Prerequisites
