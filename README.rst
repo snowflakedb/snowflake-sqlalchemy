@@ -1,8 +1,8 @@
 Snowflake SQLAlchemy
 ********************************************************************************
 
-.. image:: https://travis-ci.org/snowflakedb/spark-snowflakedb.svg?branch=master
-    :target: https://travis-ci.org/snowflakedb/spark-snowflakedb
+.. image:: https://travis-ci.org/snowflakedb/snowflake-sqlalchemy.svg?branch=master
+    :target: https://travis-ci.org/snowflakedb/snowflake-sqlalchemy
 
 .. image:: http://img.shields.io/:license-Apache%202-brightgreen.svg
     :target: http://www.apache.org/licenses/LICENSE-2.0.txt
