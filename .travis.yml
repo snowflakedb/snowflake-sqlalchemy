@@ -9,6 +9,8 @@ before_install:
     openssl aes-256-cbc -k "$super_secret_password" -in parameters.py.enc -out test/parameters.py -d
 install:
 - pip install .
+- pip install Cython
+- pip install numpy pandas
 script:
 - py.test test
 env:
