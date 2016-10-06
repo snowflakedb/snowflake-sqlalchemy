@@ -477,7 +477,7 @@ def test_view_names(engine_testaccount):
     assert 'table_constraints' in information_schema_views
 
 
-def test_view_definition(engine_testaccount):
+def test_view_definition(engine_testaccount, db_parameters):
     """
     Tests view definition
     """
@@ -498,7 +498,7 @@ SELECT * FROM {1} WHERE id > 10""".format(
     try:
         inspector = inspect(engine_testaccount)
         assert inspector.get_view_definition(test_view_name) == sql.strip()
-        assert inspector.get_view_definition(test_view_name, 'testschema') == \
+        assert inspector.get_view_definition(test_view_name, db_parameters['schema']) == \
                sql.strip()
         assert inspector.get_view_names() == [test_view_name]
     finally:

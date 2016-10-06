@@ -1,11 +1,14 @@
 language: python
 python:
-  - "2.7"
-  - "3.4"
-  - "3.5"
-  - "3.5-dev" # 3.5 development branch
-  - "nightly" # currently points to 3.6-dev
-# command to install dependencies
-install: "pip install ."
-# command to run tests
-script: python setup.py test
+- '2.7'
+- '3.4'
+- '3.5'
+- 3.5-dev
+- nightly
+before_install:
+    - openssl aes-256-cbc -K $encrypted_33af983fbe03_key -iv $encrypted_33af983fbe03_iv
+        -in parameters.py.enc -out test/parameters.py -d
+install:
+    - pip install .
+script:
+    - py.test test
