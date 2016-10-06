@@ -10,6 +10,9 @@ Install Python 2.7.9 or higher, or 3.4.3 or higher. Clone the Snowflake SQLAlche
 
         git clone git@github.com:snowflakedb/snowflake-sqlalchemy.git
         cd snowflake-sqlalchemy
+        pyvenv /tmp/test_snowflake_sqlalchemy
+        source /tmp/test_snowflake_sqlalchemy/bin/activate
+        pip install -U pip setuptools wheel
         python setup.py bdist_wheel
 
 Find the ``snowflake-sqlalchemy*.whl`` package in the ``./dist`` directory.
