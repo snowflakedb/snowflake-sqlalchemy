@@ -72,6 +72,9 @@ def db_parameters():
         TO_UNICODE(uuid.uuid4())).replace('-', '_')
     ret['name_wh'] = ret['name'] + 'wh'
 
+    if os.getenv('TRAVIS') == 'true':
+        ret['schema'] = 'TRAVIS_JOB_{0}'.format(os.getenv('TRAVIS_JOB_ID'))
+
     return ret
 
 
@@ -100,14 +103,30 @@ def get_engine(user=None, password=None, account=None):
         protocol=ret['protocol']
     ), poolclass=NullPool)
 
-    return engine
+    if os.getenv('TRAVIS') == 'true':
+        engine.execute("CREATE SCHEMA IF NOT EXISTS {0}".format(ret['schema']))
+        engine.dispose()
+        engine = create_engine(URL(
+            user=ret['user'],
+            password=ret['password'],
+            host=ret['host'],
+            port=ret['port'],
+            database=ret['database'],
+            schema=ret['schema'],
+            account=ret['account'],
+            protocol=ret['protocol']
+        ), poolclass=NullPool)
+
+    return engine, ret
 
 
 @pytest.fixture()
 def engine_testaccount(request):
-    engine = get_engine()
+    engine, ret = get_engine()
 
     def fin():
+        if os.getenv('TRAVIS') == 'true':
+            engine.execute("DROP SCHEMA IF EXISTS {0}".format(ret['schema']))
         engine.dispose()  # close when done
 
     request.addfinalizer(fin)
