@@ -91,3 +91,7 @@ ENV/
 
 # vim
 *.swp
+
+# others
+generated_version.py
+*coverage.xml
