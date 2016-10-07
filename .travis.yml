@@ -8,6 +8,11 @@ python:
 before_install: 
     openssl aes-256-cbc -k "$super_secret_password" -in parameters.py.enc -out test/parameters.py -d
 install:
+  - echo $TRAVIS_BRANCH
+  - echo $TRAVIS_BUILD_ID
+  - echo $TRAVIS_BUILD_NUMBER
+  - echo $TRAVIS_JOB_ID
+  - echo $TRAVIS_JOB_NUMBER
   # deactivate the default python venv
   - deactivate
   #
