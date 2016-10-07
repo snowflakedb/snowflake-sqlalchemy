@@ -27,6 +27,7 @@ Create a virtualenv, with ``parameters.py`` in a test directory.
 
         pyvenv /tmp/test_snowflake_sqlalchemy
         source /tmp/test_snowflake_sqlalchemy/bin/activate
+        pip install Cython
         pip install pytest numpy pandas
         pip install dist/snowflake_sqlalchemy*.whl
         vim test/parameters.py
