@@ -29,8 +29,7 @@ install:
   - conda update -q conda
   # Useful for debugging any issues with conda
   - conda info -a
-
-  # Replace dep1 dep2 ... with your dependencies
+  # Create Conda enviroment/virtualenv
   - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION pandas pytest
   - source activate test-environment
   - which pip
