@@ -1,4 +1,3 @@
-import os
 import numpy as np
 import pandas as pd
 from sqlalchemy import (Table, Column, Integer, String, MetaData,
@@ -99,20 +98,6 @@ def get_engine_with_numpy(db_parameters, user=None, password=None,
         protocol=db_parameters['protocol'],
         numpy=True,
     ), poolclass=NullPool)
-    if os.getenv('TRAVIS') == 'true':
-        engine.execute("CREATE SCHEMA IF NOT EXISTS {0}".format(db_parameters['schema']))
-        engine.dispose()
-        engine = create_engine(URL(
-            user=db_parameters['user'],
-            password=db_parameters['password'],
-            host=db_parameters['host'],
-            port=db_parameters['port'],
-            database=db_parameters['database'],
-            schema=db_parameters['schema'],
-            account=db_parameters['account'],
-            protocol=db_parameters['protocol'],
-            numpy=True,
-        ), poolclass=NullPool)
 
     return engine
 
@@ -138,6 +123,4 @@ def test_numpy_datatypes(db_parameters):
         engine.execute(
             "DROP TABLE IF EXISTS {name}".format(name=db_parameters['name'])
         )
-        if os.getenv('TRAVIS') == 'true':
-            engine.execute("DROP SCHEMA IF EXISTS {0}".format(db_parameters['schema']))
         engine.dispose()
