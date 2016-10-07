@@ -40,7 +40,8 @@ script:
   - set -e
   - ret=0
   - timeout -s SIGUSR1 600s py.test test || ret=$?
-  - if [[ "$ret" != "124" ]]; then
+  # TIMEOUT or SUCCESS
+  - if [[ "$ret" != "124" || "$ret" != "0" ]]; then
       exit 1;
     fi
 env:
