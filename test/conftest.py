@@ -4,18 +4,25 @@
 # Copyright (c) 2012-2016 Snowflake Computing Inc. All right reserved.
 #
 
+import os
 import sys
 import time
 import uuid
 from logging import getLogger
 
-from parameters import (CONNECTION_PARAMETERS)
-
-import os
 import pytest
+from parameters import (CONNECTION_PARAMETERS)
+from sqlalchemy import create_engine
+
+import snowflake.connector
 from snowflake.connector.compat import TO_UNICODE
 from snowflake.sqlalchemy import URL
-from sqlalchemy import create_engine
+
+if os.getenv('TRAVIS') == 'true':
+    TEST_SCHEMA = 'TRAVIS_JOB_{0}'.format(os.getenv('TRAVIS_JOB_ID'))
+else:
+    TEST_SCHEMA = (
+        'sqlalchemy_tests_' + TO_UNICODE(uuid.uuid4()).replace('-', '_'))
 
 
 def help():
@@ -70,10 +77,7 @@ def db_parameters():
     ret['name'] = (
         'sqlalchemy_tests_' +
         TO_UNICODE(uuid.uuid4())).replace('-', '_')
-    ret['name_wh'] = ret['name'] + 'wh'
-
-    if os.getenv('TRAVIS') == 'true':
-        ret['schema'] = 'TRAVIS_JOB_{0}'.format(os.getenv('TRAVIS_JOB_ID'))
+    ret['schema'] = TEST_SCHEMA
 
     return ret
 
@@ -98,24 +102,10 @@ def get_engine(user=None, password=None, account=None):
         host=ret['host'],
         port=ret['port'],
         database=ret['database'],
-        schema=ret['schema'],
+        schema=TEST_SCHEMA,
         account=ret['account'],
         protocol=ret['protocol']
     ), poolclass=NullPool)
-
-    if os.getenv('TRAVIS') == 'true':
-        engine.execute("CREATE SCHEMA IF NOT EXISTS {0}".format(ret['schema']))
-        engine.dispose()
-        engine = create_engine(URL(
-            user=ret['user'],
-            password=ret['password'],
-            host=ret['host'],
-            port=ret['port'],
-            database=ret['database'],
-            schema=ret['schema'],
-            account=ret['account'],
-            protocol=ret['protocol']
-        ), poolclass=NullPool)
 
     return engine, ret
 
@@ -125,9 +115,39 @@ def engine_testaccount(request):
     engine, ret = get_engine()
 
     def fin():
-        if os.getenv('TRAVIS') == 'true':
-            engine.execute("DROP SCHEMA IF EXISTS {0}".format(ret['schema']))
         engine.dispose()  # close when done
 
     request.addfinalizer(fin)
     return engine
+
+
+@pytest.fixture(scope='session', autouse=True)
+def init_test_schema(request):
+    ret = db_parameters()
+    with snowflake.connector.connect(
+            user=ret['user'],
+            password=ret['password'],
+            host=ret['host'],
+            port=ret['port'],
+            database=ret['database'],
+            account=ret['account'],
+            protocol=ret['protocol']
+    ) as con:
+        con.cursor().execute(
+            "CREATE SCHEMA IF NOT EXISTS {0}".format(TEST_SCHEMA))
+
+    def fin():
+        ret1 = db_parameters()
+        with snowflake.connector.connect(
+                user=ret1['user'],
+                password=ret1['password'],
+                host=ret1['host'],
+                port=ret1['port'],
+                database=ret1['database'],
+                account=ret1['account'],
+                protocol=ret1['protocol']
+        ) as con1:
+            con1.cursor().execute(
+                "DROP SCHEMA IF EXISTS {0}".format(TEST_SCHEMA))
+
+    request.addfinalizer(fin)
