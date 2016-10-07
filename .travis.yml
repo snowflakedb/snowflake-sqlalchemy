@@ -8,7 +8,12 @@ python:
 before_install: 
     openssl aes-256-cbc -k "$super_secret_password" -in parameters.py.enc -out test/parameters.py -d
 install:
+  # deactivate the default python venv
   - deactivate
+  #
+  # http://conda-test.pydata.org/docs/travis.html
+  # 
+  # ensure OS is up to date
   - sudo apt-get update
   # We do this conditionally because it saves us some downloading if the
   # version is the same.
@@ -26,11 +31,11 @@ install:
   - conda info -a
 
   # Replace dep1 dep2 ... with your dependencies
-  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION pandas
+  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION pandas pytest
   - source activate test-environment
   - which pip
-  - pip list
   - pip install .
+  - pip list
 script:
 - timeout 600s py.test test || true
 env:
