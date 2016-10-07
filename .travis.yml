@@ -8,6 +8,7 @@ python:
 before_install: 
     openssl aes-256-cbc -k "$super_secret_password" -in parameters.py.enc -out test/parameters.py -d
 install:
+  - deactivate
   - sudo apt-get update
   # We do this conditionally because it saves us some downloading if the
   # version is the same.
@@ -17,7 +18,7 @@ install:
       wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh;
     fi
   - bash miniconda.sh -b -p $HOME/miniconda
-  - export PATH="$HOME/miniconda/bin:$PATH"
+  - export PATH=$HOME/miniconda/bin:$PATH
   - hash -r
   - conda config --set always_yes yes --set changeps1 no
   - conda update -q conda
@@ -27,6 +28,8 @@ install:
   # Replace dep1 dep2 ... with your dependencies
   - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION pandas
   - source activate test-environment
+  - which pip
+  - pip list
   - pip install .
 script:
 - timeout 600s py.test test || true
