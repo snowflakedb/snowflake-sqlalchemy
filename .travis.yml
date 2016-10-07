@@ -1,18 +1,35 @@
 language: python
 python:
 - '2.7'
-- '3.4'
+#- '3.4'
 - '3.5'
-- 3.5-dev
-- nightly
+#- 3.5-dev
+#- nightly
 before_install: 
     openssl aes-256-cbc -k "$super_secret_password" -in parameters.py.enc -out test/parameters.py -d
 install:
-- pip install .
-- pip install Cython
-- pip install numpy pandas
+  - sudo apt-get update
+  # We do this conditionally because it saves us some downloading if the
+  # version is the same.
+  - if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
+      wget https://repo.continuum.io/miniconda/Miniconda2-latest-Linux-x86_64.sh -O miniconda.sh
+    else
+      wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh
+    fi
+  - bash miniconda.sh -b -p $HOME/miniconda
+  - export PATH="$HOME/miniconda/bin:$PATH"
+  - hash -r
+  - conda config --set always_yes yes --set changeps1 no
+  - conda update -q conda
+  # Useful for debugging any issues with conda
+  - conda info -a
+
+  # Replace dep1 dep2 ... with your dependencies
+  - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION pandas
+  - source activate test-environment
+  - pip install .
 script:
-- py.test test
+- timeout 600s py.test test || true
 env:
   global:
     secure: buWiIuw+v2g3xBkLTqLSm1lHIfHRKsPo9c9C8K73swXsV5/puKq9xQiMlP8ZUgenWyXiU3Q2Xv3TvP43j0/mXA7CDhhXNVfTlVEOPF9zL64WuGy8LhFwmLF2bCZ/ZliFj+AEelyub1pmz94PihbG6pLsm9IUFMb4759Xg4t6qf6X4vjBYsWyX0xX8BNEJSgrzsZukndlCuGNwgl+UVhKeYs0DuB6K1hreVnUByScqQMBgSb82zG6XRzYMpOq8wHCsOQl8LZj6epe0q5j3gGZtEKyJcvZI/42aHto5b60mhHxFZj/mZFWtIiIs9Q/jzVr5jpr7sz38EqmErhZUNj63tQh4anNTJd6jI7nXC1CWsGqS1FvfgD8VqFrkcPXrjJrw12gpEpfY2KPst7epH65F+M+bKQU7QCxhMNwmq80eKvuCO75CzXDztzPwcG2M874IBo518iqQ2Uoy4VsA2uPYX5ZTHYT2q5nXcpZkJo5XxIBisyKkLKjkvMBKI+a+04WIO7xVW7Hq8J92BZwsbCbOMupUWDqGJ22VIR6C/ZVO0LNg/poMh2+I/BmL615/XSXkvae4rKTkl1uluetnJDEEsnUYEoKI5wEUavtQANOuUOIAL6698SZ2rotVlgJQCyS5GD3qJCOr0H7guGOu/+NRbhxVdlZf+yppjrm3fGRLw0=
