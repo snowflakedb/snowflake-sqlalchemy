@@ -5,16 +5,18 @@
 #
 
 import re
+
+import sqlalchemy.types as sqltypes
 from sqlalchemy import exc as sa_exc
 from sqlalchemy import util as sa_util
 from sqlalchemy.engine import default, reflection
-from sqlalchemy.sql import compiler
-from sqlalchemy.sql import expression
+from sqlalchemy.sql import (
+    compiler, expression)
 from sqlalchemy.sql.elements import quoted_name
-from sqlalchemy.types import (CHAR, CLOB, DATE, DATETIME, INTEGER,
-                              SMALLINT, BIGINT, DECIMAL, TIME, TIMESTAMP,
-                              VARCHAR, BINARY, BOOLEAN,
-                              FLOAT, REAL)
+from sqlalchemy.types import (
+    CHAR, DATE, DATETIME, INTEGER, SMALLINT, BIGINT, DECIMAL, TIME,
+    TIMESTAMP, VARCHAR, BINARY, BOOLEAN, FLOAT, REAL)
+
 from ..connector import errors as sf_errors
 from ..connector.constants import UTF8
 
@@ -77,6 +79,19 @@ RESERVED_WORDS = frozenset([
 colspecs = {
 }
 
+
+class VARIANT(sqltypes.TypeEngine):
+    __visit_name__ = 'VARIANT'
+
+
+class OBJECT(sqltypes.TypeEngine):
+    __visit_name__ = 'OBJECT'
+
+
+class ARRAY(sqltypes.TypeEngine):
+    __visit_name__ = 'ARRAY'
+
+
 ischema_names = {
     'BIGINT': BIGINT,
     'BINARY': BINARY,
@@ -108,9 +123,9 @@ ischema_names = {
     'TINYINT': SMALLINT,
     'VARBINARY': BINARY,
     'VARCHAR': VARCHAR,
-    'VARIANT': CLOB,
-    'OBJECT': INTEGER,
-    #    'ARRAY': CLOB,
+    'VARIANT': VARIANT,
+    'OBJECT': OBJECT,
+    'ARRAY': ARRAY,
 }
 
 # Snowflake DML:
@@ -159,11 +174,11 @@ class SnowflakeExecutionContext(default.DefaultExecutionContext):
 
     @sa_util.memoized_property
     def should_autocommit(self):
-        autocommit = self.execution_options.get('autocommit',
-                                                not self.compiled and
-                                                self.statement and
-                                                expression.PARSE_AUTOCOMMIT
-                                                or False)
+        autocommit = self.execution_options.get(
+            'autocommit',
+            not self.compiled and self.statement
+            and expression.PARSE_AUTOCOMMIT
+            or False)
 
         if autocommit is expression.PARSE_AUTOCOMMIT:
             return self.should_autocommit_text(self.unicode_statement)
@@ -198,6 +213,17 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
             colspec.append('AUTOINCREMENT')
 
         return ' '.join(colspec)
+
+
+class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
+    def visit_VARIANT(selfself, type, **kw):
+        return "VARIANT"
+
+    def visit_ARRAY(selfself, type, **kw):
+        return "ARRAY"
+
+    def visit_OBJECT(selfself, type, **kw):
+        return "OBJECT"
 
 
 class SnowflakeDialect(default.DefaultDialect):
@@ -250,6 +276,7 @@ class SnowflakeDialect(default.DefaultDialect):
 
     preparer = SnowflakeIdentifierPreparer
     ddl_compiler = SnowflakeDDLCompiler
+    type_compiler = SnowflakeTypeCompiler
     statement_compiler = SnowflakeCompiler
     execution_ctx_cls = SnowflakeExecutionContext
 
@@ -471,9 +498,16 @@ SELECT ic.column_name,
                 table_name))
         for (colname, coltype, character_maximum_length, numeric_precision,
              numeric_scale, is_nullable, column_default, is_identity) in result:
+            col_type = self.ischema_names.get(coltype)
+            if col_type is None:
+                raise Exception(
+                    "Didn't recognize type '{0}' of "
+                    "column '{1}'".format(
+                        coltype, colname))
+                col_type = sqltypes.NULLTYPE
             cdict = {
                 'name': self.normalize_name(colname),
-                'type': self.ischema_names.get(coltype),
+                'type': col_type,
                 'nullable': is_nullable == 'YES',
                 'default': column_default,
                 'autoincrement': is_identity == 'YES',
