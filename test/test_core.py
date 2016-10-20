@@ -3,16 +3,16 @@
 #
 # Copyright (c) 2012-2016 Snowflake Computing Inc. All right reserved.
 #
-from parameters import (CONNECTION_PARAMETERS)
-
 import pytest
-from snowflake.sqlalchemy import URL
+from parameters import (CONNECTION_PARAMETERS)
 from sqlalchemy import (Table, Column, Integer, String, MetaData, Sequence,
                         ForeignKey)
 from sqlalchemy import inspect
 from sqlalchemy import text
 from sqlalchemy.sql import and_, or_, not_
 from sqlalchemy.sql import select
+
+from snowflake.sqlalchemy import URL
 
 try:
     from parameters import (CONNECTION_PARAMETERS2)
@@ -498,7 +498,8 @@ SELECT * FROM {1} WHERE id > 10""".format(
     try:
         inspector = inspect(engine_testaccount)
         assert inspector.get_view_definition(test_view_name) == sql.strip()
-        assert inspector.get_view_definition(test_view_name, db_parameters['schema']) == \
+        assert inspector.get_view_definition(test_view_name,
+                                             db_parameters['schema']) == \
                sql.strip()
         assert inspector.get_view_names() == [test_view_name]
     finally:
@@ -527,20 +528,24 @@ CREATE TEMPORARY TABLE {0} (col1 integer, col2 string)
         pass
 
 
-def test_create_table_with_schema(engine_testaccount):
+def test_create_table_with_schema(engine_testaccount, db_parameters):
     metadata = MetaData()
+    new_schema = db_parameters['schema'] + "_new"
+    engine_testaccount.execute(text(
+        "CREATE SCHEMA {0}".format(new_schema)))
     Table('users', metadata,
           Column('id', Integer, Sequence('user_id_seq'),
                  primary_key=True),
           Column('name', String),
           Column('fullname', String),
-          schema='public'
+          schema=new_schema
           )
     metadata.create_all(engine_testaccount)
 
     try:
         inspector = inspect(engine_testaccount)
-        columns_in_users = inspector.get_columns('users', schema='public')
+        columns_in_users = inspector.get_columns('users', schema=new_schema)
         assert columns_in_users is not None
     finally:
         metadata.drop_all(engine_testaccount)
+        engine_testaccount.execute(text("DROP SCHEMA {0}".format(new_schema)))
