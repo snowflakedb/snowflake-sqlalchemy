@@ -10,6 +10,10 @@ https://github.com/snowflakedb/snowflake-sqlalchemy
 Release Notes
 -------------------------------------------------------------------------------
 
+- v1.0.3 (October 20, 2016)
+
+    - Added VARIANT, OBJECT and ARRAY data type supports for fetch
+
 - v1.0.2 (July 5, 2016)
 
     - Fixed the development status in classifiers. 5 - Production/Stable

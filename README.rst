@@ -193,7 +193,7 @@ The following example shows the round trip of ``numpy.datetime64`` data:
         engine.execute(
             "INSERT INTO ts_tbl(c1) values(%s)", (specific_date,)
         )
-        df = pd.read_sql_query("SELECT * FROM ts_tbl"), engine
+        df = pd.read_sql_query("SELECT * FROM ts_tbl", engine)
         assert df.c1.values[0] == specific_date
 
 The following ``NumPy`` data types are supported:
