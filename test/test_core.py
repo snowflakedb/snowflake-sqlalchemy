@@ -530,9 +530,9 @@ CREATE TEMPORARY TABLE {0} (col1 integer, col2 string)
 
 def test_create_table_with_schema(engine_testaccount, db_parameters):
     metadata = MetaData()
-    new_schema = db_parameters['schema'] + "_new"
+    new_schema = db_parameters['schema'] + "_NEW"
     engine_testaccount.execute(text(
-        "CREATE SCHEMA {0}".format(new_schema)))
+        "CREATE SCHEMA \"{0}\"".format(new_schema)))
     Table('users', metadata,
           Column('id', Integer, Sequence('user_id_seq'),
                  primary_key=True),
@@ -548,4 +548,5 @@ def test_create_table_with_schema(engine_testaccount, db_parameters):
         assert columns_in_users is not None
     finally:
         metadata.drop_all(engine_testaccount)
-        engine_testaccount.execute(text("DROP SCHEMA {0}".format(new_schema)))
+        engine_testaccount.execute(
+            text("DROP SCHEMA \"{0}\"".format(new_schema)))
