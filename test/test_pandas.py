@@ -124,3 +124,24 @@ def test_numpy_datatypes(db_parameters):
             "DROP TABLE IF EXISTS {name}".format(name=db_parameters['name'])
         )
         engine.dispose()
+
+
+def test_to_sql(db_parameters):
+    engine = get_engine_with_numpy(db_parameters)
+    total_rows = 10000
+    engine.execute("""
+create or replace table src(c1 float)
+ as select random(123) from table(generator(timelimit=>1))
+ limit {0}
+""".format(total_rows))
+    engine.execute("""
+create or replace table dst(c1 float)
+""")
+    tbl = pd.read_sql_query(
+        'select * from src', engine)
+
+    tbl.to_sql('dst', engine, if_exists='append', chunksize=1000, index=False)
+    df = pd.read_sql_query(
+        'select count(*) as cnt from dst', engine
+    )
+    assert df.cnt.values[0] == total_rows

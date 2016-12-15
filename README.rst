@@ -7,6 +7,9 @@ Snowflake SQLAlchemy
 .. image:: https://codecov.io/gh/snowflakedb/snowflake-sqlalchemy/branch/master/graph/badge.svg
     :target: https://codecov.io/gh/snowflakedb/snowflake-sqlalchemy
 
+.. image:: https://img.shields.io/pypi/v/snowflake-sqlalchemy.svg
+    :target: https://pypi.python.org/pypi/snowflake-sqlalchemy/
+
 .. image:: http://img.shields.io/:license-Apache%202-brightgreen.svg
     :target: http://www.apache.org/licenses/LICENSE-2.0.txt
     
