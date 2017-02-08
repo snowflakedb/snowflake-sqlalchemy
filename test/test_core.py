@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# Copyright (c) 2012-2016 Snowflake Computing Inc. All right reserved.
+# Copyright (c) 2012-2017 Snowflake Computing Inc. All right reserved.
 #
 import pytest
 from parameters import (CONNECTION_PARAMETERS)
@@ -550,3 +550,32 @@ def test_create_table_with_schema(engine_testaccount, db_parameters):
         metadata.drop_all(engine_testaccount)
         engine_testaccount.execute(
             text("DROP SCHEMA \"{0}\"".format(new_schema)))
+
+
+@pytest.mark.skip("""
+No transaction works yet in the core API. Use orm API or Python Connector
+directly if needed at the moment.
+Note Snowflake DB supports DML transaction natively, but we have not figured out
+how to integrate with SQLAlchemy core API yet.
+""")
+def test_transaction(engine_testaccount, db_parameters):
+    engine_testaccount.execute(text("""
+CREATE TABLE {0} (c1 number)""".format(db_parameters['name'])))
+    trans = engine_testaccount.connect().begin()
+    try:
+        engine_testaccount.execute(text("""
+INSERT INTO {0} VALUES(123)
+        """.format(db_parameters['name'])))
+        trans.commit()
+        engine_testaccount.execute(text("""
+INSERT INTO {0} VALUES(456)
+        """.format(db_parameters['name'])))
+        trans.rollback()
+        results = engine_testaccount.execute("""
+SELECT * FROM {0}
+""".format(db_parameters['name'])).fetchall()
+        assert results == [(123,)]
+    finally:
+        engine_testaccount.execute(text("""
+DROP TABLE IF EXISTS {0}
+""".format(db_parameters['name'])))
