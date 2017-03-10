@@ -442,8 +442,9 @@ def test_get_multile_column_primary_key(engine_testaccount):
                            primary_key=True,
                            autoincrement=False),
                     Column('id',
-                           Integer
-                           , primary_key=True))
+                           Integer,
+                           primary_key=True,
+                           autoincrement=True))
 
     metadata.create_all(engine_testaccount)
     try:

@@ -33,7 +33,7 @@ setup(
     use_2to3 = False,
 
     install_requires = [
-        'sqlalchemy>=1.0.0,<1.1.0',
+        'sqlalchemy',
         'snowflake-connector-python',
     ],
     namespace_packages=[

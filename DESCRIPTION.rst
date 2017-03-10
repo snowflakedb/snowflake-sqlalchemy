@@ -10,6 +10,10 @@ https://github.com/snowflakedb/snowflake-sqlalchemy
 Release Notes
 -------------------------------------------------------------------------------
 
+- v1.0.4 (March 9, 2017)
+
+    - Added SQLAlchemy 1.1 support
+
 - v1.0.3 (October 20, 2016)
 
     - Added VARIANT, OBJECT and ARRAY data type supports for fetch
