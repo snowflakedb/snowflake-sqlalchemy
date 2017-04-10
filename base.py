@@ -10,6 +10,7 @@ import sqlalchemy.types as sqltypes
 from sqlalchemy import exc as sa_exc
 from sqlalchemy import util as sa_util
 from sqlalchemy.engine import default, reflection
+from sqlalchemy.schema import Table
 from sqlalchemy.sql import (
     compiler, expression)
 from sqlalchemy.sql.elements import quoted_name
@@ -213,6 +214,42 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
             colspec.append('AUTOINCREMENT')
 
         return ' '.join(colspec)
+
+    def post_create_table(self, table):
+        """
+        Handles snowflake-specific ``CREATE TABLE ... CLUSTER BY`` syntax.
+
+        Users can specify the `clusterby` property per table
+        using the dialect specific syntax.
+        For example, to specify a cluster by key you apply the following:
+
+        >>> import sqlalchemy as sa
+        >>> from sqlalchemy.schema import CreateTable
+        >>> engine = sa.create_engine('snowflake://om1')
+        >>> metadata = sa.MetaData()
+        >>> user = sa.Table(
+        ...     'user',
+        ...     metadata,
+        ...     sa.Column('id', sa.Integer, primary_key=True),
+        ...     sa.Column('name', sa.String),
+        ...     snowflake_clusterby=['id', 'name']
+        ... )
+        >>> print(CreateTable(user).compile(engine))
+        <BLANKLINE>
+        CREATE TABLE "user" (
+            id INTEGER NOT NULL AUTOINCREMENT,
+            name VARCHAR,
+            PRIMARY KEY (id)
+        ) CLUSTER BY (id, name)
+        <BLANKLINE>
+        <BLANKLINE>
+        """
+        text = ""
+        info = table.dialect_options['snowflake']
+        cluster = info.get('clusterby')
+        if cluster:
+            text += " CLUSTER BY ({0})".format(", ".join(self.preparer.quote(key) for key in cluster))
+        return text
 
 
 class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
@@ -589,3 +626,9 @@ SELECT ic.column_name,
 
 
 dialect = SnowflakeDialect
+
+construct_arguments = [
+    (Table, {
+        "clusterby": None
+    })
+]
