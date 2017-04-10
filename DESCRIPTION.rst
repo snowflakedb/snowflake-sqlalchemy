@@ -10,13 +10,17 @@ https://github.com/snowflakedb/snowflake-sqlalchemy
 Release Notes
 -------------------------------------------------------------------------------
 
+- v1.0.5 (April 13, 2017)
+
+    - Added ``snowflake_clusterby`` option support to ``Table`` object so that the user can create a table with clustering keys
+
 - v1.0.4 (March 9, 2017)
 
     - Added SQLAlchemy 1.1 support
 
 - v1.0.3 (October 20, 2016)
 
-    - Added VARIANT, OBJECT and ARRAY data type supports for fetch
+    - Added ``VARIANT``, ``OBJECT`` and ``ARRAY`` data type supports for fetch
 
 - v1.0.2 (July 5, 2016)
 

@@ -205,3 +205,47 @@ The following ``NumPy`` data types are supported:
 - numpy.float64
 - numpy.datatime64
 
+VARIANT, ARRAY and OBJECT Support
+-------------------------------------------------------------------------------
+
+Snowflake SQLAlchemy supports fetching ``VARIANT``, ``ARRAY`` and ``OBJECT`` data types. All types are converted into ``str`` in Python so that you can convert them to native data types using ``json.loads``.
+
+This example shows how to create a table including ``VARIANT``, ``ARRAY``, and ``OBJECT`` data type columns.
+
+    .. code-block:: python
+
+        from snowflake.sqlalchemy import (VARIANT, ARRAY, OBJECT)
+        ...
+        t = Table('my_semi_strucutred_datatype_table', metadata,
+            Column('va', VARIANT),
+            Column('ob', OBJECT),
+            Column('ar', ARRAY))
+        metdata.create_all(engine)
+
+In order to retrieve ``VARIANT``, ``ARRAY``, and ``OBJECT`` data type columns and convert them to the native Python data types, fetch data and call the ``json.loads`` method as follows:
+
+    .. code-block:: python
+
+        import json
+        conn = engine.connect()
+        results = conn.execute(select([t])
+        row = results.fetchone()
+        data_variant = json.loads(row[0])
+        data_object  = json.loads(row[1])
+        data_array   = json.loads(row[2])
+
+CLUSTER BY Support
+-------------------------------------------------------------------------------
+
+Snowflake SQLAchemy supports the ``CLUSTER BY`` parameter for tables. For information about the parameter, see :doc:`/sql-reference/sql/create-table`.
+
+This example shows how to create a table with two columns, ``id`` and ``name``, as the clustering keys:
+
+    .. code-block:: python
+
+        t = Table('myuser', metadata,
+            Column('id', Integer, primary_key=True),
+            Column('name', String),
+            snowflake_clusterby=['id', 'name'], ...
+        )
+        metadata.create_all(engine)
