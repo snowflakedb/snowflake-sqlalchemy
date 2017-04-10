@@ -188,6 +188,15 @@ class SnowflakeExecutionContext(default.DefaultExecutionContext):
 
 
 class SnowflakeDDLCompiler(compiler.DDLCompiler):
+    def denormalize_column_name(self, name):
+        if name is None:
+            return None
+        elif name.lower() == name and not \
+                self.preparer._requires_quotes(name.lower()):
+            # no quote as case insensitive
+            return name
+        return self.preparer.quote(name)
+
     def get_column_specification(self, column, **kwargs):
         """
         Gets Column specifications
@@ -248,7 +257,8 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
         info = table.dialect_options['snowflake']
         cluster = info.get('clusterby')
         if cluster:
-            text += " CLUSTER BY ({0})".format(", ".join(self.preparer.quote(key) for key in cluster))
+            text += " CLUSTER BY ({0})".format(
+                ", ".join(self.denormalize_column_name(key) for key in cluster))
         return text
 
 
@@ -370,7 +380,7 @@ class SnowflakeDialect(default.DefaultDialect):
         try:
             results = connection.execute(
                 "DESC {0} /* sqlalchemy:_has_object */ {1}".format(
-                object_type, full_name))
+                    object_type, full_name))
             row = results.fetchone()
             have = row is not None
             return have
@@ -540,6 +550,9 @@ SELECT /* sqlalchemy:get_columns */
                 table_name))
         for (colname, coltype, character_maximum_length, numeric_precision,
              numeric_scale, is_nullable, column_default, is_identity) in result:
+            if colname.startswith('SYS_CLUSTERING_COLUMN'):
+                # ignoring clustering column
+                continue
             col_type = self.ischema_names.get(coltype)
             if col_type is None:
                 raise Exception(
@@ -600,8 +613,8 @@ SELECT /* sqlalchemy:get_columns */
             cursor = connection.execute(
                 "SHOW /* sqlalchemy:get_view_definition */ VIEWS "
                 "LIKE '{0}' IN {1}".format(
-                self._denormalize_quote_join(view_name),
-                self._denormalize_quote_join(schema)))
+                    self._denormalize_quote_join(view_name),
+                    self._denormalize_quote_join(schema)))
         else:
             cursor = connection.execute(
                 "SHOW /* sqlalchemy:get_view_definition */ VIEWS "
@@ -623,7 +636,7 @@ SELECT /* sqlalchemy:get_columns */
             cursor = connection.execute(
                 "SHOW /* sqlalchemy:get_temp_table_names */ TABLES "
                 "IN {0}".format(
-                self._denormalize_quote_join(schema)))
+                    self._denormalize_quote_join(schema)))
         else:
             cursor = connection.execute(
                 "SHOW /* sqlalchemy:get_temp_table_names */ TABLES")

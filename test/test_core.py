@@ -466,6 +466,22 @@ def test_get_multile_column_primary_key(engine_testaccount):
         mytable.drop(engine_testaccount)
 
 
+def test_create_table_with_cluster_by(engine_testaccount):
+    # Test case for https://github.com/snowflakedb/snowflake-sqlalchemy/pull/14
+    metadata = MetaData()
+    user = Table('clustered_user', metadata,
+                 Column('Id', Integer, primary_key=True),
+                 Column('name', String),
+                 snowflake_clusterby=['Id', 'name'])
+    metadata.create_all(engine_testaccount)
+    try:
+        inspector = inspect(engine_testaccount)
+        columns_in_table = inspector.get_columns('clustered_user')
+        assert columns_in_table[0]['name'] == 'Id', 'name'
+    finally:
+        user.drop(engine_testaccount)
+
+
 def test_view_names(engine_testaccount):
     """
     Tests all views
