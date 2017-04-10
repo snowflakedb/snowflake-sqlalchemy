@@ -225,6 +225,13 @@ class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
     def visit_OBJECT(selfself, type, **kw):
         return "OBJECT"
 
+    def visit_DATETIME(selfself, type, **kw):
+        c = kw['type_expression']
+        if c is not None and c.type.timezone:
+            return "TIMESTAMP_TZ(0)"
+        else:
+            return "TIMESTAMP_NTZ(0)"
+
 
 class SnowflakeDialect(default.DefaultDialect):
     name = 'snowflake'
