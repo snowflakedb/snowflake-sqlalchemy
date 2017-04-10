@@ -331,7 +331,8 @@ class SnowflakeDialect(default.DefaultDialect):
         full_name = self._denormalize_quote_join(schema, object_name)
 
         try:
-            results = connection.execute("DESC {0} {1}".format(
+            results = connection.execute(
+                "DESC {0} /* sqlalchemy:_has_object */ {1}".format(
                 object_type, full_name))
             row = results.fetchone()
             have = row is not None
@@ -388,7 +389,8 @@ class SnowflakeDialect(default.DefaultDialect):
         full_table_name = self._denormalize_quote_join(schema, table_name)
 
         result = connection.execute(
-            "DESCRIBE TABLE {0}".format(full_table_name))
+            "DESCRIBE TABLE /* sqlalchemy:get_primary_keys */ {0}".format(
+                full_table_name))
         n2i = self.__class__._map_name_to_idx(result)
 
         primary_key_info = {
@@ -417,7 +419,8 @@ class SnowflakeDialect(default.DefaultDialect):
             row[0], schema if schema else row[1])
 
         result = connection.execute(
-            "SHOW IMPORTED KEYS IN SCHEMA {0}".format(full_schema_name)
+            "SHOW /* sqlalchemy:get_foreign_keys */ IMPORTED KEYS "
+            "IN SCHEMA {0}".format(full_schema_name)
         )
         n2i = self.__class__._map_name_to_idx(result)
 
@@ -468,7 +471,8 @@ class SnowflakeDialect(default.DefaultDialect):
         full_table_name = self._denormalize_quote_join(schema, table_name)
 
         result = connection.execute(
-            'DESCRIBE TABLE {0}'.format(full_table_name))
+            'DESCRIBE TABLE /* sqlalchemy:get_columns */ {0}'.format(
+                full_table_name))
         n2i = self.__class__._map_name_to_idx(result)
 
         column_map = {}
@@ -480,7 +484,8 @@ class SnowflakeDialect(default.DefaultDialect):
         columns = []
         result = connection.execute(
             """
-SELECT ic.column_name,
+SELECT /* sqlalchemy:get_columns */
+       ic.column_name,
        ic.data_type,
        ic.character_maximum_length,
        ic.numeric_precision,
@@ -525,10 +530,11 @@ SELECT ic.column_name,
         schema = schema or self.default_schema_name
         if schema:
             cursor = connection.execute(
-                "SHOW TABLES IN {0}".format(
+                "SHOW /* sqlalchemy:get_table_names */ TABLES IN {0}".format(
                     self._denormalize_quote_join(schema)))
         else:
-            cursor = connection.execute("SHOW TABLES")
+            cursor = connection.execute(
+                "SHOW /* sqlalchemy:get_table_names */ TABLES")
 
         return [self.normalize_name(row[1]) for row in cursor]
 
@@ -540,7 +546,7 @@ SELECT ic.column_name,
         schema = schema or self.default_schema_name
         if schema:
             cursor = connection.execute(
-                "SHOW VIEWS IN {0}".format(
+                "SHOW /* sqlalchemy:get_view_names */ VIEWS IN {0}".format(
                     self._denormalize_quote_join((schema))))
         else:
             cursor = connection.execute("SHOW VIEWS")
@@ -554,12 +560,15 @@ SELECT ic.column_name,
         """
         schema = schema or self.default_schema_name
         if schema:
-            cursor = connection.execute("SHOW VIEWS LIKE '{0}' IN {1}".format(
+            cursor = connection.execute(
+                "SHOW /* sqlalchemy:get_view_definition */ VIEWS "
+                "LIKE '{0}' IN {1}".format(
                 self._denormalize_quote_join(view_name),
                 self._denormalize_quote_join(schema)))
         else:
             cursor = connection.execute(
-                "SHOW VIEWS LIKE '{0}'".format(
+                "SHOW /* sqlalchemy:get_view_definition */ VIEWS "
+                "LIKE '{0}'".format(
                     self._denormalize_quote_join(view_name)))
 
         n2i = self.__class__._map_name_to_idx(cursor)
@@ -574,10 +583,13 @@ SELECT ic.column_name,
     def get_temp_table_names(self, connection, schema=None, **kw):
         schema = schema or self.default_schema_name
         if schema:
-            cursor = connection.execute("SHOW TABLES IN {0}".format(
+            cursor = connection.execute(
+                "SHOW /* sqlalchemy:get_temp_table_names */ TABLES "
+                "IN {0}".format(
                 self._denormalize_quote_join(schema)))
         else:
-            cursor = connection.execute("SHOW TABLES")
+            cursor = connection.execute(
+                "SHOW /* sqlalchemy:get_temp_table_names */ TABLES")
 
         ret = []
         n2i = self.__class__._map_name_to_idx(cursor)
