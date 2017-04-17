@@ -27,3 +27,15 @@ def test_url():
                password='test', database='testdb', schema='testschema') == \
            "snowflake://admin:test@snowflake.reg.local:443/testdb" \
            "/testschema?account=testaccount"
+
+    assert URL(host='testaccount.snowflakecomputing.com', user='admin',
+               account='testaccount',
+               password='test', region='eu-central-1') == (
+               'snowflake://admin:test@testaccount.snowflakecomputing.com:443'
+               '/?account=testaccount&region=eu-central-1')
+
+    assert URL(host='testaccount.eu-central-1.snowflakecomputing.com',
+               user='admin', account='testaccount',
+               password='test') == (
+               'snowflake://admin:test@testaccount.eu-central-1'
+               '.snowflakecomputing.com:443/?account=testaccount')

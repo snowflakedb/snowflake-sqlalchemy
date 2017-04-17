@@ -5,6 +5,7 @@
 #
 
 from sqlalchemy import exc
+
 from ..connector.compat import (PY2, IS_STR)
 
 if PY2:
@@ -50,7 +51,8 @@ def _url(**db_parameters):
         return '?' if is_first_parameter else '&'
 
     is_first_parameter = True
-    for p, v in db_parameters.items():
+    for p in sorted(db_parameters.keys()):
+        v = db_parameters[p]
         if p not in specified_parameters:
             encoded_value = quote_plus(v) if IS_STR(v) else str(v)
             ret += sep(is_first_parameter) + p + '=' + encoded_value

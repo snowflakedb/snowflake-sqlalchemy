@@ -353,8 +353,12 @@ class SnowflakeDialect(default.DefaultDialect):
                     "Invalid name space is specified: {0}".format(
                         opts['database']
                     ))
-        if '.' not in opts['host']:
+        if '.snowflakecomputing.com' not in opts['host'] and not opts.get(
+                'port'):
             opts['account'] = opts['host']
+            if u'.' in opts['account']:
+                # remove region subdomain
+                opts['account'] = opts['account'][0:opts['account'].find(u'.')]
             opts['host'] = opts['host'] + '.snowflakecomputing.com'
             opts['port'] = '443'
         opts['autocommit'] = False  # autocommit is disabled by default
