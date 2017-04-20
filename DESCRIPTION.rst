@@ -10,6 +10,10 @@ https://github.com/snowflakedb/snowflake-sqlalchemy
 Release Notes
 -------------------------------------------------------------------------------
 
+- v1.0.6 (April 20, 2017)
+
+    - Fixed account with subdomain issue
+
 - v1.0.5 (April 13, 2017)
 
     - Added ``snowflake_clusterby`` option support to ``Table`` object so that the user can create a table with clustering keys
