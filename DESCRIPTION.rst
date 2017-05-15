@@ -10,9 +10,13 @@ https://github.com/snowflakedb/snowflake-sqlalchemy
 Release Notes
 -------------------------------------------------------------------------------
 
+- v1.0.7 (May 18, 2017)
+
+    - Fixed COPY command transaction issue. PR #16(Pangstar) and Issue #17(Pangstar)
+
 - v1.0.6 (April 20, 2017)
 
-    - Fixed account with subdomain issue
+    - Fixed account with subdomain issue. Issue #15(Pangstar)
 
 - v1.0.5 (April 13, 2017)
 
