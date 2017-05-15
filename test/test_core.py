@@ -3,6 +3,7 @@
 #
 # Copyright (c) 2012-2017 Snowflake Computing Inc. All right reserved.
 #
+import os
 import pytest
 from parameters import (CONNECTION_PARAMETERS)
 from sqlalchemy import (Table, Column, Integer, String, MetaData, Sequence,
@@ -19,6 +20,7 @@ try:
 except:
     CONNECTION_PARAMETERS2 = CONNECTION_PARAMETERS
 
+THIS_DIR = os.path.dirname(os.path.realpath(__file__))
 
 def _create_users_addresses_tables(engine_testaccount, metadata):
     users = Table('users', metadata,
@@ -567,6 +569,27 @@ def test_create_table_with_schema(engine_testaccount, db_parameters):
         metadata.drop_all(engine_testaccount)
         engine_testaccount.execute(
             text("DROP SCHEMA \"{0}\"".format(new_schema)))
+
+
+def test_copy(engine_testaccount):
+    """
+    COPY must be in a transaction
+    """
+    metadata = MetaData()
+    users, addresses = _create_users_addresses_tables_without_sequence(
+        engine_testaccount,
+        metadata)
+
+    try:
+        engine_testaccount.execute(
+            "PUT file://{file_name} @%users".format(
+                file_name=os.path.join(THIS_DIR, "data", "users.txt")))
+        engine_testaccount.execute("COPY INTO users")
+        results = engine_testaccount.execute("SELECT * FROM USERS").fetchall()
+        assert results is not None and len(results) > 0
+    finally:
+        addresses.drop(engine_testaccount)
+        users.drop(engine_testaccount)
 
 
 @pytest.mark.skip("""
