@@ -329,9 +329,9 @@ CREATE OR REPLACE TABLE user (
 """)
     try:
         meta = MetaData()
-        user_refrected = Table('user', meta, autoload=True,
+        user_reflected = Table('user', meta, autoload=True,
                                autoload_with=engine_testaccount)
-        assert user_refrected.c == ['user.id', 'user.name', 'user.fullname']
+        assert user_reflected.c == ['user.id', 'user.name', 'user.fullname']
     finally:
         engine_testaccount.execute("""
 DROP TABLE IF EXISTS user
