@@ -32,6 +32,7 @@ RESERVED_WORDS = frozenset([
     "CHECK",
     "COLUMN",
     "CONNECT",
+    "COPY",
     "CREATE",
     "CURRENT",
     "DELETE",
@@ -135,7 +136,7 @@ ischema_names = {
 # - DELETE
 # - MERGE
 AUTOCOMMIT_REGEXP = re.compile(
-    r'\s*(?:UPDATE|INSERT|DELETE|MERGE)',
+    r'\s*(?:UPDATE|INSERT|DELETE|MERGE|COPY)',
     re.I | re.UNICODE)
 
 
