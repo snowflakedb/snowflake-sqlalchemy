@@ -654,6 +654,13 @@ SELECT /* sqlalchemy:get_columns */
 
         return ret
 
+    def get_schema_names(self, connection, **kw):
+        """
+        Gets all schema names.
+        """
+        cursor = connection.execute("SHOW /* sqlalchemy:get_schema_names */ SCHEMAS ")
+
+        return [self.normalize_name(row[1]) for row in cursor]
 
 dialect = SnowflakeDialect
 
