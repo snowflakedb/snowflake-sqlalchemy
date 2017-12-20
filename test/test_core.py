@@ -61,7 +61,7 @@ def test_connect_args():
     """
     Tests connect string
 
-    Snowflake connect string supports accout name as a replacement of
+    Snowflake connect string supports account name as a replacement of
     host:port
     """
     from sqlalchemy import create_engine
