@@ -4,6 +4,7 @@
 # Copyright (c) 2012-2017 Snowflake Computing Inc. All right reserved.
 #
 import os
+
 import pytest
 from parameters import (CONNECTION_PARAMETERS)
 from sqlalchemy import (Table, Column, Integer, String, MetaData, Sequence,
@@ -21,6 +22,7 @@ except:
     CONNECTION_PARAMETERS2 = CONNECTION_PARAMETERS
 
 THIS_DIR = os.path.dirname(os.path.realpath(__file__))
+
 
 def _create_users_addresses_tables(engine_testaccount, metadata):
     users = Table('users', metadata,
@@ -252,8 +254,8 @@ def test_insert_tables(engine_testaccount):
         # example 2
         obj = users.c.name.like('j%') & (users.c.id == addresses.c.user_id) & \
               (
-                  (addresses.c.email_address == 'wendy@aol.com') | \
-                  (addresses.c.email_address == 'jack@yahoo.com')
+                      (addresses.c.email_address == 'wendy@aol.com') | \
+                      (addresses.c.email_address == 'jack@yahoo.com')
               ) \
               & ~(users.c.id > 5)
         assert str(obj) == ''.join(expected_sql.split('\n')), \
@@ -619,3 +621,16 @@ SELECT * FROM {0}
         engine_testaccount.execute(text("""
 DROP TABLE IF EXISTS {0}
 """.format(db_parameters['name'])))
+
+
+def test_get_schemas(engine_testaccount):
+    """
+    Tests get schemas from inspect.
+
+    Although the method get_schema_names is not part of DefaultDialect,
+    inspect() may call the method if exists.
+    """
+    inspector = inspect(engine_testaccount)
+
+    schemas = inspector.get_schema_names()
+    assert 'information_schema' in schemas
