@@ -7,8 +7,8 @@ import os
 
 import pytest
 from parameters import (CONNECTION_PARAMETERS)
-from sqlalchemy import (Table, Column, Integer, String, MetaData, Sequence,
-                        ForeignKey)
+from sqlalchemy import (Table, Column, Integer, Numeric, String, MetaData,
+                        Sequence, ForeignKey, Binary, REAL)
 from sqlalchemy import inspect
 from sqlalchemy import text
 from sqlalchemy.sql import and_, or_, not_
@@ -634,3 +634,29 @@ def test_get_schemas(engine_testaccount):
 
     schemas = inspector.get_schema_names()
     assert 'information_schema' in schemas
+
+
+def test_column_metadata(engine_testaccount):
+    from sqlalchemy.ext.declarative import declarative_base
+
+    Base = declarative_base()
+
+    class Appointment(Base):
+        __tablename__ = 'appointment'
+        id = Column(Numeric(38, 3), primary_key=True)
+        string_with_len = Column(String(100))
+        binary_data = Column(Binary)
+        real_data = Column(REAL)
+
+    Base.metadata.create_all(engine_testaccount)
+
+    metadata = Base.metadata
+
+    t = Table('appointment', metadata)
+
+    inspector = inspect(engine_testaccount)
+    inspector.reflecttable(t, None)
+    assert str(t.columns['id'].type) == 'DECIMAL(38, 3)'
+    assert str(t.columns['string_with_len'].type) == 'VARCHAR(100)'
+    assert str(t.columns['binary_data'].type) == 'BINARY'
+    assert str(t.columns['real_data'].type) == 'FLOAT'
