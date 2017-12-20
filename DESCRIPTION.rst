@@ -10,6 +10,10 @@ https://github.com/snowflakedb/snowflake-sqlalchemy
 Release Notes
 -------------------------------------------------------------------------------
 
+- v1.0.8 (December 21, 2017)
+
+    - Added ``get_schema_names`` method to Snowflake SQLAlchemy dialect. PR #20(andrewsali)
+
 - v1.0.7 (May 18, 2017)
 
     - Fixed COPY command transaction issue. PR #16(Pangstar) and Issue #17(Pangstar)
