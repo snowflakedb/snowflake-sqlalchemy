@@ -220,7 +220,7 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
         # postfetch_lastrowid is enabled. But it is very unlikely to happen...
         if column.table is not None \
                 and column is column.table._autoincrement_column and \
-                        column.server_default is None:
+                column.server_default is None:
             colspec.append('AUTOINCREMENT')
 
         return ' '.join(colspec)
@@ -264,14 +264,17 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
 
 
 class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
-    def visit_VARIANT(selfself, type, **kw):
+    def visit_VARIANT(self, type, **kw):
         return "VARIANT"
 
-    def visit_ARRAY(selfself, type, **kw):
+    def visit_ARRAY(self, type, **kw):
         return "ARRAY"
 
-    def visit_OBJECT(selfself, type, **kw):
+    def visit_OBJECT(self, type, **kw):
         return "OBJECT"
+
+    def visit_BLOB(self, type, **kw):
+        return "BINARY"
 
 
 class SnowflakeDialect(default.DefaultDialect):
@@ -558,16 +561,26 @@ SELECT /* sqlalchemy:get_columns */
             if colname.startswith('SYS_CLUSTERING_COLUMN'):
                 # ignoring clustering column
                 continue
-            col_type = self.ischema_names.get(coltype)
+            col_type = self.ischema_names.get(coltype, None)
+            col_type_kw = {}
             if col_type is None:
-                raise Exception(
-                    "Didn't recognize type '{0}' of "
-                    "column '{1}'".format(
+                sa_util.warn(
+                    "Did not recognize type '{}' of column '{}'".format(
                         coltype, colname))
                 col_type = sqltypes.NULLTYPE
+            else:
+                if issubclass(col_type, sqltypes.Numeric):
+                    col_type_kw['precision'] = numeric_precision
+                    col_type_kw['scale'] = numeric_scale
+                elif issubclass(col_type,
+                                (sqltypes.String, sqltypes.BINARY)):
+                    col_type_kw['length'] = character_maximum_length
+
+            type_instance = col_type(**col_type_kw)
+
             cdict = {
                 'name': self.normalize_name(colname),
-                'type': col_type,
+                'type': type_instance,
                 'nullable': is_nullable == 'YES',
                 'default': column_default,
                 'autoincrement': is_identity == 'YES',
@@ -662,6 +675,7 @@ SELECT /* sqlalchemy:get_columns */
             "SHOW /* sqlalchemy:get_schema_names */ SCHEMAS")
 
         return [self.normalize_name(row[1]) for row in cursor]
+
 
 dialect = SnowflakeDialect
 
