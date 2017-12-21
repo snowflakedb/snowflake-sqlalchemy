@@ -13,6 +13,7 @@ Release Notes
 - v1.0.8 (December 21, 2017)
 
     - Added ``get_schema_names`` method to Snowflake SQLAlchemy dialect. PR #20(andrewsali)
+    - Fixed the column metadata including length for string/varchar and precision and scale for numeric data type. Issue #22(@cladden)
 
 - v1.0.7 (May 18, 2017)
 
