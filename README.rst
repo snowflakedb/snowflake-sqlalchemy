@@ -116,7 +116,7 @@ The following example calls the ``create_engine`` method with the account name `
             'snowflake://testuser1:pass@testaccount/db/public?warehouse=testwh'
         )
  
-Other parameters, such as *proxy_host* (proxy host address for Snowflake) and *proxy_port* (proxy server port number), can also be specified as a URI parameter or in ``connect_args`` parameters. For example:
+Other parameters, such as *timezone*, can also be specified as a URI parameter or in ``connect_args`` parameters. For example:
 
     .. code-block:: python
 
@@ -124,8 +124,7 @@ Other parameters, such as *proxy_host* (proxy host address for Snowflake) and *p
         engine = create_engine(
             'snowflake://testuser1:pass@testaccount/db/public?warehouse=testwh',
             connect_args={
-                'proxy_host': 'localhost',
-                'proxy_port': '3128',
+                'timezone': 'America/Los_Angeles',
             } 
         )
 
@@ -143,8 +142,7 @@ For convenience, you can use the ``snowflake.sqlalchemy.URL`` method to construc
             database = 'db',
             schema = 'public',
             warehouse = 'testwh',
-            proxy_host = 'localhost',
-            proxy_port = '3128'
+            timezone = 'America/Los_Angeles',
         ))
 
 Auto-increment Behavior
