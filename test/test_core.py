@@ -298,7 +298,7 @@ def test_insert_tables(engine_testaccount):
                               addresses.c.email_address.like(
                                   users.c.name + '%'))) == \
                'users JOIN addresses ' \
-               'ON addresses.email_address LIKE (users.name || :name_1)'
+               'ON addresses.email_address LIKE users.name || :name_1'
 
         s = select([users.c.fullname]).select_from(
             users.join(addresses,
