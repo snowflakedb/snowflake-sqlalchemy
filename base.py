@@ -420,6 +420,12 @@ class SnowflakeDialect(default.DefaultDialect):
         return '.'.join(
             self.identifier_preparer._quote_free_identifiers(*idents))
 
+    def _get_default_schema_name(self, connection):
+        schema = connection.execute(
+            'SELECT /* sqlalchemy:_get_default_schema_name */ '
+            'CURRENT_SCHEMA()').scalar()
+        return self.normalize_name(schema)
+
     @staticmethod
     def _map_name_to_idx(result):
         name_to_idx = {}
@@ -439,8 +445,10 @@ class SnowflakeDialect(default.DefaultDialect):
     def get_primary_keys(self, connection, table_name, schema=None, **kw):
         schema = schema or self.default_schema_name
         if not schema:
-            row = connection.execute("SELECT CURRENT_SCHEMA()").fetchone()
-            schema = self.normalize_name(row[0])
+            row = connection.execute(
+                "SELECT /* sqlalchemy:get_primary_keys */ "
+                "CURRENT_SCHEMA()").scalar()
+            schema = self.normalize_name(row)
         full_table_name = self._denormalize_quote_join(schema, table_name)
 
         result = connection.execute(
@@ -474,6 +482,7 @@ class SnowflakeDialect(default.DefaultDialect):
         full_schema_name = self._denormalize_quote_join(
             row[0], schema if schema else row[1])
 
+        # NOTE: wish to cache database name as well
         result = connection.execute(
             "SHOW /* sqlalchemy:get_foreign_keys */ IMPORTED KEYS "
             "IN SCHEMA {0}".format(full_schema_name)
@@ -521,8 +530,10 @@ class SnowflakeDialect(default.DefaultDialect):
         """
         schema = schema or self.default_schema_name
         if not schema:
-            row = connection.execute("SELECT CURRENT_SCHEMA()").fetchone()
-            schema = self.normalize_name(row[0])
+            row = connection.execute(
+                "SELECT /* sqlalchemy:get_columns */ CURRENT_SCHEMA()"
+            ).scalar()
+            schema = self.normalize_name(row)
 
         full_table_name = self._denormalize_quote_join(schema, table_name)
 
