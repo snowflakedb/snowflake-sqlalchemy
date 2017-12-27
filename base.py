@@ -467,8 +467,9 @@ class SnowflakeDialect(default.DefaultDialect):
         Gets all foreign keys
         """
         schema = schema or self.default_schema_name
-        row = connection.execute("SELECT CURRENT_DATABASE(), "
-                                 "CURRENT_SCHEMA()").fetchone()
+        row = connection.execute(
+            "SELECT /* sqlalchemy:get_foreign_keys */ CURRENT_DATABASE(), "
+            "CURRENT_SCHEMA()").fetchone()
 
         full_schema_name = self._denormalize_quote_join(
             row[0], schema if schema else row[1])
@@ -481,7 +482,7 @@ class SnowflakeDialect(default.DefaultDialect):
 
         foreign_key_map = {}
         for row in result:
-            name = row[n2i['fk_name']]
+            name = self.normalize_name(row[n2i['fk_name']])
             constrained_table = self.normalize_name(row[n2i['fk_table_name']])
             if constrained_table == table_name:
                 constrained_column = self.normalize_name(
