@@ -24,7 +24,7 @@ except:
 THIS_DIR = os.path.dirname(os.path.realpath(__file__))
 
 
-def _create_users_addresses_tables(engine_testaccount, metadata):
+def _create_users_addresses_tables(engine_testaccount, metadata, fk=None):
     users = Table('users', metadata,
                   Column('id', Integer, Sequence('user_id_seq'),
                          primary_key=True),
@@ -35,7 +35,8 @@ def _create_users_addresses_tables(engine_testaccount, metadata):
     addresses = Table('addresses', metadata,
                       Column('id', Integer, Sequence('address_id_seq'),
                              primary_key=True),
-                      Column('user_id', None, ForeignKey('users.id')),
+                      Column('user_id', None,
+                             ForeignKey('users.id', name=fk)),
                       Column('email_address', String, nullable=False)
                       )
     metadata.create_all(engine_testaccount)
@@ -422,13 +423,15 @@ def test_get_foreign_keys(engine_testaccount):
     Tests foreign keys
     """
     metadata = MetaData()
+    fk_name = 'fk_users_id_from_addresses'
     users, addresses = _create_users_addresses_tables(
         engine_testaccount,
-        metadata)
+        metadata, fk=fk_name)
 
     try:
         inspector = inspect(engine_testaccount)
         foreign_keys = inspector.get_foreign_keys('addresses')
+        assert foreign_keys[0]['name'] == fk_name
         assert foreign_keys[0]['constrained_columns'] == ['user_id']
     finally:
         addresses.drop(engine_testaccount)
