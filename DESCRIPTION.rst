@@ -10,6 +10,11 @@ https://github.com/snowflakedb/snowflake-sqlalchemy
 Release Notes
 -------------------------------------------------------------------------------
 
+- v1.0.9 (January 4, 2018)
+
+    - Fixed foreign key names that should be normalized. Issue #24 (@cladden)
+    - Set the default schema Issue #25 (@cladden)
+
 - v1.0.8 (December 21, 2017)
 
     - Added ``get_schema_names`` method to Snowflake SQLAlchemy dialect. PR #20(andrewsali)
