@@ -14,6 +14,7 @@ Release Notes
 
     - Fixed foreign key names that should be normalized. Issue #24 (@cladden)
     - Set the default schema Issue #25 (@cladden)
+    - Improved performance by caching current database and schema for inspector. Issue #30 (@cladden)
 
 - v1.0.8 (December 21, 2017)
 
