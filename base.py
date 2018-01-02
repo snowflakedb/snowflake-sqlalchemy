@@ -420,11 +420,16 @@ class SnowflakeDialect(default.DefaultDialect):
         return '.'.join(
             self.identifier_preparer._quote_free_identifiers(*idents))
 
+    @reflection.cache
+    def _current_database_schema(self, connection):
+        row = connection.execute(
+            "SELECT /* sqlalchemy:_current_database_schema */ "
+            "CURRENT_DATABASE(), CURRENT_SCHEMA()").fetchone()
+        return self.normalize_name(row[0]), self.normalize_name(row[1])
+
     def _get_default_schema_name(self, connection):
-        schema = connection.execute(
-            'SELECT /* sqlalchemy:_get_default_schema_name */ '
-            'CURRENT_SCHEMA()').scalar()
-        return self.normalize_name(schema)
+        _, current_schema = self._current_database_schema(connection)
+        return current_schema
 
     @staticmethod
     def _map_name_to_idx(result):
@@ -442,19 +447,22 @@ class SnowflakeDialect(default.DefaultDialect):
         return []
 
     @reflection.cache
+    def _describe_table(self, connection, full_table_name):
+        result = connection.execute(
+            "DESCRIBE TABLE /* sqlalchemy:get_primary_keys */ {0}".format(
+                self.denormalize_name(full_table_name)))
+        n2i = self.__class__._map_name_to_idx(result)
+        return result, n2i
+
+    @reflection.cache
     def get_primary_keys(self, connection, table_name, schema=None, **kw):
         schema = schema or self.default_schema_name
         if not schema:
-            row = connection.execute(
-                "SELECT /* sqlalchemy:get_primary_keys */ "
-                "CURRENT_SCHEMA()").scalar()
-            schema = self.normalize_name(row)
+            _, schema = self._current_database_schema(connection)
+
         full_table_name = self._denormalize_quote_join(schema, table_name)
 
-        result = connection.execute(
-            "DESCRIBE TABLE /* sqlalchemy:get_primary_keys */ {0}".format(
-                full_table_name))
-        n2i = self.__class__._map_name_to_idx(result)
+        result, n2i = self._describe_table(connection, full_table_name)
 
         primary_key_info = {
             'constrained_columns': [],
@@ -475,17 +483,14 @@ class SnowflakeDialect(default.DefaultDialect):
         Gets all foreign keys
         """
         schema = schema or self.default_schema_name
-        row = connection.execute(
-            "SELECT /* sqlalchemy:get_foreign_keys */ CURRENT_DATABASE(), "
-            "CURRENT_SCHEMA()").fetchone()
-
+        current_database, current_schema = self._current_database_schema(
+            connection)
         full_schema_name = self._denormalize_quote_join(
-            row[0], schema if schema else row[1])
+            current_database, schema if schema else current_schema)
 
-        # NOTE: wish to cache database name as well
         result = connection.execute(
             "SHOW /* sqlalchemy:get_foreign_keys */ IMPORTED KEYS "
-            "IN SCHEMA {0}".format(full_schema_name)
+            "IN SCHEMA {0}".format(self.denormalize_name(full_schema_name))
         )
         n2i = self.__class__._map_name_to_idx(result)
 
@@ -530,17 +535,11 @@ class SnowflakeDialect(default.DefaultDialect):
         """
         schema = schema or self.default_schema_name
         if not schema:
-            row = connection.execute(
-                "SELECT /* sqlalchemy:get_columns */ CURRENT_SCHEMA()"
-            ).scalar()
-            schema = self.normalize_name(row)
+            _, schema = self._current_database_schema(connection)
 
         full_table_name = self._denormalize_quote_join(schema, table_name)
 
-        result = connection.execute(
-            'DESCRIBE TABLE /* sqlalchemy:get_columns */ {0}'.format(
-                full_table_name))
-        n2i = self.__class__._map_name_to_idx(result)
+        result, n2i = self._describe_table(connection, full_table_name)
 
         column_map = {}
         for row in result:
@@ -629,7 +628,8 @@ SELECT /* sqlalchemy:get_columns */
                 "SHOW /* sqlalchemy:get_view_names */ VIEWS IN {0}".format(
                     self._denormalize_quote_join((schema))))
         else:
-            cursor = connection.execute("SHOW VIEWS")
+            cursor = connection.execute(
+                "SHOW /* sqlalchemy:get_view_names */ VIEWS")
 
         return [self.normalize_name(row[1]) for row in cursor]
 
