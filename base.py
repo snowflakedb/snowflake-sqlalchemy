@@ -423,15 +423,14 @@ class SnowflakeDialect(default.DefaultDialect):
         return '.'.join(
             self.identifier_preparer._quote_free_identifiers(*idents))
 
-    @reflection.cache
-    def _current_database_schema(self, connection, **_):
-        row = connection.execute(
-            "SELECT /* sqlalchemy:_current_database_schema */ "
-            "CURRENT_DATABASE(), CURRENT_SCHEMA()").fetchone()
-        return self.normalize_name(row[0]), self.normalize_name(row[1])
+    def _current_database_schema(self, connection):
+        return (
+            self.normalize_name(connection.connect().connection.database),
+            self.normalize_name(connection.connect().connection.schema))
 
-    def _get_default_schema_name(self, connection, **kw):
-        _, current_schema = self._current_database_schema(connection, **kw)
+    def _get_default_schema_name(self, connection):
+        # NOTE: no cache object is passed here
+        _, current_schema = self._current_database_schema(connection)
         return current_schema
 
     @staticmethod
@@ -461,7 +460,7 @@ class SnowflakeDialect(default.DefaultDialect):
     def get_primary_keys(self, connection, table_name, schema=None, **kw):
         schema = schema or self.default_schema_name
         if not schema:
-            _, schema = self._current_database_schema(connection, **kw)
+            _, schema = self._current_database_schema(connection)
 
         full_table_name = self._denormalize_quote_join(schema, table_name)
 
