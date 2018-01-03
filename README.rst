@@ -203,6 +203,39 @@ The following ``NumPy`` data types are supported:
 - numpy.float64
 - numpy.datatime64
 
+Cache Column Metadata 
+-------------------------------------------------------------------------------
+
+SQLAlchemy provides `the runtime inspection API <http://docs.sqlalchemy.org/en/latest/core/inspection.html>`_ to get the runtime information about the various objects. One of the common use case is get all tables and their column metadata in a schema in order to construct a schema catalog. For example, `alembic <http://alembic.zzzcomputing.com/en/latest/>`_ on top of SQLAlchemy manages database schema migrations. A pseudo code flow is as follows:
+
+    .. code-block:: python
+
+        inspector = inspect(engine)
+        schema = inspector.default_schema_name
+        for table_name in inspector.get_table_names(schema):
+            column_metadata = inspector.get_columns(table_name, schema)
+            primary_keys = inspector.get_primary_keys(table_name, schema)
+            foreign_keys = inspector.get_foreign_keys(table_name, schema)
+            ...
+
+In this flow, a potential problem is it may take quite a while as queries run on each table. The results are cached but getting column metadata is expensive.
+
+To mitigate the problem, Snowflake SQLAlchemy takes a flag ``cache_column_metadata=True`` such that all of column metadata for all tables are cached when ``get_table_names`` is called and the rest of ``get_columns``, ``get_primary_keys`` and ``get_foreign_keys`` can take advantage of the cache.  
+        
+    .. code-block:: python
+
+        engine = create_engine(URL(
+            account = 'testaccount',
+            user = 'testuser1',
+            password = 'pass',
+            database = 'db',
+            schema = 'public',
+            warehouse = 'testwh',
+            cache_column_metadata=True,
+        ))
+
+Note memory usage will go up higher as all of column metadata are cached associated with ``Inspector`` object. Use the flag only if you need to get all of column metadata.
+
 VARIANT, ARRAY and OBJECT Support
 -------------------------------------------------------------------------------
 
