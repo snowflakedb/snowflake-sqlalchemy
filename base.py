@@ -424,9 +424,10 @@ class SnowflakeDialect(default.DefaultDialect):
             self.identifier_preparer._quote_free_identifiers(*idents))
 
     def _current_database_schema(self, connection):
+        con = connection.connect().connection
         return (
-            self.normalize_name(connection.connect().connection.database),
-            self.normalize_name(connection.connect().connection.schema))
+            self.normalize_name(con.database),
+            self.normalize_name(con.schema))
 
     def _get_default_schema_name(self, connection):
         # NOTE: no cache object is passed here
