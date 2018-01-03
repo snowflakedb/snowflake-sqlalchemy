@@ -33,18 +33,18 @@ An easier way to build an environment is through `Anaconda <https://www.continuu
 Installing Snowflake SQLAlchemy
 ================================================================================
 
-The Snowflake SQLAlchemy package can be installed from the public PyPI repository using ``pip``:
+The Snowflake SQLAlchemy package can be installed from the public PyPI repository using :code:`pip`:
 
     .. code-block:: bash
 
         pip install --upgrade snowflake-sqlalchemy
 
-``pip`` automatically installs all required modules, including the Snowflake Connector for Python.
+:code:`pip` automatically installs all required modules, including the Snowflake Connector for Python.
 
 Verifying Your Installation
 ================================================================================
 
-#. Create a file (e.g. ``validate.py``) that contains the following Python sample code,
+#. Create a file (e.g. :code:`validate.py`) that contains the following Python sample code,
    which connects to Snowflake and displays the Snowflake version:
 
     .. code-block:: python
@@ -65,15 +65,16 @@ Verifying Your Installation
         finally:
             engine.dispose()
 
-#. Replace *your_user_login_name*, *your_password*, and *your_account_name* with the appropriate values for your Snowflake account and user. For more details, see `Connection Parameters`_ in this topic.
+#. Replace :code:`<your_user_login_name>`, :code:`<your_password>`, and :code:`<your_account_name>` with the appropriate values for your Snowflake account and user. For more details, see `Connection Parameters`_ (in 
+   this topic).
 
-#. Execute the sample code. For example, if you created a file named ``validate.py``:
+#. Execute the sample code. For example, if you created a file named :code:`validate.py`:
 
     .. code-block:: python
 
         python validate.py
 
-The Snowflake version (e.g. ``1.48.0``) should be displayed.
+The Snowflake version (e.g. :code:`1.48.0`) should be displayed.
 
 Parameters and Behavior
 ================================================================================
@@ -93,11 +94,11 @@ Snowflake SQLAlchemy uses the following syntax for the connection string used to
 
 Where: 
 
-- *user_login_name* is the login name for your Snowflake user.
-- *password* is the password for your Snowflake user.
-- *account_name* is the name of your Snowflake account. Your account name is included in the URL used to access your account, e.g. ``testaccount`` in ``testaccount.snowflakecomputing.com``.
+- :code:`<user_login_name>` is the login name for your Snowflake user.
+- :code:`<password>` is the password for your Snowflake user.
+- :code:`<account_name>` is the name of your Snowflake account.
 
-You can optionally specify the initial database and schema for the Snowflake session by including them at the end of the connection string, separated by ``/``. You can also specify the initial warehouse for the session as a parameter string at the end of the connection string:
+You can optionally specify the initial database and schema for the Snowflake session by including them at the end of the connection string, separated by :code:`/`. You can also specify the initial warehouse for the session as a parameter string at the end of the connection string:
 
     .. code-block:: python
 
@@ -107,13 +108,13 @@ You can optionally specify the initial database and schema for the Snowflake ses
 
   After login, the initial database, schema, and warehouse specified in the connection string can always be changed for the session.
 
-The following example calls the ``create_engine`` method with the account name ``testaccount``, user name ``testuser1``, password ``pass``, database ``db``, schema ``public``, and warehouse ``testwh``:
+The following example calls the ``create_engine`` method with the account name ``abc123``, user name ``testuser1``, password ``0123456``, database ``db``, schema ``public``, and warehouse ``testwh``:
 
     .. code-block:: python
       
         from sqlalchemy import create_engine
         engine = create_engine(
-            'snowflake://testuser1:pass@testaccount/db/public?warehouse=testwh'
+            'snowflake://testuser1:0123456@abc123/testdb/public?warehouse=testwh'
         )
  
 Other parameters, such as *timezone*, can also be specified as a URI parameter or in ``connect_args`` parameters. For example:
@@ -122,13 +123,13 @@ Other parameters, such as *timezone*, can also be specified as a URI parameter o
 
         from sqlalchemy import create_engine
         engine = create_engine(
-            'snowflake://testuser1:pass@testaccount/db/public?warehouse=testwh',
+            'snowflake://testuser1:0123456@abc123/testdb/public?warehouse=testwh',
             connect_args={
                 'timezone': 'America/Los_Angeles',
             } 
         )
 
-For convenience, you can use the ``snowflake.sqlalchemy.URL`` method to construct the connection string and connect to the database. The following example constructs the same connection string from the previous example:
+For convenience, you can use the :code:`snowflake.sqlalchemy.URL` method to construct the connection string and connect to the database. The following example constructs the same connection string from the previous example:
 
     .. code-block:: python
 
@@ -136,19 +137,24 @@ For convenience, you can use the ``snowflake.sqlalchemy.URL`` method to construc
         from sqlalchemy import create_engine
 
         engine = create_engine(URL(
-            account = 'testaccount',
+            account = 'abc123',
             user = 'testuser1',
-            password = 'pass',
-            database = 'db',
+            password = '0123456',
+            database = 'testdb',
             schema = 'public',
             warehouse = 'testwh',
             timezone = 'America/Los_Angeles',
         ))
 
+using a proxy server
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Use the supported environment variables, ``HTTPS_PROXY``, ``HTTP_PROXY`` and ``NO_PROXY`` to configure a proxy server.
+
 Auto-increment Behavior
 -------------------------------------------------------------------------------
 
-Auto-incrementing a value requires the ``Sequence`` object. Include the ``Sequence`` object in the primary key column to automatically increment the value as each new record is inserted. For example:
+Auto-incrementing a value requires the :code:`Sequence` object. Include the :code:`Sequence` object in the primary key column to automatically increment the value as each new record is inserted. For example:
 
     .. code-block:: python
      
@@ -170,16 +176,16 @@ Snowflake does not utilize indexes, so neither does Snowflake SQLAlchemy.
 Numpy Data Type Support
 -------------------------------------------------------------------------------
 
-Snowflake SQLAlchemy supports binding and fetching ``NumPy`` data types. Binding is always supported. To enable fetching ``NumPy`` data types, add ``numpy=True`` to the connection parameters.
+Snowflake SQLAlchemy supports binding and fetching :code:`NumPy` data types. Binding is always supported. To enable fetching :code:`NumPy` data types, add :code:`numpy=True` to the connection parameters.
 
-The following example shows the round trip of ``numpy.datetime64`` data:
+The following example shows the round trip of :code:`numpy.datetime64` data:
 
     .. code-block:: python
 
         import numpy as np
         import pandas as pd
         engine = create_engine(URL(
-            account = 'testaccount',
+            account = 'abc123',
             user = 'testuser1',
             password = 'pass',
             database = 'db',
@@ -197,7 +203,7 @@ The following example shows the round trip of ``numpy.datetime64`` data:
         df = pd.read_sql_query("SELECT * FROM ts_tbl", engine)
         assert df.c1.values[0] == specific_date
 
-The following ``NumPy`` data types are supported:
+The following :code:`NumPy` data types are supported:
 
 - numpy.int64
 - numpy.float64
@@ -225,7 +231,7 @@ To mitigate the problem, Snowflake SQLAlchemy takes a flag ``cache_column_metada
     .. code-block:: python
 
         engine = create_engine(URL(
-            account = 'testaccount',
+            account = 'abc123',
             user = 'testuser1',
             password = 'pass',
             database = 'db',
@@ -239,9 +245,9 @@ Note memory usage will go up higher as all of column metadata are cached associa
 VARIANT, ARRAY and OBJECT Support
 -------------------------------------------------------------------------------
 
-Snowflake SQLAlchemy supports fetching ``VARIANT``, ``ARRAY`` and ``OBJECT`` data types. All types are converted into ``str`` in Python so that you can convert them to native data types using ``json.loads``.
+Snowflake SQLAlchemy supports fetching :code:`VARIANT`, :code:`ARRAY` and :code:`OBJECT` data types. All types are converted into :code:`str` in Python so that you can convert them to native data types using :code:`json.loads`.
 
-This example shows how to create a table including ``VARIANT``, ``ARRAY``, and ``OBJECT`` data type columns.
+This example shows how to create a table including :code:`VARIANT`, :code:`ARRAY`, and :code:`OBJECT` data type columns.
 
     .. code-block:: python
 
@@ -253,7 +259,7 @@ This example shows how to create a table including ``VARIANT``, ``ARRAY``, and `
             Column('ar', ARRAY))
         metdata.create_all(engine)
 
-In order to retrieve ``VARIANT``, ``ARRAY``, and ``OBJECT`` data type columns and convert them to the native Python data types, fetch data and call the ``json.loads`` method as follows:
+In order to retrieve :code:`VARIANT`, :code:`ARRAY`, and :code:`OBJECT` data type columns and convert them to the native Python data types, fetch data and call the :code:`json.loads` method as follows:
 
     .. code-block:: python
 
@@ -268,9 +274,9 @@ In order to retrieve ``VARIANT``, ``ARRAY``, and ``OBJECT`` data type columns an
 CLUSTER BY Support
 -------------------------------------------------------------------------------
 
-Snowflake SQLAchemy supports the ``CLUSTER BY`` parameter for tables. For information about the parameter, see :doc:`/sql-reference/sql/create-table`.
+Snowflake SQLAchemy supports the :code:`CLUSTER BY` parameter for tables. For information about the parameter, see :doc:`/sql-reference/sql/create-table`.
 
-This example shows how to create a table with two columns, ``id`` and ``name``, as the clustering keys:
+This example shows how to create a table with two columns, :code:`id` and :code:`name`, as the clustering keys:
 
     .. code-block:: python
 
