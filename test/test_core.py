@@ -4,6 +4,7 @@
 # Copyright (c) 2012-2017 Snowflake Computing Inc. All right reserved.
 #
 import os
+import re
 
 import pytest
 from parameters import (CONNECTION_PARAMETERS)
@@ -663,3 +664,80 @@ def test_column_metadata(engine_testaccount):
     assert str(t.columns['string_with_len'].type) == 'VARCHAR(100)'
     assert str(t.columns['binary_data'].type) == 'BINARY'
     assert str(t.columns['real_data'].type) == 'FLOAT'
+
+
+def _get_engine_with_columm_metadata_cache(
+        db_parameters, user=None, password=None, account=None):
+    """
+    Creates a connection with column metadata cache
+    """
+    if user is not None:
+        db_parameters['user'] = user
+    if password is not None:
+        db_parameters['password'] = password
+    if account is not None:
+        db_parameters['account'] = account
+
+    from sqlalchemy.pool import NullPool
+    from sqlalchemy import create_engine
+    from snowflake.sqlalchemy import URL
+    engine = create_engine(URL(
+        user=db_parameters['user'],
+        password=db_parameters['password'],
+        host=db_parameters['host'],
+        port=db_parameters['port'],
+        database=db_parameters['database'],
+        schema=db_parameters['schema'],
+        account=db_parameters['account'],
+        protocol=db_parameters['protocol'],
+        cache_column_metadata=True,
+    ), poolclass=NullPool)
+
+    return engine
+
+
+def test_many_table_column_metadta(db_parameters):
+    """
+    Get dozens of table metadata with column metadata cache.
+
+    cache_column_metadata=True will cache all column metadata for all tables
+    in the schema.
+    """
+    engine = _get_engine_with_columm_metadata_cache(db_parameters)
+    RE_SUFFIX_NUM = re.compile(r'.*(\d+)$')
+    metadata = MetaData()
+    total_objects = 10
+    for idx in range(total_objects):
+        Table('mainusers' + str(idx), metadata,
+              Column('id', Integer, Sequence('user_id_seq'),
+                     primary_key=True),
+              Column('name' + str(idx), String),
+              Column('fullname', String),
+              Column('password', String)
+              )
+        Table('mainaddresses' + str(idx), metadata,
+              Column('id', Integer, Sequence('address_id_seq'),
+                     primary_key=True),
+              Column('user_id', None,
+                     ForeignKey('mainusers' + str(idx) + '.id')),
+              Column('email_address' + str(idx), String, nullable=False)
+              )
+    metadata.create_all(engine)
+
+    inspector = inspect(engine)
+    cnt = 0
+    for table_name in inspector.get_table_names():
+        m = RE_SUFFIX_NUM.match(table_name)
+        if m:
+            suffix = m.group(1)
+            cs = inspector.get_columns(table_name)
+            if table_name.startswith("mainusers"):
+                assert len(cs) == 4
+                assert cs[1]['name'] == 'name' + suffix
+                cnt += 1
+            elif table_name.startswith("mainaddresses"):
+                assert len(cs) == 3
+                assert cs[2]['name'] == 'email_address' + suffix
+                cnt += 1
+
+    assert cnt == total_objects * 2, 'total number of test objects'
