@@ -22,7 +22,7 @@ if os.getenv('TRAVIS') == 'true':
     TEST_SCHEMA = 'TRAVIS_JOB_{0}'.format(os.getenv('TRAVIS_JOB_ID'))
 else:
     TEST_SCHEMA = (
-        'sqlalchemy_tests_' + TO_UNICODE(uuid.uuid4()).replace('-', '_'))
+            'sqlalchemy_tests_' + TO_UNICODE(uuid.uuid4()).replace('-', '_'))
 
 
 def help():
@@ -75,8 +75,8 @@ def db_parameters():
 
     # a unique table name
     ret['name'] = (
-        'sqlalchemy_tests_' +
-        TO_UNICODE(uuid.uuid4())).replace('-', '_')
+            'sqlalchemy_tests_' +
+            TO_UNICODE(uuid.uuid4())).replace('-', '_')
     ret['schema'] = TEST_SCHEMA
 
     return ret

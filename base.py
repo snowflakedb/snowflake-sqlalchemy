@@ -5,6 +5,7 @@
 #
 
 import re
+from collections import OrderedDict
 
 import sqlalchemy.types as sqltypes
 from sqlalchemy import exc as sa_exc
@@ -367,6 +368,8 @@ class SnowflakeDialect(default.DefaultDialect):
             opts['port'] = '443'
         opts['autocommit'] = False  # autocommit is disabled by default
         opts.update(url.query)
+        self._cache_column_metadata = opts.get('cache_column_metadata',
+                                               "false").lower() == 'true'
         return ([], opts)
 
     def has_table(self, connection, table_name, schema=None):
@@ -421,14 +424,14 @@ class SnowflakeDialect(default.DefaultDialect):
             self.identifier_preparer._quote_free_identifiers(*idents))
 
     @reflection.cache
-    def _current_database_schema(self, connection):
+    def _current_database_schema(self, connection, **_):
         row = connection.execute(
             "SELECT /* sqlalchemy:_current_database_schema */ "
             "CURRENT_DATABASE(), CURRENT_SCHEMA()").fetchone()
         return self.normalize_name(row[0]), self.normalize_name(row[1])
 
-    def _get_default_schema_name(self, connection):
-        _, current_schema = self._current_database_schema(connection)
+    def _get_default_schema_name(self, connection, **kw):
+        _, current_schema = self._current_database_schema(connection, **kw)
         return current_schema
 
     @staticmethod
@@ -447,22 +450,22 @@ class SnowflakeDialect(default.DefaultDialect):
         return []
 
     @reflection.cache
-    def _describe_table(self, connection, full_table_name):
+    def _describe_table(self, connection, full_table_name, **_):
         result = connection.execute(
             "DESCRIBE TABLE /* sqlalchemy:get_primary_keys */ {0}".format(
                 self.denormalize_name(full_table_name)))
         n2i = self.__class__._map_name_to_idx(result)
-        return result, n2i
+        return result.fetchall(), n2i
 
     @reflection.cache
     def get_primary_keys(self, connection, table_name, schema=None, **kw):
         schema = schema or self.default_schema_name
         if not schema:
-            _, schema = self._current_database_schema(connection)
+            _, schema = self._current_database_schema(connection, **kw)
 
         full_table_name = self._denormalize_quote_join(schema, table_name)
 
-        result, n2i = self._describe_table(connection, full_table_name)
+        result, n2i = self._describe_table(connection, full_table_name, **kw)
 
         primary_key_info = {
             'constrained_columns': [],
@@ -529,28 +532,15 @@ class SnowflakeDialect(default.DefaultDialect):
         return ret
 
     @reflection.cache
-    def get_columns(self, connection, table_name, schema=None, **kw):
-        """
-        Gets all column info given the table info
-        """
-        schema = schema or self.default_schema_name
-        if not schema:
-            _, schema = self._current_database_schema(connection)
+    def _get_columns_for_tables(self, connection, schema, **kw):
+        info_cache = kw.get('info_cache', None)
+        if info_cache is None:
+            return
 
-        full_table_name = self._denormalize_quote_join(schema, table_name)
-
-        result, n2i = self._describe_table(connection, full_table_name)
-
-        column_map = {}
-        for row in result:
-            column_name = row[n2i['name']]
-            is_primary_key = row[n2i['primary key']] == 'Y'
-            column_map[column_name] = is_primary_key
-
-        columns = []
         result = connection.execute(
             """
-SELECT /* sqlalchemy:get_columns */
+SELECT /* sqlalchemy:_get_columns_for_tables */
+       ic.table_name,
        ic.column_name,
        ic.data_type,
        ic.character_maximum_length,
@@ -561,14 +551,12 @@ SELECT /* sqlalchemy:get_columns */
        ic.is_identity
   FROM information_schema.columns ic
  WHERE ic.table_schema=%(table_schema)s
-   AND ic.table_name=%(table_name)s
- ORDER BY ic.ordinal_position
             """,
-            table_schema=self.denormalize_name(schema),
-            table_name=self.denormalize_name(
-                table_name))
-        for (colname, coltype, character_maximum_length, numeric_precision,
+            table_schema=self.denormalize_name(schema))
+        for (table_name, colname, coltype, character_maximum_length,
+             numeric_precision,
              numeric_scale, is_nullable, column_default, is_identity) in result:
+            table_name = self.normalize_name(table_name)
             if colname.startswith('SYS_CLUSTERING_COLUMN'):
                 # ignoring clustering column
                 continue
@@ -589,16 +577,104 @@ SELECT /* sqlalchemy:get_columns */
 
             type_instance = col_type(**col_type_kw)
 
-            cdict = {
-                'name': self.normalize_name(colname),
+            sfkey = ('snowflake_cache', schema, table_name)
+            if info_cache.get(sfkey) is None:
+                info_cache[sfkey] = {}
+
+            info_cache[sfkey][colname] = {
                 'type': type_instance,
                 'nullable': is_nullable == 'YES',
                 'default': column_default,
                 'autoincrement': is_identity == 'YES',
-                'primary_key': column_map[colname],
             }
 
-            columns.append(cdict)
+    @reflection.cache
+    def get_columns(self, connection, table_name, schema=None, **kw):
+        """
+        Gets all column info given the table info
+        """
+        schema = schema or self.default_schema_name
+        if not schema:
+            _, schema = self._current_database_schema(connection)
+
+        full_table_name = self._denormalize_quote_join(schema, table_name)
+
+        result, n2i = self._describe_table(connection, full_table_name, **kw)
+
+        column_map = OrderedDict()
+        for row in result:
+            column_name = row[n2i['name']]
+            is_primary_key = row[n2i['primary key']] == 'Y'
+            column_map[column_name] = is_primary_key
+
+        columns = []
+
+        info_cache = kw.get('info_cache', None)
+        sfkey = ('snowflake_cache', schema, table_name)
+        if info_cache is None or info_cache.get(sfkey) is None:
+            # no column metadata cache is found
+            result = connection.execute(
+                """
+SELECT /* sqlalchemy:get_columns */
+       ic.column_name,
+       ic.data_type,
+       ic.character_maximum_length,
+       ic.numeric_precision,
+       ic.numeric_scale,
+       ic.is_nullable,
+       ic.column_default,
+       ic.is_identity
+  FROM information_schema.columns ic
+ WHERE ic.table_schema=%(table_schema)s
+   AND ic.table_name=%(table_name)s
+ ORDER BY ic.ordinal_position
+            """,
+                table_schema=self.denormalize_name(schema),
+                table_name=self.denormalize_name(
+                    table_name))
+            for (colname, coltype, character_maximum_length, numeric_precision,
+                 numeric_scale, is_nullable, column_default,
+                 is_identity) in result:
+                if colname.startswith('SYS_CLUSTERING_COLUMN'):
+                    # ignoring clustering column
+                    continue
+                col_type = self.ischema_names.get(coltype, None)
+                col_type_kw = {}
+                if col_type is None:
+                    sa_util.warn(
+                        "Did not recognize type '{}' of column '{}'".format(
+                            coltype, colname))
+                    col_type = sqltypes.NULLTYPE
+                else:
+                    if issubclass(col_type, sqltypes.Numeric):
+                        col_type_kw['precision'] = numeric_precision
+                        col_type_kw['scale'] = numeric_scale
+                    elif issubclass(col_type,
+                                    (sqltypes.String, sqltypes.BINARY)):
+                        col_type_kw['length'] = character_maximum_length
+
+                type_instance = col_type(**col_type_kw)
+
+                cdict = {
+                    'name': self.normalize_name(colname),
+                    'type': type_instance,
+                    'nullable': is_nullable == 'YES',
+                    'default': column_default,
+                    'autoincrement': is_identity == 'YES',
+                    'primary_key': column_map[colname],
+                }
+
+                columns.append(cdict)
+        else:
+            cache = info_cache[sfkey]
+            for colname, is_primary_key in column_map.items():
+                column_metadata = cache.get(colname)
+                # combine with output from DESCRIBE TABLE
+                column_metadata['name'] = self.normalize_name(colname)
+                column_metadata['primary_key'] = is_primary_key
+                columns.append(column_metadata)
+            del info_cache[sfkey]  # no longer need it
+
         return columns
 
     @reflection.cache
@@ -607,6 +683,7 @@ SELECT /* sqlalchemy:get_columns */
         Gets all table names.
         """
         schema = schema or self.default_schema_name
+        current_schema = schema
         if schema:
             cursor = connection.execute(
                 "SHOW /* sqlalchemy:get_table_names */ TABLES IN {0}".format(
@@ -614,8 +691,14 @@ SELECT /* sqlalchemy:get_columns */
         else:
             cursor = connection.execute(
                 "SHOW /* sqlalchemy:get_table_names */ TABLES")
+            _, current_schema = self._current_database_schema(connection)
 
-        return [self.normalize_name(row[1]) for row in cursor]
+        ret = [self.normalize_name(row[1]) for row in cursor]
+
+        if hasattr(self, "_cache_column_metadata") and \
+                self._cache_column_metadata:
+            self._get_columns_for_tables(connection, current_schema, **kw)
+        return ret
 
     @reflection.cache
     def get_view_names(self, connection, schema=None, **kw):
