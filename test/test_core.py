@@ -709,28 +709,29 @@ def test_many_table_column_metadta(db_parameters):
     total_objects = 10
     for idx in range(total_objects):
         Table('mainusers' + str(idx), metadata,
-              Column('id', Integer, Sequence('user_id_seq'),
+              Column('id' + str(idx), Integer, Sequence('user_id_seq'),
                      primary_key=True),
               Column('name' + str(idx), String),
               Column('fullname', String),
               Column('password', String)
               )
         Table('mainaddresses' + str(idx), metadata,
-              Column('id', Integer, Sequence('address_id_seq'),
+              Column('id' + str(idx), Integer, Sequence('address_id_seq'),
                      primary_key=True),
-              Column('user_id', None,
-                     ForeignKey('mainusers' + str(idx) + '.id')),
+              Column('user_id' + str(idx), None,
+                     ForeignKey('mainusers' + str(idx) + '.id' + str(idx))),
               Column('email_address' + str(idx), String, nullable=False)
               )
     metadata.create_all(engine)
 
     inspector = inspect(engine)
     cnt = 0
-    for table_name in inspector.get_table_names():
+    schema = inspector.default_schema_name
+    for table_name in inspector.get_table_names(schema):
         m = RE_SUFFIX_NUM.match(table_name)
         if m:
             suffix = m.group(1)
-            cs = inspector.get_columns(table_name)
+            cs = inspector.get_columns(table_name, schema)
             if table_name.startswith("mainusers"):
                 assert len(cs) == 4
                 assert cs[1]['name'] == 'name' + suffix
@@ -739,5 +740,17 @@ def test_many_table_column_metadta(db_parameters):
                 assert len(cs) == 3
                 assert cs[2]['name'] == 'email_address' + suffix
                 cnt += 1
+            ps = inspector.get_primary_keys(table_name, schema)
+            if table_name.startswith("mainusers"):
+                assert ps['constrained_columns'] == ['id' + suffix]
+            elif table_name.startswith("mainaddresses"):
+                assert ps['constrained_columns'] == ['id' + suffix]
+            fs = inspector.get_foreign_keys(table_name, schema)
+            if table_name.startswith("mainusers"):
+                assert len(fs) == 0
+            elif table_name.startswith("mainaddresses"):
+                assert len(fs) == 1
+                assert fs[0]['constrained_columns'] == ['user_id' + suffix]
+                assert fs[0]['referred_table'] == 'mainusers' + suffix
 
     assert cnt == total_objects * 2, 'total number of test objects'
