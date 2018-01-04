@@ -108,7 +108,7 @@ You can optionally specify the initial database and schema for the Snowflake ses
 
   After login, the initial database, schema, and warehouse specified in the connection string can always be changed for the session.
 
-The following example calls the :code:`create_engine` method with the account name :code:`abc123`, user name :code:`testuser1`, password :code:`0123456`, database :code:`db`, schema :code:`public`, and warehouse :code:`testwh`:
+The following example calls the :code:`create_engine` method with the user name :code:`testuser1`, password :code:`0123456`, account name :code:`abc123`, database :code:`testdb`, schema :code:`public`, and warehouse :code:`testwh`:
 
     .. code-block:: python
       
@@ -166,7 +166,7 @@ Auto-incrementing a value requires the :code:`Sequence` object. Include the :cod
 Object Name Case Handling
 -------------------------------------------------------------------------------
 
-Snowflake stores all case-insensitive object names in uppercase text. In contrast, SQLAlchemy considers all lowercase object names to be case-insensitive. Snowflake SQLAlchemy converts the object name case during schema-level communication, i.e. during table and index reflection. If you use uppercase object names, SQLAlchemy assumes they are case-sensitive and surrounds the names with quotes.
+Snowflake stores all case-insensitive object names in uppercase text. In contrast, SQLAlchemy considers all lowercase object names to be case-insensitive. Snowflake SQLAlchemy converts the object name case during schema-level communication, i.e. during table and index reflection. If you use uppercase object names, SQLAlchemy assumes they are case-sensitive and encloses the names with quotes.
 
 Index Support
 -------------------------------------------------------------------------------
