@@ -108,7 +108,7 @@ You can optionally specify the initial database and schema for the Snowflake ses
 
   After login, the initial database, schema, and warehouse specified in the connection string can always be changed for the session.
 
-The following example calls the ``create_engine`` method with the account name ``abc123``, user name ``testuser1``, password ``0123456``, database ``db``, schema ``public``, and warehouse ``testwh``:
+The following example calls the :code:`create_engine` method with the account name :code:`abc123`, user name :code:`testuser1`, password :code:`0123456`, database :code:`db`, schema :code:`public`, and warehouse :code:`testwh`:
 
     .. code-block:: python
       
@@ -117,7 +117,7 @@ The following example calls the ``create_engine`` method with the account name `
             'snowflake://testuser1:0123456@abc123/testdb/public?warehouse=testwh'
         )
  
-Other parameters, such as *timezone*, can also be specified as a URI parameter or in ``connect_args`` parameters. For example:
+Other parameters, such as :code:`timezone`, can also be specified as a URI parameter or in :code:`connect_args` parameters. For example:
 
     .. code-block:: python
 
@@ -149,7 +149,7 @@ For convenience, you can use the :code:`snowflake.sqlalchemy.URL` method to cons
 using a proxy server
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Use the supported environment variables, ``HTTPS_PROXY``, ``HTTP_PROXY`` and ``NO_PROXY`` to configure a proxy server.
+Use the supported environment variables, :code:`HTTPS_PROXY`, :code:`HTTP_PROXY` and :code:`NO_PROXY` to configure a proxy server.
 
 Auto-increment Behavior
 -------------------------------------------------------------------------------
@@ -212,7 +212,7 @@ The following :code:`NumPy` data types are supported:
 Cache Column Metadata 
 -------------------------------------------------------------------------------
 
-SQLAlchemy provides `the runtime inspection API <http://docs.sqlalchemy.org/en/latest/core/inspection.html>`_ to get the runtime information about the various objects. One of the common use case is get all tables and their column metadata in a schema in order to construct a schema catalog. For example, `alembic <http://alembic.zzzcomputing.com/en/latest/>`_ on top of SQLAlchemy manages database schema migrations. A pseudo code flow is as follows:
+SQLAlchemy provides `the runtime inspection API <http://docs.sqlalchemy.org/en/latest/core/inspection.html>`_ to get the runtime information about the various objects. One of the common use case is get all tables and their column metadata in a schema in order to construct a schema catalog. For example, `alembic <http://alembic.zzzcomputing.com/>`_ on top of SQLAlchemy manages database schema migrations. A pseudo code flow is as follows:
 
     .. code-block:: python
 
@@ -226,7 +226,7 @@ SQLAlchemy provides `the runtime inspection API <http://docs.sqlalchemy.org/en/l
 
 In this flow, a potential problem is it may take quite a while as queries run on each table. The results are cached but getting column metadata is expensive.
 
-To mitigate the problem, Snowflake SQLAlchemy takes a flag ``cache_column_metadata=True`` such that all of column metadata for all tables are cached when ``get_table_names`` is called and the rest of ``get_columns``, ``get_primary_keys`` and ``get_foreign_keys`` can take advantage of the cache.  
+To mitigate the problem, Snowflake SQLAlchemy takes a flag :code:`cache_column_metadata=True` such that all of column metadata for all tables are cached when :code:`get_table_names` is called and the rest of :code:`get_columns`, :code:`get_primary_keys` and :code:`get_foreign_keys` can take advantage of the cache.  
         
     .. code-block:: python
 
@@ -240,7 +240,7 @@ To mitigate the problem, Snowflake SQLAlchemy takes a flag ``cache_column_metada
             cache_column_metadata=True,
         ))
 
-Note memory usage will go up higher as all of column metadata are cached associated with ``Inspector`` object. Use the flag only if you need to get all of column metadata.
+Note memory usage will go up higher as all of column metadata are cached associated with :code:`Inspector` object. Use the flag only if you need to get all of column metadata.
 
 VARIANT, ARRAY and OBJECT Support
 -------------------------------------------------------------------------------
@@ -286,3 +286,17 @@ This example shows how to create a table with two columns, :code:`id` and :code:
             snowflake_clusterby=['id', 'name'], ...
         )
         metadata.create_all(engine)
+
+Alembic Support
+-------------------------------------------------------------------------------
+
+`Alembic <http://alembic.zzzcomputing.com/>`_ is a database migration tool on top of :code:`SQLAlchemy`. Snowflake SQLAlchemy works by adding the following code to :code:`alembic/env.py` so that Alembic can recognize Snowflake SQLAlchemy.
+
+    .. code-block:: python
+
+        from alembic.ddl.impl import DefaultImpl
+
+        class SnowflakeImpl(DefaultImpl):
+            __dialect__ = 'snowflake'
+
+See `Alembic Documentation <http://alembic.zzzcomputing.com/>`_ for general usage.
