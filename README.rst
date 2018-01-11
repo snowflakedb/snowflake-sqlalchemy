@@ -166,7 +166,7 @@ Auto-incrementing a value requires the :code:`Sequence` object. Include the :cod
 Object Name Case Handling
 -------------------------------------------------------------------------------
 
-Snowflake stores all case-insensitive object names in uppercase text. In contrast, SQLAlchemy considers all lowercase object names to be case-insensitive. Snowflake SQLAlchemy converts the object name case during schema-level communication, i.e. during table and index reflection. If you use uppercase object names, SQLAlchemy assumes they are case-sensitive and encloses the names with quotes.
+Snowflake stores all case-insensitive object names in uppercase text. In contrast, SQLAlchemy considers all lowercase object names to be case-insensitive. Snowflake SQLAlchemy converts the object name case during schema-level communication, i.e. during table and index reflection. If you use uppercase object names, SQLAlchemy assumes they are case-sensitive and encloses the names with quotes. This behavior will cause mismatches agaisnt data dictionary data received from Snowflake, so unless identifier names have been truly created as case sensitive using quotes, e.g., :code:`"TestDb"`, all lowercase names should be used on the SQLAlchemy side.
 
 Index Support
 -------------------------------------------------------------------------------
