@@ -98,23 +98,23 @@ Where:
 - :code:`<password>` is the password for your Snowflake user.
 - :code:`<account_name>` is the name of your Snowflake account.
 
-You can optionally specify the initial database and schema for the Snowflake session by including them at the end of the connection string, separated by :code:`/`. You can also specify the initial warehouse for the session as a parameter string at the end of the connection string:
+You can optionally specify the initial database and schema for the Snowflake session by including them at the end of the connection string, separated by :code:`/`. You can also specify the initial warehouse and role for the session as a parameter string at the end of the connection string:
 
     .. code-block:: python
 
-        'snowflake://<user_login_name>:<password>@<account_name>/<database_name>/<schema_name>?warehouse=<warehouse_name>'
+        'snowflake://<user_login_name>:<password>@<account_name>/<database_name>/<schema_name>?warehouse=<warehouse_name>?role=<role_name>'
 
 .. note::
 
-  After login, the initial database, schema, and warehouse specified in the connection string can always be changed for the session.
+  After login, the initial database, schema, warehouse and role specified in the connection string can always be changed for the session.
 
-The following example calls the :code:`create_engine` method with the user name :code:`testuser1`, password :code:`0123456`, account name :code:`abc123`, database :code:`testdb`, schema :code:`public`, and warehouse :code:`testwh`:
+The following example calls the :code:`create_engine` method with the user name :code:`testuser1`, password :code:`0123456`, account name :code:`abc123`, database :code:`testdb`, schema :code:`public`, warehouse :code:`testwh`, and role :code:`myrole`:
 
     .. code-block:: python
       
         from sqlalchemy import create_engine
         engine = create_engine(
-            'snowflake://testuser1:0123456@abc123/testdb/public?warehouse=testwh'
+            'snowflake://testuser1:0123456@abc123/testdb/public?warehouse=testwh&role=myrole'
         )
  
 Other parameters, such as :code:`timezone`, can also be specified as a URI parameter or in :code:`connect_args` parameters. For example:
@@ -123,7 +123,7 @@ Other parameters, such as :code:`timezone`, can also be specified as a URI param
 
         from sqlalchemy import create_engine
         engine = create_engine(
-            'snowflake://testuser1:0123456@abc123/testdb/public?warehouse=testwh',
+            'snowflake://testuser1:0123456@abc123/testdb/public?warehouse=testwh&role=myrole',
             connect_args={
                 'timezone': 'America/Los_Angeles',
             } 
@@ -143,6 +143,7 @@ For convenience, you can use the :code:`snowflake.sqlalchemy.URL` method to cons
             database = 'testdb',
             schema = 'public',
             warehouse = 'testwh',
+            role='myrole',
             timezone = 'America/Los_Angeles',
         ))
 
@@ -191,6 +192,7 @@ The following example shows the round trip of :code:`numpy.datetime64` data:
             database = 'db',
             schema = 'public',
             warehouse = 'testwh',
+            role='myrole',
             numpy=True,
         ))
     
@@ -237,6 +239,7 @@ To mitigate the problem, Snowflake SQLAlchemy takes a flag :code:`cache_column_m
             database = 'db',
             schema = 'public',
             warehouse = 'testwh',
+            role='myrole',
             cache_column_metadata=True,
         ))
 
