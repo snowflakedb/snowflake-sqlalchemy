@@ -408,10 +408,18 @@ def test_get_primary_keys(engine_testaccount):
     try:
         inspector = inspect(engine_testaccount)
 
+        # deprecated methods returning a list of primary keys
         primary_keys = inspector.get_primary_keys('users')
-        assert primary_keys['constrained_columns'] == ['id']
+        assert primary_keys == ['id']
 
         primary_keys = inspector.get_primary_keys('addresses')
+        assert primary_keys == ['id']
+
+        # new methods returning a dict of primary keys
+        primary_keys = inspector.get_pk_constraint('users')
+        assert primary_keys['constrained_columns'] == ['id']
+
+        primary_keys = inspector.get_pk_constraint('addresses')
         assert primary_keys['constrained_columns'] == ['id']
 
     finally:
@@ -467,7 +475,7 @@ def test_get_multile_column_primary_key(engine_testaccount):
         assert columns_in_mytable[1]['name'] == 'id', 'name'
         assert columns_in_mytable[1]['primary_key'], 'primary key'
 
-        primary_keys = inspector.get_primary_keys('mytable')
+        primary_keys = inspector.get_pk_constraint('mytable')
         assert primary_keys['constrained_columns'] == ['gid', 'id']
 
     finally:
@@ -740,7 +748,7 @@ def test_many_table_column_metadta(db_parameters):
                 assert len(cs) == 3
                 assert cs[2]['name'] == 'email_address' + suffix
                 cnt += 1
-            ps = inspector.get_primary_keys(table_name, schema)
+            ps = inspector.get_pk_constraint(table_name, schema)
             if table_name.startswith("mainusers"):
                 assert ps['constrained_columns'] == ['id' + suffix]
             elif table_name.startswith("mainaddresses"):
