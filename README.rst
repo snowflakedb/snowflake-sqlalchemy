@@ -60,9 +60,11 @@ Verifying Your Installation
             )
         )
         try:
-            results = engine.execute('select current_version()').fetchone()
+            connection = engine.connect()
+            results = connection.execute('select current_version()').fetchone()
             print(results[0])
         finally:
+            connection.close()
             engine.dispose()
 
 #. Replace :code:`<your_user_login_name>`, :code:`<your_password>`, and :code:`<your_account_name>` with the appropriate values for your Snowflake account and user. For more details, see `Connection Parameters`_ (in 
@@ -152,6 +154,29 @@ using a proxy server
 
 Use the supported environment variables, :code:`HTTPS_PROXY`, :code:`HTTP_PROXY` and :code:`NO_PROXY` to configure a proxy server.
 
+Opening and Closing Connection
+-------------------------------------------------------------------------------
+
+Open a connection by executing :code:`engine.connect()`; avoid using :code:`engine.execute()`. Make certain to close the connection by executing :code:`connection.close()` before 
+:code:`engine.dispose()`; otherwise, the Python Garbage collector removes the resources required to communicate with Snowflake, preventing the Python connector from closing the session properly.
+
+    .. code-block:: python
+
+        # Avoid this.
+        engine = create_engine(...)
+        engine.execute(<SQL>)
+        engine.dispose()
+
+        # Do this.
+        engine = create_engine(...)
+        connection = engine.connect()
+        try:
+            connection.execute(<SQL>)
+        finally:
+            connection.close()
+            engine.dispose()
+
+
 Auto-increment Behavior
 -------------------------------------------------------------------------------
 
@@ -197,9 +222,11 @@ The following example shows the round trip of :code:`numpy.datetime64` data:
         ))
     
         specific_date = np.datetime64('2016-03-04T12:03:05.123456789Z')
-        engine.execute(
+        
+        connection = engine.connect()
+        connection.execute(
             "CREATE OR REPLACE TABLE ts_tbl(c1 TIMESTAMP_NTZ)")
-        engine.execute(
+        connection.execute(
             "INSERT INTO ts_tbl(c1) values(%s)", (specific_date,)
         )
         df = pd.read_sql_query("SELECT * FROM ts_tbl", engine)
@@ -267,8 +294,8 @@ In order to retrieve :code:`VARIANT`, :code:`ARRAY`, and :code:`OBJECT` data typ
     .. code-block:: python
 
         import json
-        conn = engine.connect()
-        results = conn.execute(select([t])
+        connection = engine.connect()
+        results = connection.execute(select([t])
         row = results.fetchone()
         data_variant = json.loads(row[0])
         data_object  = json.loads(row[1])
