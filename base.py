@@ -458,7 +458,8 @@ class SnowflakeDialect(default.DefaultDialect):
         return result.fetchall(), n2i
 
     @reflection.cache
-    def get_primary_keys(self, connection, table_name, schema=None, **kw):
+    def get_pk_constraint(self, connection, table_name, schema=None, **kw):
+
         schema = schema or self.default_schema_name
         if not schema:
             _, schema = self._current_database_schema(connection)
