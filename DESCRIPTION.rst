@@ -14,6 +14,7 @@ Release Notes
 
     - Updated doc including ``role`` example.
     - Fixed the return value of ``get_pk_constraint`` and ``get_primary_keys``. Those applications that depend on the old behaviors must update codes. Issue #38 (@nrth)
+    - Updated doc including a note about ``open`` and ``close`` connections.
 
 - v1.0.9 (January 4, 2018)
 
