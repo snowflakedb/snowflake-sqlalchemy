@@ -10,6 +10,11 @@ https://github.com/snowflakedb/snowflake-sqlalchemy
 Release Notes
 -------------------------------------------------------------------------------
 
+- v1.1.0 (February 1, 2018)
+
+    - Updated doc including ``role`` example.
+    - Fixed the return value of ``get_pk_constraint`` and ``get_primary_keys``. Those applications that depend on the old behaviors must update codes. Issue #38 (@nrth)
+
 - v1.0.9 (January 4, 2018)
 
     - Fixed foreign key names that should be normalized. Issue #24 (@cladden)
