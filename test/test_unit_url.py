@@ -39,3 +39,18 @@ def test_url():
                password='test') == (
                'snowflake://admin:test@testaccount.eu-central-1'
                '.snowflakecomputing.com:443/?account=testaccount')
+
+    # empty password should be acceptable in URL utility. The validation will
+    # happen in Python connector anyway.
+    assert URL(host='testaccount.eu-central-1.snowflakecomputing.com',
+               user='admin', account='testaccount') == (
+               'snowflake://admin:@testaccount.eu-central-1'
+               '.snowflakecomputing.com:443/?account=testaccount')
+
+    # authenticator=externalbrowser doesn't require a password.
+    assert URL(host='testaccount.eu-central-1.snowflakecomputing.com',
+               user='admin', account='testaccount',
+               authenticator='externalbrowser') == (
+               'snowflake://admin:@testaccount.eu-central-1'
+               '.snowflakecomputing.com:443/?account=testaccount'
+               '&authenticator=externalbrowser')
