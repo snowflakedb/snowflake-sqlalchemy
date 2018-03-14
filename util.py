@@ -26,7 +26,7 @@ def _url(**db_parameters):
     if 'host' in db_parameters:
         ret = 'snowflake://{user}:{password}@{host}:{port}/'.format(
             user=db_parameters['user'],
-            password=quote_plus(db_parameters['password']),
+            password=quote_plus(db_parameters.get('password', '')),
             host=db_parameters['host'],
             port=db_parameters['port'] if 'port' in db_parameters else 443,
         )
@@ -35,7 +35,7 @@ def _url(**db_parameters):
         ret = 'snowflake://{user}:{password}@{account}/'.format(
             account=db_parameters['account'],
             user=db_parameters['user'],
-            password=db_parameters['password'],
+            password=db_parameters.get('password', ''),
         )
         specified_parameters += ['user', 'password', 'account']
     if 'database' in db_parameters:
