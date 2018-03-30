@@ -32,7 +32,8 @@ install:
   # Create Conda enviroment/virtualenv
   - conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION pandas pytest pytest-cov
   - source activate test-environment
-  - which pip
+  - curl -O https://bootstrap.pypa.io/get-pip.py
+  - python get-pip.py
   - pip install .
   - pip install -U python-dateutil==2.6.1  # workaround for botocore 1.9.8
   - pip list
