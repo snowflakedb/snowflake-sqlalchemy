@@ -34,6 +34,7 @@ install:
   - source activate test-environment
   - curl -O https://bootstrap.pypa.io/get-pip.py
   - python get-pip.py
+  - pip --version
   - pip install .
   - pip install -U python-dateutil==2.6.1  # workaround for botocore 1.9.8
   - pip list
