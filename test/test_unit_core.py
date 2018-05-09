@@ -77,3 +77,17 @@ def test_create_connect_args():
     for idx, ts in enumerate(test_data):
         _, opts = sfdialect.create_connect_args(ts[0])
         assert opts == ts[1], "Failed: {0}: {1}".format(idx, ts[0])
+
+
+def test_denormalize_quote_join():
+    sfdialect = base.SnowflakeDialect()
+
+    test_data = [
+        (['abc', 'cde'], 'abc.cde'),
+        (['abc.cde', 'def'], 'abc.cde.def'),
+        (['"Abc".cde', 'def'], '"Abc".cde.def'),
+        (['"Abc".cde', '"dEf"'], '"Abc".cde."dEf"'),
+
+    ]
+    for idx, ts in enumerate(test_data):
+        assert sfdialect._denormalize_quote_join(*ts[0]) == ts[1]

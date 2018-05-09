@@ -4,8 +4,10 @@
 # Copyright (c) 2012-2018 Snowflake Computing Inc. All right reserved.
 #
 
+import operator
 import re
 from collections import OrderedDict
+from functools import reduce
 
 import sqlalchemy.types as sqltypes
 from sqlalchemy import exc as sa_exc
@@ -163,11 +165,7 @@ class SnowflakeIdentifierPreparer(compiler.IdentifierPreparer):
         Split schema by a dot and merge with required quotes
         """
         idents = schema.split('.')
-        return self._denormalize_quote_join(*idents)
-
-    def _denormalize_quote_join(self, *idents):
-        return '.'.join(
-            self._quote_free_identifiers(*idents))
+        return '.'.join(self._quote_free_identifiers(*idents))
 
 
 class SnowflakeCompiler(compiler.SQLCompiler):
@@ -398,7 +396,6 @@ class SnowflakeDialect(default.DefaultDialect):
     def _has_object(self, connection, object_type, object_name, schema=None):
 
         full_name = self._denormalize_quote_join(schema, object_name)
-
         try:
             results = connection.execute(
                 "DESC {0} /* sqlalchemy:_has_object */ {1}".format(
@@ -431,8 +428,12 @@ class SnowflakeDialect(default.DefaultDialect):
         return name
 
     def _denormalize_quote_join(self, *idents):
+        split_idents = reduce(
+            operator.add,
+            [ids.split('.') for ids in idents if ids is not None])
+        split_idents = [ids.strip('"') for ids in split_idents]
         return '.'.join(
-            self.identifier_preparer._quote_free_identifiers(*idents))
+            self.identifier_preparer._quote_free_identifiers(*split_idents))
 
     def _current_database_schema(self, connection):
         con = connection.connect().connection

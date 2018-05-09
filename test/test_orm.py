@@ -229,3 +229,4 @@ def test_schema_including_db(engine_testaccount, db_parameters):
         session.commit()
     finally:
         Base.metadata.drop_all(engine_testaccount)
+
