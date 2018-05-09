@@ -201,13 +201,17 @@ def test_orm_query(engine_testaccount):
 def test_schema_including_db(engine_testaccount, db_parameters):
     Base = declarative_base()
 
+    namespace = '{0}.{1}'.format(
+        db_parameters['database'], db_parameters['schema'])
+
     class User(Base):
         __tablename__ = 'users'
         __table_args__ = {
-            'schema': '{0}.{1}'.format(
-                db_parameters['database'], db_parameters['schema'])}
+            'schema': namespace
+        }
 
-        id = Column(Integer, Sequence('user_id_seq'), primary_key=True)
+        id = Column(Integer, Sequence('user_id_orm_seq', schema=namespace),
+                    primary_key=True)
         name = Column(String)
         fullname = Column(String)
 
