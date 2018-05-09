@@ -194,6 +194,34 @@ def test_orm_query(engine_testaccount):
     for name, fullname in session.query(User.name, User.fullname):
         print(name, fullname)
 
-
         # TODO: session.query.one() must return always one. NoResultFound and
         # MultipleResultsFound if not one result
+
+
+def test_schema_including_db(engine_testaccount, db_parameters):
+    Base = declarative_base()
+
+    class User(Base):
+        __tablename__ = 'users'
+        __table_args__ = {
+            'schema': '{0}.{1}'.format(
+                db_parameters['database'], db_parameters['schema'])}
+
+        id = Column(Integer, Sequence('user_id_seq'), primary_key=True)
+        name = Column(String)
+        fullname = Column(String)
+
+    Base.metadata.create_all(engine_testaccount)
+    try:
+        ed_user = User(name='ed', fullname='Edward Jones')
+
+        session = Session(bind=engine_testaccount)
+        session.add(ed_user)
+
+        ret_user = session.query(User.id, User.name).first()
+        assert ret_user[0] == 1
+        assert ret_user[1] == 'ed'
+
+        session.commit()
+    finally:
+        Base.metadata.drop_all(engine_testaccount)

@@ -158,6 +158,17 @@ class SnowflakeIdentifierPreparer(compiler.IdentifierPreparer):
         """
         return tuple([self.quote(i) for i in ids if i is not None])
 
+    def quote_schema(self, schema, force=None):
+        """
+        Split schema by a dot and merge with required quotes
+        """
+        idents = schema.split('.')
+        return self._denormalize_quote_join(*idents)
+
+    def _denormalize_quote_join(self, *idents):
+        return '.'.join(
+            self._quote_free_identifiers(*idents))
+
 
 class SnowflakeCompiler(compiler.SQLCompiler):
     def visit_sequence(self, sequence):
