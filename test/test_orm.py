@@ -241,8 +241,8 @@ def test_schema_including_dot(engine_testaccount, db_parameters):
     Base = declarative_base()
 
     namespace = '{db}."{schema}.{schema}".{db}'.format(
-        db=db_parameters['database'],
-        schema=db_parameters['schema'])
+        db=db_parameters['database'].lower(),
+        schema=db_parameters['schema'].lower())
 
     class User(Base):
         __tablename__ = 'users'
@@ -259,5 +259,5 @@ def test_schema_including_dot(engine_testaccount, db_parameters):
     query = session.query(User.id)
     assert str(query).startswith(
         'SELECT {db}."{schema}.{schema}".{db}.users.id'.format(
-            db=db_parameters['database'],
-            schema=db_parameters['schema']))
+            db=db_parameters['database'].lower(),
+            schema=db_parameters['schema'].lower()))
