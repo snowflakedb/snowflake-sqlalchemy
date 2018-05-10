@@ -164,8 +164,41 @@ class SnowflakeIdentifierPreparer(compiler.IdentifierPreparer):
         """
         Split schema by a dot and merge with required quotes
         """
-        idents = schema.split('.')
+        idents = self._split_schema_by_dot(schema)
         return '.'.join(self._quote_free_identifiers(*idents))
+
+    def format_label(self, label, name=None):
+        """
+        Format label after removing double quotes, which are not currently
+        supported in a object identifier.
+        """
+        s = (name or label.name).replace(self.escape_quote, '')
+        return self.quote(s)
+
+    def _split_schema_by_dot(self, schema):
+        ret = []
+        idx = 0
+        pre_idx = 0
+        in_quote = False
+        while idx < len(schema):
+            if not in_quote:
+                if schema[idx] == '.' and pre_idx < idx:
+                    ret.append(schema[pre_idx:idx])
+                    pre_idx = idx + 1
+                elif schema[idx] == '"':
+                    in_quote = True
+                    pre_idx = idx + 1
+            else:
+                if schema[idx] == '"' and pre_idx < idx:
+                    ret.append(schema[pre_idx:idx])
+                    in_quote = False
+                    pre_idx = idx + 1
+            idx += 1
+            if pre_idx < len(schema) and schema[pre_idx] == '.':
+                pre_idx += 1
+        if pre_idx < idx:
+            ret.append(schema[pre_idx:idx])
+        return ret
 
 
 class SnowflakeCompiler(compiler.SQLCompiler):
@@ -428,12 +461,12 @@ class SnowflakeDialect(default.DefaultDialect):
         return name
 
     def _denormalize_quote_join(self, *idents):
+        ip = self.identifier_preparer
         split_idents = reduce(
             operator.add,
-            [ids.split('.') for ids in idents if ids is not None])
-        split_idents = [ids.strip('"') for ids in split_idents]
+            [ip._split_schema_by_dot(ids) for ids in idents if ids is not None])
         return '.'.join(
-            self.identifier_preparer._quote_free_identifiers(*split_idents))
+            ip._quote_free_identifiers(*split_idents))
 
     def _current_database_schema(self, connection):
         con = connection.connect().connection
