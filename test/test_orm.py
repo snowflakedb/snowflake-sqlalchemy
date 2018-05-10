@@ -199,6 +199,9 @@ def test_orm_query(engine_testaccount):
 
 
 def test_schema_including_db(engine_testaccount, db_parameters):
+    """
+    Test schema parameter including database separated by a dot.
+    """
     Base = declarative_base()
 
     namespace = '{0}.{1}'.format(
@@ -230,3 +233,31 @@ def test_schema_including_db(engine_testaccount, db_parameters):
     finally:
         Base.metadata.drop_all(engine_testaccount)
 
+
+def test_schema_including_dot(engine_testaccount, db_parameters):
+    """
+    Tests pseudo schema name including dot.
+    """
+    Base = declarative_base()
+
+    namespace = '{db}."{schema}.{schema}".{db}'.format(
+        db=db_parameters['database'],
+        schema=db_parameters['schema'])
+
+    class User(Base):
+        __tablename__ = 'users'
+        __table_args__ = {
+            'schema': namespace
+        }
+
+        id = Column(Integer, Sequence('user_id_orm_seq', schema=namespace),
+                    primary_key=True)
+        name = Column(String)
+        fullname = Column(String)
+
+    session = Session(bind=engine_testaccount)
+    query = session.query(User.id)
+    assert str(query).startswith(
+        'SELECT {db}."{schema}.{schema}".{db}.users.id'.format(
+            db=db_parameters['database'],
+            schema=db_parameters['schema']))
