@@ -10,6 +10,12 @@ https://github.com/snowflakedb/snowflake-sqlalchemy
 Release Notes
 -------------------------------------------------------------------------------
 
+- v1.1.1 (May 17, 2018)
+
+    - Made password as optional parameter for SSO support
+    - Fixed paramstyl=qmark mode where the data are bound in the server instead of client side
+    - Fixed multipart schema support. Now db.schema can be specified in the schema parameters.
+
 - v1.1.0 (February 1, 2018)
 
     - Updated doc including ``role`` example.
