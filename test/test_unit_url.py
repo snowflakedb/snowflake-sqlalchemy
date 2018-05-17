@@ -1,3 +1,9 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+#
+# Copyright (c) 2012-2018 Snowflake Computing Inc. All right reserved.
+#
+
 from snowflake.sqlalchemy import URL
 
 
@@ -28,11 +34,13 @@ def test_url():
            "snowflake://admin:test@snowflake.reg.local:443/testdb" \
            "/testschema?account=testaccount"
 
-    assert URL(host='testaccount.snowflakecomputing.com', user='admin',
-               account='testaccount',
+    assert URL(user='admin', account='testaccount',
                password='test', region='eu-central-1') == (
-               'snowflake://admin:test@testaccount.snowflakecomputing.com:443'
-               '/?account=testaccount&region=eu-central-1')
+               'snowflake://admin:test@testaccount.eu-central-1/')
+
+    assert URL(user='admin', account='testaccount',
+               password='test', region='eu-central-1.azure') == (
+               'snowflake://admin:test@testaccount.eu-central-1.azure/')
 
     assert URL(host='testaccount.eu-central-1.snowflakecomputing.com',
                user='admin', account='testaccount',

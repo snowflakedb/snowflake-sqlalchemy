@@ -15,6 +15,7 @@ Release Notes
     - Made password as optional parameter for SSO support
     - Fixed paramstyl=qmark mode where the data are bound in the server instead of client side
     - Fixed multipart schema support. Now db.schema can be specified in the schema parameters.
+    - Added ``region`` parameter support to ``URL`` utility method.
 
 - v1.1.0 (February 1, 2018)
 

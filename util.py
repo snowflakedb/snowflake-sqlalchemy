@@ -31,13 +31,22 @@ def _url(**db_parameters):
             port=db_parameters['port'] if 'port' in db_parameters else 443,
         )
         specified_parameters += ['user', 'password', 'host', 'port']
-    else:
+    elif 'region' not in db_parameters:
         ret = 'snowflake://{user}:{password}@{account}/'.format(
             account=db_parameters['account'],
             user=db_parameters['user'],
             password=db_parameters.get('password', ''),
         )
         specified_parameters += ['user', 'password', 'account']
+    else:
+        ret = 'snowflake://{user}:{password}@{account}.{region}/'.format(
+            account=db_parameters['account'],
+            user=db_parameters['user'],
+            password=db_parameters.get('password', ''),
+            region=db_parameters['region'],
+        )
+        specified_parameters += ['user', 'password', 'account', 'region']
+
     if 'database' in db_parameters:
         ret += quote_plus(db_parameters['database'])
         specified_parameters += ['database']

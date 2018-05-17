@@ -762,3 +762,42 @@ def test_many_table_column_metadta(db_parameters):
                 assert fs[0]['referred_table'] == 'mainusers' + suffix
 
     assert cnt == total_objects * 2, 'total number of test objects'
+
+
+@pytest.mark.timeout(15)
+def test_region():
+    from sqlalchemy import create_engine
+    engine = create_engine(URL(
+        user='testuser',
+        password='testpassword',
+        account='testaccount',
+        region='eu-central-1',
+        login_timeout=5
+    ))
+    try:
+        engine.execute('select current_version()').fetchone()
+        pytest.fail('should not run')
+    except Exception as ex:
+        assert ex.orig.errno == 250001
+        assert 'Failed to connect to DB' in ex.orig.msg
+        assert 'testaccount.eu-central-1.snowflakecomputing.com' in ex.orig.msg
+
+
+@pytest.mark.timeout(15)
+def test_azure():
+    from sqlalchemy import create_engine
+    engine = create_engine(URL(
+        user='testuser',
+        password='testpassword',
+        account='testaccount',
+        region='east-us-2.azure',
+        login_timeout=5
+    ))
+    try:
+        engine.execute('select current_version()').fetchone()
+        pytest.fail('should not run')
+    except Exception as ex:
+        assert ex.orig.errno == 250001
+        assert 'Failed to connect to DB' in ex.orig.msg
+        assert 'testaccount.east-us-2.azure.snowflakecomputing.com' in \
+               ex.orig.msg
