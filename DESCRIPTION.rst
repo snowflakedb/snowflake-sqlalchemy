@@ -10,6 +10,10 @@ https://github.com/snowflakedb/snowflake-sqlalchemy
 Release Notes
 -------------------------------------------------------------------------------
 
+- v1.1.2 (June 7, 2018)
+
+    - Removes username restriction for OAuth
+
 - v1.1.1 (May 17, 2018)
 
     - Made password as optional parameter for SSO support
