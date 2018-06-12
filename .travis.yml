@@ -37,6 +37,7 @@ install:
   - pip --version
   - pip install .
   - pip install -U python-dateutil==2.6.1  # workaround for botocore 1.9.8
+  - pip install -U idna==2.6  # workaround for request
   - pip list
 script:
   - set -e
