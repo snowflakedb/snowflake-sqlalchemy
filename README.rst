@@ -330,3 +330,10 @@ Alembic Support
             __dialect__ = 'snowflake'
 
 See `Alembic Documentation <http://alembic.zzzcomputing.com/>`_ for general usage.
+
+
+Support
+================================================================================
+
+Feel free to file an issue or submit a PR here for general cases. For official support, contact Snowflake support at:
+https://support.snowflake.net/s/snowflake-support
