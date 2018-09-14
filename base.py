@@ -96,6 +96,8 @@ class OBJECT(sqltypes.TypeEngine):
 class ARRAY(sqltypes.TypeEngine):
     __visit_name__ = 'ARRAY'
 
+class TIMESTAMP_LTZ(sqltypes.TIMESTAMP):
+    __visit_name__ = 'TIMESTAMP_LTZ'
 
 ischema_names = {
     'BIGINT': BIGINT,
@@ -122,7 +124,7 @@ ischema_names = {
     'TEXT': VARCHAR,
     'TIME': TIME,
     'TIMESTAMP': TIMESTAMP,
-    'TIMESTAMP_LTZ': TIMESTAMP,
+    'TIMESTAMP_LTZ': TIMESTAMP_LTZ,
     'TIMESTAMP_TZ': TIMESTAMP,
     'TIMESTAMP_NTZ': TIMESTAMP,
     'TINYINT': SMALLINT,
@@ -318,6 +320,21 @@ class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
 
     def visit_BLOB(self, type, **kw):
         return "BINARY"
+
+    def visit_datetime(self, type, **kw):
+        return self.visit_TIMESTAMP(type, **kw)
+
+    def visit_DATETIME(self, type, **kw):
+        return self.visit_TIMESTAMP(type, **kw)
+
+    def visit_TIMESTAMP_LTZ(self, type, **kw):
+        return self.visit_TIMESTAMP(type, is_local=True, **kw)
+
+    def visit_TIMESTAMP(self, type, is_local=False, **kw):
+        return "TIMESTAMP%s %s" % (
+            "(%d)" % type.precision if getattr(type, 'precision', None) is not None else "",
+            (type.timezone and "WITH" or "WITHOUT") + (is_local and " LOCAL" or "") + " TIME ZONE"
+        )
 
 
 class SnowflakeDialect(default.DefaultDialect):
