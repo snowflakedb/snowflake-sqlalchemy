@@ -99,6 +99,12 @@ class ARRAY(sqltypes.TypeEngine):
 class TIMESTAMP_LTZ(sqltypes.TIMESTAMP):
     __visit_name__ = 'TIMESTAMP_LTZ'
 
+class TIMESTAMP_TZ(sqltypes.TIMESTAMP):
+    __visit_name__ = 'TIMESTAMP_LTZ'
+
+class TIMESTAMP_TZ(sqltypes.TIMESTAMP):
+    __visit_name__ = 'TIMESTAMP_LTZ'
+
 ischema_names = {
     'BIGINT': BIGINT,
     'BINARY': BINARY,
@@ -125,8 +131,8 @@ ischema_names = {
     'TIME': TIME,
     'TIMESTAMP': TIMESTAMP,
     'TIMESTAMP_LTZ': TIMESTAMP_LTZ,
-    'TIMESTAMP_TZ': TIMESTAMP,
-    'TIMESTAMP_NTZ': TIMESTAMP,
+    'TIMESTAMP_TZ': TIMESTAMP_TZ,
+    'TIMESTAMP_NTZ': TIMESTAMP_NTZ,
     'TINYINT': SMALLINT,
     'VARBINARY': BINARY,
     'VARCHAR': VARCHAR,
@@ -327,13 +333,25 @@ class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
     def visit_DATETIME(self, type, **kw):
         return self.visit_TIMESTAMP(type, **kw)
 
-    def visit_TIMESTAMP_LTZ(self, type, **kw):
-        return self.visit_TIMESTAMP(type, is_local=True, **kw)
+    def visit_TIMESTAMP_NTZ(self, type, **kw):
+        kw['timezone'] = False
+        return self.visit_TIMESTAMP(type, **kw)
 
-    def visit_TIMESTAMP(self, type, is_local=False, **kw):
+    def visit_TIMESTAMP_TZ(self, type, **kw):
+        kw['timezone'] = True
+        return self.visit_TIMESTAMP(type, **kw)
+
+    def visit_TIMESTAMP_LTZ(self, type, **kw):
+        kw['timezone'] = True
+        kw['is_local'] = True
+        return self.visit_TIMESTAMP(type, **kw)
+
+    def visit_TIMESTAMP(self, type, **kw):
+        is_local = kw.get('is_local', False)
+        timezone = kw.get('timezone', type.timezone)
         return "TIMESTAMP%s %s" % (
             "(%d)" % type.precision if getattr(type, 'precision', None) is not None else "",
-            (type.timezone and "WITH" or "WITHOUT") + (is_local and " LOCAL" or "") + " TIME ZONE"
+            (timezone and "WITH" or "WITHOUT") + (is_local and " LOCAL" or "") + " TIME ZONE"
         )
 
 
