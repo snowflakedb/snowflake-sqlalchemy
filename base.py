@@ -96,14 +96,14 @@ class OBJECT(sqltypes.TypeEngine):
 class ARRAY(sqltypes.TypeEngine):
     __visit_name__ = 'ARRAY'
 
+class TIMESTAMP_TZ(sqltypes.TIMESTAMP):
+    __visit_name__ = 'TIMESTAMP_TZ'
+
 class TIMESTAMP_LTZ(sqltypes.TIMESTAMP):
     __visit_name__ = 'TIMESTAMP_LTZ'
 
-class TIMESTAMP_TZ(sqltypes.TIMESTAMP):
-    __visit_name__ = 'TIMESTAMP_LTZ'
-
-class TIMESTAMP_TZ(sqltypes.TIMESTAMP):
-    __visit_name__ = 'TIMESTAMP_LTZ'
+class TIMESTAMP_NTZ(sqltypes.TIMESTAMP):
+    __visit_name__ = 'TIMESTAMP_NTZ'
 
 ischema_names = {
     'BIGINT': BIGINT,
@@ -130,8 +130,8 @@ ischema_names = {
     'TEXT': VARCHAR,
     'TIME': TIME,
     'TIMESTAMP': TIMESTAMP,
-    'TIMESTAMP_LTZ': TIMESTAMP_LTZ,
     'TIMESTAMP_TZ': TIMESTAMP_TZ,
+    'TIMESTAMP_LTZ': TIMESTAMP_LTZ,
     'TIMESTAMP_NTZ': TIMESTAMP_NTZ,
     'TINYINT': SMALLINT,
     'VARBINARY': BINARY,
