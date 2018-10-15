@@ -206,6 +206,20 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         return (self.dialect.identifier_preparer.format_sequence(sequence) +
                 ".nextval")
 
+    def delete_extra_from_clause(self, delete_stmt, from_table,
+                                 extra_froms, from_hints, **kw):
+        return "USING " + ', '.join(
+            t._compiler_dispatch(self, asfrom=True,
+                                 fromhints=from_hints, **kw)
+            for t in extra_froms)
+
+    def update_from_clause(self, update_stmt, from_table,
+                           extra_froms, from_hints, **kw):
+        return "FROM " + ', '.join(
+            t._compiler_dispatch(self, asfrom=True,
+                                 fromhints=from_hints, **kw)
+            for t in extra_froms)
+
 
 class SnowflakeExecutionContext(default.DefaultExecutionContext):
     def fire_sequence(self, seq, type_):
