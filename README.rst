@@ -331,6 +331,48 @@ Alembic Support
 
 See `Alembic Documentation <http://alembic.zzzcomputing.com/>`_ for general usage.
 
+Key Pair Authentication Support
+-------------------------------------------------------------------------------
+Snowflake SQLAlchemy supports the key pair authentication leveraging Snowflake Connector for Python. See `Using Key Pair Authentication <https://docs.snowflake.net/manuals/user-guide/python-connector-example.html#using-key-pair-authentication>`_ about how to set up the keys.
+
+The private key parameter is passed through :code:`connect_args` as follows.
+
+    .. code-block:: python
+
+        ...
+        from snowflake.sqlalchemy import URL
+        from sqlalchemy import create_engine
+
+        from cryptography.hazmat.backends import default_backend
+        from cryptography.hazmat.primitives.asymmetric import rsa
+        from cryptography.hazmat.primitives.asymmetric import dsa
+        from cryptography.hazmat.primitives import serialization
+
+        with open("rsa_key.p8", "rb") as key:
+            p_key= serialization.load_pem_private_key(
+                key.read(),
+                password=os.environ['PRIVATE_KEY_PASSPHRASE'].encode(),
+                backend=default_backend()
+            )
+
+        pkb = p_key.private_bytes(
+            encoding=serialization.Encoding.DER,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption())
+
+        engine = create_engine(URL(
+            account='abc123',
+            user='testuser1',
+            ),
+            connect_args={
+                'private_key': pkb,
+                },
+            )
+
+where :code:`PRIVATE_KEY_PASSPHRASE` is a passphrase to decrypt the private key file :code:`rsa_key.p8`.
+
+Currently a private key parameter is not accepted by :code:`snowflake.sqlalchemy.URL` method.
+
 
 Support
 ================================================================================
