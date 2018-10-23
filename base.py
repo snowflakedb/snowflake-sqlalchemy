@@ -96,14 +96,18 @@ class OBJECT(sqltypes.TypeEngine):
 class ARRAY(sqltypes.TypeEngine):
     __visit_name__ = 'ARRAY'
 
+
 class TIMESTAMP_TZ(sqltypes.TIMESTAMP):
     __visit_name__ = 'TIMESTAMP_TZ'
+
 
 class TIMESTAMP_LTZ(sqltypes.TIMESTAMP):
     __visit_name__ = 'TIMESTAMP_LTZ'
 
+
 class TIMESTAMP_NTZ(sqltypes.TIMESTAMP):
     __visit_name__ = 'TIMESTAMP_NTZ'
+
 
 ischema_names = {
     'BIGINT': BIGINT,
@@ -350,8 +354,10 @@ class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
         is_local = kw.get('is_local', False)
         timezone = kw.get('timezone', type.timezone)
         return "TIMESTAMP%s %s" % (
-            "(%d)" % type.precision if getattr(type, 'precision', None) is not None else "",
-            (timezone and "WITH" or "WITHOUT") + (is_local and " LOCAL" or "") + " TIME ZONE"
+            "(%d)" % type.precision if getattr(type, 'precision',
+                                               None) is not None else "",
+            (timezone and "WITH" or "WITHOUT") + (
+                        is_local and " LOCAL" or "") + " TIME ZONE"
         )
 
 
