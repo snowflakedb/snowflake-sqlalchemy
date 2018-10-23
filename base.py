@@ -357,7 +357,7 @@ class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
             "(%d)" % type.precision if getattr(type, 'precision',
                                                None) is not None else "",
             (timezone and "WITH" or "WITHOUT") + (
-                        is_local and " LOCAL" or "") + " TIME ZONE"
+                    is_local and " LOCAL" or "") + " TIME ZONE"
         )
 
 
