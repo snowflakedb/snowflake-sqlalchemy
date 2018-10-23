@@ -333,9 +333,9 @@ See `Alembic Documentation <http://alembic.zzzcomputing.com/>`_ for general usag
 
 Key Pair Authentication Support
 -------------------------------------------------------------------------------
-Snowflake SQLAlchemy supports the key pair authentication leveraging Snowflake Connector for Python. See `Using Key Pair Authentication <https://docs.snowflake.net/manuals/user-guide/python-connector-example.html#using-key-pair-authentication>`_ about how to set up the keys.
+Snowflake SQLAlchemy supports key pair authentication by leveraging its Snowflake Connector for Python underpinnings. See `Using Key Pair Authentication <https://docs.snowflake.net/manuals/user-guide/python-connector-example.html#using-key-pair-authentication>`_ for steps to create the private and public keys.
 
-The private key parameter is passed through :code:`connect_args` as follows.
+The private key parameter is passed through :code:`connect_args` as follows:
 
     .. code-block:: python
 
@@ -369,9 +369,9 @@ The private key parameter is passed through :code:`connect_args` as follows.
                 },
             )
 
-where :code:`PRIVATE_KEY_PASSPHRASE` is a passphrase to decrypt the private key file :code:`rsa_key.p8`.
+Where :code:`PRIVATE_KEY_PASSPHRASE` is a passphrase to decrypt the private key file, :code:`rsa_key.p8`.
 
-Currently a private key parameter is not accepted by :code:`snowflake.sqlalchemy.URL` method.
+Currently a private key parameter is not accepted by the :code:`snowflake.sqlalchemy.URL` method.
 
 
 Support
