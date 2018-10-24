@@ -38,6 +38,9 @@ install:
   - pip install .
   - pip install -U python-dateutil==2.6.1  # workaround for botocore 1.9.8
   - pip install -U idna==2.6  # workaround for request
+  - if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
+      pip install -U mock;
+    fi
   - pip list
 script:
   - set -e
