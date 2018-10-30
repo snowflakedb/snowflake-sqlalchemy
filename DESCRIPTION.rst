@@ -10,6 +10,12 @@ https://github.com/snowflakedb/snowflake-sqlalchemy
 Release Notes
 -------------------------------------------------------------------------------
 
+- v1.1.3 (October 30, 2018)
+
+    - SQLAlchemy 1.2 multi table support.
+    - TIMESTAMP_LTZ, TIMESTAMP_NTZ and TIMESTAMP_TZ support.
+    - Fixed relative import issue in SQLAlchemy
+
 - v1.1.2 (June 7, 2018)
 
     - Removes username restriction for OAuth
