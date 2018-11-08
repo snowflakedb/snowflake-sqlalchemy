@@ -180,20 +180,13 @@ class SnowflakeIdentifierPreparer(compiler.IdentifierPreparer):
         return '.'.join(self._quote_free_identifiers(*idents))
 
     def format_label(self, label, name=None):
-        """
-        Format label after removing double quotes, which are not currently
-        supported in a object identifier.
-        """
         n = name or label.name
         s = n.replace(self.escape_quote, '')
 
         if not isinstance(n, quoted_name) or n.quote is None:
             return self.quote(s)
 
-        if n.quote:
-            return self.quote_identifier(s)
-        else:
-            return s
+        return self.quote_identifier(s) if n.quote else s
 
     def _split_schema_by_dot(self, schema):
         ret = []

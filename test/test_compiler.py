@@ -74,6 +74,15 @@ FROM "abc" GROUP BY colname"""
     assert str(compiled_result) == """SELECT colname AS alias 
 FROM "abc" GROUP BY colname"""
 
+    # Not quote label in capital case
+    col = column('colname').label('ALIAS')
+    sel_from_tbl = select([col]).group_by(col).select_from(
+        table(quoted_name('abc', True)))
+    compiled_result = sel_from_tbl.compile(engine_testaccount)
+
+    assert str(compiled_result) == """SELECT colname AS "ALIAS" 
+FROM "abc" GROUP BY colname"""
+
     # Not quote table
     col = column('colname').label('alias')
     sel_from_tbl = select([col]).group_by(col).select_from(
