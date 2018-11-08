@@ -1,10 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from sqlalchemy import Integer, String, and_
-from sqlalchemy.sql import column, table
+from sqlalchemy import Integer, String, and_, select
+from sqlalchemy.sql import column, table, quoted_name
 from sqlalchemy.testing import AssertsCompiledSQL
-
 
 table1 = table(
     'table1',
@@ -46,11 +45,40 @@ class TestSnowflakeCompiler(AssertsCompiledSQL):
         )
 
     def test_multi_table_update(self):
-        statement = table1.update()\
-                    .values(name=table2.c.name)\
-                    .where(table1.c.id == table2.c.name)
+        statement = table1.update() \
+            .values(name=table2.c.name) \
+            .where(table1.c.id == table2.c.name)
         self.assert_compile(
             statement,
             "UPDATE table1 SET name=table2.name FROM table2 "
             "WHERE table1.id = table2.name"
         )
+
+
+def test_quoted_name_label(engine_testaccount):
+    # quote label
+    col = column('colname').label(quoted_name('alias', True))
+    sel_from_tbl = select([col]).group_by(col).select_from(
+        table(quoted_name('abc', True)))
+    compiled_result = sel_from_tbl.compile(engine_testaccount)
+
+    assert str(compiled_result) == """SELECT colname AS "alias" 
+FROM "abc" GROUP BY colname"""
+
+    # Not quote label
+    col = column('colname').label('alias')
+    sel_from_tbl = select([col]).group_by(col).select_from(
+        table(quoted_name('abc', True)))
+    compiled_result = sel_from_tbl.compile(engine_testaccount)
+
+    assert str(compiled_result) == """SELECT colname AS alias 
+FROM "abc" GROUP BY colname"""
+
+    # Not quote table
+    col = column('colname').label('alias')
+    sel_from_tbl = select([col]).group_by(col).select_from(
+        table('abc'))
+    compiled_result = sel_from_tbl.compile(engine_testaccount)
+
+    assert str(compiled_result) == """SELECT colname AS alias 
+FROM abc GROUP BY colname"""
