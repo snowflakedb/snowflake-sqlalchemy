@@ -50,9 +50,11 @@ DEFAULT_PARAMETERS = {
     'port': '443',
 }
 
-
-@pytest.fixture()
+@pytest.fixture(scope='session')
 def db_parameters():
+    return get_db_parameters()
+
+def get_db_parameters():
     """
     Sets the db connection parameters
     """
@@ -86,7 +88,7 @@ def get_engine(user=None, password=None, account=None):
     """
     Creates a connection using the parameters defined in JDBC connect string
     """
-    ret = db_parameters()
+    ret = get_db_parameters()
 
     if user is not None:
         ret['user'] = user
@@ -122,8 +124,8 @@ def engine_testaccount(request):
 
 
 @pytest.fixture(scope='session', autouse=True)
-def init_test_schema(request):
-    ret = db_parameters()
+def init_test_schema(request, db_parameters):
+    ret = db_parameters
     with snowflake.connector.connect(
             user=ret['user'],
             password=ret['password'],
@@ -137,7 +139,7 @@ def init_test_schema(request):
             "CREATE SCHEMA IF NOT EXISTS {0}".format(TEST_SCHEMA))
 
     def fin():
-        ret1 = db_parameters()
+        ret1 = db_parameters
         with snowflake.connector.connect(
                 user=ret1['user'],
                 password=ret1['password'],
