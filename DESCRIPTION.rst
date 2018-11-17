@@ -10,6 +10,10 @@ https://github.com/snowflakedb/snowflake-sqlalchemy
 Release Notes
 -------------------------------------------------------------------------------
 
+- v1.1.4 (November 13, 2018)
+
+    - Fixed lable/alias by honoring quote_name.
+
 - v1.1.3 (October 30, 2018)
 
     - SQLAlchemy 1.2 multi table support.
