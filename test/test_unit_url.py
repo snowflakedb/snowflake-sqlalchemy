@@ -62,3 +62,10 @@ def test_url():
                'snowflake://admin:@testaccount.eu-central-1'
                '.snowflakecomputing.com:443/?account=testaccount'
                '&authenticator=externalbrowser')
+
+    # authenticator=oktaurl support
+    assert URL(user='testuser', account='testaccount',
+               password='test',
+               authenticator='https://testokta.okta.com') == (
+               'snowflake://testuser:test@testaccount'
+               '/?authenticator=https%3A%2F%2Ftestokta.okta.com')
