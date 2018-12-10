@@ -423,6 +423,9 @@ class SnowflakeDialect(default.DefaultDialect):
 
     # The dialect supports a native ENUM construct.
     supports_native_enum = False
+    
+    # The dialect supports inserting multiple rows at once 
+    supports_multivalues_insert = True
 
     preparer = SnowflakeIdentifierPreparer
     ddl_compiler = SnowflakeDDLCompiler
