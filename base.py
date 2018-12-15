@@ -423,8 +423,8 @@ class SnowflakeDialect(default.DefaultDialect):
 
     # The dialect supports a native ENUM construct.
     supports_native_enum = False
-    
-    # The dialect supports inserting multiple rows at once 
+
+    # The dialect supports inserting multiple rows at once.
     supports_multivalues_insert = True
 
     preparer = SnowflakeIdentifierPreparer
@@ -433,10 +433,8 @@ class SnowflakeDialect(default.DefaultDialect):
     statement_compiler = SnowflakeCompiler
     execution_ctx_cls = SnowflakeExecutionContext
 
-    # indicates symbol names are
-    # UPPERCASEd if they are case insensitive
-    # within the database.
-    # if this is True, the methods normalize_name()
+    # indicates symbol names are UPPERCASEd if they are case insensitive
+    # within the database. If this is True, the methods normalize_name()
     # and denormalize_name() must be provided.
     requires_name_normalize = True
 
