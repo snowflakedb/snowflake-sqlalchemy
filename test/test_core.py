@@ -160,9 +160,10 @@ def test_insert_tables(engine_testaccount):
     Inserts data into tables
     """
     metadata = MetaData()
-    users, addresses = _create_users_addresses_tables(engine_testaccount,
-                                                      metadata)
+    users, addresses = _create_users_addresses_tables(
+        engine_testaccount, metadata)
 
+    conn = engine_testaccount.connect()
     try:
         # inserts data with an implicitly generated id
         ins = users.insert().values(name='jack', fullname='Jack Jones')
@@ -171,7 +172,6 @@ def test_insert_tables(engine_testaccount):
         results.close()
 
         # inserts data with the given id
-        conn = engine_testaccount.connect()
         ins = users.insert()
         conn.execute(ins, id=2, name='wendy', fullname='Wendy Williams')
 
@@ -312,6 +312,7 @@ def test_insert_tables(engine_testaccount):
         results = engine_testaccount.execute(s).fetchall()
         assert results[-1] == ('Wendy Williams',)
     finally:
+        conn.close()
         # drop tables
         addresses.drop(engine_testaccount)
         users.drop(engine_testaccount)
