@@ -408,14 +408,6 @@ def test_get_primary_keys(engine_testaccount):
     try:
         inspector = inspect(engine_testaccount)
 
-        # deprecated methods returning a list of primary keys
-        primary_keys = inspector.get_primary_keys('users')
-        assert primary_keys == ['id']
-
-        primary_keys = inspector.get_primary_keys('addresses')
-        assert primary_keys == ['id']
-
-        # new methods returning a dict of primary keys
         primary_keys = inspector.get_pk_constraint('users')
         assert primary_keys['constrained_columns'] == ['id']
 
