@@ -10,6 +10,11 @@ https://github.com/snowflakedb/snowflake-sqlalchemy
 Release Notes
 -------------------------------------------------------------------------------
 
+- v1.1.5 (December 19, 2018)
+
+    - Added multivalue_support feature flag
+    - Deprecate get_primary_keys
+
 - v1.1.4 (November 13, 2018)
 
     - Fixed lable/alias by honoring quote_name.
