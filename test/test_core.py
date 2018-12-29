@@ -12,10 +12,12 @@ from sqlalchemy import (Table, Column, Integer, Numeric, String, MetaData,
                         Sequence, ForeignKey, Binary, REAL)
 from sqlalchemy import inspect
 from sqlalchemy import text
+from sqlalchemy import dialects
 from sqlalchemy.sql import and_, or_, not_
 from sqlalchemy.sql import select
 
 from snowflake.sqlalchemy import URL
+from snowflake.sqlalchemy.base import SnowflakeDialect
 
 try:
     from parameters import (CONNECTION_PARAMETERS2)
@@ -794,3 +796,10 @@ def test_azure():
         assert 'Failed to connect to DB' in ex.orig.msg
         assert 'testaccount.east-us-2.azure.snowflakecomputing.com' in \
                ex.orig.msg
+
+
+def test_load_dialect():
+    """
+    Test loading Snowflake SQLAlchemy dialect class
+    """
+    assert isinstance(dialects.registry.load('snowflake')(), SnowflakeDialect)

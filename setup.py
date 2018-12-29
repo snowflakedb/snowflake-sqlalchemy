@@ -50,7 +50,7 @@ setup(
     },
     entry_points={
         'sqlalchemy.dialects': [
-            'snowflake=snowflake.sqlalchemy.base',
+            'snowflake=snowflake.sqlalchemy.base:SnowflakeDialect',
         ]
     },
     classifiers = [
