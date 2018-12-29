@@ -111,7 +111,7 @@ def get_engine_with_numpy(db_parameters, user=None, password=None,
 def test_numpy_datatypes(db_parameters):
     engine = get_engine_with_numpy(db_parameters)
     try:
-        specific_date = np.datetime64('2016-03-04T12:03:05.123456789Z')
+        specific_date = np.datetime64('2016-03-04T12:03:05.123456789')
         engine.execute(
             "CREATE OR REPLACE TABLE {name}("
             "c1 timestamp_ntz)".format(name=db_parameters['name']))
