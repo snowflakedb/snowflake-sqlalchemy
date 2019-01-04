@@ -10,6 +10,10 @@ https://github.com/snowflakedb/snowflake-sqlalchemy
 Release Notes
 -------------------------------------------------------------------------------
 
+- v1.1.6 (January 3, 2019)
+
+    - Fixed 'module' object is not callable in csvsql
+
 - v1.1.5 (December 19, 2018)
 
     - Added multivalue_support feature flag
