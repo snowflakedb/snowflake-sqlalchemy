@@ -11,7 +11,11 @@ pip --version
 pip install -U virtualenv
 python -m virtualenv venv
 source ./venv/bin/activate
-pip install pandas
+if [[ "$TRAVIS_PYTHON_VERSION" == "3.4" ]]; then
+    pip install pandas==0.20.3
+else
+    pip install pandas
+fi
 pip install pytest pytest-cov pytest-rerunfailures
 if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
     pip install mock
