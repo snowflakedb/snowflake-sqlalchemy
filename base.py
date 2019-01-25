@@ -663,7 +663,10 @@ class SnowflakeDialect(default.DefaultDialect):
                         coltype, colname))
                 col_type = sqltypes.NULLTYPE
             else:
-                if issubclass(col_type, sqltypes.Numeric):
+                if issubclass(col_type, FLOAT):
+                    col_type_kw['precision'] = numeric_precision
+                    col_type_kw['decimal_return_scale'] = numeric_scale
+                elif issubclass(col_type, sqltypes.Numeric):
                     col_type_kw['precision'] = numeric_precision
                     col_type_kw['scale'] = numeric_scale
                 elif issubclass(col_type,

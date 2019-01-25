@@ -9,7 +9,7 @@ import re
 import pytest
 from parameters import (CONNECTION_PARAMETERS)
 from sqlalchemy import (Table, Column, Integer, Numeric, String, MetaData,
-                        Sequence, ForeignKey, Binary, REAL)
+                        Sequence, ForeignKey, LargeBinary, REAL)
 from sqlalchemy import inspect
 from sqlalchemy import text
 from sqlalchemy import dialects
@@ -652,7 +652,7 @@ def test_column_metadata(engine_testaccount):
         __tablename__ = 'appointment'
         id = Column(Numeric(38, 3), primary_key=True)
         string_with_len = Column(String(100))
-        binary_data = Column(Binary)
+        binary_data = Column(LargeBinary)
         real_data = Column(REAL)
 
     Base.metadata.create_all(engine_testaccount)
