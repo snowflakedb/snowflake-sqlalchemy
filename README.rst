@@ -373,6 +373,33 @@ Where :code:`PRIVATE_KEY_PASSPHRASE` is a passphrase to decrypt the private key 
 
 Currently a private key parameter is not accepted by the :code:`snowflake.sqlalchemy.URL` method.
 
+Merge Command Support
+================================================================================
+Snowflake SQLAlchemy supports upserting with its :code:`MergeInto` custom expression.
+See `Merge <https://docs.snowflake.net/manuals/sql-reference/sql/merge.html>`_  for full documentation.
+
+Use it as follows:
+
+    .. code-block:: python
+        from sqlalchemy.orm import sessionmaker
+        from sqlalchemy import MetaData, create_engine
+        from snowflake.sqlalchemy import MergeInto
+
+        engine = create_engine(db.url, echo=False)
+        session = sessionmaker(bind=engine)()
+        connection = engine.connect()
+
+        meta = MetaData()
+        meta.reflect(bind=session.bind)
+        t1 = meta.tables['t1']
+        t2 = meta.tables['t2']
+
+        merge = MergeInto(target=t1, source=t2, on=t1.c.t1key == t2.c.t2key)
+        merge.when_matched_then_delete().where(t2.c.marked == 1)
+        merge.when_matched_then_update().where(t2.c.isnewstatus == 1).values(val = t2.c.newval, status=t2.c.newstatus)
+        merge.when_matched_then_update().values(val=t2.c.newval)
+        merge.when_not_matched_then_insert().values(val=t2.c.newval, status=t2.c.newstatus)
+        connection.execute(merge)
 
 Support
 ================================================================================
