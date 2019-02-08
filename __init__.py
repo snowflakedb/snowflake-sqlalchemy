@@ -5,7 +5,7 @@
 #
 
 from snowflake.sqlalchemy.base import (
-    VARIANT, ARRAY, OBJECT, TIMESTAMP_LTZ, TIMESTAMP_TZ, TIMESTAMP_NTZ)
+    VARIANT, ARRAY, OBJECT, TIMESTAMP_LTZ, TIMESTAMP_TZ, TIMESTAMP_NTZ, MergeInto)
 from snowflake.sqlalchemy.util import _url as URL
 from snowflake.sqlalchemy.version import VERSION
 from snowflake.connector.compat import (TO_UNICODE)

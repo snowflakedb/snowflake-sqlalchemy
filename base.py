@@ -16,7 +16,8 @@ from sqlalchemy.engine import default, reflection
 from sqlalchemy.schema import Table
 from sqlalchemy.sql import (
     compiler, expression)
-from sqlalchemy.sql.elements import quoted_name
+from sqlalchemy.sql.dml import UpdateBase
+from sqlalchemy.sql.elements import quoted_name, ClauseElement
 from sqlalchemy.types import (
     CHAR, DATE, DATETIME, INTEGER, SMALLINT, BIGINT, DECIMAL, TIME,
     TIMESTAMP, VARCHAR, BINARY, BOOLEAN, FLOAT, REAL)
@@ -218,6 +219,31 @@ class SnowflakeCompiler(compiler.SQLCompiler):
     def visit_sequence(self, sequence):
         return (self.dialect.identifier_preparer.format_sequence(sequence) +
                 ".nextval")
+
+    def visit_merge_into(self, merge_into):
+        clauses = " ".join(clause._compiler_dispatch(self) for clause in merge_into.clauses)
+        return "MERGE INTO %s USING %s ON %s" % (merge_into.target, merge_into.source, merge_into.on) + (
+            " " + clauses if clauses else ""
+        )
+
+    def visit_merge_into_clause(self, merge_into_clause):
+        if merge_into_clause.command == 'INSERT':
+            sets, sets_tos = zip(*merge_into_clause.set.items())
+            return "WHEN NOT MATCHED%s THEN %s (%s) VALUES (%s)" % (
+                " AND %s" % merge_into_clause.predicate._compiler_dispatch(
+                    self) if merge_into_clause.predicate is not None else "",
+                merge_into_clause.command,
+                ", ".join(sets),
+                ", ".join(map(lambda e: e._compiler_dispatch(self), sets_tos)))
+        else:
+            sets = ", ".join(
+                ["%s = %s" % (set[0], set[1]._compiler_dispatch(self)) for set in
+                 merge_into_clause.set.items()]) if merge_into_clause.set else ""
+            return "WHEN MATCHED%s THEN %s%s" % (
+                " AND %s" % merge_into_clause.predicate._compiler_dispatch(
+                    self) if merge_into_clause.predicate is not None else "",
+                merge_into_clause.command,
+                " SET %s" % sets if merge_into_clause.set else "")
 
     def delete_extra_from_clause(self, delete_stmt, from_table,
                                  extra_froms, from_hints, **kw):
@@ -865,6 +891,68 @@ SELECT /* sqlalchemy:get_columns */
             "SHOW /* sqlalchemy:get_schema_names */ SCHEMAS")
 
         return [self.normalize_name(row[1]) for row in cursor]
+
+
+class MergeInto(UpdateBase):
+    __visit_name__ = 'merge_into'
+
+    def __init__(self, target, source, on):
+        self.target = target
+        self.source = source
+        self.on = on
+        self.clauses = []
+
+    class clause(ClauseElement):
+        __visit_name__ = 'merge_into_clause'
+
+        def __init__(self, command):
+            self.set = None
+            self.predicate = None
+            self.command = command
+
+        def __repr__(self):
+            if self.command == 'INSERT':
+                sets, sets_tos = zip(*self.set.items())
+                return "WHEN NOT MATCHED%s THEN %s (%s) VALUES (%s)" % (
+                    " AND %s" % self.predicate if self.predicate is not None else "",
+                    self.command,
+                    ", ".join(sets),
+                    ", ".join(map(str, sets_tos)))
+            else:
+                # WHEN MATCHED clause
+                sets = ", ".join(["%s = %s" % (set[0], set[1]) for set in self.set.items()]) if self.set else ""
+                return "WHEN MATCHED%s THEN %s%s" % (" AND %s" % self.predicate if self.predicate is not None else "",
+                                                     self.command,
+                                                     " SET %s" % sets if self.set else "")
+
+        def values(self, **kwargs):
+            self.set = kwargs
+            return self
+
+        def where(self, expr):
+            self.predicate = expr
+            return self
+
+    def __repr__(self):
+        clauses = " ".join([repr(clause) for clause in self.clauses])
+        return "MERGE INTO %s USING %s ON %s" % (self.target, self.source, self.on) + (
+            ' ' + clauses if clauses else ''
+        )
+
+    def when_matched_then_update(self):
+        clause = self.clause('UPDATE')
+        self.clauses.append(clause)
+        return clause
+
+    def when_matched_then_delete(self):
+        clause = self.clause('DELETE')
+        self.clauses.append(clause)
+        return clause
+
+    def when_not_matched_then_insert(self):
+        clause = self.clause('INSERT')
+        self.clauses.append(clause)
+        return clause
 
 
 dialect = SnowflakeDialect

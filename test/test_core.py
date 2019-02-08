@@ -9,7 +9,7 @@ import re
 import pytest
 from parameters import (CONNECTION_PARAMETERS)
 from sqlalchemy import (Table, Column, Integer, Numeric, String, MetaData,
-                        Sequence, ForeignKey, LargeBinary, REAL)
+                        Sequence, ForeignKey, LargeBinary, REAL, Boolean)
 from sqlalchemy import inspect
 from sqlalchemy import text
 from sqlalchemy import dialects
@@ -17,7 +17,7 @@ from sqlalchemy.sql import and_, or_, not_
 from sqlalchemy.sql import select
 
 from snowflake.sqlalchemy import URL
-from snowflake.sqlalchemy.base import SnowflakeDialect
+from snowflake.sqlalchemy.base import SnowflakeDialect, MergeInto
 
 try:
     from parameters import (CONNECTION_PARAMETERS2)
@@ -803,3 +803,90 @@ def test_load_dialect():
     Test loading Snowflake SQLAlchemy dialect class
     """
     assert isinstance(dialects.registry.load('snowflake')(), SnowflakeDialect)
+
+
+@pytest.mark.parametrize('conditional_flag', [True, False])
+@pytest.mark.parametrize('update_flag,insert_flag,delete_flag', [
+    (True, False, False),
+    (False, True, False),
+    (False, False, True),
+    (False, True, True),
+    (True, True, False)])
+def test_upsert(engine_testaccount, update_flag, insert_flag, delete_flag, conditional_flag):
+    meta = MetaData()
+    users = Table('users', meta,
+                  Column('id', Integer, Sequence('user_id_seq'), primary_key=True),
+                  Column('name', String),
+                  Column('fullname', String))
+    onboarding_users = Table('onboarding_users', meta,
+                             Column('id', Integer, Sequence('new_user_id_seq'), primary_key=True),
+                             Column('name', String),
+                             Column('fullname', String),
+                             Column('delete', Boolean))
+    meta.create_all(engine_testaccount)
+    conn = engine_testaccount.connect()
+    try:
+        conn.execute(users.insert(), [
+            {'id': 1, 'name': 'mark', 'fullname': 'Mark Keller'},
+            {'id': 4, 'name': 'luke', 'fullname': 'Luke Lorimer'},
+            {'id': 2, 'name': 'amanda', 'fullname': 'Amanda Harris'}])
+        conn.execute(onboarding_users.insert(), [
+            {'id': 2, 'name': 'amanda', 'fullname': 'Amanda Charlotte Harris', 'delete': True},
+            {'id': 3, 'name': 'jim', 'fullname': 'Jim Wang', 'delete': False},
+            {'id': 4, 'name': 'lukas', 'fullname': 'Lukas Lorimer', 'delete': False},
+            {'id': 5, 'name': 'andras', 'fullname': None, 'delete': False}
+        ])
+
+        merge = MergeInto(users, onboarding_users, users.c.id == onboarding_users.c.id)
+        if update_flag:
+            clause = merge.when_matched_then_update().values(name=onboarding_users.c.name,
+                                                             fullname=onboarding_users.c.fullname)
+            if conditional_flag:
+                clause.where(onboarding_users.c.name != 'amanda')
+        if insert_flag:
+            clause = merge.when_not_matched_then_insert().values(
+                id=onboarding_users.c.id,
+                name=onboarding_users.c.name,
+                fullname=onboarding_users.c.fullname,
+            )
+            if conditional_flag:
+                clause.where(onboarding_users.c.fullname != None)
+        if delete_flag:
+            clause = merge.when_matched_then_delete()
+            if conditional_flag:
+                clause.where(onboarding_users.c.delete == True)
+
+        conn.execute(merge)
+        users_tuples = {tuple(row) for row in conn.execute(select([users]))}
+        onboarding_users_tuples = {tuple(row) for row in conn.execute(select([onboarding_users]))}
+        expected_users = {
+            (1, 'mark', 'Mark Keller'),
+            (2, 'amanda', 'Amanda Harris'),
+            (4, 'luke', 'Luke Lorimer')
+        }
+        if update_flag:
+            if not conditional_flag:
+                expected_users.remove((2, 'amanda', 'Amanda Harris'))
+                expected_users.add((2, 'amanda', 'Amanda Charlotte Harris'))
+            expected_users.remove((4, 'luke', 'Luke Lorimer'))
+            expected_users.add((4, 'lukas', 'Lukas Lorimer'))
+        elif delete_flag:
+            if not conditional_flag:
+                expected_users.remove((4, 'luke', 'Luke Lorimer'))
+            expected_users.remove((2, 'amanda', 'Amanda Harris'))
+        if insert_flag:
+            if not conditional_flag:
+                expected_users.add((5, 'andras', None))
+            expected_users.add((3, 'jim', 'Jim Wang'))
+        expected_onboarding_users = {
+            (2, 'amanda', 'Amanda Charlotte Harris', True),
+            (3, 'jim', 'Jim Wang', False),
+            (4, 'lukas', 'Lukas Lorimer', False),
+            (5, 'andras', None, False)
+        }
+        assert users_tuples == expected_users
+        assert onboarding_users_tuples == expected_onboarding_users
+    finally:
+        conn.close()
+        users.drop(engine_testaccount)
+        onboarding_users.drop(engine_testaccount)
