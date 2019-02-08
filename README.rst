@@ -401,6 +401,32 @@ Use it as follows:
         merge.when_not_matched_then_insert().values(val=t2.c.newval, status=t2.c.newstatus)
         connection.execute(merge)
 
+CopyIntoStorage Support
+================================================================================
+Snowflake SQLAlchemy supports saving tables/query results into different stages, as well as into Azure Containers and
+AWS buckets with its custom :code:`CopyIntoStorage` expression. See `Copy into <https://docs.snowflake.net/manuals/sql-reference/sql/copy-into-location.html>`_
+for full documentation.
+
+Use it as follows:
+
+    .. code-block:: python
+        from sqlalchemy.orm import sessionmaker
+        from sqlalchemy import MetaData, create_engine
+        from snowflake.sqlalchemy import CopyIntoStorage, AWSBucket, CSVFormatter
+
+        engine = create_engine(db.url, echo=False)
+        session = sessionmaker(bind=engine)()
+        connection = engine.connect()
+
+        meta = MetaData()
+        meta.reflect(bind=session.bind)
+        users = meta.tables['users']
+
+        copy_into = CopyIntoStorage(from_=users,
+                                    into=AWSBucket.from_uri('s3://my_private_backup').encryption_aws_sse_kms('1234abcd-12ab-34cd-56ef-1234567890ab'),
+                                    formatter=CSVFormatter().null_if(['null', 'Null']))
+        connection.execute(copy_into)
+
 Support
 ================================================================================
 
