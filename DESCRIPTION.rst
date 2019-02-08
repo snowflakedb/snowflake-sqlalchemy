@@ -10,6 +10,12 @@ https://github.com/snowflakedb/snowflake-sqlalchemy
 Release Notes
 -------------------------------------------------------------------------------
 
+
+- v1.1.7 (February 8, 2019)
+		
+    - Added Upsert in sql-alchemy
+    - CopyIntoS3 command in SQLAlchemy
+
 - v1.1.6 (January 3, 2019)
 
     - Fixed 'module' object is not callable in csvsql
