@@ -240,6 +240,8 @@ class SnowflakeCompiler(compiler.SQLCompiler):
     def visit_merge_into_clause(self, merge_into_clause, **kw):
         if merge_into_clause.command == 'INSERT':
             sets, sets_tos = zip(*merge_into_clause.set.items())
+            if kw.get('deterministic', False):
+                sets, sets_tos = zip(*sorted(merge_into_clause.set.items(), key=operator.itemgetter(0)))
             return "WHEN NOT MATCHED%s THEN %s (%s) VALUES (%s)" % (
                 " AND %s" % merge_into_clause.predicate._compiler_dispatch(
                     self, **kw) if merge_into_clause.predicate is not None else "",
@@ -247,9 +249,12 @@ class SnowflakeCompiler(compiler.SQLCompiler):
                 ", ".join(sets),
                 ", ".join(map(lambda e: e._compiler_dispatch(self, **kw), sets_tos)))
         else:
+            set_list = merge_into_clause.set.items()
+            if kw.get('deterministic', False):
+                set_list.sort(key=operator.itemgetter(0))
             sets = ", ".join(
                 ["%s = %s" % (set[0], set[1]._compiler_dispatch(self, **kw)) for set in
-                 merge_into_clause.set.items()]) if merge_into_clause.set else ""
+                 set_list]) if merge_into_clause.set else ""
             return "WHEN MATCHED%s THEN %s%s" % (
                 " AND %s" % merge_into_clause.predicate._compiler_dispatch(
                     self, **kw) if merge_into_clause.predicate is not None else "",
@@ -267,8 +272,11 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             into, credentials, encryption = into
         elif isinstance(from_, tuple):
             from_, credentials, encryption = from_
+        options_list = copy_into.copy_options.items()
+        if kw.get('deterministic', False):
+            options_list.sort(key=operator.itemgetter(0))
         options = (' ' + ' '.join(["{} = {}".format(n, v._compiler_dispatch(self, **kw)) for n, v in
-                                   copy_into.copy_options.items()])) if copy_into.copy_options else ''
+                                   options_list])) if copy_into.copy_options else ''
         if credentials:
             options += " {}".format(credentials)
         if encryption:
@@ -276,24 +284,30 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         return "COPY INTO {} FROM {} {}{}".format(into, from_, formatter, options)
 
     def visit_copy_formatter(self, formatter, **kw):
+        options_list = formatter.options.items()
+        if kw.get('deterministic', False):
+            options_list.sort(key=operator.itemgetter(0))
         return 'FILE_FORMAT=(TYPE={}{})'.format(formatter.file_format,
                                                 (' ' + ' '.join([("{}='{}'" if isinstance(value, str)
                                                                   else "{}={}").format(
-                                                    name,
-                                                    value._compiler_dispatch(self, **kw) if getattr(value,
-                                                                                                    '_compiler_dispatch',
-                                                                                                    False)
-                                                    else str(value))
-                                                    for name, value in
-                                                    formatter.options.items()])) if formatter.options else "")
+                                                 name,
+                                                 value._compiler_dispatch(self, **kw) if getattr(value,
+                                                                                                 '_compiler_dispatch',
+                                                                                                 False) else str(value))
+                                                 for name, value in options_list])) if formatter.options else "")
 
     def visit_aws_bucket(self, aws_bucket, **kw):
+        credentials_list = aws_bucket.credentials_used.items()
+        if kw.get('deterministic', False):
+            credentials_list.sort(key=operator.itemgetter(0))
         credentials = 'CREDENTIALS=({})'.format(
-            ' '.join("{}='{}'".format(n, v) for n, v in aws_bucket.credentials_used.items())
+            ' '.join("{}='{}'".format(n, v) for n, v in credentials_list)
         )
+        encryption_list = aws_bucket.encryption_used.items()
+        if kw.get('deterministic', False):
+            encryption_list.sort(key=operator.itemgetter(0))
         encryption = 'ENCRYPTION=({})'.format(
-            ' '.join(("{}='{}'" if isinstance(v, string_types) else "{}={}").format(n, v) for n, v in
-                     aws_bucket.encryption_used.items())
+            ' '.join(("{}='{}'" if isinstance(v, string_types) else "{}={}").format(n, v) for n, v in encryption_list)
         )
         uri = "'s3://{}{}'".format(aws_bucket.bucket, '/' + aws_bucket.path if aws_bucket.path else "")
         return (uri,
@@ -301,12 +315,15 @@ class SnowflakeCompiler(compiler.SQLCompiler):
                 encryption if aws_bucket.encryption_used else '')
 
     def visit_azure_container(self, azure_container, **kw):
-        credentials = 'CREDENTIALS=({})'.format(
-            ' '.join("{}='{}'".format(n, v) for n, v in azure_container.credentials_used.items())
-        )
-        encryption = 'ENCRYPTION=({})'.format(
-            ' '.join(("{}='{}'" if isinstance(v, string_types) else "{}={}").format(n, v) for n, v in
-                     azure_container.encryption_used.items())
+        credentials_list = azure_container.credentials_used.items()
+        if kw.get('deterministic', False):
+            credentials_list.sort(key=operator.itemgetter(0))
+        credentials = 'CREDENTIALS=({})'.format(' '.join("{}='{}'".format(n, v) for n, v in credentials_list))
+        encryption_list = azure_container.encryption_used.items()
+        if kw.get('deterministic', False):
+            encryption_list.sort(key=operator.itemgetter(0))
+        encryption = 'ENCRYPTION=({})'.format(' '.join(("{}='{}'" if isinstance(v, string_types) else "{}={}").format(n, v) for n, v in
+                     encryption_list)
         )
         uri = "'azure://{}.blob.core.windows.net/{}{}'".format(
             azure_container.account,
@@ -979,7 +996,7 @@ class MergeInto(UpdateBase):
         __visit_name__ = 'merge_into_clause'
 
         def __init__(self, command):
-            self.set = None
+            self.set = {}
             self.predicate = None
             self.command = command
 

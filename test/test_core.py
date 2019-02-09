@@ -891,8 +891,31 @@ def test_upsert(engine_testaccount, update_flag, insert_flag, delete_flag, condi
         users.drop(engine_testaccount)
         onboarding_users.drop(engine_testaccount)
 
+def test_deterministic_merge_into(sql_compiler):
+    meta = MetaData()
+    users = Table('users', meta,
+                  Column('id', Integer, Sequence('user_id_seq'), primary_key=True),
+                  Column('name', String),
+                  Column('fullname', String))
+    onboarding_users = Table('onboarding_users', meta,
+                             Column('id', Integer, Sequence('new_user_id_seq'), primary_key=True),
+                             Column('name', String),
+                             Column('fullname', String),
+                             Column('delete', Boolean))
+    merge = MergeInto(users, onboarding_users, users.c.id == onboarding_users.c.id)
+    merge.when_matched_then_update().values(name=onboarding_users.c.name,
+                                            fullname=onboarding_users.c.fullname)
+    merge.when_not_matched_then_insert().values(
+        id=onboarding_users.c.id,
+        name=onboarding_users.c.name,
+        fullname=onboarding_users.c.fullname,
+    ).where(onboarding_users.c.fullname != None)
+    assert sql_compiler(merge) == "MERGE INTO users USING onboarding_users ON users.id = onboarding_users.id " \
+                                  "WHEN MATCHED THEN UPDATE SET fullname = onboarding_users.fullname, " \
+                                  "name = onboarding_users.name WHEN NOT MATCHED AND onboarding_users.fullname " \
+                                  "IS NOT NULL THEN INSERT (fullname, id, name) VALUES (onboarding_users.fullname, " \
+                                  "onboarding_users.id, onboarding_users.name)"
 
-@pytest.mark.skip("test result is not deterministic")
 def test_copy_into_location(engine_testaccount, sql_compiler):
     meta = MetaData()
     conn = engine_testaccount.connect()
@@ -902,34 +925,37 @@ def test_copy_into_location(engine_testaccount, sql_compiler):
                        Column('quantity', Integer))
     meta.create_all(engine_testaccount)
     copy_stmt_1 = CopyIntoStorage(from_=food_items,
-                                  into=AWSBucket.from_uri('s3://backup').encryption_aws_sse_kms('1234abcd-12ab-34cd-56ef-1234567890ab'),
+                                  into=AWSBucket.from_uri('s3://backup').encryption_aws_sse_kms(
+                                      '1234abcd-12ab-34cd-56ef-1234567890ab'),
                                   formatter=CSVFormatter().record_delimiter('|').escape(None).null_if(['null', 'Null']))
     assert (sql_compiler(copy_stmt_1) == "COPY INTO 's3://backup' FROM python_tests_foods FILE_FORMAT=(TYPE=csv "
-                                        "NULL_IF=('null', 'Null') RECORD_DELIMITER='|' ESCAPE=None) ENCRYPTION="
-                                        "(KMS_KEY_ID='1234abcd-12ab-34cd-56ef-1234567890ab' TYPE='AWS_SSE_KMS')")
+                                         "ESCAPE=None NULL_IF=('null', 'Null') RECORD_DELIMITER='|') ENCRYPTION="
+                                         "(KMS_KEY_ID='1234abcd-12ab-34cd-56ef-1234567890ab' TYPE='AWS_SSE_KMS')")
     copy_stmt_2 = CopyIntoStorage(from_=select([food_items]).where(food_items.c.id == 1),  # Test sub-query
-                                  into=AWSBucket.from_uri('s3://backup').credentials(aws_role='some_iam_role').encryption_aws_sse_s3(),
+                                  into=AWSBucket.from_uri('s3://backup').credentials(
+                                      aws_role='some_iam_role').encryption_aws_sse_s3(),
                                   formatter=JSONFormatter().file_extension('json').compression('zstd'))
     assert (sql_compiler(copy_stmt_2) == "COPY INTO 's3://backup' FROM (SELECT python_tests_foods.id, "
-                                        "python_tests_foods.name, python_tests_foods.quantity FROM python_tests_foods "
-                                        "WHERE python_tests_foods.id = 1) FILE_FORMAT=(TYPE=json FILE_EXTENSION='json' "
-                                        "COMPRESSION='zstd') CREDENTIALS=(AWS_ROLE='some_iam_role') ENCRYPTION=(TYPE='AWS_SSE_S3')")
+                                         "python_tests_foods.name, python_tests_foods.quantity FROM python_tests_foods "
+                                         "WHERE python_tests_foods.id = 1) FILE_FORMAT=(TYPE=json COMPRESSION='zstd' "
+                                         "FILE_EXTENSION='json') CREDENTIALS=(AWS_ROLE='some_iam_role') "
+                                         "ENCRYPTION=(TYPE='AWS_SSE_S3')")
     copy_stmt_3 = CopyIntoStorage(from_=food_items,
                                   into=AzureContainer.from_uri(
                                       'azure://snowflake.blob.core.windows.net/snowpile/backup'
                                   ).credentials('token'),
                                   formatter=PARQUETFormatter().snappy_compression(True))
     assert (sql_compiler(copy_stmt_3) == "COPY INTO 'azure://snowflake.blob.core.windows.net/snowpile/backup' "
-                                        "FROM python_tests_foods FILE_FORMAT=(TYPE=parquet SNAPPY_COMPRESSION=true) "
-                                        "CREDENTIALS=(AZURE_SAS_TOKEN='token')")
+                                         "FROM python_tests_foods FILE_FORMAT=(TYPE=parquet SNAPPY_COMPRESSION=true) "
+                                         "CREDENTIALS=(AZURE_SAS_TOKEN='token')")
     # NOTE Other than expect known compiled text, submit it to RegressionTests environment and expect them to fail, but
     # because of the right reasons
-    try:
-        acceptable_exc_reasons = {'Failure using stage area', 'AWS_ROLE credentials are not allowed for this account.'}
-        for stmnt in (copy_stmt_1, copy_stmt_2):
-            with pytest.raises(Exception) as exc:
-                conn.execute(stmnt)
-            assert any(map(lambda reason: reason in str(exc) or reason in str(exc.value), acceptable_exc_reasons))
-    finally:
-        conn.close()
-        food_items.drop(engine_testaccount)
+    # try:
+    #     acceptable_exc_reasons = {'Failure using stage area', 'AWS_ROLE credentials are not allowed for this account.'}
+    #     for stmnt in (copy_stmt_1, copy_stmt_2, copy_stmt_3):
+    #         with pytest.raises(Exception) as exc:
+    #             conn.execute(stmnt)
+    #         assert any(map(lambda reason: reason in str(exc) or reason in str(exc.value), acceptable_exc_reasons))
+    # finally:
+    #     conn.close()
+    #     food_items.drop(engine_testaccount)
