@@ -240,6 +240,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
     def visit_merge_into_clause(self, merge_into_clause, **kw):
         if merge_into_clause.command == 'INSERT':
             sets, sets_tos = zip(*merge_into_clause.set.items())
+            sets, sets_tos = list(sets), list(sets_tos)
             if kw.get('deterministic', False):
                 sets, sets_tos = zip(*sorted(merge_into_clause.set.items(), key=operator.itemgetter(0)))
             return "WHEN NOT MATCHED%s THEN %s (%s) VALUES (%s)" % (
@@ -249,7 +250,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
                 ", ".join(sets),
                 ", ".join(map(lambda e: e._compiler_dispatch(self, **kw), sets_tos)))
         else:
-            set_list = merge_into_clause.set.items()
+            set_list = list(merge_into_clause.set.items())
             if kw.get('deterministic', False):
                 set_list.sort(key=operator.itemgetter(0))
             sets = ", ".join(
@@ -272,7 +273,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             into, credentials, encryption = into
         elif isinstance(from_, tuple):
             from_, credentials, encryption = from_
-        options_list = copy_into.copy_options.items()
+        options_list = list(copy_into.copy_options.items())
         if kw.get('deterministic', False):
             options_list.sort(key=operator.itemgetter(0))
         options = (' ' + ' '.join(["{} = {}".format(n, v._compiler_dispatch(self, **kw)) for n, v in
@@ -284,7 +285,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         return "COPY INTO {} FROM {} {}{}".format(into, from_, formatter, options)
 
     def visit_copy_formatter(self, formatter, **kw):
-        options_list = formatter.options.items()
+        options_list = list(formatter.options.items())
         if kw.get('deterministic', False):
             options_list.sort(key=operator.itemgetter(0))
         return 'FILE_FORMAT=(TYPE={}{})'.format(formatter.file_format,
@@ -297,13 +298,13 @@ class SnowflakeCompiler(compiler.SQLCompiler):
                                                  for name, value in options_list])) if formatter.options else "")
 
     def visit_aws_bucket(self, aws_bucket, **kw):
-        credentials_list = aws_bucket.credentials_used.items()
+        credentials_list = list(aws_bucket.credentials_used.items())
         if kw.get('deterministic', False):
             credentials_list.sort(key=operator.itemgetter(0))
         credentials = 'CREDENTIALS=({})'.format(
             ' '.join("{}='{}'".format(n, v) for n, v in credentials_list)
         )
-        encryption_list = aws_bucket.encryption_used.items()
+        encryption_list = list(aws_bucket.encryption_used.items())
         if kw.get('deterministic', False):
             encryption_list.sort(key=operator.itemgetter(0))
         encryption = 'ENCRYPTION=({})'.format(
@@ -315,11 +316,11 @@ class SnowflakeCompiler(compiler.SQLCompiler):
                 encryption if aws_bucket.encryption_used else '')
 
     def visit_azure_container(self, azure_container, **kw):
-        credentials_list = azure_container.credentials_used.items()
+        credentials_list = list(azure_container.credentials_used.items())
         if kw.get('deterministic', False):
             credentials_list.sort(key=operator.itemgetter(0))
         credentials = 'CREDENTIALS=({})'.format(' '.join("{}='{}'".format(n, v) for n, v in credentials_list))
-        encryption_list = azure_container.encryption_used.items()
+        encryption_list = list(azure_container.encryption_used.items())
         if kw.get('deterministic', False):
             encryption_list.sort(key=operator.itemgetter(0))
         encryption = 'ENCRYPTION=({})'.format(' '.join(("{}='{}'" if isinstance(v, string_types) else "{}={}").format(n, v) for n, v in
