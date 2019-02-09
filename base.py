@@ -8,7 +8,6 @@ import operator
 import re
 from collections import OrderedDict, Sequence
 from functools import reduce
-from types import NoneType
 
 import sqlalchemy.types as sqltypes
 from sqlalchemy import exc as sa_exc
@@ -163,6 +162,9 @@ def translate_bool(bln):
     if bln:
         return true()
     return false()
+
+
+NoneType = type(None)
 
 
 class SnowflakeIdentifierPreparer(compiler.IdentifierPreparer):
