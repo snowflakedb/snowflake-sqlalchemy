@@ -381,6 +381,7 @@ See `Merge <https://docs.snowflake.net/manuals/sql-reference/sql/merge.html>`_  
 Use it as follows:
 
     .. code-block:: python
+
         from sqlalchemy.orm import sessionmaker
         from sqlalchemy import MetaData, create_engine
         from snowflake.sqlalchemy import MergeInto
@@ -410,6 +411,7 @@ for full documentation.
 Use it as follows:
 
     .. code-block:: python
+
         from sqlalchemy.orm import sessionmaker
         from sqlalchemy import MetaData, create_engine
         from snowflake.sqlalchemy import CopyIntoStorage, AWSBucket, CSVFormatter
