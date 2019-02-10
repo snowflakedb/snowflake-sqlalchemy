@@ -950,12 +950,13 @@ def test_copy_into_location(engine_testaccount, sql_compiler):
                                          "CREDENTIALS=(AZURE_SAS_TOKEN='token')")
     # NOTE Other than expect known compiled text, submit it to RegressionTests environment and expect them to fail, but
     # because of the right reasons
-    # try:
-    #     acceptable_exc_reasons = {'Failure using stage area', 'AWS_ROLE credentials are not allowed for this account.'}
-    #     for stmnt in (copy_stmt_1, copy_stmt_2, copy_stmt_3):
-    #         with pytest.raises(Exception) as exc:
-    #             conn.execute(stmnt)
-    #         assert any(map(lambda reason: reason in str(exc) or reason in str(exc.value), acceptable_exc_reasons))
-    # finally:
-    #     conn.close()
-    #     food_items.drop(engine_testaccount)
+    try:
+        acceptable_exc_reasons = {'Failure using stage area', 'AWS_ROLE credentials are not allowed for this account.'}
+        for stmnt in (copy_stmt_1, copy_stmt_2, copy_stmt_3):
+            with pytest.raises(Exception) as exc:
+                conn.execute(stmnt)
+            if not any(map(lambda reason: reason in str(exc) or reason in str(exc.value), acceptable_exc_reasons)):
+                raise Exception("Not acceptable exception: {} {}".format(str(exc), str(exc.value)))
+    finally:
+        conn.close()
+        food_items.drop(engine_testaccount)
