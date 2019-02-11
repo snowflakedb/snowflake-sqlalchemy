@@ -158,4 +158,5 @@ def init_test_schema(request, db_parameters):
 @pytest.fixture(scope='session')
 def sql_compiler():
     return lambda sql_command: str(sql_command.compile(dialect=SnowflakeDialect(),
-                                                       compile_kwargs={'literal_binds': True})).replace('\n', '')
+                                                       compile_kwargs={'literal_binds': True,
+                                                                       'deterministic': True})).replace('\n', '')
