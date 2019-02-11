@@ -11,6 +11,14 @@ Release Notes
 -------------------------------------------------------------------------------
 
 
+- v1.1.9 (February 11, 2019)
+
+    - Fix an issue in v1.1.8 
+
+- v1.1.8 (February 8, 2019)
+
+    - Fixed a dependency
+
 - v1.1.7 (February 8, 2019)
 		
     - Added Upsert in sql-alchemy
