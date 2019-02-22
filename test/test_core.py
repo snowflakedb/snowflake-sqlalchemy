@@ -1,23 +1,24 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# Copyright (c) 2012-2018 Snowflake Computing Inc. All right reserved.
+# Copyright (c) 2012-2019 Snowflake Computing Inc. All right reserved.
 #
 import os
 import re
 
 import pytest
-from parameters import (CONNECTION_PARAMETERS)
-from sqlalchemy import (Table, Column, Integer, Numeric, String, MetaData,
-                        Sequence, ForeignKey, LargeBinary, REAL, Boolean)
+from parameters import CONNECTION_PARAMETERS
+from sqlalchemy import Table, Column, Integer, Numeric, String, MetaData, Sequence, ForeignKey, LargeBinary, REAL, Boolean
 from sqlalchemy import inspect
 from sqlalchemy import text
 from sqlalchemy import dialects
 from sqlalchemy.sql import and_, or_, not_
 from sqlalchemy.sql import select
 
-from snowflake.sqlalchemy import (URL, CopyIntoStorage, CSVFormatter, JSONFormatter, MergeInto,
-                                  PARQUETFormatter, AWSBucket, AzureContainer, SnowflakeDialect)
+from snowflake.sqlalchemy import (
+    URL, CopyIntoStorage, CSVFormatter, JSONFormatter, MergeInto, PARQUETFormatter, AWSBucket, AzureContainer,
+    dialect
+)
 
 try:
     from parameters import (CONNECTION_PARAMETERS2)
@@ -802,7 +803,7 @@ def test_load_dialect():
     """
     Test loading Snowflake SQLAlchemy dialect class
     """
-    assert isinstance(dialects.registry.load('snowflake')(), SnowflakeDialect)
+    assert isinstance(dialects.registry.load('snowflake')(), dialect)
 
 
 @pytest.mark.parametrize('conditional_flag', [True, False])
