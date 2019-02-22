@@ -10,6 +10,11 @@ https://github.com/snowflakedb/snowflake-sqlalchemy
 Release Notes
 -------------------------------------------------------------------------------
 
+- v1.1.10 (February 22, 2019)
+
+    - Separated base.py file into smaller files and fixed import statements
+    - Prevent creating tables with indexes in SQLAlchemy
+    - Add tox support
 
 - v1.1.9 (February 11, 2019)
 
