@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# Copyright (c) 2012-2018 Snowflake Computing Inc. All right reserved.
+# Copyright (c) 2012-2019 Snowflake Computing Inc. All right reserved.
 #
 
 import os
@@ -16,7 +16,7 @@ from sqlalchemy import create_engine
 
 import snowflake.connector
 from snowflake.connector.compat import TO_UNICODE
-from snowflake.sqlalchemy import URL, SnowflakeDialect
+from snowflake.sqlalchemy import URL, dialect
 
 if os.getenv('TRAVIS') == 'true':
     TEST_SCHEMA = 'TRAVIS_JOB_{0}'.format(os.getenv('TRAVIS_JOB_ID'))
@@ -157,6 +157,6 @@ def init_test_schema(request, db_parameters):
 
 @pytest.fixture(scope='session')
 def sql_compiler():
-    return lambda sql_command: str(sql_command.compile(dialect=SnowflakeDialect(),
+    return lambda sql_command: str(sql_command.compile(dialect=dialect(),
                                                        compile_kwargs={'literal_binds': True,
                                                                        'deterministic': True})).replace('\n', '')

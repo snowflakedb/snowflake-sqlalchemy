@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# Copyright (c) 2012-2018 Snowflake Computing Inc. All right reserved.
+# Copyright (c) 2012-2019 Snowflake Computing Inc. All right reserved.
 #
 
 from sqlalchemy.engine.url import URL
@@ -10,7 +10,7 @@ from snowflake.sqlalchemy import base
 
 
 def test_create_connect_args():
-    sfdialect = base.SnowflakeDialect()
+    sfdialect = base.dialect()
 
     test_data = [
         (
@@ -86,7 +86,7 @@ def test_create_connect_args():
 
 
 def test_denormalize_quote_join():
-    sfdialect = base.SnowflakeDialect()
+    sfdialect = base.dialect()
 
     test_data = [
         (['abc', 'cde'], 'abc.cde'),
