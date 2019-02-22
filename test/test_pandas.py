@@ -4,6 +4,7 @@
 # Copyright (c) 2012-2018 Snowflake Computing Inc. All right reserved.
 #
 
+import pytest
 import numpy as np
 import pandas as pd
 from sqlalchemy import (Table, Column, Integer, String, MetaData,
@@ -151,3 +152,10 @@ create or replace table dst(c1 float)
         'select count(*) as cnt from dst', engine
     )
     assert df.cnt.values[0] == total_rows
+
+def test_no_indexes(engine_testaccount, db_parameters):
+    conn = engine_testaccount.connect()
+    data = pd.DataFrame([('1.0.0',), ('1.0.1',)])
+    with pytest.raises(NotImplementedError) as exc:
+        data.to_sql('versions', schema=db_parameters['schema'], index=True, index_label='col1', con=conn, if_exists='replace')
+    assert str(exc.value) == "Snowflake does not support indexes"

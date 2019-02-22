@@ -11,6 +11,7 @@ from functools import reduce
 
 import sqlalchemy.types as sqltypes
 from sqlalchemy import exc as sa_exc
+from sqlalchemy import event as sa_vnt
 from sqlalchemy import util as sa_util
 from sqlalchemy import true, false
 from sqlalchemy.engine import default, reflection
@@ -1367,6 +1368,11 @@ class AzureContainer(ClauseElement):
 CopyIntoStorage = CopyInto
 
 dialect = SnowflakeDialect
+
+@sa_vnt.listens_for(Table, 'before_create')
+def check_table(table, connection, **kw):
+    if table.indexes:
+        raise NotImplementedError("Snowflake does not support indexes")
 
 construct_arguments = [
     (Table, {
