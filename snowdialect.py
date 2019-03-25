@@ -20,11 +20,11 @@ from .base import (
     SnowflakeDDLCompiler, SnowflakeCompiler, SnowflakeExecutionContext, SnowflakeIdentifierPreparer,
     SnowflakeTypeCompiler
 )
-from ..connector.constants import UTF8
+from snowflake.connector.constants import UTF8
 from .custom_types import (
     TIMESTAMP_LTZ, TIMESTAMP_TZ, TIMESTAMP_NTZ, VARIANT, OBJECT, ARRAY
 )
-from ..connector import errors as sf_errors
+from snowflake.connector import errors as sf_errors
 
 colspecs = {}
 

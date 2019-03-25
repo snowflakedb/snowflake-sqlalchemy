@@ -6,7 +6,7 @@
 
 from sqlalchemy import exc
 
-from ..connector.compat import (PY2, IS_STR)
+from snowflake.connector.compat import (PY2, IS_STR)
 
 if PY2:
     from urllib import quote_plus
