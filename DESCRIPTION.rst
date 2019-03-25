@@ -10,6 +10,10 @@ https://github.com/snowflakedb/snowflake-sqlalchemy
 Release Notes
 -------------------------------------------------------------------------------
 
+- v1.1.11 (March 25, 2019)
+
+    - Remove relative reference to connector from SQLAlchemy dialect
+
 - v1.1.10 (February 22, 2019)
 
     - Separated base.py file into smaller files and fixed import statements
