@@ -54,6 +54,7 @@ RESERVED_WORDS = frozenset([
     "REVOKE",
     "ROW",
     "ROWS",
+    "SAMPLE",
     "SELECT",
     "SET",
     "START",
