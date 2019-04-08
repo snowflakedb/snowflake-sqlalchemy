@@ -10,6 +10,11 @@ https://github.com/snowflakedb/snowflake-sqlalchemy
 Release Notes
 -------------------------------------------------------------------------------
 
+- v1.1.12 (April 8,2019)
+
+    - Add ability to inspect column comments
+    - Restricting index creation checking to only SnowflakeDialect tables
+
 - v1.1.11 (March 25, 2019)
 
     - Remove relative reference to connector from SQLAlchemy dialect
