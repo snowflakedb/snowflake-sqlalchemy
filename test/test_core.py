@@ -4,7 +4,9 @@
 # Copyright (c) 2012-2019 Snowflake Computing Inc. All right reserved.
 #
 import os
+import random
 import re
+import string
 
 import pytest
 from parameters import CONNECTION_PARAMETERS
@@ -965,3 +967,15 @@ def test_copy_into_location(engine_testaccount, sql_compiler):
     finally:
         conn.close()
         food_items.drop(engine_testaccount)
+
+def test_comments(engine_testaccount):
+    table_name = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(5))
+    try:
+        engine_testaccount.execute("create table public.{} (\"col1\" text);".format(table_name))
+        engine_testaccount.execute("alter table public.{} alter \"col1\" comment 'this is my comment'".format(table_name))
+        engine_testaccount.execute("select comment from information_schema.columns where table_name='{}'".format(table_name)).fetchall()
+        inspector = inspect(engine_testaccount)
+        columns = inspector.get_columns(table_name, schema='PUBLIC')
+        assert columns[0].get('comment') == u'this is my comment'
+    finally:
+        engine_testaccount.execute("drop table public.{}".format(table_name))

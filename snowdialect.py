@@ -8,9 +8,11 @@ import operator
 from collections import OrderedDict
 import sqlalchemy.types as sqltypes
 from sqlalchemy import util as sa_util
+from sqlalchemy import event as sa_vnt
 from functools import reduce
 from sqlalchemy import exc as sa_exc
 from sqlalchemy.sql.elements import quoted_name
+from sqlalchemy.schema import Table
 from sqlalchemy.engine import default, reflection
 from sqlalchemy.types import (
     CHAR, DATE, DATETIME, INTEGER, SMALLINT, BIGINT, DECIMAL, TIME, TIMESTAMP, VARCHAR, BINARY, BOOLEAN, FLOAT, REAL
@@ -338,7 +340,8 @@ class SnowflakeDialect(default.DefaultDialect):
              numeric_scale,
              is_nullable,
              column_default,
-             is_identity) in result:
+             is_identity,
+             comment) in result:
             table_name = self.normalize_name(table_name)
             colname = self.normalize_name(colname)
             if colname.startswith('sys_clustering_column'):
@@ -370,6 +373,7 @@ class SnowflakeDialect(default.DefaultDialect):
                 'nullable': is_nullable == 'YES',
                 'default': column_default,
                 'autoincrement': is_identity == 'YES',
+                'comment': comment,
             })
 
     @reflection.cache
@@ -436,7 +440,8 @@ SELECT /* sqlalchemy:get_columns */
        ic.numeric_scale,
        ic.is_nullable,
        ic.column_default,
-       ic.is_identity
+       ic.is_identity,
+       ic.comment
   FROM information_schema.columns ic
  WHERE ic.table_schema=%(table_schema)s
    AND ic.table_name=%(table_name)s
@@ -554,5 +559,11 @@ SELECT /* sqlalchemy:get_columns */
             "SHOW /* sqlalchemy:get_schema_names */ SCHEMAS")
 
         return [self.normalize_name(row[1]) for row in cursor]
+
+
+@sa_vnt.listens_for(Table, 'before_create')
+def check_table(table, connection, _ddl_runner, **kw):
+    if isinstance(_ddl_runner.dialect, SnowflakeDialect) and table.indexes:
+        raise NotImplementedError("Snowflake does not support indexes")
 
 dialect = SnowflakeDialect

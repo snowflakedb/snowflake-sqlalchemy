@@ -7,7 +7,6 @@
 import operator
 import re
 
-from sqlalchemy import event as sa_vnt
 from sqlalchemy import util as sa_util
 from sqlalchemy.engine import default
 from sqlalchemy.schema import Table
@@ -408,10 +407,6 @@ class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
                     is_local and " LOCAL" or "") + " TIME ZONE"
         )
 
-@sa_vnt.listens_for(Table, 'before_create')
-def check_table(table, connection, **kw):
-    if table.indexes:
-        raise NotImplementedError("Snowflake does not support indexes")
 
 construct_arguments = [
     (Table, {
