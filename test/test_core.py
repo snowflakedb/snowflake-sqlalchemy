@@ -969,7 +969,7 @@ def test_copy_into_location(engine_testaccount, sql_compiler):
         food_items.drop(engine_testaccount)
 
 def test_comments(engine_testaccount):
-    table_name = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(5))
+    table_name = ''.join(random.choice(string.ascii_uppercase) for _ in range(5))
     try:
         engine_testaccount.execute("create table public.{} (\"col1\" text);".format(table_name))
         engine_testaccount.execute("alter table public.{} alter \"col1\" comment 'this is my comment'".format(table_name))
