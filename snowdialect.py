@@ -392,7 +392,8 @@ SELECT /* sqlalchemy:_get_columns_for_tables */
        ic.numeric_scale,
        ic.is_nullable,
        ic.column_default,
-       ic.is_identity
+       ic.is_identity,
+       ic.comment
   FROM information_schema.columns ic
  WHERE ic.table_schema=%(table_schema)s
 """
