@@ -229,11 +229,11 @@ def test_timezone(db_parameters):
         assert(np.issubdtype(result.decimal_col, np.float64))
         assert(np.issubdtype(result.float_col, np.float64))
         # Check sqlalchemy raw connection result
-        assert(pd.api.types.is_datetime64tz_dtype(result2.tz_col))
-        assert(not pd.api.types.is_datetime64tz_dtype(result2.ntz_col))
-        assert(pd.api.types.is_datetime64tz_dtype(result2.tz_col_converted))
-        assert(pd.api.types.is_datetime64tz_dtype(result2.ntz_col_converted))
-        assert(np.issubdtype(result2.decimal_col, np.float64))
-        assert(np.issubdtype(result2.float_col, np.float64))
+        assert(pd.api.types.is_datetime64tz_dtype(result2.TZ_COL))
+        assert(not pd.api.types.is_datetime64tz_dtype(result2.NTZ_COL))
+        assert(pd.api.types.is_datetime64tz_dtype(result2.TZ_COL_CONVERTED))
+        assert(pd.api.types.is_datetime64tz_dtype(result2.NTZ_COL_CONVERTED))
+        assert(np.issubdtype(result2.DECIMAL_COL, np.float64))
+        assert(np.issubdtype(result2.FLOAT_COL, np.float64))
     finally:
         sa_engine.execute('DROP TABLE {table};'.format(table=test_table_name))
