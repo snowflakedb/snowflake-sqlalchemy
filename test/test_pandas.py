@@ -3,10 +3,14 @@
 #
 # Copyright (c) 2012-2019 Snowflake Computing Inc. All right reserved.
 #
+import random
+import string
 
 import pytest
 import numpy as np
 import pandas as pd
+import sqlalchemy
+import snowflake.sqlalchemy
 from sqlalchemy import (Table, Column, Integer, String, MetaData,
                         Sequence, ForeignKey)
 
@@ -159,3 +163,77 @@ def test_no_indexes(engine_testaccount, db_parameters):
     with pytest.raises(NotImplementedError) as exc:
         data.to_sql('versions', schema=db_parameters['schema'], index=True, index_label='col1', con=conn, if_exists='replace')
     assert str(exc.value) == "Snowflake does not support indexes"
+
+def test_timezone(db_parameters):
+
+    test_table_name = ''.join([random.choice(string.ascii_letters) for _ in range(5)])
+
+    sa_engine = sqlalchemy.create_engine(snowflake.sqlalchemy.URL(
+        account=db_parameters['account'],
+        password=db_parameters['password'],
+        database=db_parameters['database'],
+        port=db_parameters['port'],
+        user=db_parameters['user'],
+        host=db_parameters['host'],
+        protocol=db_parameters['protocol'],
+        schema=db_parameters['schema'],
+        numpy=True,
+    ))
+
+    sa_engine2 = sqlalchemy.create_engine(snowflake.sqlalchemy.URL(
+    account=db_parameters['account'],
+    password=db_parameters['password'],
+    database=db_parameters['database'],
+    port=db_parameters['port'],
+    user=db_parameters['user'],
+    host=db_parameters['host'],
+    protocol=db_parameters['protocol'],
+    schema=db_parameters['schema'],
+    timezone='America/Los_Angeles',
+    numpy='')).raw_connection()
+
+    sa_engine.execute("""
+    CREATE OR REPLACE TABLE {table}(
+        tz_col timestamp_tz,
+        ntz_col timestamp_ntz,
+        decimal_col decimal(10,1),
+        float_col float
+    );""".format(table=test_table_name))
+
+    try:
+        sa_engine.execute("""
+        INSERT INTO {table}
+            SELECT
+                current_timestamp(),
+                current_timestamp()::timestamp_ntz,
+                to_decimal(.1, 10, 1),
+                .10;""".format(table=test_table_name))
+
+        qry = """
+        SELECT
+            tz_col,
+            ntz_col,
+            CONVERT_TIMEZONE('America/Los_Angeles', tz_col) AS tz_col_converted,
+            CONVERT_TIMEZONE('America/Los_Angeles', ntz_col) AS ntz_col_converted,
+            decimal_col,
+            float_col
+        FROM {table};""".format(table=test_table_name)
+
+        result = pd.read_sql_query(qry, sa_engine)
+        result2 = pd.read_sql_query(qry, sa_engine2)
+        # Check sqlalchemy engine result
+        assert(list(result.tz_col.dtype._metadata) == ['unit', 'tz'])
+        assert(result.ntz_col.dtype.type == np.datetime64)
+        assert(list(result.tz_col_converted.dtype._metadata) == ['unit', 'tz'])
+        assert(list(result.ntz_col_converted.dtype._metadata) == ['unit', 'tz'])
+        assert(result.decimal_col.dtype.type == np.float64)
+        assert(result.float_col.dtype == np.float64)
+        # Check sqlalchemy raw connection result
+        assert(list(result2.TZ_COL.dtype._metadata) == ['unit', 'tz'])
+        assert(result2.NTZ_COL.dtype.type == np.datetime64)
+        assert(list(result2.TZ_COL_CONVERTED.dtype._metadata) == ['unit', 'tz'])
+        assert(list(result2.NTZ_COL_CONVERTED.dtype._metadata) == ['unit', 'tz'])
+        assert(result2.DECIMAL_COL.dtype.type == np.float64)
+        assert(result2.FLOAT_COL.dtype == np.float64)
+    finally:
+        sa_engine.execute('DROP TABLE {table};'.format(table=test_table_name))
