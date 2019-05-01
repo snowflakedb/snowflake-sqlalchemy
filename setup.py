@@ -36,6 +36,13 @@ setup(
         'sqlalchemy<2.0.0',
         'snowflake-connector-python<2.0.0',
     ],
+    extras_require= dict(
+        azure=[
+        'azure-common<=1.1.20',
+        'azure=storage-blob<=1.5.0',
+        'azure-storage-common<=1.4.0',
+        ]
+    ),
     namespace_packages=[
         'snowflake'
     ],

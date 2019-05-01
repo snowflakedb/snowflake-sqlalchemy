@@ -41,6 +41,12 @@ The Snowflake SQLAlchemy package can be installed from the public PyPI repositor
 
 :code:`pip` automatically installs all required modules, including the Snowflake Connector for Python.
 
+Azure plugins can be installed using :code:`pip`:
+
+    .. code-block:: bash
+
+        pip install --upgrade snowflake-sqlalchemy[azure]
+
 Verifying Your Installation
 ================================================================================
 
