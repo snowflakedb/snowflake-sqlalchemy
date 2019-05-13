@@ -966,7 +966,7 @@ def test_copy_into_location(engine_testaccount, sql_compiler):
         acceptable_exc_reasons = {'Failure using stage area',
                                   'AWS_ROLE credentials are not allowed for this account.',
                                   'AWS_ROLE credentials are invalid'}
-        for stmnt in (copy_stmt_1, copy_stmt_2, copy_stmt_3):
+        for stmnt in (copy_stmt_1, copy_stmt_2, copy_stmt_3, copy_stmt_4):
             with pytest.raises(Exception) as exc:
                 conn.execute(stmnt)
             if not any(map(lambda reason: reason in str(exc) or reason in str(exc.value), acceptable_exc_reasons)):
