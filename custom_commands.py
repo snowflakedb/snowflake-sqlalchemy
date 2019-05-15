@@ -116,9 +116,9 @@ class CopyInto(UpdateBase):
         self.copy_options.update({'SINGLE': translate_bool(single_file)})
 
     def maxfilesize(self, max_size):
-        if not isinstance(max_size, bool):
-            raise TypeError("Parameter max_size should  be a boolean value")
-        self.copy_options.update({'MAX_FILE_SIZE': translate_bool(max_size)})
+        if not isinstance(max_size, int):
+            raise TypeError("Parameter max_size should be an integer value")
+        self.copy_options.update({'MAX_FILE_SIZE': max_size})
 
 
 class CopyFormatter(ClauseElement):
