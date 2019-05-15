@@ -201,8 +201,9 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         options_list = list(copy_into.copy_options.items())
         if kw.get('deterministic', False):
             options_list.sort(key=operator.itemgetter(0))
-        options = (' ' + ' '.join(["{} = {}".format(n, v._compiler_dispatch(self, **kw)) for n, v in
-                                   options_list])) if copy_into.copy_options else ''
+        options = (' ' + ' '.join(["{} = {}".format(
+            n, v._compiler_dispatch(self, **kw) if getattr(v, 'compiler_dispatch', False) else str(v)
+        ) for n, v in options_list])) if copy_into.copy_options else ''
         if credentials:
             options += " {}".format(credentials)
         if encryption:
