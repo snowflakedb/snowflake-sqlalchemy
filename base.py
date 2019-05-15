@@ -179,7 +179,8 @@ class SnowflakeCompiler(compiler.SQLCompiler):
 
     def visit_copy_into(self, copy_into, **kw):
         formatter = copy_into.formatter._compiler_dispatch(self, **kw)
-        into = copy_into.into._compiler_dispatch(self, **kw)
+        into = (copy_into.into if isinstance(copy_into.into, Table)
+                else copy_into.into._compiler_dispatch(self, **kw))
         from_ = None
         if isinstance(copy_into.from_, Table):
             from_ = copy_into.from_
