@@ -953,18 +953,28 @@ def test_copy_into_location(engine_testaccount, sql_compiler):
     assert (sql_compiler(copy_stmt_3) == "COPY INTO 'azure://snowflake.blob.core.windows.net/snowpile/backup' "
                                          "FROM python_tests_foods FILE_FORMAT=(TYPE=parquet SNAPPY_COMPRESSION=true) "
                                          "CREDENTIALS=(AZURE_SAS_TOKEN='token')")
+    
     copy_stmt_3.maxfilesize(50000000)
     assert (sql_compiler(copy_stmt_3) == "COPY INTO 'azure://snowflake.blob.core.windows.net/snowpile/backup' "
                                          "FROM python_tests_foods FILE_FORMAT=(TYPE=parquet SNAPPY_COMPRESSION=true) "
                                          "MAX_FILE_SIZE = 50000000 "
                                          "CREDENTIALS=(AZURE_SAS_TOKEN='token')")
+
+    copy_stmt_4 = CopyIntoStorage(from_=AWSBucket.from_uri('s3://backup').encryption_aws_sse_kms(
+                                        '1234abcd-12ab-34cd-56ef-1234567890ab'),
+                                  into=food_items,
+                                  formatter=CSVFormatter().record_delimiter('|').escape(None).null_if(['null', 'Null']))
+    assert (sql_compiler(copy_stmt_4) == "COPY INTO python_tests_foods FROM 's3://backup' FILE_FORMAT=(TYPE=csv "
+                                         "ESCAPE=None NULL_IF=('null', 'Null') RECORD_DELIMITER='|') ENCRYPTION="
+                                         "(KMS_KEY_ID='1234abcd-12ab-34cd-56ef-1234567890ab' TYPE='AWS_SSE_KMS')")
+
     # NOTE Other than expect known compiled text, submit it to RegressionTests environment and expect them to fail, but
     # because of the right reasons
     try:
         acceptable_exc_reasons = {'Failure using stage area',
                                   'AWS_ROLE credentials are not allowed for this account.',
                                   'AWS_ROLE credentials are invalid'}
-        for stmnt in (copy_stmt_1, copy_stmt_2, copy_stmt_3):
+        for stmnt in (copy_stmt_1, copy_stmt_2, copy_stmt_3, copy_stmt_4):
             with pytest.raises(Exception) as exc:
                 conn.execute(stmnt)
             if not any(map(lambda reason: reason in str(exc) or reason in str(exc.value), acceptable_exc_reasons)):

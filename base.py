@@ -14,6 +14,8 @@ from sqlalchemy.sql import compiler, expression
 from sqlalchemy.sql.elements import quoted_name
 from sqlalchemy.util.compat import string_types
 
+from .custom_commands import AWSBucket, AzureContainer
+
 RESERVED_WORDS = frozenset([
     "ALL",  # ANSI Reserved words
     "ALTER",
@@ -179,10 +181,18 @@ class SnowflakeCompiler(compiler.SQLCompiler):
 
     def visit_copy_into(self, copy_into, **kw):
         formatter = copy_into.formatter._compiler_dispatch(self, **kw)
-        into = copy_into.into._compiler_dispatch(self, **kw)
-        from_ = copy_into.from_ if isinstance(copy_into.from_, Table) else '({})'.format(
-            copy_into.from_._compiler_dispatch(self, **kw)
-        )
+        into = (copy_into.into if isinstance(copy_into.into, Table)
+                else copy_into.into._compiler_dispatch(self, **kw))
+        from_ = None
+        if isinstance(copy_into.from_, Table):
+            from_ = copy_into.from_
+        # this is intended to catch AWSBucket and AzureContainer
+        elif isinstance(copy_into.from_, AWSBucket) or isinstance(copy_into.from_, AzureContainer):
+            from_ = copy_into.from_._compiler_dispatch(self, **kw)
+        # everything else (selects, etc.)
+        else:
+            from_ = '({})'.format(copy_into.from_._compiler_dispatch(self,
+                                                                     **kw))
         credentials, encryption = '', ''
         if isinstance(into, tuple):
             into, credentials, encryption = into
