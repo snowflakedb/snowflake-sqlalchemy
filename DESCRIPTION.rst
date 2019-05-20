@@ -10,6 +10,11 @@ https://github.com/snowflakedb/snowflake-sqlalchemy
 Release Notes
 -------------------------------------------------------------------------------
 
+- v1.1.13 (May 20,2019)
+
+    - CopyInto's maxfilesize method expects a bool instead of an int
+    - CopyInto statement doesn't compile correctly when the source is storage and the destination is a table
+
 - v1.1.12 (April 8,2019)
 
     - Add ability to inspect column comments
