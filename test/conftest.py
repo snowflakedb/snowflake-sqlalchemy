@@ -81,6 +81,25 @@ def get_db_parameters():
             TO_UNICODE(uuid.uuid4())).replace('-', '_')
     ret['schema'] = TEST_SCHEMA
 
+    # This reduces a chance to exposing password in test output.
+    ret['a00'] = 'dummy parameter'
+    ret['a01'] = 'dummy parameter'
+    ret['a02'] = 'dummy parameter'
+    ret['a03'] = 'dummy parameter'
+    ret['a04'] = 'dummy parameter'
+    ret['a05'] = 'dummy parameter'
+    ret['a06'] = 'dummy parameter'
+    ret['a07'] = 'dummy parameter'
+    ret['a08'] = 'dummy parameter'
+    ret['a09'] = 'dummy parameter'
+    ret['a10'] = 'dummy parameter'
+    ret['a11'] = 'dummy parameter'
+    ret['a12'] = 'dummy parameter'
+    ret['a13'] = 'dummy parameter'
+    ret['a14'] = 'dummy parameter'
+    ret['a15'] = 'dummy parameter'
+    ret['a16'] = 'dummy parameter'
+
     return ret
 
 
