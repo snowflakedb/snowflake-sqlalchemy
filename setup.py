@@ -32,8 +32,6 @@ setup(
     download_url = 'https://www.snowflake.net/',
     use_2to3 = False,
 
-    python_requires='>=2.7.9,!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*',
-
     install_requires = [
         'sqlalchemy<2.0.0',
         'snowflake-connector-python<2.0.0',
