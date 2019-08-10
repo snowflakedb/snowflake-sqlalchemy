@@ -159,15 +159,15 @@ class CSVFormatter(CopyFormatter):
             self.options['RECORD_DELIMITER'] = deli_type
         return self
 
-    def field_delimeter(self, deli_type):
+    def field_delimiter(self, deli_type):
         """Character that separates fields in an unloaded file."""
         if not isinstance(deli_type, (int, NoneType, string_types)) \
                 or (isinstance(deli_type, string_types) and len(deli_type) != 1):
             raise TypeError("Field delimeter should be a single character, that is either a string, or a number")
         if isinstance(deli_type, int):
-            self.options['FIELD_DELIMETER'] = hex(deli_type)
+            self.options['FIELD_DELIMITER'] = hex(deli_type)
         else:
-            self.options['FIELD_DELIMETER'] = deli_type
+            self.options['FIELD_DELIMITER'] = deli_type
         return self
 
     def file_extension(self, ext):
