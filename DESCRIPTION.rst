@@ -10,6 +10,10 @@ https://github.com/snowflakedb/snowflake-sqlalchemy
 Release Notes
 -------------------------------------------------------------------------------
 
+- v1.1.14 (August 12, 2019)
+
+    - Fix CSVFormatter class has `FIELD_DELIMETER` spelled incorrectly
+
 - v1.1.13 (May 20,2019)
 
     - CopyInto's maxfilesize method expects a bool instead of an int
