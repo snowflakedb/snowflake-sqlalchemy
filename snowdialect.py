@@ -70,6 +70,7 @@ ischema_names = {
 class SnowflakeDialect(default.DefaultDialect):
     name = 'snowflake'
     max_identifier_length = 65535
+    cte_follows_insert = True
 
     encoding = UTF8
     default_paramstyle = 'pyformat'
