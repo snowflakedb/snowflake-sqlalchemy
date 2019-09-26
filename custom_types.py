@@ -6,6 +6,16 @@
 
 import sqlalchemy.types as sqltypes
 
+TEXT = sqltypes.VARCHAR
+CHARACTER = sqltypes.CHAR
+DEC = sqltypes.DECIMAL
+DOUBLE = sqltypes.FLOAT
+FIXED = sqltypes.DECIMAL
+NUMBER = sqltypes.DECIMAL
+BYTEINT = sqltypes.SMALLINT
+STRING = sqltypes.VARCHAR
+TINYINT  = sqltypes.SMALLINT
+VARBINARY = sqltypes.BINARY
 
 class VARIANT(sqltypes.TypeEngine):
     __visit_name__ = 'VARIANT'
@@ -29,4 +39,3 @@ class TIMESTAMP_LTZ(sqltypes.TIMESTAMP):
 
 class TIMESTAMP_NTZ(sqltypes.TIMESTAMP):
     __visit_name__ = 'TIMESTAMP_NTZ'
-
