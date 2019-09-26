@@ -378,6 +378,33 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
 
 
 class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
+    def visit_BYTEINT(self, type, **kw):
+        return "BYTEINT"
+
+    def visit_CHARACTER(self, type, **kw):
+        return "CHARACTER"
+
+    def visit_DEC(self, type, **kw):
+        return "DEC"
+
+    def visit_DOUBLE(self, type, **kw):
+        return "DOUBLE"
+
+    def visit_FIXED(self, type, **kw):
+        return "FIXED"
+
+    def visit_INT(self, type, **kw):
+        return "INT"
+
+    def visit_NUMBER(self, type, **kw):
+        return "NUMBER"
+
+    def visit_STRING(self, type, **kw):
+        return "STRING"
+
+    def visit_TINYINT(self, type, **kw):
+        return "TINYINT"
+
     def visit_VARIANT(self, type, **kw):
         return "VARIANT"
 
