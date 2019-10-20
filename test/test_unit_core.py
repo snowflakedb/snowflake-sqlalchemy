@@ -78,6 +78,15 @@ def test_create_connect_args():
              'password': 'testpassword', 'user': 'testuser', 'port': 8082,
              'account': 'testaccount'}
         ),
+        (
+            # 7: Global URL
+            URL("snowflake", username="testuser", password="testpassword",
+                host='testaccount-hso894gsiuafdhsaj935.global'),
+            {'autocommit': False,
+             'host': 'testaccount-hso894gsiuafdhsaj935.global.snowflakecomputing.com',
+             'password': 'testpassword', 'user': 'testuser', 'port': '443',
+             'account': 'testaccount'}
+        ),
     ]
 
     for idx, ts in enumerate(test_data):
