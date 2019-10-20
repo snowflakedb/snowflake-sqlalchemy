@@ -155,6 +155,8 @@ class SnowflakeDialect(default.DefaultDialect):
             if u'.' in opts['account']:
                 # remove region subdomain
                 opts['account'] = opts['account'][0:opts['account'].find(u'.')]
+                # remove external ID
+                opts['account'] = opts['account'].split('-')[0]
             opts['host'] = opts['host'] + '.snowflakecomputing.com'
             opts['port'] = '443'
         opts['autocommit'] = False  # autocommit is disabled by default
