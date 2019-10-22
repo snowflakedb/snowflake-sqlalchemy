@@ -10,6 +10,10 @@ https://github.com/snowflakedb/snowflake-sqlalchemy
 Release Notes
 -------------------------------------------------------------------------------
 
+- v1.1.16 (October 21,2019)
+
+    - Fix SQLAlchemy not working with global url
+
 - v1.1.15 (September 30, 2019)
    
     - Incorrect SQL generated for INSERT with CTE
