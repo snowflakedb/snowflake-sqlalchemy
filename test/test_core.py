@@ -364,17 +364,17 @@ def test_inspect_column(engine_testaccount):
 
         columns_in_users = inspector.get_columns('users')
 
-        assert columns_in_users[0]['autoincrement'], 'autoinrecment'
+        assert columns_in_users[0]['autoincrement'], 'autoincrement'
         assert columns_in_users[0]['default'] is None, 'default'
         assert columns_in_users[0]['name'] == 'id', 'name'
         assert columns_in_users[0]['primary_key'], 'primary key'
 
-        assert not columns_in_users[1]['autoincrement'], 'autoinrecment'
+        assert not columns_in_users[1]['autoincrement'], 'autoincrement'
         assert columns_in_users[1]['default'] is None, 'default'
         assert columns_in_users[1]['name'] == 'name', 'name'
         assert not columns_in_users[1]['primary_key'], 'primary key'
 
-        assert not columns_in_users[2]['autoincrement'], 'autoinrecment'
+        assert not columns_in_users[2]['autoincrement'], 'autoincrement'
         assert columns_in_users[2]['default'] is None, 'default'
         assert columns_in_users[2]['name'] == 'fullname', 'name'
         assert not columns_in_users[2]['primary_key'], 'primary key'
@@ -464,11 +464,11 @@ def test_get_multile_column_primary_key(engine_testaccount):
     try:
         inspector = inspect(engine_testaccount)
         columns_in_mytable = inspector.get_columns('mytable')
-        assert not columns_in_mytable[0]['autoincrement'], 'autoinrecment'
+        assert not columns_in_mytable[0]['autoincrement'], 'autoincrement'
         assert columns_in_mytable[0]['default'] is None, 'default'
         assert columns_in_mytable[0]['name'] == 'gid', 'name'
         assert columns_in_mytable[0]['primary_key'], 'primary key'
-        assert columns_in_mytable[1]['autoincrement'], 'autoinrecment'
+        assert columns_in_mytable[1]['autoincrement'], 'autoincrement'
         assert columns_in_mytable[1]['default'] is None, 'default'
         assert columns_in_mytable[1]['name'] == 'id', 'name'
         assert columns_in_mytable[1]['primary_key'], 'primary key'
