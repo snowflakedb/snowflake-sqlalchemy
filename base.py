@@ -439,13 +439,12 @@ class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
     def visit_TIMESTAMP(self, type, **kw):
         is_local = kw.get('is_local', False)
         timezone = kw.get('timezone', type.timezone)
-        return "TIMESTAMP%s %s" % (
-            "(%d)" % type.precision if getattr(type, 'precision',
-                                               None) is not None else "",
+        return "TIMESTAMP %s%s" % (
             (timezone and "WITH" or "WITHOUT") + (
-                    is_local and " LOCAL" or "") + " TIME ZONE"
+                    is_local and " LOCAL" or "") + " TIME ZONE",
+            "(%d)" % type.precision if getattr(type, 'precision',
+                                               None) is not None else ""
         )
-
 
 construct_arguments = [
     (Table, {
