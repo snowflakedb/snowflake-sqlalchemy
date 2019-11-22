@@ -7,6 +7,7 @@ import os
 import random
 import re
 import string
+import time
 
 import pytest
 from parameters import CONNECTION_PARAMETERS
@@ -762,6 +763,56 @@ def test_many_table_column_metadta(db_parameters):
                 assert fs[0]['referred_table'] == 'mainusers' + suffix
 
     assert cnt == total_objects * 2, 'total number of test objects'
+
+
+def test_cache_time(engine_testaccount, db_parameters):
+    """Check whether Inspector cache is working"""
+    # Set up necessary tables
+    metadata = MetaData()
+    total_objects = 10
+    for idx in range(total_objects):
+        Table('mainusers' + str(idx), metadata,
+              Column('id' + str(idx), Integer, Sequence('user_id_seq'),
+                     primary_key=True),
+              Column('name' + str(idx), String),
+              Column('fullname', String),
+              Column('password', String)
+              )
+        Table('mainaddresses' + str(idx), metadata,
+              Column('id' + str(idx), Integer, Sequence('address_id_seq'),
+                     primary_key=True),
+              Column('user_id' + str(idx), None,
+                     ForeignKey('mainusers' + str(idx) + '.id' + str(idx))),
+              Column('email_address' + str(idx), String, nullable=False)
+              )
+    metadata.create_all(engine_testaccount)
+    inspector = inspect(engine_testaccount)
+    schema = db_parameters['schema']
+
+    def harass_inspector():
+        for table_name in inspector.get_table_names(schema):
+            column_metadata = inspector.get_columns(table_name, schema)
+            primary_keys = inspector.get_primary_keys(table_name, schema)
+            foreign_keys = inspector.get_foreign_keys(table_name, schema)
+
+    outcome = False
+    # Allow up to 5 times for the speed test to pass to avoid flaky test
+    for i in range(5):
+        # Python 2.7 has no timeit.timeit with globals and locals parameters
+        s_time = time.time()
+        harass_inspector()
+        m_time = time.time()
+        harass_inspector()
+        time2 = time.time() - m_time
+        time1 = m_time - s_time
+        print("Ran inspector through tables twice, times:\n\tfirst: {0}\n\tsecond: {1}".format(time1, time2))
+        if time2 < time1 * 0.01:
+            outcome = True
+            break
+        else:
+            # Reset inspector to reset cache
+            inspector = inspect(engine_testaccount)
+    assert outcome
 
 
 @pytest.mark.timeout(15)
