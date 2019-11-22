@@ -25,6 +25,11 @@ else:
             'sqlalchemy_tests_' + TO_UNICODE(uuid.uuid4()).replace('-', '_'))
 
 
+@pytest.fixture(scope='session')
+def on_travis():
+    return os.getenv('TRAVIS') == 'true'
+
+
 def help():
     print("""Connection parameter must be specified in parameters.py,
     for example:
@@ -103,7 +108,7 @@ def get_db_parameters():
     return ret
 
 
-def get_engine(user=None, password=None, account=None):
+def get_engine(user=None, password=None, account=None, schema=None):
     """
     Creates a connection using the parameters defined in JDBC connect string
     """
@@ -123,7 +128,7 @@ def get_engine(user=None, password=None, account=None):
         host=ret['host'],
         port=ret['port'],
         database=ret['database'],
-        schema=TEST_SCHEMA,
+        schema=TEST_SCHEMA if not schema else schema,
         account=ret['account'],
         protocol=ret['protocol']
     ), poolclass=NullPool)
@@ -133,12 +138,8 @@ def get_engine(user=None, password=None, account=None):
 
 @pytest.fixture()
 def engine_testaccount(request):
-    engine, ret = get_engine()
-
-    def fin():
-        engine.dispose()  # close when done
-
-    request.addfinalizer(fin)
+    engine, _ = get_engine()
+    request.addfinalizer(engine.dispose)
     return engine
 
 

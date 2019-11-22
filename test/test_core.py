@@ -10,7 +10,8 @@ import string
 
 import pytest
 from parameters import CONNECTION_PARAMETERS
-from sqlalchemy import Table, Column, Integer, Numeric, String, MetaData, Sequence, ForeignKey, LargeBinary, REAL, Boolean
+from sqlalchemy import Table, Column, Integer, Numeric, String, MetaData, Sequence, ForeignKey, LargeBinary, REAL, \
+    Boolean, DateTime
 from sqlalchemy import inspect
 from sqlalchemy import text
 from sqlalchemy import dialects
@@ -21,6 +22,7 @@ from snowflake.sqlalchemy import (
     URL, CopyIntoStorage, CSVFormatter, JSONFormatter, MergeInto, PARQUETFormatter, AWSBucket, AzureContainer,
     dialect
 )
+from conftest import get_engine
 
 try:
     from parameters import (CONNECTION_PARAMETERS2)
@@ -922,6 +924,7 @@ def test_deterministic_merge_into(sql_compiler):
 
 
 def test_comments(engine_testaccount):
+    """Tests strictly reading column comment through SQLAlchemy"""
     table_name = ''.join(random.choice(string.ascii_uppercase) for _ in range(5))
     try:
         engine_testaccount.execute("create table public.{} (\"col1\" text);".format(table_name))
@@ -932,3 +935,52 @@ def test_comments(engine_testaccount):
         assert columns[0].get('comment') == u'this is my comment'
     finally:
         engine_testaccount.execute("drop table public.{}".format(table_name))
+
+
+def test_comment_sqlalchemy(db_parameters, engine_testaccount, on_travis):
+    """Testing adding/reading column and table comments through SQLAlchemy"""
+    new_schema = db_parameters['schema'] + '2'
+    # Use same table name in 2 different schemas to make sure comment retrieval works properly
+    table_name = ''.join(random.choice(string.ascii_uppercase) for _ in range(5))
+    table_comment1 = ''.join(random.choice(string.ascii_uppercase) for _ in range(10))
+    column_comment1 = ''.join(random.choice(string.ascii_uppercase) for _ in range(10))
+    table_comment2 = ''.join(random.choice(string.ascii_uppercase) for _ in range(10))
+    column_comment2 = ''.join(random.choice(string.ascii_uppercase) for _ in range(10))
+    engine2, _ = get_engine(schema=new_schema)
+    con2 = None
+    if not on_travis:
+        con2 = engine2.connect()
+        con2.execute("CREATE SCHEMA IF NOT EXISTS {0}".format(new_schema))
+    inspector = inspect(engine_testaccount)
+    metadata1 = MetaData()
+    metadata2 = MetaData()
+    mytable1 = Table(table_name,
+                     metadata1,
+                     Column("tstamp", DateTime, comment=column_comment1),
+                     comment=table_comment1)
+    mytable2 = Table(table_name,
+                     metadata2,
+                     Column("tstamp", DateTime, comment=column_comment2),
+                     comment=table_comment2)
+
+    metadata1.create_all(engine_testaccount, tables=[mytable1])
+    if not on_travis:
+        metadata2.create_all(engine2, tables=[mytable2])
+
+    try:
+        assert inspector.get_columns(table_name)[0]['comment'] == column_comment1
+        assert inspector.get_table_comment(table_name)['text'] == table_comment1
+        if not on_travis:
+            assert inspector.get_columns(table_name, schema=new_schema)[0]['comment'] == column_comment2
+            assert inspector.get_table_comment(
+                table_name,
+                schema=new_schema.upper()  # Note: since did not quote schema name it was uppercase'd
+            )['text'] == table_comment2
+    finally:
+        mytable1.drop(engine_testaccount)
+        if not on_travis:
+            mytable2.drop(engine2)
+            con2.execute("DROP SCHEMA IF EXISTS {0}".format(new_schema))
+            con2.close()
+        engine2.dispose()
+
