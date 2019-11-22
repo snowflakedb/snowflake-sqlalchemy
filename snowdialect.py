@@ -119,6 +119,9 @@ class SnowflakeDialect(default.DefaultDialect):
     # The dialect supports inserting multiple rows at once.
     supports_multivalues_insert = True
 
+    # The dialect supports comments
+    supports_comments = True
+
     preparer = SnowflakeIdentifierPreparer
     ddl_compiler = SnowflakeDDLCompiler
     type_compiler = SnowflakeTypeCompiler
@@ -564,10 +567,24 @@ SELECT /* sqlalchemy:get_columns */
 
         return [self.normalize_name(row[1]) for row in cursor]
 
+    def get_table_comment(self, connection, table_name, schema=None, **kw):
+        """
+        Returns comment of table in a dictionary as described by SQLAlchemy spec
+        """
+        sql_command = "SHOW /* sqlalchemy:get_table_comment */ " \
+                      "TABLES LIKE '{0}'{1}".format(
+                                        table_name,
+                                        (' IN SCHEMA {0}'.format(self.normalize_name(schema))) if schema else ''
+                                    )
+        cursor = connection.execute(sql_command)
+        ans = cursor.fetchone()
+        return {'text': ans['comment']}
+
 
 @sa_vnt.listens_for(Table, 'before_create')
 def check_table(table, connection, _ddl_runner, **kw):
     if isinstance(_ddl_runner.dialect, SnowflakeDialect) and table.indexes:
         raise NotImplementedError("Snowflake does not support indexes")
+
 
 dialect = SnowflakeDialect
