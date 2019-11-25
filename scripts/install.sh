@@ -5,19 +5,11 @@
 set -o pipefail
 
 if [ "$TRAVIS_OS_NAME" == "osx" ]; then
-    brew update
-    brew install openssl readline sqlite3 xz zlib
-    brew outdated pyenv || brew upgrade pyenv
-    brew install pyenv-virtualenv
-    pyenv install ${PYTHON_VERSION}
-    export PYENV_VERSION=$PYTHON
-    export PATH="${HOME}/.pyenv/shims:${PATH}"
-    if [[ $PYTHON_VERSION == "2.7"* ]]; then
-        pip install -U virtualenv
-        python -m virtualenv venv
-    else
-        python3 -m venv venv
-    fi
+    curl -O https://www.python.org/ftp/python/${PYTHON_VERSION}/python-${PYTHON_VERSION}-macosx10.9.pkg
+    sudo installer -pkg python-${PYTHON_VERSION}-macosx10.9.pkg -target /
+    which python3
+    python3 --version
+    python3 -m venv venv
 else
     sudo apt-get update
     pip install -U virtualenv
@@ -25,6 +17,8 @@ else
 fi
 if [[ -n "$SNOWFLAKE_AZURE" ]]; then
     openssl aes-256-cbc -k "$super_azure_secret_password" -in parameters_az.py.enc -out test/parameters.py -d
+elif [[ -n "$SNOWFLAKE_GCP" ]]; then
+    openssl aes-256-cbc -k "$super_gcp_secret_password" -in parameters_gcp.py.enc -out test/parameters.py -d
 else
     openssl aes-256-cbc -k "$super_secret_password" -in parameters.py.enc -out test/parameters.py -d
 fi

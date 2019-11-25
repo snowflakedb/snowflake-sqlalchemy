@@ -20,7 +20,8 @@ from sqlalchemy.sql import and_, or_, not_
 from sqlalchemy.sql import select
 
 from snowflake.sqlalchemy import (
-    URL, CopyIntoStorage, CSVFormatter, JSONFormatter, MergeInto, PARQUETFormatter, AWSBucket, AzureContainer,
+    URL,
+    MergeInto,
     dialect
 )
 from conftest import get_engine
@@ -586,6 +587,7 @@ def test_create_table_with_schema(engine_testaccount, db_parameters):
             text("DROP SCHEMA \"{0}\"".format(new_schema)))
 
 
+@pytest.mark.skipif(os.getenv("SNOWFLAKE_GCP") is not None, reason="PUT and GET is not supported for GCP yet")
 def test_copy(engine_testaccount):
     """
     COPY must be in a transaction
