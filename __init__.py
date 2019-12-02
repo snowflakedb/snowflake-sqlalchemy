@@ -69,6 +69,7 @@ __all__ = (
     'SMALLINT',
     'TIME',
     'TIMESTAMP',
+    'URL',
     'VARCHAR',
 
     'ARRAY',

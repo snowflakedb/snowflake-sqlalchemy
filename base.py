@@ -292,9 +292,7 @@ class SnowflakeExecutionContext(default.DefaultExecutionContext):
     def should_autocommit(self):
         autocommit = self.execution_options.get(
             'autocommit',
-            not self.compiled and self.statement
-            and expression.PARSE_AUTOCOMMIT
-            or False)
+            not self.compiled and self.statement and expression.PARSE_AUTOCOMMIT or False)
 
         if autocommit is expression.PARSE_AUTOCOMMIT:
             return self.should_autocommit_text(self.unicode_statement)
@@ -445,6 +443,7 @@ class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
             "(%d)" % type.precision if getattr(type, 'precision',
                                                None) is not None else ""
         )
+
 
 construct_arguments = [
     (Table, {

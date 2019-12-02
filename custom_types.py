@@ -14,8 +14,9 @@ FIXED = sqltypes.DECIMAL
 NUMBER = sqltypes.DECIMAL
 BYTEINT = sqltypes.SMALLINT
 STRING = sqltypes.VARCHAR
-TINYINT  = sqltypes.SMALLINT
+TINYINT = sqltypes.SMALLINT
 VARBINARY = sqltypes.BINARY
+
 
 class VARIANT(sqltypes.TypeEngine):
     __visit_name__ = 'VARIANT'
