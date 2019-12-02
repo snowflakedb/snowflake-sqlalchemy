@@ -5,6 +5,8 @@
 #
 
 import operator
+from six.moves.urllib_parse import unquote_plus
+
 import sqlalchemy.types as sqltypes
 from six import iteritems
 from sqlalchemy import util as sa_util
@@ -141,7 +143,7 @@ class SnowflakeDialect(default.DefaultDialect):
     def create_connect_args(self, url):
         opts = url.translate_connect_args(username='user')
         if 'database' in opts:
-            name_spaces = opts['database'].split('/')
+            name_spaces = [unquote_plus(e) for e in opts['database'].split('/')]
             if len(name_spaces) == 1:
                 pass
             elif len(name_spaces) == 2:
