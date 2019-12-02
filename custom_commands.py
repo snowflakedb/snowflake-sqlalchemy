@@ -13,10 +13,12 @@ from sqlalchemy.sql.elements import ClauseElement
 
 NoneType = type(None)
 
+
 def translate_bool(bln):
     if bln:
         return true()
     return false()
+
 
 class MergeInto(UpdateBase):
     __visit_name__ = 'merge_into'

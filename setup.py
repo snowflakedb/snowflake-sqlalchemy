@@ -4,7 +4,7 @@
 # Copyright (c) 2012-2019 Snowflake Computing Inc. All right reserved.
 #
 
-from os import path, getenv
+from os import path
 from setuptools import setup
 from codecs import open
 
@@ -23,16 +23,16 @@ setup(
     name='snowflake-sqlalchemy',
     version=version,
     description='Snowflake SQLAlchemy Dialect',
-    long_description = long_description,
-    author = 'Snowflake Computing, Inc',
-    author_email = 'support@snowflake.net',
-    license = 'Apache License, Version 2.0',
-    url = 'https://www.snowflake.net/',
-    keywords = "Snowflake db database cloud analytics warehouse",
-    download_url = 'https://www.snowflake.net/',
-    use_2to3 = False,
+    long_description=long_description,
+    author='Snowflake Computing, Inc',
+    author_email='support@snowflake.net',
+    license='Apache License, Version 2.0',
+    url='https://www.snowflake.net/',
+    keywords="Snowflake db database cloud analytics warehouse",
+    download_url='https://www.snowflake.net/',
+    use_2to3=False,
 
-    install_requires = [
+    install_requires=[
         'sqlalchemy<2.0.0',
         'snowflake-connector-python',
     ],
@@ -53,7 +53,7 @@ setup(
             'snowflake=snowflake.sqlalchemy:dialect',
         ]
     },
-    classifiers = [
+    classifiers=[
         'Development Status :: 5 - Production/Stable',
 
         'Environment :: Console',
@@ -81,4 +81,24 @@ setup(
         'Topic :: Software Development :: Libraries :: Python Modules',
         'Topic :: Scientific/Engineering :: Information Analysis',
     ],
+    extras_requires={
+        'development': [
+            'pytest==4.6.6',  # Last Python 2.7 supported version
+            'pytest-cov',
+            'pytest-rerunfailures',
+            'pytest-timeout',
+            'coverage',
+            'pexpect',
+            'mock',
+            'pytz',
+            'pytzdata',
+            'Cython',
+            'more-itertools==4.3.0;python_version=="2.7"',  # Last Python 2.7 supported version
+            'more-itertools;python_version!="2.7"',
+            'numpy==1.16.5;python_version=="2.7"',  # Last Python 2.7 supported version
+            'numpy;python_version!="2.7"',
+            'pandas==0.24.2;python_version=="2.7" or python_version=="3.5"',
+            'pandas<1.0.0;python_version>"3.5"',
+        ]
+    },
 )
