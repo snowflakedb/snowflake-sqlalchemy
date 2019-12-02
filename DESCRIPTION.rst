@@ -10,6 +10,14 @@ https://github.com/snowflakedb/snowflake-sqlalchemy
 Release Notes
 -------------------------------------------------------------------------------
 
+- v1.1.17 (December 2,2019)
+
+    - Comments not created when creating new table #118
+    - SQLAlchemy Column Metadata Cache not working
+    - Timestamp DDL renders wrong when precision value passed
+    - Fixed special character handling in snowflake-sqlalchemy from URL string
+    - Added development optional dependencies to Python packages
+
 - v1.1.16 (October 21,2019)
 
     - Fix SQLAlchemy not working with global url
