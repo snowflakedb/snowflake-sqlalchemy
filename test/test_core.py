@@ -13,11 +13,10 @@ import pytest
 from parameters import CONNECTION_PARAMETERS
 from sqlalchemy import Table, Column, Integer, Numeric, String, MetaData, Sequence, ForeignKey, LargeBinary, REAL, \
     Boolean, DateTime
-from sqlalchemy import inspect
-from sqlalchemy import text
-from sqlalchemy import dialects
+from sqlalchemy import create_engine, dialects, inspect, text
 from sqlalchemy.sql import and_, or_, not_
 from sqlalchemy.sql import select
+from snowflake.connector import connect
 
 from snowflake.sqlalchemy import (
     URL,
@@ -1037,3 +1036,36 @@ def test_comment_sqlalchemy(db_parameters, engine_testaccount, on_travis):
             con2.close()
         engine2.dispose()
 
+
+
+@pytest.mark.skipif(
+    os.getenv('TRAVIS') == 'true',
+    reason="Travis cannot create Schemas and Databases"
+)
+def test_special_schema_character(db_parameters):
+    """Make sure we decode special characters correctly"""
+    # Constants
+    database = "a/b/c"  # "'/'.join([choice(ascii_lowercase) for _ in range(3)])
+    schema = "d/e/f"  # '/'.join([choice(ascii_lowercase) for _ in range(3)])
+    # Setup
+    options = dict(**db_parameters)
+    conn = connect(**options)
+    conn.cursor().execute("CREATE OR REPLACE DATABASE \"{0}\"".format(database))
+    conn.cursor().execute("CREATE OR REPLACE SCHEMA \"{0}\"".format(schema))
+    conn.close()
+    # Test
+    options.update({'database': '"' + database + '"',
+                    'schema': '"' + schema + '"'})
+    sf_conn = connect(**options)
+    sf_connection = [res for res in sf_conn.cursor().execute("select current_database(), "
+                                                             "current_schema();")]
+    sa_conn = create_engine(URL(**options)).connect()
+    sa_connection = [res for res in sa_conn.execute("select current_database(), "
+                                                    "current_schema();")]
+    sa_conn.close()
+    sf_conn.close()
+    # Teardown
+    conn = connect(**options)
+    conn.cursor().execute("DROP DATABASE IF EXISTS \"{0}\"".format(database))
+    conn.close()
+    assert [(database, schema)] == sf_connection == sa_connection
