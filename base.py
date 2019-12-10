@@ -376,73 +376,62 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
 
 
 class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
-    def visit_BYTEINT(self, type, **kw):
+    def visit_BYTEINT(self, type_, **kw):
         return "BYTEINT"
 
-    def visit_CHARACTER(self, type, **kw):
+    def visit_CHARACTER(self, type_, **kw):
         return "CHARACTER"
 
-    def visit_DEC(self, type, **kw):
+    def visit_DEC(self, type_, **kw):
         return "DEC"
 
-    def visit_DOUBLE(self, type, **kw):
+    def visit_DOUBLE(self, type_, **kw):
         return "DOUBLE"
 
-    def visit_FIXED(self, type, **kw):
+    def visit_FIXED(self, type_, **kw):
         return "FIXED"
 
-    def visit_INT(self, type, **kw):
+    def visit_INT(self, type_, **kw):
         return "INT"
 
-    def visit_NUMBER(self, type, **kw):
+    def visit_NUMBER(self, type_, **kw):
         return "NUMBER"
 
-    def visit_STRING(self, type, **kw):
+    def visit_STRING(self, type_, **kw):
         return "STRING"
 
-    def visit_TINYINT(self, type, **kw):
+    def visit_TINYINT(self, type_, **kw):
         return "TINYINT"
 
-    def visit_VARIANT(self, type, **kw):
+    def visit_VARIANT(self, type_, **kw):
         return "VARIANT"
 
-    def visit_ARRAY(self, type, **kw):
+    def visit_ARRAY(self, type_, **kw):
         return "ARRAY"
 
-    def visit_OBJECT(self, type, **kw):
+    def visit_OBJECT(self, type_, **kw):
         return "OBJECT"
 
-    def visit_BLOB(self, type, **kw):
+    def visit_BLOB(self, type_, **kw):
         return "BINARY"
 
-    def visit_datetime(self, type, **kw):
-        return self.visit_TIMESTAMP(type, **kw)
+    def visit_datetime(self, type_, **kw):
+        return "datetime"
 
-    def visit_DATETIME(self, type, **kw):
-        return self.visit_TIMESTAMP(type, **kw)
+    def visit_DATETIME(self, type_, **kw):
+        return "DATETIME"
 
-    def visit_TIMESTAMP_NTZ(self, type, **kw):
-        kw['timezone'] = False
-        return self.visit_TIMESTAMP(type, **kw)
+    def visit_TIMESTAMP_NTZ(self, type_, **kw):
+        return "TIMESTAMP_NTZ"
 
-    def visit_TIMESTAMP_TZ(self, type, **kw):
-        kw['timezone'] = True
-        return self.visit_TIMESTAMP(type, **kw)
+    def visit_TIMESTAMP_TZ(self, type_, **kw):
+        return "TIMESTAMP_TZ"
 
-    def visit_TIMESTAMP_LTZ(self, type, **kw):
-        kw['timezone'] = True
-        kw['is_local'] = True
-        return self.visit_TIMESTAMP(type, **kw)
+    def visit_TIMESTAMP_LTZ(self, type_, **kw):
+        return "TIMESTAMP_LTZ"
 
-    def visit_TIMESTAMP(self, type, **kw):
-        is_local = kw.get('is_local', False)
-        timezone = kw.get('timezone', type.timezone)
-        return "TIMESTAMP %s%s" % (
-            (timezone and "WITH" or "WITHOUT") + (
-                    is_local and " LOCAL" or "") + " TIME ZONE",
-            "(%d)" % type.precision if getattr(type, 'precision',
-                                               None) is not None else ""
-        )
+    def visit_TIMESTAMP(self, type_, **kw):
+        return "TIMESTAMP"
 
 
 construct_arguments = [
