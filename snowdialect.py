@@ -402,7 +402,6 @@ class SnowflakeDialect(default.DefaultDialect):
             connection, full_schema_name, **kw
         )
 
-        columns = []
         table_name = self.denormalize_name(table_name)
         current_table_pks = schema_primary_keys.get(table_name)
 
