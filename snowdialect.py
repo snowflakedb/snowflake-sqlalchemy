@@ -501,7 +501,7 @@ class SnowflakeDialect(default.DefaultDialect):
                                     )
         cursor = connection.execute(sql_command)
         ans = cursor.fetchone()
-        return {'text': ans['comment']}
+        return {'text': ans['comment'] if ans['comment'] else None}
 
 
 @sa_vnt.listens_for(Table, 'before_create')
