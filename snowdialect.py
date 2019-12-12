@@ -391,12 +391,16 @@ class SnowflakeDialect(default.DefaultDialect):
         Gets all column info given the table info
         """
         schema = schema or self.default_schema_name
-        current_database, current_schema = self._current_database_schema(connection, **kw)
+        current_database, current_schema = self._current_database_schema(
+            connection, **kw
+        )
         if not schema:
             schema = current_schema
 
         full_schema_name = self._denormalize_quote_join(current_database, schema)
-        schema_primary_keys = self._get_schema_primary_keys(connection, full_schema_name, **kw)
+        schema_primary_keys = self._get_schema_primary_keys(
+            connection, full_schema_name, **kw
+        )
 
         columns = []
         table_name = self.denormalize_name(table_name)
@@ -419,21 +423,27 @@ class SnowflakeDialect(default.DefaultDialect):
                 AND ic.table_name=%(table_name)s
         """
 
-        print('Trying to run this SQL', SQL_COLS)
-
-        result = connection.execute(SQL_COLS, {"table_schema": self.denormalize_name(schema), "table_name": self.denormalize_name(table_name)})
+        result = connection.execute(
+            SQL_COLS,
+            {
+                "table_schema": self.denormalize_name(schema),
+                "table_name": self.denormalize_name(table_name),
+            },
+        )
 
         columns = []
 
-        for (column_name,
-             coltype,
-             character_maximum_length,
-             numeric_precision,
-             numeric_scale,
-             is_nullable,
-             column_default,
-             is_identity,
-             comment) in result:
+        for (
+            column_name,
+            coltype,
+            character_maximum_length,
+            numeric_precision,
+            numeric_scale,
+            is_nullable,
+            column_default,
+            is_identity,
+            comment,
+        ) in result:
 
             column_name = self.normalize_name(column_name)
             if column_name.startswith('sys_clustering_column'):
@@ -445,7 +455,9 @@ class SnowflakeDialect(default.DefaultDialect):
             if col_type is None:
                 sa_util.warn(
                     "Did not recognize type '{}' of column '{}'".format(
-                        coltype, column_name))
+                        coltype, column_name
+                    )
+                )
                 col_type = sqltypes.NULLTYPE
 
             else:
@@ -455,8 +467,7 @@ class SnowflakeDialect(default.DefaultDialect):
                 elif issubclass(col_type, sqltypes.Numeric):
                     col_type_kw['precision'] = numeric_precision
                     col_type_kw['scale'] = numeric_scale
-                elif issubclass(col_type,
-                                (sqltypes.String, sqltypes.BINARY)):
+                elif issubclass(col_type, (sqltypes.String, sqltypes.BINARY)):
                     col_type_kw['length'] = character_maximum_length
 
             type_instance = col_type(**col_type_kw)
@@ -469,7 +480,12 @@ class SnowflakeDialect(default.DefaultDialect):
                     'default': column_default,
                     'autoincrement': is_identity == 'YES',
                     'comment': comment,
-                    'primary_key': (column_name in schema_primary_keys[table_name]['constrained_columns']) if current_table_pks else False,
+                    'primary_key': (
+                        column_name
+                        in schema_primary_keys[table_name]['constrained_columns']
+                    )
+                    if current_table_pks
+                    else False,
                 }
             )
 
