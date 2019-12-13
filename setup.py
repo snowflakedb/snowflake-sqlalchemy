@@ -81,7 +81,7 @@ setup(
         'Topic :: Software Development :: Libraries :: Python Modules',
         'Topic :: Scientific/Engineering :: Information Analysis',
     ],
-    extras_requires={
+    extras_require={
         'development': [
             'pytest==4.6.6',  # Last Python 2.7 supported version
             'pytest-cov',
