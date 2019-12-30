@@ -394,7 +394,6 @@ class SnowflakeDialect(default.DefaultDialect):
             })
         return ans
 
-
     @reflection.cache
     def _get_table_columns(self, connection, table_name, schema=None, **kw):
         """Get all columns in a table in a schema"""
