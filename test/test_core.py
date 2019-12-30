@@ -1069,3 +1069,48 @@ def test_special_schema_character(db_parameters):
     conn.cursor().execute("DROP DATABASE IF EXISTS \"{0}\"".format(database))
     conn.close()
     assert [(database, schema)] == sf_connection == sa_connection
+
+
+def test_autoincrement(engine_testaccount):
+    metadata = MetaData()
+    users = Table('users', metadata,
+               Column('uid', Integer, Sequence('id_seq'), primary_key=True),
+               Column('name', String(39)))
+
+    try:
+        users.create(engine_testaccount)
+
+        connection = engine_testaccount.connect()
+        connection.execute(users.insert(), [{'name': 'sf1'}])
+
+        assert connection.execute(select([users])).fetchall() == [
+            (1, 'sf1')
+        ]
+
+        connection.execute(users.insert(), {'name': 'sf2'}, {'name': 'sf3'})
+        assert connection.execute(select([users])).fetchall() == [
+            (1, 'sf1'),
+            (2, 'sf2'),
+            (3, 'sf3')
+        ]
+
+        connection.execute(users.insert(), {'name': 'sf4'})
+        assert connection.execute(select([users])).fetchall() == [
+            (1, 'sf1'),
+            (2, 'sf2'),
+            (3, 'sf3'),
+            (4, 'sf4')
+        ]
+
+        seq = Sequence('id_seq')
+        nextid = connection.execute(seq)
+        connection.execute(users.insert(), [{'uid': nextid, 'name': 'sf5'}])
+        assert connection.execute(select([users])).fetchall() == [
+            (1, 'sf1'),
+            (2, 'sf2'),
+            (3, 'sf3'),
+            (4, 'sf4'),
+            (5, 'sf5')
+        ]
+    finally:
+        users.drop(engine_testaccount)

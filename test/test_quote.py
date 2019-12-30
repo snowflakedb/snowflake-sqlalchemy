@@ -23,7 +23,7 @@ def test_table_name_with_reserved_words(engine_testaccount, db_parameters):
         inspector = inspect(engine_testaccount)
         columns_in_insert = inspector.get_columns(test_table_name)
         assert len(columns_in_insert) == 3
-        assert columns_in_insert[0]['autoincrement'], 'autoinrecment'
+        assert columns_in_insert[0]['autoincrement'], 'autoincrement'
         assert columns_in_insert[0]['default'] is None, 'default'
         assert columns_in_insert[0]['name'] == 'id', 'name'
         assert columns_in_insert[0]['primary_key'], 'primary key'
