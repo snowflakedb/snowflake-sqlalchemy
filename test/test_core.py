@@ -567,7 +567,7 @@ def test_create_table_with_schema(engine_testaccount, db_parameters):
     metadata = MetaData()
     new_schema = db_parameters['schema'] + "_NEW"
     engine_testaccount.execute(text(
-        "CREATE SCHEMA \"{0}\"".format(new_schema)))
+        "CREATE OR REPLACE SCHEMA \"{0}\"".format(new_schema)))
     Table('users', metadata,
           Column('id', Integer, Sequence('user_id_seq'),
                  primary_key=True),
@@ -584,7 +584,7 @@ def test_create_table_with_schema(engine_testaccount, db_parameters):
     finally:
         metadata.drop_all(engine_testaccount)
         engine_testaccount.execute(
-            text("DROP SCHEMA \"{0}\"".format(new_schema)))
+            text("DROP SCHEMA IF EXISTS \"{0}\"".format(new_schema)))
 
 
 @pytest.mark.skipif(os.getenv("SNOWFLAKE_GCP") is not None, reason="PUT and GET is not supported for GCP yet")
