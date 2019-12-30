@@ -28,7 +28,7 @@ from snowflake.connector.constants import UTF8
 from .custom_types import (
     TIMESTAMP_LTZ, TIMESTAMP_TZ, TIMESTAMP_NTZ, VARIANT, OBJECT, ARRAY
 )
-from snowflake.connector import errors as sf_errors
+from snowflake.connector import errors as sf_errors, ProgrammingError
 
 colspecs = {}
 
@@ -318,25 +318,33 @@ class SnowflakeDialect(default.DefaultDialect):
 
     @reflection.cache
     def _get_schema_columns(self, connection, schema, **kw):
+        """Get all columns in the schema, if we hit 'Information schema query returned too much data' problem return
+        None, as it is cacheable and is an unexpected return type for this function"""
         ans = {}
         current_database, _ = self._current_database_schema(connection, **kw)
         full_schema_name = self._denormalize_quote_join(current_database, schema)
         schema_primary_keys = self._get_schema_primary_keys(connection, full_schema_name, **kw)
-        result = connection.execute("""
-        SELECT /* sqlalchemy:_get_columns_in_schema */
-               ic.table_name,
-               ic.column_name,
-               ic.data_type,
-               ic.character_maximum_length,
-               ic.numeric_precision,
-               ic.numeric_scale,
-               ic.is_nullable,
-               ic.column_default,
-               ic.is_identity,
-               ic.comment
-          FROM information_schema.columns ic
-         WHERE ic.table_schema=%(table_schema)s
-         ORDER BY ic.ordinal_position""", {"table_schema": self.denormalize_name(schema)})
+        try:
+            result = connection.execute("""
+            SELECT /* sqlalchemy:_get_schema_columns */
+                   ic.table_name,
+                   ic.column_name,
+                   ic.data_type,
+                   ic.character_maximum_length,
+                   ic.numeric_precision,
+                   ic.numeric_scale,
+                   ic.is_nullable,
+                   ic.column_default,
+                   ic.is_identity,
+                   ic.comment
+              FROM information_schema.columns ic
+             WHERE ic.table_schema=%(table_schema)s
+             ORDER BY ic.ordinal_position""", {"table_schema": self.denormalize_name(schema)})
+        except ProgrammingError as pe:
+            if pe.errno == 90030:
+                # This means that there are too many tables in the schema, we need to go more granular
+                return None  # None triggers _get_table_columns while staying cacheable
+            raise
         for (table_name,
              column_name,
              coltype,
@@ -386,6 +394,79 @@ class SnowflakeDialect(default.DefaultDialect):
             })
         return ans
 
+
+    @reflection.cache
+    def _get_table_columns(self, connection, table_name, schema=None, **kw):
+        """Get all columns in a table in a schema"""
+        ans = []
+        current_database, _ = self._current_database_schema(connection, **kw)
+        full_schema_name = self._denormalize_quote_join(current_database, schema)
+        schema_primary_keys = self._get_schema_primary_keys(connection, full_schema_name, **kw)
+        result = connection.execute("""
+        SELECT /* sqlalchemy:get_table_columns */
+               ic.table_name,
+               ic.column_name,
+               ic.data_type,
+               ic.character_maximum_length,
+               ic.numeric_precision,
+               ic.numeric_scale,
+               ic.is_nullable,
+               ic.column_default,
+               ic.is_identity,
+               ic.comment
+          FROM information_schema.columns ic
+         WHERE ic.table_schema=%(table_schema)s
+           AND ic.table_name=%(table_name)s
+         ORDER BY ic.ordinal_position""", {"table_schema": self.denormalize_name(schema),
+                                           "table_name": self.denormalize_name(table_name)})
+        for (table_name,
+             column_name,
+             coltype,
+             character_maximum_length,
+             numeric_precision,
+             numeric_scale,
+             is_nullable,
+             column_default,
+             is_identity,
+             comment) in result:
+            table_name = self.normalize_name(table_name)
+            column_name = self.normalize_name(column_name)
+            if column_name.startswith('sys_clustering_column'):
+                continue  # ignoring clustering column
+            col_type = self.ischema_names.get(coltype, None)
+            col_type_kw = {}
+            if col_type is None:
+                sa_util.warn(
+                    "Did not recognize type '{}' of column '{}'".format(
+                        coltype, column_name))
+                col_type = sqltypes.NULLTYPE
+            else:
+                if issubclass(col_type, FLOAT):
+                    col_type_kw['precision'] = numeric_precision
+                    col_type_kw['decimal_return_scale'] = numeric_scale
+                elif issubclass(col_type, sqltypes.Numeric):
+                    col_type_kw['precision'] = numeric_precision
+                    col_type_kw['scale'] = numeric_scale
+                elif issubclass(col_type,
+                                (sqltypes.String, sqltypes.BINARY)):
+                    col_type_kw['length'] = character_maximum_length
+
+            type_instance = col_type(**col_type_kw)
+
+            current_table_pks = schema_primary_keys.get(table_name)
+
+            ans.append({
+                'name': column_name,
+                'type': type_instance,
+                'nullable': is_nullable == 'YES',
+                'default': column_default,
+                'autoincrement': is_identity == 'YES',
+                'comment': comment,
+                'primary_key': (column_name in schema_primary_keys[table_name][
+                    'constrained_columns']) if current_table_pks else False,
+            })
+        return ans
+
     def get_columns(self, connection, table_name, schema=None, **kw):
         """
         Gets all column info given the table info
@@ -395,6 +476,9 @@ class SnowflakeDialect(default.DefaultDialect):
             _, schema = self._current_database_schema(connection, **kw)
 
         schema_columns = self._get_schema_columns(connection, schema, **kw)
+        if schema_columns is None:
+            # Too many results, fall back to only query about single table
+            return self._get_table_columns(connection, table_name, schema, **kw)
         return schema_columns[self.normalize_name(table_name)]
 
     @reflection.cache
@@ -415,8 +499,6 @@ class SnowflakeDialect(default.DefaultDialect):
 
         ret = [self.normalize_name(row[1]) for row in cursor]
 
-        # special flag to cache all column metadata for all tables in a schema.
-        self._get_schema_columns(connection, current_schema, **kw)
         return ret
 
     @reflection.cache
