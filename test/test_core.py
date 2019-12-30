@@ -10,13 +10,14 @@ import string
 import time
 
 import pytest
+from mock import patch
 from parameters import CONNECTION_PARAMETERS
 from sqlalchemy import Table, Column, Integer, Numeric, String, MetaData, Sequence, ForeignKey, LargeBinary, REAL, \
     Boolean, DateTime
 from sqlalchemy import create_engine, dialects, inspect, text
 from sqlalchemy.sql import and_, or_, not_
 from sqlalchemy.sql import select
-from snowflake.connector import connect
+from snowflake.connector import connect, ProgrammingError
 
 from snowflake.sqlalchemy import (
     URL,
@@ -813,6 +814,7 @@ def test_cache_time(engine_testaccount, db_parameters):
         else:
             # Reset inspector to reset cache
             inspector = inspect(engine_testaccount)
+    metadata.drop_all(engine_testaccount)
     assert outcome
 
 
@@ -1114,3 +1116,86 @@ def test_autoincrement(engine_testaccount):
         ]
     finally:
         users.drop(engine_testaccount)
+
+def test_get_too_many_columns(engine_testaccount, db_parameters):
+    """Check whether Inspector cache is working, when there are too many column to cache whole schema's columns"""
+    # Set up necessary tables
+    metadata = MetaData()
+    total_objects = 10
+    for idx in range(total_objects):
+        Table('mainuserss' + str(idx), metadata,
+              Column('id' + str(idx), Integer, Sequence('user_id_seq'),
+                     primary_key=True),
+              Column('name' + str(idx), String),
+              Column('fullname', String),
+              Column('password', String)
+              )
+        Table('mainaddressess' + str(idx), metadata,
+              Column('id' + str(idx), Integer, Sequence('address_id_seq'),
+                     primary_key=True),
+              Column('user_id' + str(idx), None,
+                     ForeignKey('mainuserss' + str(idx) + '.id' + str(idx))),
+              Column('email_address' + str(idx), String, nullable=False)
+              )
+    metadata.create_all(engine_testaccount)
+    inspector = inspect(engine_testaccount)
+    schema = db_parameters['schema']
+
+    # Emulate error
+    with patch.object(inspector.dialect, '_get_schema_columns', return_value=None) as mock_method:
+        def harass_inspector():
+            for table_name in inspector.get_table_names(schema):
+                column_metadata = inspector.get_columns(table_name, schema)
+                primary_keys = inspector.get_primary_keys(table_name, schema)
+                foreign_keys = inspector.get_foreign_keys(table_name, schema)
+                assert 3 <= len(column_metadata) <= 4  # Either one of the tables should have 3 or 4 columns
+
+        outcome = False
+        # Allow up to 5 times for the speed test to pass to avoid flaky test
+        for i in range(5):
+            # Python 2.7 has no timeit.timeit with globals and locals parameters
+            s_time = time.time()
+            harass_inspector()
+            m_time = time.time()
+            harass_inspector()
+            time2 = time.time() - m_time
+            time1 = m_time - s_time
+            print("Ran inspector through tables twice, times:\n\tfirst: {0}\n\tsecond: {1}".format(time1, time2))
+            if time2 < time1 * 0.01:
+                outcome = True
+                break
+            else:
+                # Reset inspector to reset cache
+                inspector = inspect(engine_testaccount)
+        metadata.drop_all(engine_testaccount)
+        assert mock_method.call_count > 0  # Make sure we actually mocked the issue happening
+        assert outcome
+
+
+def test_too_many_columns_detection(engine_testaccount, db_parameters):
+    """This tests whether a too many column error actually triggers the more granular table version"""
+    # Set up a single table
+    metadata = MetaData()
+    Table('users', metadata,
+          Column('id', Integer, Sequence('user_id_seq'),
+                 primary_key=True),
+          Column('name', String),
+          Column('fullname', String),
+          Column('password', String)
+          )
+    metadata.create_all(engine_testaccount)
+    inspector = inspect(engine_testaccount)
+    # Do test
+    original_execute = inspector.bind.execute
+    def mock_helper(command, *args, **kwargs):
+        if '_get_schema_columns' in command:
+            raise ProgrammingError("Information schema query returned too much data. Please repeat query with more "
+                                   "selective predicates.", 90030)
+        else:
+            return original_execute(command, *args, **kwargs)
+
+    with patch.object(inspector.bind,'execute', side_effect=mock_helper) as mock_execute:
+        column_metadata = inspector.get_columns('users', db_parameters['schema'])
+    assert len(column_metadata) == 4
+    # Clean up
+    metadata.drop_all(engine_testaccount)

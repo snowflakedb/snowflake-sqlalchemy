@@ -270,7 +270,8 @@ To mitigate the problem, Snowflake SQLAlchemy takes a flag :code:`cache_column_m
             cache_column_metadata=True,
         ))
 
-Note memory usage will go up higher as all of column metadata are cached associated with :code:`Inspector` object. Use the flag only if you need to get all of column metadata.
+Note that this flag has been deprecated, as our caching now uses the built-in SQLAlchemy reflection cache, the flag has been removed, but caching has been improved and if possible extra data will be fetched and cached.
+
 
 VARIANT, ARRAY and OBJECT Support
 -------------------------------------------------------------------------------
