@@ -24,5 +24,5 @@ else
 fi
 
 source ./venv/bin/activate
-pip install '.[pandas,development]'
+pip install '.[development]'
 pip list --format=columns
