@@ -991,7 +991,7 @@ def test_comments(engine_testaccount):
         engine_testaccount.execute("drop table public.{}".format(table_name))
 
 
-def test_comment_sqlalchemy(db_parameters, engine_testaccount, on_travis):
+def test_comment_sqlalchemy(db_parameters, engine_testaccount, on_public_ci):
     """Testing adding/reading column and table comments through SQLAlchemy"""
     new_schema = db_parameters['schema'] + '2'
     # Use same table name in 2 different schemas to make sure comment retrieval works properly
@@ -1002,7 +1002,7 @@ def test_comment_sqlalchemy(db_parameters, engine_testaccount, on_travis):
     column_comment2 = ''.join(random.choice(string.ascii_uppercase) for _ in range(10))
     engine2, _ = get_engine(schema=new_schema)
     con2 = None
-    if not on_travis:
+    if not on_public_ci:
         con2 = engine2.connect()
         con2.execute("CREATE SCHEMA IF NOT EXISTS {0}".format(new_schema))
     inspector = inspect(engine_testaccount)
@@ -1018,13 +1018,13 @@ def test_comment_sqlalchemy(db_parameters, engine_testaccount, on_travis):
                      comment=table_comment2)
 
     metadata1.create_all(engine_testaccount, tables=[mytable1])
-    if not on_travis:
+    if not on_public_ci:
         metadata2.create_all(engine2, tables=[mytable2])
 
     try:
         assert inspector.get_columns(table_name)[0]['comment'] == column_comment1
         assert inspector.get_table_comment(table_name)['text'] == table_comment1
-        if not on_travis:
+        if not on_public_ci:
             assert inspector.get_columns(table_name, schema=new_schema)[0]['comment'] == column_comment2
             assert inspector.get_table_comment(
                 table_name,
@@ -1032,20 +1032,17 @@ def test_comment_sqlalchemy(db_parameters, engine_testaccount, on_travis):
             )['text'] == table_comment2
     finally:
         mytable1.drop(engine_testaccount)
-        if not on_travis:
+        if not on_public_ci:
             mytable2.drop(engine2)
             con2.execute("DROP SCHEMA IF EXISTS {0}".format(new_schema))
             con2.close()
         engine2.dispose()
 
 
-
-@pytest.mark.skipif(
-    os.getenv('TRAVIS') == 'true',
-    reason="Travis cannot create Schemas and Databases"
-)
-def test_special_schema_character(db_parameters):
+def test_special_schema_character(db_parameters, on_public_ci):
     """Make sure we decode special characters correctly"""
+    if on_public_ci:
+        pytest.skip("Public CIs cannot create Schemas and Databases")
     # Constants
     database = "a/b/c"  # "'/'.join([choice(ascii_lowercase) for _ in range(3)])
     schema = "d/e/f"  # '/'.join([choice(ascii_lowercase) for _ in range(3)])

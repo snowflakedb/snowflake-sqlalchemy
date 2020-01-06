@@ -5,21 +5,9 @@
 #
 
 import json
-import logging
-
 import pytest
 
-for logger_name in ['snowflake.connector', 'botocore']:
-    logger = logging.getLogger(logger_name)
-    logger.setLevel(logging.DEBUG)
-    ch = logging.FileHandler('/tmp/python_connector.log')
-    ch.setLevel(logging.DEBUG)
-    ch.setFormatter(logging.Formatter(
-        '%(asctime)s - %(threadName)s %(filename)s:%(lineno)d - %(funcName)s() - %(levelname)s - %(message)s'))
-    logger.addHandler(ch)
-
 from parameters import (CONNECTION_PARAMETERS)
-
 from sqlalchemy import inspect
 from sqlalchemy import (Table, Column, Integer, MetaData)
 from sqlalchemy.sql import select
