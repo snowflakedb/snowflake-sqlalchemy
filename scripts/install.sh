@@ -24,11 +24,5 @@ else
 fi
 
 source ./venv/bin/activate
-pip install pandas
-
-pip install pytest pytest-cov pytest-rerunfailures pytest-timeout
-if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
-    pip install mock
-fi
-pip install .
+pip install '.[development]'
 pip list --format=columns
