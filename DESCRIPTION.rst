@@ -10,6 +10,11 @@ https://github.com/snowflakedb/snowflake-sqlalchemy
 Release Notes
 -------------------------------------------------------------------------------
 
+- v1.1.18 (January 6,2020)
+
+    - Set current schema in connection string containing special characters
+    - Calling str on custom_types throws Exception
+
 - v1.1.17 (December 2,2019)
 
     - Comments not created when creating new table #118
