@@ -15,7 +15,7 @@ from parameters import (CONNECTION_PARAMETERS)
 from sqlalchemy import create_engine
 
 import snowflake.connector
-from snowflake.connector.compat import TO_UNICODE
+from snowflake.connector.compat import TO_UNICODE, IS_WINDOWS
 from snowflake.sqlalchemy import URL, dialect
 
 if os.getenv('TRAVIS') == 'true':
@@ -27,7 +27,17 @@ else:
 
 @pytest.fixture(scope='session')
 def on_travis():
-    return os.getenv('TRAVIS') == 'true'
+    return os.getenv('TRAVIS', '').lower() == 'true'
+
+
+@pytest.fixture(scope='session')
+def on_appveyor():
+    return os.getenv('APPVEYOR', '').lower() == 'true'
+
+
+@pytest.fixture(scope='session')
+def on_public_ci(on_travis, on_appveyor):
+    return on_travis or on_appveyor
 
 
 def help():
@@ -65,7 +75,8 @@ def get_db_parameters():
     """
     ret = {}
     os.environ['TZ'] = 'UTC'
-    time.tzset()
+    if not IS_WINDOWS:
+        time.tzset()
     for k, v in CONNECTION_PARAMETERS.items():
         ret[k] = v
 

@@ -14,17 +14,6 @@ except:
 
 THIS_DIR = os.path.dirname(os.path.realpath(__file__))
 
-import logging
-
-for logger_name in ['snowflake.connector', 'botocore']:
-    logger = logging.getLogger(logger_name)
-    logger.setLevel(logging.DEBUG)
-    ch = logging.FileHandler('/tmp/python_connector.log')
-    ch.setLevel(logging.DEBUG)
-    ch.setFormatter(logging.Formatter(
-        '%(asctime)s - %(threadName)s %(filename)s:%(lineno)d - %(funcName)s() - %(levelname)s - %(message)s'))
-    logger.addHandler(ch)
-
 
 def _get_engine_with_qmark(
         db_parameters, user=None, password=None, account=None):

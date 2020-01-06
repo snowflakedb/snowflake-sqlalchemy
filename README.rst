@@ -4,6 +4,9 @@ Snowflake SQLAlchemy
 .. image:: https://travis-ci.org/snowflakedb/snowflake-sqlalchemy.svg?branch=master
     :target: https://travis-ci.org/snowflakedb/snowflake-sqlalchemy
 
+.. image:: https://ci.appveyor.com/api/projects/status/risll3oufbi12nou?svg=true
+    :target: https://ci.appveyor.com/project/smtakeda/snowflake-sqlalchemy
+
 .. image:: https://codecov.io/gh/snowflakedb/snowflake-sqlalchemy/branch/master/graph/badge.svg
     :target: https://codecov.io/gh/snowflakedb/snowflake-sqlalchemy
 

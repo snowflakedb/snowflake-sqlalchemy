@@ -1,0 +1,28 @@
+platform:
+  - amd64
+
+environment:
+  global:
+    VSVER: 14
+    my_secret:
+      secure: YOioakwGPBD5jBTUnSD71Al48yWuURhnehlozjLZBuBxZZGM8wOpyc9dVgpJnK9n
+    my_salt:
+      secure: jQ+wp6UFUNOVoibd/aLmbj3lFRF2DPtC3EHNWDFxvVGWhM9OuvmJAfHScvvN1RXoiAbEZe0g3I6DOys1DRZbtg==
+
+  matrix:
+    - PYTHON: "C:\\Python36-x64"
+
+install:
+  - ps: iex ((New-Object Net.WebClient).DownloadString('https://raw.githubusercontent.com/appveyor/secure-file/master/install.ps1'))
+  - cmd: appveyor-tools\secure-file -decrypt parameters.appveyor.py.enc -secret %my_secret% -salt %my_salt% -out parameters.py
+  - "SET PATH=%PYTHON%;%PYTHON%\\Scripts;%PATH%"
+  - "python --version"
+  - "python -c \"import struct; print(struct.calcsize('P') * 8)\""
+  - "python -m pip install --upgrade pip setuptools wheel"
+  - "python -m pip install .[development]"
+  - "python -m pip list --format=columns"
+
+build: off
+
+test_script:
+  - "python -m pytest -vvv --cov=snowflake.sqlalchemy test"
