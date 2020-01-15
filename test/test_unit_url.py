@@ -16,6 +16,9 @@ def test_url():
                password='test') == "snowflake://admin:test@testaccount/"
 
     assert URL(account='testaccount', user='admin',
+               password='test test') == "snowflake://admin:test%20test@testaccount/"
+
+    assert URL(account='testaccount', user='admin',
                password='test', database='testdb') == \
            "snowflake://admin:test@testaccount/testdb"
 
