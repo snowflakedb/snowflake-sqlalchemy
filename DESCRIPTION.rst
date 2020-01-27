@@ -10,6 +10,13 @@ https://github.com/snowflakedb/snowflake-sqlalchemy
 Release Notes
 -------------------------------------------------------------------------------
 
+- v1.2.0 (January 27, 2020)
+
+    - Fix typo in README Connection Parameters #141
+    - Fix sqlalchemy and possibly python-connector warnings
+    - Fix handling of empty table comments #137
+    - Fix handling spaces in connection string passwords #149
+
 - v1.1.18 (January 6,2020)
 
     - Set current schema in connection string containing special characters
