@@ -4,8 +4,7 @@
 # Copyright (c) 2012-2019 Snowflake Computing Inc. All right reserved.
 #
 
-from sqlalchemy import (Table, Column, Integer, String, MetaData, Sequence)
-from sqlalchemy import inspect
+from sqlalchemy import Column, Integer, MetaData, Sequence, String, Table, inspect
 
 
 def test_table_name_with_reserved_words(engine_testaccount, db_parameters):

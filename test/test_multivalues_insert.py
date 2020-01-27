@@ -4,8 +4,8 @@
 # Copyright (c) 2012-2019 Snowflake Computing Inc. All right reserved.
 #
 
-from sqlalchemy import (Integer, String, Sequence)
-from sqlalchemy.schema import (Table, Column, MetaData)
+from sqlalchemy import Integer, Sequence, String
+from sqlalchemy.schema import Column, MetaData, Table
 from sqlalchemy.sql import select
 
 

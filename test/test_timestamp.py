@@ -4,21 +4,20 @@
 # Copyright (c) 2012-2019 Snowflake Computing Inc. All right reserved.
 #
 
-from parameters import (CONNECTION_PARAMETERS)
+from datetime import datetime
 
 import pytz
-from sqlalchemy import inspect
-from sqlalchemy import (Table, Column, Integer, MetaData)
+from parameters import CONNECTION_PARAMETERS
+from snowflake.sqlalchemy import TIMESTAMP_LTZ, TIMESTAMP_NTZ, TIMESTAMP_TZ
+from sqlalchemy import Column, Integer, MetaData, Table
 from sqlalchemy.sql import select
-from snowflake.sqlalchemy import (TIMESTAMP_TZ, TIMESTAMP_LTZ, TIMESTAMP_NTZ)
-from datetime import datetime
 
 PST_TZ = "America/Los_Angeles"
 JST_TZ = "Asia/Tokyo"
 
 try:
     from parameters import (CONNECTION_PARAMETERS2)
-except:
+except ImportError:
     CONNECTION_PARAMETERS2 = CONNECTION_PARAMETERS
 
 

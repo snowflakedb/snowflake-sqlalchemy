@@ -4,13 +4,16 @@
 # Copyright (c) 2012-2019 Snowflake Computing Inc. All right reserved.
 #
 import pytest
-from parameters import CONNECTION_PARAMETERS
-from sqlalchemy import Table, Column, Integer, String, MetaData, Sequence
-from sqlalchemy.sql import select
-
 from snowflake.sqlalchemy import (
-    CopyIntoStorage, CSVFormatter, JSONFormatter, MergeInto, PARQUETFormatter, AWSBucket, AzureContainer,
+    AWSBucket,
+    AzureContainer,
+    CopyIntoStorage,
+    CSVFormatter,
+    JSONFormatter,
+    PARQUETFormatter,
 )
+from sqlalchemy import Column, Integer, MetaData, Sequence, String, Table
+from sqlalchemy.sql import select
 
 
 def test_copy_into_location(engine_testaccount, sql_compiler):

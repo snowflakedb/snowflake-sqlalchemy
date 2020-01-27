@@ -21,7 +21,7 @@ Find the ``snowflake-sqlalchemy*.whl`` package in the ``./dist`` directory.
 Testing
 ================================================================================
 
-Create a virtualenv, with ``parameters.py`` in a test directory. 
+Create a virtualenv, with ``parameters.py`` in a test directory.
 
     .. code-block:: bash
 

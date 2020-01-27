@@ -12,7 +12,7 @@ THIS_DIR = path.dirname(path.realpath(__file__))
 
 try:
     from generated_version import VERSION
-except:
+except ImportError:
     from version import VERSION
 version = '.'.join([str(v) for v in VERSION if v is not None])
 

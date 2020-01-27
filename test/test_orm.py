@@ -5,11 +5,9 @@
 #
 
 import pytest
-from sqlalchemy import (Column, Integer, String, Sequence)
-from sqlalchemy import ForeignKey
+from sqlalchemy import Column, ForeignKey, Integer, Sequence, String
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import Session
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Session, relationship
 
 
 def test_basic_orm(engine_testaccount):

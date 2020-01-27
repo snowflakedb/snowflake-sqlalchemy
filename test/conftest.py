@@ -11,12 +11,11 @@ import uuid
 from logging import getLogger
 
 import pytest
-from parameters import (CONNECTION_PARAMETERS)
-from sqlalchemy import create_engine
-
 import snowflake.connector
-from snowflake.connector.compat import TO_UNICODE, IS_WINDOWS
+from parameters import CONNECTION_PARAMETERS
+from snowflake.connector.compat import IS_WINDOWS, TO_UNICODE
 from snowflake.sqlalchemy import URL, dialect
+from sqlalchemy import create_engine
 
 if os.getenv('TRAVIS') == 'true':
     TEST_SCHEMA = 'TRAVIS_JOB_{0}'.format(os.getenv('TRAVIS_JOB_ID'))
@@ -65,9 +64,11 @@ DEFAULT_PARAMETERS = {
     'port': '443',
 }
 
+
 @pytest.fixture(scope='session')
 def db_parameters():
     return get_db_parameters()
+
 
 def get_db_parameters():
     """
@@ -167,7 +168,7 @@ def init_test_schema(request, db_parameters):
             protocol=ret['protocol']
     ) as con:
         con.cursor().execute(
-            "CREATE SCHEMA IF NOT EXISTS {0}".format(TEST_SCHEMA))
+            "CREATE SCHEMA IF NOT EXISTS {}".format(TEST_SCHEMA))
 
     def fin():
         ret1 = db_parameters
