@@ -6,12 +6,9 @@
 
 from sqlalchemy import exc
 
-from snowflake.connector.compat import (PY2, IS_STR)
+from snowflake.connector.compat import IS_STR
 
-if PY2:
-    from urllib import quote_plus
-else:
-    from urllib.parse import quote_plus
+from urllib.parse import quote_plus
 
 
 def _url(**db_parameters):
