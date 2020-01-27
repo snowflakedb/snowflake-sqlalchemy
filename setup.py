@@ -34,7 +34,7 @@ setup(
 
     install_requires=[
         'sqlalchemy<2.0.0',
-        'snowflake-connector-python',
+        'snowflake-connector-python>=2.2.0,<3.0.0',
     ],
     namespace_packages=[
         'snowflake'
@@ -69,7 +69,6 @@ setup(
         'Operating System :: OS Independent',
 
         'Programming Language :: SQL',
-        'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
@@ -83,7 +82,7 @@ setup(
     ],
     extras_require={
         'development': [
-            'pytest==4.6.6',  # Last Python 2.7 supported version
+            'pytest',
             'pytest-cov',
             'pytest-rerunfailures',
             'pytest-timeout',
@@ -93,11 +92,9 @@ setup(
             'pytz',
             'pytzdata',
             'Cython',
-            'more-itertools==4.3.0;python_version=="2.7"',  # Last Python 2.7 supported version
-            'more-itertools;python_version!="2.7"',
-            'numpy==1.16.5;python_version=="2.7"',  # Last Python 2.7 supported version
-            'numpy;python_version!="2.7"',
-            'pandas==0.24.2;python_version=="2.7" or python_version=="3.5"',
+            'more-itertools',
+            'numpy',
+            'pandas==0.24.2;python_version=="3.5"',
             'pandas<1.0.0;python_version>"3.5"',
         ]
     },
