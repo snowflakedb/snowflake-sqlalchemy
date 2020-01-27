@@ -461,7 +461,7 @@ class SnowflakeDialect(default.DefaultDialect):
                 'nullable': is_nullable == 'YES',
                 'default': column_default,
                 'autoincrement': is_identity == 'YES',
-                'comment': comment,
+                'comment': comment if comment != '' else None,
                 'primary_key': (column_name in schema_primary_keys[table_name][
                     'constrained_columns']) if current_table_pks else False,
             })
@@ -583,7 +583,7 @@ class SnowflakeDialect(default.DefaultDialect):
                                     )
         cursor = connection.execute(sql_command)
         ans = cursor.fetchone()
-        return {'text': ans['comment']}
+        return {'text': ans['comment'] if ans['comment'] else None}
 
 
 @sa_vnt.listens_for(Table, 'before_create')
