@@ -4,7 +4,7 @@ Building and Testing Snowflake SQLAlchemy
 Building
 ================================================================================
 
-Install Python 2.7.9 or higher, or 3.5.0 or higher. Clone the Snowflake SQLAlchemy repository, then run the following command to create a wheel package:
+Install Python 3.5.0 or higher. Clone the Snowflake SQLAlchemy repository, then run the following command to create a wheel package:
 
     .. code-block:: bash
 
