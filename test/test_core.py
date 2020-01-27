@@ -1206,3 +1206,17 @@ def test_too_many_columns_detection(engine_testaccount, db_parameters):
     assert len(column_metadata) == 4
     # Clean up
     metadata.drop_all(engine_testaccount)
+
+
+def test_empty_comments(engine_testaccount):
+    """Test that no comment returns None"""
+    table_name = ''.join(random.choice(string.ascii_uppercase) for _ in range(5))
+    try:
+        engine_testaccount.execute("create table public.{} (\"col1\" text);".format(table_name))
+        engine_testaccount.execute("select comment from information_schema.columns where table_name='{}'".format(table_name)).fetchall()
+        inspector = inspect(engine_testaccount)
+        columns = inspector.get_columns(table_name, schema='PUBLIC')
+        assert inspector.get_table_comment(table_name, schema='PUBLIC') == {'text': None}
+        assert all([c['comment'] is None for c in columns])
+    finally:
+        engine_testaccount.execute("drop table public.{}".format(table_name))
