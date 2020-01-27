@@ -1,5 +1,6 @@
 .svn
 # Byte-compiled / optimized / DLL files
+.tox
 __pycache__/
 *.py[cod]
 *$py.class

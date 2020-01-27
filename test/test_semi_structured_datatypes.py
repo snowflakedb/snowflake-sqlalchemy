@@ -5,17 +5,16 @@
 #
 
 import json
-import pytest
 
-from parameters import (CONNECTION_PARAMETERS)
-from sqlalchemy import inspect
-from sqlalchemy import (Table, Column, Integer, MetaData)
+import pytest
+from parameters import CONNECTION_PARAMETERS
+from snowflake.sqlalchemy import ARRAY, OBJECT, VARIANT
+from sqlalchemy import Column, Integer, MetaData, Table, inspect
 from sqlalchemy.sql import select
-from snowflake.sqlalchemy import VARIANT, ARRAY, OBJECT
 
 try:
     from parameters import (CONNECTION_PARAMETERS2)
-except:
+except ImportError:
     CONNECTION_PARAMETERS2 = CONNECTION_PARAMETERS
 
 

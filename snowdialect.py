@@ -299,7 +299,7 @@ class SnowflakeDialect(default.DefaultDialect):
                 foreign_key_map[name]['referred_columns'].append(self.normalize_name(row['pk_column_name']))
 
         ans = {}
-        for k, v in iteritems(foreign_key_map):
+        for _, v in iteritems(foreign_key_map):
             if v['table_name'] not in ans:
                 ans[v['table_name']] = []
             ans[v['table_name']].append({k2: v2 for k2, v2 in iteritems(v) if k2 != 'table_name'})
@@ -540,7 +540,7 @@ class SnowflakeDialect(default.DefaultDialect):
             ret = cursor.fetchone()
             if ret:
                 return ret[n2i['text']]
-        except:
+        except Exxception:
             pass
         return None
 

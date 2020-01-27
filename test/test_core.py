@@ -10,25 +10,34 @@ import string
 import time
 
 import pytest
+from conftest import get_engine
 from mock import patch
 from parameters import CONNECTION_PARAMETERS
-from sqlalchemy import Table, Column, Integer, Numeric, String, MetaData, Sequence, ForeignKey, LargeBinary, REAL, \
-    Boolean, DateTime
-from sqlalchemy import create_engine, dialects, inspect, text
-from sqlalchemy.sql import and_, or_, not_
-from sqlalchemy.sql import select
-from snowflake.connector import connect, ProgrammingError
-
-from snowflake.sqlalchemy import (
-    URL,
-    MergeInto,
-    dialect
+from snowflake.connector import ProgrammingError, connect
+from snowflake.sqlalchemy import URL, MergeInto, dialect
+from sqlalchemy import (
+    REAL,
+    Boolean,
+    Column,
+    DateTime,
+    ForeignKey,
+    Integer,
+    LargeBinary,
+    MetaData,
+    Numeric,
+    Sequence,
+    String,
+    Table,
+    create_engine,
+    dialects,
+    inspect,
+    text,
 )
-from conftest import get_engine
+from sqlalchemy.sql import and_, not_, or_, select
 
 try:
     from parameters import (CONNECTION_PARAMETERS2)
-except:
+except ImportError:
     CONNECTION_PARAMETERS2 = CONNECTION_PARAMETERS
 
 THIS_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -236,8 +245,7 @@ def test_insert_tables(engine_testaccount):
                'users.id = addresses.user_id', 'equal operator'
         assert str(users.c.id == 7) == 'users.id = :id_1', \
             'equal to a static number'
-        assert str(users.c.name == None) == 'users.name IS NULL', \
-            'equal to None'
+        assert str(users.c.name == None)  # NOQA
         assert str(users.c.id + addresses.c.id) == 'users.id + addresses.id', \
             'number + number'
         assert str(users.c.name + users.c.fullname) == \
@@ -265,7 +273,7 @@ def test_insert_tables(engine_testaccount):
         # example 2
         obj = users.c.name.like('j%') & (users.c.id == addresses.c.user_id) & \
               (
-                      (addresses.c.email_address == 'wendy@aol.com') | \
+                      (addresses.c.email_address == 'wendy@aol.com') |
                       (addresses.c.email_address == 'jack@yahoo.com')
               ) \
               & ~(users.c.id > 5)
@@ -793,13 +801,13 @@ def test_cache_time(engine_testaccount, db_parameters):
 
     def harass_inspector():
         for table_name in inspector.get_table_names(schema):
-            column_metadata = inspector.get_columns(table_name, schema)
-            primary_keys = inspector.get_primary_keys(table_name, schema)
-            foreign_keys = inspector.get_foreign_keys(table_name, schema)
+            inspector.get_columns(table_name, schema)
+            inspector.get_pk_constraint(table_name, schema)
+            inspector.get_foreign_keys(table_name, schema)
 
     outcome = False
     # Allow up to 5 times for the speed test to pass to avoid flaky test
-    for i in range(5):
+    for _ in range(5):
         # Python 2.7 has no timeit.timeit with globals and locals parameters
         s_time = time.time()
         harass_inspector()
@@ -909,11 +917,11 @@ def test_upsert(engine_testaccount, update_flag, insert_flag, delete_flag, condi
                 fullname=onboarding_users.c.fullname,
             )
             if conditional_flag:
-                clause.where(onboarding_users.c.fullname != None)
+                clause.where(onboarding_users.c.fullname != None)  # NOQA
         if delete_flag:
             clause = merge.when_matched_then_delete()
             if conditional_flag:
-                clause.where(onboarding_users.c.delete == True)
+                clause.where(onboarding_users.c.delete == True)  # NOQA
 
         conn.execute(merge)
         users_tuples = {tuple(row) for row in conn.execute(select([users]))}
@@ -969,7 +977,7 @@ def test_deterministic_merge_into(sql_compiler):
         id=onboarding_users.c.id,
         name=onboarding_users.c.name,
         fullname=onboarding_users.c.fullname,
-    ).where(onboarding_users.c.fullname != None)
+    ).where(onboarding_users.c.fullname != None)  # NOQA
     assert sql_compiler(merge) == "MERGE INTO users USING onboarding_users ON users.id = onboarding_users.id " \
                                   "WHEN MATCHED THEN UPDATE SET fullname = onboarding_users.fullname, " \
                                   "name = onboarding_users.name WHEN NOT MATCHED AND onboarding_users.fullname " \
@@ -1114,6 +1122,7 @@ def test_autoincrement(engine_testaccount):
     finally:
         users.drop(engine_testaccount)
 
+
 def test_get_too_many_columns(engine_testaccount, db_parameters):
     """Check whether Inspector cache is working, when there are too many column to cache whole schema's columns"""
     # Set up necessary tables
@@ -1143,13 +1152,13 @@ def test_get_too_many_columns(engine_testaccount, db_parameters):
         def harass_inspector():
             for table_name in inspector.get_table_names(schema):
                 column_metadata = inspector.get_columns(table_name, schema)
-                primary_keys = inspector.get_primary_keys(table_name, schema)
-                foreign_keys = inspector.get_foreign_keys(table_name, schema)
+                inspector.get_pk_constraint(table_name, schema)
+                inspector.get_foreign_keys(table_name, schema)
                 assert 3 <= len(column_metadata) <= 4  # Either one of the tables should have 3 or 4 columns
 
         outcome = False
         # Allow up to 5 times for the speed test to pass to avoid flaky test
-        for i in range(5):
+        for _ in range(5):
             # Python 2.7 has no timeit.timeit with globals and locals parameters
             s_time = time.time()
             harass_inspector()
@@ -1184,6 +1193,7 @@ def test_too_many_columns_detection(engine_testaccount, db_parameters):
     inspector = inspect(engine_testaccount)
     # Do test
     original_execute = inspector.bind.execute
+
     def mock_helper(command, *args, **kwargs):
         if '_get_schema_columns' in command:
             raise ProgrammingError("Information schema query returned too much data. Please repeat query with more "
@@ -1191,7 +1201,7 @@ def test_too_many_columns_detection(engine_testaccount, db_parameters):
         else:
             return original_execute(command, *args, **kwargs)
 
-    with patch.object(inspector.bind,'execute', side_effect=mock_helper) as mock_execute:
+    with patch.object(inspector.bind, 'execute', side_effect=mock_helper):
         column_metadata = inspector.get_columns('users', db_parameters['schema'])
     assert len(column_metadata) == 4
     # Clean up

@@ -6,13 +6,12 @@
 import random
 import string
 
-import pytest
 import numpy as np
 import pandas as pd
-import sqlalchemy
+import pytest
 import snowflake.sqlalchemy
-from sqlalchemy import (Table, Column, Integer, String, MetaData,
-                        Sequence, ForeignKey)
+import sqlalchemy
+from sqlalchemy import Column, ForeignKey, Integer, MetaData, Sequence, String, Table
 
 
 def _create_users_addresses_tables(engine_testaccount, metadata):
@@ -157,12 +156,14 @@ create or replace table dst(c1 float)
     )
     assert df.cnt.values[0] == total_rows
 
+
 def test_no_indexes(engine_testaccount, db_parameters):
     conn = engine_testaccount.connect()
     data = pd.DataFrame([('1.0.0',), ('1.0.1',)])
     with pytest.raises(NotImplementedError) as exc:
         data.to_sql('versions', schema=db_parameters['schema'], index=True, index_label='col1', con=conn, if_exists='replace')
     assert str(exc.value) == "Snowflake does not support indexes"
+
 
 def test_timezone(db_parameters):
 

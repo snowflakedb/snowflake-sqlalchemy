@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from sqlalchemy import Integer, String, and_, select
-from sqlalchemy.sql import column, table, quoted_name
+from sqlalchemy.sql import column, quoted_name, table
 from sqlalchemy.testing import AssertsCompiledSQL
 
 table1 = table(

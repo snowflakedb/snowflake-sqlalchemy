@@ -252,7 +252,7 @@ SQLAlchemy provides `the runtime inspection API <http://docs.sqlalchemy.org/en/l
         schema = inspector.default_schema_name
         for table_name in inspector.get_table_names(schema):
             column_metadata = inspector.get_columns(table_name, schema)
-            primary_keys = inspector.get_primary_keys(table_name, schema)
+            primary_keys = inspector.get_pk_constraint(table_name, schema)
             foreign_keys = inspector.get_foreign_keys(table_name, schema)
             ...
 

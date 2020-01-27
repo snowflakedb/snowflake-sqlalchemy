@@ -5,11 +5,11 @@
 #
 import os
 
-from parameters import (CONNECTION_PARAMETERS)
+from parameters import CONNECTION_PARAMETERS
 
 try:
     from parameters import (CONNECTION_PARAMETERS2)
-except:
+except ImportError:
     CONNECTION_PARAMETERS2 = CONNECTION_PARAMETERS
 
 THIS_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -56,7 +56,7 @@ def test_qmark_bulk_insert(db_parameters):
     try:
         con.execute(
             """
-            create or replace table src(c1 int, c2 string) as select seq8(), 
+            create or replace table src(c1 int, c2 string) as select seq8(),
             randstr(100, random()) from table(generator(rowcount=>100000))
             """
         )

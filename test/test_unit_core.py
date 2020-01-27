@@ -4,9 +4,8 @@
 # Copyright (c) 2012-2019 Snowflake Computing Inc. All right reserved.
 #
 
-from sqlalchemy.engine.url import URL
-
 from snowflake.sqlalchemy import base
+from sqlalchemy.engine.url import URL
 
 
 def test_create_connect_args():
@@ -104,5 +103,5 @@ def test_denormalize_quote_join():
         (['"Abc".cde', '"dEf"'], '"Abc".cde."dEf"'),
 
     ]
-    for idx, ts in enumerate(test_data):
+    for ts in test_data:
         assert sfdialect._denormalize_quote_join(*ts[0]) == ts[1]
