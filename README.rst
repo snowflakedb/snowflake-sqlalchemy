@@ -107,7 +107,7 @@ You can optionally specify the initial database and schema for the Snowflake ses
 
     .. code-block:: python
 
-        'snowflake://<user_login_name>:<password>@<account_name>/<database_name>/<schema_name>?warehouse=<warehouse_name>?role=<role_name>'
+        'snowflake://<user_login_name>:<password>@<account_name>/<database_name>/<schema_name>?warehouse=<warehouse_name>&role=<role_name>'
 
 .. note::
 
