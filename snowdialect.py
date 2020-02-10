@@ -596,8 +596,8 @@ class SnowflakeDialect(default.DefaultDialect):
 
         # Also, we should not throw an error here just because we could not
         # fetch the *comment* field
-        comment = ans.get('comment', None) if ans else None
-        return {'text': comment if comment else None}
+        comment = ans['comment'] if (ans and ans['comment']) else None
+        return {'text': comment}
 
 
 @sa_vnt.listens_for(Table, 'before_create')
