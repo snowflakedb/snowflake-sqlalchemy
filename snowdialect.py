@@ -583,7 +583,21 @@ class SnowflakeDialect(default.DefaultDialect):
                                     )
         cursor = connection.execute(sql_command)
         ans = cursor.fetchone()
-        return {'text': ans['comment'] if ans['comment'] else None}
+        if ans is None:
+            # NOTE: this may happen because the "table" being reflected is
+            # actually a view; SQLAlchemy has the same code path for both.
+            sql_command = "SHOW /* sqlalchemy:get_view_comment */ " \
+                "VIEWS LIKE '{0}'{1}".format(
+                    table_name,
+                    (' IN SCHEMA {0}'.format(self.normalize_name(schema))) if schema else ''
+                )
+            cursor = connection.execute(sql_command)
+            ans = cursor.fetchone()
+
+        # Also, we should not throw an error here just because we could not
+        # fetch the *comment* field
+        comment = ans.get('comment', None) if ans else None
+        return {'text': comment if comment else None}
 
 
 @sa_vnt.listens_for(Table, 'before_create')
