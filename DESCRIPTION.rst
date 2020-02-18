@@ -10,6 +10,11 @@ https://github.com/snowflakedb/snowflake-sqlalchemy
 Release Notes
 -------------------------------------------------------------------------------
 
+- v1.2.1 (February 18,2020)
+
+    - Add driver property to SnowflakeDialect #140
+    - Suppress deprecation warning by fixing import
+
 - v1.2.0 (January 27, 2020)
 
     - Fix typo in README Connection Parameters #141
