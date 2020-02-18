@@ -4,7 +4,7 @@
 # Copyright (c) 2012-2019 Snowflake Computing Inc. All right reserved.
 #
 
-from collections import Sequence
+from collections.abc import Sequence
 from sqlalchemy import true, false
 from sqlalchemy.sql.dml import UpdateBase
 from sqlalchemy.util.compat import string_types
