@@ -607,7 +607,7 @@ class SnowflakeDialect(default.DefaultDialect):
         """
         try:
             comment = self._get_table_comment()
-            if comment is None or comment == "":
+            if comment is None:
                 # the "table" being reflected is actually a view
                 comment = self._get_view_comment()
         except (KeyError, TypeError):
