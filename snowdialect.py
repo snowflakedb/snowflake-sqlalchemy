@@ -607,14 +607,14 @@ class SnowflakeDialect(default.DefaultDialect):
         """
         try:
             comment = self._get_table_comment()
-            if comment is None:
+            if comment is None or comment == "":
                 # the "table" being reflected is actually a view
                 comment = self._get_view_comment()
         except (KeyError, TypeError):
             # Also, we should not throw an error here just because we could not
             # fetch the *comment* field
             comment = None
-        return {'text': comment}
+        return {'text': comment if comment else None}
 
 
 @sa_vnt.listens_for(Table, 'before_create')
