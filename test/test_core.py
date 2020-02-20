@@ -552,6 +552,42 @@ SELECT * FROM {1} WHERE id > 10""".format(
             "DROP VIEW IF EXISTS {0}".format(test_view_name))
 
 
+def test_view_comment_reading(engine_testaccount, db_parameters):
+    """
+    Tests reading a comment from a view once it's defined
+    """
+    test_table_name = "test_table_sqlalchemy"
+    test_view_name = "testview_sqlalchemy"
+    engine_testaccount.execute("""
+CREATE OR REPLACE TABLE {0} (
+    id INTEGER,
+    name STRING
+)
+""".format(test_table_name))
+    sql = """
+CREATE OR REPLACE VIEW {0} AS
+SELECT * FROM {1} WHERE id > 10""".format(
+        test_view_name, test_table_name)
+    engine_testaccount.execute(text(sql).execution_options(
+        autocommit=True))
+    comment_text = "hello my viewing friends"
+    sql = "COMMENT ON VIEW {0} IS '{1}';".format(
+        test_view_name, comment_text)
+    engine_testaccount.execute(text(sql).execution_options(
+        autocommit=True))
+    try:
+        inspector = inspect(engine_testaccount)
+        # NOTE: sqlalchemy doesn't have a way to get view comments specifically,
+        # but the code to get table comments should work for views too
+        assert inspector.get_table_comment(test_view_name) == {'text': comment_text}
+    finally:
+        engine_testaccount.execute(
+            "DROP TABLE IF EXISTS {0}".format(test_table_name))
+        engine_testaccount.execute(
+            "DROP VIEW IF EXISTS {0}".format(test_view_name))
+
+
+
 @pytest.mark.skip("Temp table cannot be viewed for some reason")
 def test_get_temp_table_names(engine_testaccount):
     num_of_temp_tables = 2
