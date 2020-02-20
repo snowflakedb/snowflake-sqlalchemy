@@ -576,7 +576,7 @@ class SnowflakeDialect(default.DefaultDialect):
         """
         Returns comment of table in a dictionary as described by SQLAlchemy spec.
         """
-        sql_command = "SHOW /* sqlalchemy:get_table_comment */ " \
+        sql_command = "SHOW /* sqlalchemy:_get_table_comment */ " \
                       "TABLES LIKE '{0}'{1}".format(
                                         table_name,
                                         (' IN SCHEMA {0}'.format(self.normalize_name(schema))) if schema else ''
@@ -589,7 +589,7 @@ class SnowflakeDialect(default.DefaultDialect):
         """
         Returns comment of view in a dictionary as described by SQLAlchemy spec.
         """
-        sql_command = "SHOW /* sqlalchemy:get_view_comment */ " \
+        sql_command = "SHOW /* sqlalchemy:_get_view_comment */ " \
             "VIEWS LIKE '{0}'{1}".format(
                 table_name,
                 (' IN SCHEMA {0}'.format(self.normalize_name(schema))) if schema else ''
@@ -601,10 +601,10 @@ class SnowflakeDialect(default.DefaultDialect):
     def get_table_comment(self, connection, table_name, schema=None, **kw):
         """
         Returns comment associated with a table (or view) in a dictionary as
-        SQLAlchemy expects.
+        SQLAlchemy expects. Note that since SQLAlchemy may not (in fact,
+        typically does not) know if this is a table or a view, we have to
+        handle both cases here.
         """
-        # NOTE: Since SQLAlchemy may not (in fact, typically does not) know if
-        # this is a table or a view, we have to handle both cases here.
         try:
             comment = self._get_table_comment()
             if comment is None:

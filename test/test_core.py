@@ -546,10 +546,10 @@ SELECT * FROM {1} WHERE id > 10""".format(
                sql.strip()
         assert inspector.get_view_names() == [test_view_name]
     finally:
-        engine_testaccount.execute(
-            "DROP TABLE IF EXISTS {0}".format(test_table_name))
-        engine_testaccount.execute(
-            "DROP VIEW IF EXISTS {0}".format(test_view_name))
+        engine_testaccount.execute(text(
+            "DROP TABLE IF EXISTS {0}".format(test_table_name)))
+        engine_testaccount.execute(text(
+            "DROP VIEW IF EXISTS {0}".format(test_view_name)))
 
 
 def test_view_comment_reading(engine_testaccount, db_parameters):
@@ -581,10 +581,10 @@ SELECT * FROM {1} WHERE id > 10""".format(
         # but the code to get table comments should work for views too
         assert inspector.get_table_comment(test_view_name) == {'text': comment_text}
     finally:
-        engine_testaccount.execute(
-            "DROP TABLE IF EXISTS {0}".format(test_table_name))
-        engine_testaccount.execute(
-            "DROP VIEW IF EXISTS {0}".format(test_view_name))
+        engine_testaccount.execute(text(
+            "DROP TABLE IF EXISTS {0}".format(test_table_name)))
+        engine_testaccount.execute(text(
+            "DROP VIEW IF EXISTS {0}".format(test_view_name)))
 
 
 
