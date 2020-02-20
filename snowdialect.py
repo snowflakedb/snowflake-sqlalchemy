@@ -572,9 +572,9 @@ class SnowflakeDialect(default.DefaultDialect):
 
         return [self.normalize_name(row[1]) for row in cursor]
 
-    def get_table_comment(self, connection, table_name, schema=None, **kw):
+    def _get_table_comment(self, connection, table_name, schema=None, **kw):
         """
-        Returns comment of table in a dictionary as described by SQLAlchemy spec
+        Returns comment of table in a dictionary as described by SQLAlchemy spec.
         """
         sql_command = "SHOW /* sqlalchemy:get_table_comment */ " \
                       "TABLES LIKE '{0}'{1}".format(
@@ -582,21 +582,38 @@ class SnowflakeDialect(default.DefaultDialect):
                                         (' IN SCHEMA {0}'.format(self.normalize_name(schema))) if schema else ''
                                     )
         cursor = connection.execute(sql_command)
-        ans = cursor.fetchone()
-        if ans is None:
-            # NOTE: this may happen because the "table" being reflected is
-            # actually a view; SQLAlchemy has the same code path for both.
-            sql_command = "SHOW /* sqlalchemy:get_view_comment */ " \
-                "VIEWS LIKE '{0}'{1}".format(
-                    table_name,
-                    (' IN SCHEMA {0}'.format(self.normalize_name(schema))) if schema else ''
-                )
-            cursor = connection.execute(sql_command)
-            ans = cursor.fetchone()
+        result = cursor.fetchone()
+        return result['comment']
 
-        # Also, we should not throw an error here just because we could not
-        # fetch the *comment* field
-        comment = ans['comment'] if (ans and ans['comment']) else None
+    def _get_view_comment(self, connection, table_name, schema=None, **kw):
+        """
+        Returns comment of view in a dictionary as described by SQLAlchemy spec.
+        """
+        sql_command = "SHOW /* sqlalchemy:get_view_comment */ " \
+            "VIEWS LIKE '{0}'{1}".format(
+                table_name,
+                (' IN SCHEMA {0}'.format(self.normalize_name(schema))) if schema else ''
+            )
+        cursor = connection.execute(sql_command)
+        result = cursor.fetchone()
+        return result['comment']
+
+    def get_table_comment(self, connection, table_name, schema=None, **kw):
+        """
+        Returns comment associated with a table (or view) in a dictionary as
+        SQLAlchemy expects.
+        """
+        # NOTE: Since SQLAlchemy may not (in fact, typically does not) know if
+        # this is a table or a view, we have to handle both cases here.
+        try:
+            comment = self._get_table_comment()
+            if comment is None:
+                # the "table" being reflected is actually a view
+                comment = self._get_view_comment()
+        except (KeyError, TypeError):
+            # Also, we should not throw an error here just because we could not
+            # fetch the *comment* field
+            comment = None
         return {'text': comment}
 
 
