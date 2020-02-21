@@ -582,8 +582,7 @@ class SnowflakeDialect(default.DefaultDialect):
                                         (' IN SCHEMA {0}'.format(self.normalize_name(schema))) if schema else ''
                                     )
         cursor = connection.execute(sql_command)
-        result = cursor.fetchone()
-        return result['comment']
+        return cursor.fetchone()
 
     def _get_view_comment(self, connection, table_name, schema=None, **kw):
         """
@@ -595,8 +594,7 @@ class SnowflakeDialect(default.DefaultDialect):
                 (' IN SCHEMA {0}'.format(self.normalize_name(schema))) if schema else ''
             )
         cursor = connection.execute(sql_command)
-        result = cursor.fetchone()
-        return result['comment']
+        return cursor.fetchone()
 
     def get_table_comment(self, connection, table_name, schema=None, **kw):
         """
@@ -605,16 +603,12 @@ class SnowflakeDialect(default.DefaultDialect):
         typically does not) know if this is a table or a view, we have to
         handle both cases here.
         """
-        try:
-            comment = self._get_table_comment()
-            if comment is None:
-                # the "table" being reflected is actually a view
-                comment = self._get_view_comment()
-        except (KeyError, TypeError):
-            # Also, we should not throw an error here just because we could not
-            # fetch the *comment* field
-            comment = None
-        return {'text': comment if comment else None}
+        result = self._get_table_comment()
+        if result is None:
+            # the "table" being reflected is actually a view
+            result = self._get_view_comment()
+
+        return {'text': result['comment'] if result and result['comment'] else None}
 
 
 @sa_vnt.listens_for(Table, 'before_create')
