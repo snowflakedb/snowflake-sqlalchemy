@@ -17,6 +17,19 @@ from sqlalchemy import Column, Integer, MetaData, Sequence, String, Table
 from sqlalchemy.sql import select
 
 
+def test_external_stage():
+    assert ExternalStage.prepare_namespace("something") == "something."
+    assert ExternalStage.prepare_path("prefix") == "/prefix"
+
+    # All arguments are handled
+    assert (
+        str(ExternalStage(name="name", path="prefix/path", namespace="namespace") == "@namespace.name/prefix/path"
+    )
+
+    # defaults don't ruin things
+    assert str(ExternalStage(name="name", path=None, namespace=None)) == "@name"
+
+
 def test_copy_into_location(engine_testaccount, sql_compiler):
     meta = MetaData()
     conn = engine_testaccount.connect()
