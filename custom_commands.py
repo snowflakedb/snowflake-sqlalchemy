@@ -289,6 +289,19 @@ class PARQUETFormatter(CopyFormatter):
         return self
 
 
+class ExternalStage(ClauseElement):
+    """External Stage descriptor"""
+    __visit_name__ = "external_stage"
+
+    def __init__(self, name, path='', namespace=''):
+        self.name = name
+        self.path = '/{}'.format(path) if path and not path.startswith('/') else path
+        self.namespace = '{}.' if namespace and not namespace.endswith('.') else namespace
+
+    def __repr__(self):
+        return "@{}{}{}".format(self.namespace, self.name, self.path)
+
+
 class AWSBucket(ClauseElement):
     """AWS S3 bucket descriptor"""
     __visit_name__ = 'aws_bucket'

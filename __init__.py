@@ -7,7 +7,7 @@
 from . import base
 from . import snowdialect
 from .custom_commands import (
-    MergeInto, CSVFormatter, JSONFormatter, PARQUETFormatter, CopyIntoStorage, AWSBucket, AzureContainer
+    MergeInto, CSVFormatter, JSONFormatter, PARQUETFormatter, CopyIntoStorage, AWSBucket, AzureContainer, ExternalStage
 )
 from .util import _url as URL
 from .version import VERSION
@@ -96,4 +96,5 @@ __all__ = (
     'CopyIntoStorage',
     'AWSBucket',
     'AzureContainer'
+    'ExternalStage',
 )

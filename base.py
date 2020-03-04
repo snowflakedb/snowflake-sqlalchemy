@@ -224,6 +224,9 @@ class SnowflakeCompiler(compiler.SQLCompiler):
                                                         value))
                                                     for name, value in options_list])) if formatter.options else "")
 
+    def visit_external_stage(self, stage, **kw):
+        return "@{}{}{}".format(stage.namespace, stage.name, stage.path)
+
     def visit_aws_bucket(self, aws_bucket, **kw):
         credentials_list = list(aws_bucket.credentials_used.items())
         if kw.get('deterministic', False):
