@@ -546,10 +546,47 @@ SELECT * FROM {1} WHERE id > 10""".format(
                sql.strip()
         assert inspector.get_view_names() == [test_view_name]
     finally:
-        engine_testaccount.execute(
-            "DROP TABLE IF EXISTS {0}".format(test_table_name))
-        engine_testaccount.execute(
-            "DROP VIEW IF EXISTS {0}".format(test_view_name))
+        engine_testaccount.execute(text(
+            "DROP TABLE IF EXISTS {0}".format(test_table_name)))
+        engine_testaccount.execute(text(
+            "DROP VIEW IF EXISTS {0}".format(test_view_name)))
+
+
+def test_view_comment_reading(engine_testaccount, db_parameters):
+    """
+    Tests reading a comment from a view once it's defined
+    """
+    test_table_name = "test_table_sqlalchemy"
+    test_view_name = "testview_sqlalchemy"
+    engine_testaccount.execute("""
+CREATE OR REPLACE TABLE {} (
+    id INTEGER,
+    name STRING
+)
+""".format(test_table_name))
+    sql = """
+CREATE OR REPLACE VIEW {} AS
+SELECT * FROM {} WHERE id > 10""".format(
+        test_view_name, test_table_name)
+    engine_testaccount.execute(text(sql).execution_options(
+        autocommit=True))
+    comment_text = "hello my viewing friends"
+    sql = "COMMENT ON VIEW {} IS '{}';".format(
+        test_view_name, comment_text)
+    engine_testaccount.execute(text(sql).execution_options(
+        autocommit=True))
+    try:
+        inspector = inspect(engine_testaccount)
+        # NOTE: sqlalchemy doesn't have a way to get view comments specifically,
+        # but the code to get table comments should work for views too
+        assert inspector.get_table_comment(test_view_name) == {'text': comment_text}
+        assert inspector.get_table_comment(test_table_name) == {'text': None}
+        assert str(inspector.get_columns(test_table_name)) == str(inspector.get_columns(test_view_name))
+    finally:
+        engine_testaccount.execute(text(
+            "DROP TABLE IF EXISTS {0}".format(test_table_name)))
+        engine_testaccount.execute(text(
+            "DROP VIEW IF EXISTS {0}".format(test_view_name)))
 
 
 @pytest.mark.skip("Temp table cannot be viewed for some reason")
