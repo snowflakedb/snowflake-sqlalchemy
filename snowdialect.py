@@ -572,18 +572,43 @@ class SnowflakeDialect(default.DefaultDialect):
 
         return [self.normalize_name(row[1]) for row in cursor]
 
-    def get_table_comment(self, connection, table_name, schema=None, **kw):
+    def _get_table_comment(self, connection, table_name, schema=None, **kw):
         """
-        Returns comment of table in a dictionary as described by SQLAlchemy spec
+        Returns comment of table in a dictionary as described by SQLAlchemy spec.
         """
-        sql_command = "SHOW /* sqlalchemy:get_table_comment */ " \
-                      "TABLES LIKE '{0}'{1}".format(
+        sql_command = "SHOW /* sqlalchemy:_get_table_comment */ " \
+                      "TABLES LIKE '{}'{}".format(
                                         table_name,
-                                        (' IN SCHEMA {0}'.format(self.normalize_name(schema))) if schema else ''
+                                        (' IN SCHEMA {}'.format(self.normalize_name(schema))) if schema else ''
                                     )
         cursor = connection.execute(sql_command)
-        ans = cursor.fetchone()
-        return {'text': ans['comment'] if ans['comment'] else None}
+        return cursor.fetchone()
+
+    def _get_view_comment(self, connection, table_name, schema=None, **kw):
+        """
+        Returns comment of view in a dictionary as described by SQLAlchemy spec.
+        """
+        sql_command = "SHOW /* sqlalchemy:_get_view_comment */ " \
+            "VIEWS LIKE '{}'{}".format(
+                table_name,
+                (' IN SCHEMA {}'.format(self.normalize_name(schema))) if schema else ''
+            )
+        cursor = connection.execute(sql_command)
+        return cursor.fetchone()
+
+    def get_table_comment(self, connection, table_name, schema=None, **kw):
+        """
+        Returns comment associated with a table (or view) in a dictionary as
+        SQLAlchemy expects. Note that since SQLAlchemy may not (in fact,
+        typically does not) know if this is a table or a view, we have to
+        handle both cases here.
+        """
+        result = self._get_table_comment(connection, table_name, schema)
+        if result is None:
+            # the "table" being reflected is actually a view
+            result = self._get_view_comment(connection, table_name, schema)
+
+        return {'text': result['comment'] if result and result['comment'] else None}
 
 
 @sa_vnt.listens_for(Table, 'before_create')
