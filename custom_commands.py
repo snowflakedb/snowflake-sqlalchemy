@@ -299,7 +299,7 @@ class ExternalStage(ClauseElement):
 
     @staticmethod
     def prepare_path(path):
-        return "/{}".format(path) if not namespace.startswith("/") else path
+        return "/{}".format(path) if not path.startswith("/") else path
 
     def __init__(self, name, path=None, namespace=None):
         self.name = name
