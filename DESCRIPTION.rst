@@ -10,6 +10,10 @@ https://github.com/snowflakedb/snowflake-sqlalchemy
 Release Notes
 -------------------------------------------------------------------------------
 
+- v1.2.2 (March 9, 2020)
+ 
+    - Allow get_table_comment to fetch view comments too
+
 - v1.2.1 (February 18,2020)
 
     - Add driver property to SnowflakeDialect #140
