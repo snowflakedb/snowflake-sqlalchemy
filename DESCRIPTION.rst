@@ -10,6 +10,12 @@ https://github.com/snowflakedb/snowflake-sqlalchemy
 Release Notes
 -------------------------------------------------------------------------------
 
+- v1.2.3 (March 30, 2020)
+ 
+    - Update tox.ini
+    - Add external stage to COPY INTO custom command.
+    - Bumped pandas to newest versions
+
 - v1.2.2 (March 9, 2020)
  
     - Allow get_table_comment to fetch view comments too
