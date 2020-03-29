@@ -9,11 +9,25 @@ from snowflake.sqlalchemy import (
     AzureContainer,
     CopyIntoStorage,
     CSVFormatter,
+    ExternalStage,
     JSONFormatter,
     PARQUETFormatter,
 )
 from sqlalchemy import Column, Integer, MetaData, Sequence, String, Table
 from sqlalchemy.sql import select
+
+
+def test_external_stage(sql_compiler):
+    assert ExternalStage.prepare_namespace("something") == "something."
+    assert ExternalStage.prepare_path("prefix") == "/prefix"
+
+    # All arguments are handled
+    assert (
+        sql_compiler(ExternalStage(name="name", path="prefix/path", namespace="namespace")) == "@namespace.name/prefix/path"
+    )
+
+    # defaults don't ruin things
+    assert sql_compiler(ExternalStage(name="name", path=None, namespace=None)) == "@name"
 
 
 def test_copy_into_location(engine_testaccount, sql_compiler):
@@ -70,6 +84,12 @@ def test_copy_into_location(engine_testaccount, sql_compiler):
     assert (sql_compiler(copy_stmt_5) == "COPY INTO python_tests_foods FROM 's3://backup' FILE_FORMAT=(TYPE=csv "
                                          "FIELD_DELIMITER=',') ENCRYPTION="
                                          "(KMS_KEY_ID='1234abcd-12ab-34cd-56ef-1234567890ab' TYPE='AWS_SSE_KMS')")
+
+    copy_stmt_6 = CopyIntoStorage(from_=food_items, into=ExternalStage(name="stage_name"), formatter=CSVFormatter())
+    assert sql_compiler(copy_stmt_6) == "COPY INTO @stage_name FROM python_tests_foods FILE_FORMAT=(TYPE=csv)"
+
+    copy_stmt_7 = CopyIntoStorage(from_=food_items, into=ExternalStage(name="stage_name", path="prefix/file", namespace="name"), formatter=CSVFormatter())
+    assert sql_compiler(copy_stmt_7) == "COPY INTO @name.stage_name/prefix/file FROM python_tests_foods FILE_FORMAT=(TYPE=csv)"
 
     # NOTE Other than expect known compiled text, submit it to RegressionTests environment and expect them to fail, but
     # because of the right reasons
