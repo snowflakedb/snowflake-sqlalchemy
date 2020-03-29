@@ -4,9 +4,10 @@
 # Copyright (c) 2012-2019 Snowflake Computing Inc. All right reserved.
 #
 
-from os import path
-from setuptools import setup
 from codecs import open
+from os import path
+
+from setuptools import setup
 
 THIS_DIR = path.dirname(path.realpath(__file__))
 
@@ -95,7 +96,7 @@ setup(
             'more-itertools',
             'numpy',
             'pandas==0.24.2;python_version=="3.5"',
-            'pandas<1.0.0;python_version>"3.5"',
+            'pandas>=1.0.0,<1.1.0;python_version>"3.5"',
         ]
     },
 )
