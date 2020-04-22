@@ -11,6 +11,7 @@ import pandas as pd
 import pytest
 import snowflake.sqlalchemy
 import sqlalchemy
+from snowflake.connector.pandas_tools import pd_writer
 from sqlalchemy import Column, ForeignKey, Integer, MetaData, Sequence, String, Table
 
 
@@ -238,3 +239,21 @@ def test_timezone(db_parameters):
         assert(np.issubdtype(result2.FLOAT_COL, np.float64))
     finally:
         sa_engine.execute('DROP TABLE {table};'.format(table=test_table_name))
+
+
+def test_pandas_writeback(engine_testaccount):
+    sf_connector_version_data = [
+        ('snowflake-connector-python', '1.2.23'),
+        ('snowflake-sqlalchemy', '1.1.1'),
+        ('snowflake-connector-go', '0.0.1'),
+        ('snowflake-go', '1.0.1'),
+        ('snowflake-odbc', '3.12.3'),
+    ]
+    table_name = 'driver_versions'
+    # Note: column names have to be all upper case because our sqlalchemy connector creates it in a case insensitive way
+    sf_connector_version_df = pd.DataFrame(sf_connector_version_data, columns=['NAME', 'NEWEST_VERSION'])
+    sf_connector_version_df.to_sql(table_name, engine_testaccount, index=False, method=pd_writer)
+
+    assert (pd.read_sql_table(table_name, engine_testaccount).rename(
+        columns={'newest_version': 'NEWEST_VERSION', 'name': 'NAME'}
+    ) == sf_connector_version_df).all().all()
