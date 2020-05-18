@@ -4,6 +4,8 @@
 #
 set -o pipefail
 
+SCRIPTS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
 if [ "$TRAVIS_OS_NAME" == "osx" ]; then
     curl -O https://www.python.org/ftp/python/${PYTHON_VERSION}/python-${PYTHON_VERSION}-macosx10.9.pkg
     sudo installer -pkg python-${PYTHON_VERSION}-macosx10.9.pkg -target /
@@ -23,6 +25,9 @@ else
     openssl aes-256-cbc -k "$super_secret_password" -in parameters.py.enc -out test/parameters.py -d
 fi
 
+if [ "$TRAVIS_OS_NAME" != "osx" ]; then
+    $SCRIPTS_DIR/../ci/wss.sh
+fi
 source ./venv/bin/activate
 pip install '.[development]'
 pip list --format=columns
