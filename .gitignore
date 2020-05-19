@@ -97,3 +97,8 @@ ENV/
 generated_version.py
 *coverage.xml
 parameters.py
+
+# WhiteSource Scan
+wss-*agent.config
+wss-unified-agent.jar
+whitesource/
