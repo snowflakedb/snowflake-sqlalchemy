@@ -35,8 +35,8 @@ else
 fi
 pip install -U pip virtualenv >& /dev/null
 
-export PRODUCT_NAME=SQLAlchemy
-export PROJECT_NAME=SQLAlchemy
+export PRODUCT_NAME=snowflake-sqlalchemy
+export PROJECT_NAME=snowflake-sqlalchemy
 
 DATE=$(date +'%m-%d-%Y')
 
