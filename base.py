@@ -436,6 +436,14 @@ class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
     def visit_TIMESTAMP(self, type_, **kw):
         return "TIMESTAMP"
 
+    def _render_string_type(self, type_, name):
+
+        text = name
+        if type_.length:
+            text += "(%d)" % type_.length
+        if type_.collation:
+            text += ' COLLATE \'%s\'' % type_.collation
+        return text
 
 construct_arguments = [
     (Table, {
