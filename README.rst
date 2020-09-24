@@ -101,7 +101,8 @@ Where:
 
 - :code:`<user_login_name>` is the login name for your Snowflake user.
 - :code:`<password>` is the password for your Snowflake user.
-- :code:`<account_name>` is the name of your Snowflake account.
+- :code:`<account_name>` is the name of your Snowflake account (region included if applicable, more info `Python
+<https://docs.snowflake.com/en/user-guide/connecting.html#your-snowflake-account-name>`_.).
 
 You can optionally specify the initial database and schema for the Snowflake session by including them at the end of the connection string, separated by :code:`/`. You can also specify the initial warehouse and role for the session as a parameter string at the end of the connection string:
 
