@@ -101,7 +101,7 @@ Where:
 
 - :code:`<user_login_name>` is the login name for your Snowflake user.
 - :code:`<password>` is the password for your Snowflake user.
-- :code:`<account_name>` is the name of your Snowflake account 
+- :code:`<account_name>` is the name of your Snowflake account.
 
 Include the region in the `<account_name>` if applicable, more info `here
 <https://docs.snowflake.com/en/user-guide/connecting.html#your-snowflake-account-name>`_.
