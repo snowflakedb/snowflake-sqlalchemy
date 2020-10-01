@@ -12,8 +12,10 @@ import time
 import pytest
 from conftest import get_engine
 from mock import patch
+from sqlalchemy.exc import DBAPIError
+
 from parameters import CONNECTION_PARAMETERS
-from snowflake.connector import ProgrammingError, connect
+from snowflake.connector import ProgrammingError, connect, Error
 from snowflake.sqlalchemy import URL, MergeInto, dialect
 from sqlalchemy import (
     REAL,
@@ -34,6 +36,8 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.sql import and_, not_, or_, select
+
+from snowflake.sqlalchemy.snowdialect import SnowflakeDialect
 
 try:
     from parameters import (CONNECTION_PARAMETERS2)
@@ -1233,8 +1237,32 @@ def test_too_many_columns_detection(engine_testaccount, db_parameters):
 
     def mock_helper(command, *args, **kwargs):
         if '_get_schema_columns' in command:
-            raise ProgrammingError("Information schema query returned too much data. Please repeat query with more "
-                                   "selective predicates.", 90030)
+            # Creating exception exactly how SQLAlchemy does
+            raise DBAPIError.instance(
+                '''
+            SELECT /* sqlalchemy:_get_schema_columns */
+                   ic.table_name,
+                   ic.column_name,
+                   ic.data_type,
+                   ic.character_maximum_length,
+                   ic.numeric_precision,
+                   ic.numeric_scale,
+                   ic.is_nullable,
+                   ic.column_default,
+                   ic.is_identity,
+                   ic.comment
+              FROM information_schema.columns ic
+             WHERE ic.table_schema='schema_name'
+             ORDER BY ic.ordinal_position''',
+                {'table_schema': 'TESTSCHEMA'},
+                ProgrammingError("Information schema query returned too much data. Please repeat query with more "
+                                 "selective predicates.", 90030),
+                Error,
+                hide_parameters=False,
+                connection_invalidated=False,
+                dialect=SnowflakeDialect(),
+                ismulti=None
+            )
         else:
             return original_execute(command, *args, **kwargs)
 
