@@ -324,8 +324,8 @@ class SnowflakeDialect(default.DefaultDialect):
         ans = {}
         current_database, _ = self._current_database_schema(connection, **kw)
         full_schema_name = self._denormalize_quote_join(current_database, schema)
-        schema_primary_keys = self._get_schema_primary_keys(connection, full_schema_name, **kw)
         try:
+            schema_primary_keys = self._get_schema_primary_keys(connection, full_schema_name, **kw)
             result = connection.execute("""
             SELECT /* sqlalchemy:_get_schema_columns */
                    ic.table_name,
@@ -341,8 +341,8 @@ class SnowflakeDialect(default.DefaultDialect):
               FROM information_schema.columns ic
              WHERE ic.table_schema=%(table_schema)s
              ORDER BY ic.ordinal_position""", {"table_schema": self.denormalize_name(schema)})
-        except ProgrammingError as pe:
-            if pe.errno == 90030:
+        except sa_exc.ProgrammingError as pe:
+            if pe.orig.errno == 90030:
                 # This means that there are too many tables in the schema, we need to go more granular
                 return None  # None triggers _get_table_columns while staying cacheable
             raise

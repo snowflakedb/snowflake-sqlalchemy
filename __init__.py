@@ -18,7 +18,6 @@ from .custom_commands import (
 )
 from .util import _url as URL
 from .version import VERSION
-from snowflake.connector.compat import TO_UNICODE
 from sqlalchemy.types import (
     BIGINT,
     BINARY,
@@ -55,7 +54,7 @@ from .custom_types import (
     VARIANT,
 )
 
-SNOWFLAKE_CONNECTOR_VERSION = '.'.join(TO_UNICODE(v) for v in VERSION[0:3])
+SNOWFLAKE_CONNECTOR_VERSION = '.'.join(str(v) for v in VERSION[0:3])
 
 base.dialect = dialect = snowdialect.dialect
 

@@ -13,7 +13,7 @@ from logging import getLogger
 import pytest
 import snowflake.connector
 from parameters import CONNECTION_PARAMETERS
-from snowflake.connector.compat import IS_WINDOWS, TO_UNICODE
+from snowflake.connector.compat import IS_WINDOWS
 from snowflake.sqlalchemy import URL, dialect
 from sqlalchemy import create_engine
 
@@ -21,7 +21,7 @@ if os.getenv('TRAVIS') == 'true':
     TEST_SCHEMA = 'TRAVIS_JOB_{0}'.format(os.getenv('TRAVIS_JOB_ID'))
 else:
     TEST_SCHEMA = (
-            'sqlalchemy_tests_' + TO_UNICODE(uuid.uuid4()).replace('-', '_'))
+            'sqlalchemy_tests_' + str(uuid.uuid4()).replace('-', '_'))
 
 
 @pytest.fixture(scope='session')
@@ -95,7 +95,7 @@ def get_db_parameters():
     # a unique table name
     ret['name'] = (
             'sqlalchemy_tests_' +
-            TO_UNICODE(uuid.uuid4())).replace('-', '_')
+            str(uuid.uuid4())).replace('-', '_')
     ret['schema'] = TEST_SCHEMA
 
     # This reduces a chance to exposing password in test output.

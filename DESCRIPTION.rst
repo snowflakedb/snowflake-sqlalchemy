@@ -10,6 +10,10 @@ https://github.com/snowflakedb/snowflake-sqlalchemy
 Release Notes
 -------------------------------------------------------------------------------
 
+- v1.2.4 (October 05,2020)
+
+    - Fixed an issue where inspector would not properly switch to table wide column retrieving when schema wide column retrieving was taking too long to respond.
+
 - v1.2.3 (March 30, 2020)
  
     - Update tox.ini
