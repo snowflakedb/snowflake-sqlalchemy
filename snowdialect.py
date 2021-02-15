@@ -380,8 +380,7 @@ class SnowflakeDialect(default.DefaultDialect):
                                 (sqltypes.String, sqltypes.BINARY)):
                     col_type_kw['length'] = character_maximum_length
 
-            type_instance = col_type(**col_type_kw)
-
+            type_instance = col_type if isinstance(col_type, sqltypes.NullType) else col_type(**col_type_kw)
             current_table_pks = schema_primary_keys.get(table_name)
 
             ans[table_name].append({
