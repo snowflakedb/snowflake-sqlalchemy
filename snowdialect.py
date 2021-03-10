@@ -228,6 +228,8 @@ class SnowflakeDialect(default.DefaultDialect):
 
     @reflection.cache
     def _current_database_schema(self, connection, **kw):
+        # "branches" a connection if one exists, otherwise creates one
+        # branched connections use the same underlying DBAPI but maintain separate references
         with connection.connect() as sqla_con:
             dbapi_con = sqla_con.connection
             return (
