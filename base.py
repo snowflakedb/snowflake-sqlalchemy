@@ -14,7 +14,7 @@ from sqlalchemy.sql import compiler, expression
 from sqlalchemy.sql.elements import quoted_name
 from sqlalchemy.util.compat import string_types
 
-from .custom_commands import AWSBucket, AzureContainer
+from .custom_commands import AWSBucket, AzureContainer, ExternalStage
 
 RESERVED_WORDS = frozenset([
     "ALL",  # ANSI Reserved words
@@ -187,7 +187,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         if isinstance(copy_into.from_, Table):
             from_ = copy_into.from_
         # this is intended to catch AWSBucket and AzureContainer
-        elif isinstance(copy_into.from_, AWSBucket) or isinstance(copy_into.from_, AzureContainer):
+        elif isinstance(copy_into.from_, (AWSBucket, AzureContainer, ExternalStage)):
             from_ = copy_into.from_._compiler_dispatch(self, **kw)
         # everything else (selects, etc.)
         else:
