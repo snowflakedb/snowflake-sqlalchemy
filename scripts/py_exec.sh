@@ -5,7 +5,7 @@ PYTHON_ENV=${PYTHON_ENV:-}
 
 function set_defaults() {
   # Set up to fall back onto when something is set wrong, or PYTHON_ENV is invalid
-  PYTHON_EXEC=python3.5
+  PYTHON_EXEC=python3.6
   find_full_path ${PYTHON_EXEC}
   get_python_env_from_exec ${PYTHON_EXEC}
 }
