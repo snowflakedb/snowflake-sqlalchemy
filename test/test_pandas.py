@@ -59,7 +59,10 @@ def test_a_simple_read_sql(engine_testaccount):
         # inserts data with an implicitly generated id
         ins = users.insert().values(name='jack', fullname='Jack Jones')
         results = engine_testaccount.execute(ins)
-        assert results.inserted_primary_key == [1], 'sequence value'
+        # Note: SQLAlchemy 1.4 changed what ``inserted_primary_key`` returns
+        #  a cast is here to make sure the test works with both older and newer
+        #  versions
+        assert list(results.inserted_primary_key) == [1], 'sequence value'
         results.close()
 
         # inserts data with the given id
