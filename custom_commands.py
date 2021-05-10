@@ -4,12 +4,13 @@
 # Copyright (c) 2012-2019 Snowflake Computing Inc. All right reserved.
 #
 
+import codecs
 from collections.abc import Sequence
-from sqlalchemy import true, false
-from sqlalchemy.sql.dml import UpdateBase
-from sqlalchemy.util.compat import string_types
-from sqlalchemy.sql.elements import ClauseElement
 
+from sqlalchemy import false, true
+from sqlalchemy.sql.dml import UpdateBase
+from sqlalchemy.sql.elements import ClauseElement
+from sqlalchemy.util.compat import string_types
 
 NoneType = type(None)
 
@@ -99,7 +100,7 @@ class CopyInto(UpdateBase):
     def __repr__(self):
         options = (' ' + ' '.join(["{} = {}".format(n, str(v)) for n, v in
                                    self.copy_options.items()])) if self.copy_options else ''
-        return "COPY INTO {} FROM {} {}{}".format(self.into.__repr__(),
+        return "COPY INTO {} FROM {} {}{}".format(self.into.__str__(),
                                                   self.from_.__repr__(),
                                                   self.formatter.__repr__(),
                                                   options)
@@ -129,10 +130,26 @@ class CopyFormatter(ClauseElement):
     def __init__(self):
         self.options = {}
 
+    @staticmethod
+    def _value_repr(value):
+        """
+        Make a SQL-suitable representation of "value":
+        - if string: enclose in quotes
+        - if tuple of length 1: enclose element 1 in brackets to prevent printing of
+            pythonic trailing comma
+        - otherwise: just convert to str as is
+        """
+        if isinstance(value, str):
+            return "'{}'".format(value)
+        elif isinstance(value, tuple) and len(value) == 1:
+            return "('{}')".format(str(value[0]))
+        else:
+            return str(value)
+
     def __repr__(self):
         return 'FILE_FORMAT=(TYPE={}{})'.format(
             self.file_format,
-            (' ' + ' '.join([("{} = '{}'" if isinstance(value, str) else "{} = {}").format(name, str(value))
+            (' ' + ' '.join(["{} = {}".format(name, self._value_repr(value))
                              for name, value in self.options.items()])) if self.options else ""
         )
 
@@ -150,11 +167,26 @@ class CSVFormatter(CopyFormatter):
         self.options['COMPRESSION'] = comp_type
         return self
 
+    def _check_delimiter(self, delimiter, delimiter_txt, allow_int=True):
+        """
+        Check if a delimiter is either a string of length 1 or an integer. In case of
+        a string delimiter, take into account that the actual string may be longer,
+        but still evaluate to a single character (like "\\n" or r"\n"
+        """
+        if isinstance(delimiter, NoneType):
+            return
+        if isinstance(delimiter, string_types):
+            delimiter_processed = codecs.escape_decode(bytes(delimiter, "utf-8"))[0].decode("utf-8")
+            if len(delimiter_processed) == 1:
+                return
+        if allow_int and isinstance(delimiter, int):
+            return
+        raise TypeError(
+            "{} should be a single character, that is either a string, or a number".format(delimiter_txt))
+
     def record_delimiter(self, deli_type):
         """Character that separates records in an unloaded file."""
-        if not isinstance(deli_type, (int, string_types)) \
-                or (isinstance(deli_type, string_types) and len(deli_type) != 1):
-            raise TypeError("Record delimeter should be a single character, that is either a string, or a number")
+        self._check_delimiter(deli_type, "Record delimiter")
         if isinstance(deli_type, int):
             self.options['RECORD_DELIMITER'] = hex(deli_type)
         else:
@@ -163,9 +195,7 @@ class CSVFormatter(CopyFormatter):
 
     def field_delimiter(self, deli_type):
         """Character that separates fields in an unloaded file."""
-        if not isinstance(deli_type, (int, NoneType, string_types)) \
-                or (isinstance(deli_type, string_types) and len(deli_type) != 1):
-            raise TypeError("Field delimeter should be a single character, that is either a string, or a number")
+        self._check_delimiter(deli_type, "Field delimiter")
         if isinstance(deli_type, int):
             self.options['FIELD_DELIMITER'] = hex(deli_type)
         else:
@@ -214,9 +244,7 @@ class CSVFormatter(CopyFormatter):
 
     def escape(self, esc):
         """Character used as the escape character for any field values."""
-        if not isinstance(esc, (int, NoneType, string_types)) \
-                or (isinstance(esc, string_types) and len(esc) != 1):
-            raise TypeError("Escape should be a single character, that is either a string, or a number")
+        self._check_delimiter(esc, "Escape")
         if isinstance(esc, int):
             self.options['ESCAPE'] = hex(esc)
         else:
@@ -225,10 +253,7 @@ class CSVFormatter(CopyFormatter):
 
     def escape_unenclosed_field(self, esc):
         """Single character string used as the escape character for unenclosed field values only."""
-        if not isinstance(esc, (int, NoneType, string_types)) \
-                or (isinstance(esc, string_types) and len(esc) != 1):
-            raise TypeError(
-                "Escape unenclosed field should be a single character, that is either a string, or a number")
+        self._check_delimiter(esc, "Escape unenclosed field")
         if isinstance(esc, int):
             self.options['ESCAPE_UNENCLOSED_FIELD'] = hex(esc)
         else:
@@ -243,12 +268,30 @@ class CSVFormatter(CopyFormatter):
         self.options['FIELD_OPTIONALLY_ENCLOSED_BY'] = enc
         return self
 
-    def null_if(self, null):
+    def null_if(self, null_value):
         """Copying into a table these strings will be replaced by a NULL, while copying out of Snowflake will replace
         NULL values with the first string"""
-        if not isinstance(null, Sequence):
-            raise TypeError('Parameter null should be an iterable')
-        self.options['NULL_IF'] = tuple(null)
+        if not isinstance(null_value, Sequence):
+            raise TypeError('Parameter null_value should be an iterable')
+        self.options['NULL_IF'] = tuple(null_value)
+        return self
+
+    def skip_header(self, skip_header):
+        if not isinstance(skip_header, int):
+            raise TypeError("skip_header  should be an int")
+        self.options['SKIP_HEADER'] = skip_header
+        return self
+
+    def trim_space(self, trim_space):
+        if not isinstance(trim_space, bool):
+            raise TypeError("skip_header  should be a bool")
+        self.options['TRIM_SPACE'] = trim_space
+        return self
+
+    def error_on_column_count_mismatch(self, error_on_col_count_mismatch):
+        if not isinstance(error_on_col_count_mismatch, bool):
+            raise TypeError("skip_header  should be a bool")
+        self.options['ERROR_ON_COLUMN_COUNT_MISMATCH'] = error_on_col_count_mismatch
         return self
 
 
@@ -410,7 +453,9 @@ class AzureContainer(ClauseElement):
             self.container,
             '/' + self.path if self.path else ""
         )
-        return uri + credentials if self.credentials_used else '' + encryption if self.encryption_used else ''
+        return '{}{}{}'.format(uri,
+                               ' ' + credentials if self.credentials_used else '',
+                               ' ' + encryption if self.encryption_used else '')
 
     def credentials(self, azure_sas_token):
         self.credentials_used = {'AZURE_SAS_TOKEN': azure_sas_token}

@@ -102,3 +102,5 @@ parameters.py
 wss-*agent.config
 wss-unified-agent.jar
 whitesource/
+.idea
+Python
