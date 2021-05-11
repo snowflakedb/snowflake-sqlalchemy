@@ -15,12 +15,6 @@ from sqlalchemy.sql import select
 PST_TZ = "America/Los_Angeles"
 JST_TZ = "Asia/Tokyo"
 
-try:
-    from parameters import (CONNECTION_PARAMETERS2)
-except ImportError:
-    CONNECTION_PARAMETERS2 = CONNECTION_PARAMETERS
-
-
 def test_create_table_timestamp_datatypes(engine_testaccount):
     """
     Create table including timestamp data types

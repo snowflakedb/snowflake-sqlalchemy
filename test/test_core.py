@@ -39,11 +39,6 @@ from sqlalchemy.sql import and_, not_, or_, select
 
 from snowflake.sqlalchemy.snowdialect import SnowflakeDialect
 
-try:
-    from parameters import (CONNECTION_PARAMETERS2)
-except ImportError:
-    CONNECTION_PARAMETERS2 = CONNECTION_PARAMETERS
-
 THIS_DIR = os.path.dirname(os.path.realpath(__file__))
 
 
@@ -93,11 +88,11 @@ def test_connect_args():
     from sqlalchemy import create_engine
     engine = create_engine(
         'snowflake://{user}:{password}@{account}/{database}/{schema}'.format(
-            user=CONNECTION_PARAMETERS2['user'],
-            password=CONNECTION_PARAMETERS2['password'],
-            account=CONNECTION_PARAMETERS2['account'],
-            database=CONNECTION_PARAMETERS2['database'],
-            schema=CONNECTION_PARAMETERS2['schema'],
+            user=CONNECTION_PARAMETERS['user'],
+            password=CONNECTION_PARAMETERS['password'],
+            account=CONNECTION_PARAMETERS['account'],
+            database=CONNECTION_PARAMETERS['database'],
+            schema=CONNECTION_PARAMETERS['schema'],
         )
     )
     try:
@@ -108,9 +103,9 @@ def test_connect_args():
 
     engine = create_engine(
         'snowflake://{user}:{password}@{account}/'.format(
-            user=CONNECTION_PARAMETERS2['user'],
-            password=CONNECTION_PARAMETERS2['password'],
-            account=CONNECTION_PARAMETERS2['account'],
+            user=CONNECTION_PARAMETERS['user'],
+            password=CONNECTION_PARAMETERS['password'],
+            account=CONNECTION_PARAMETERS['account'],
         )
     )
     try:
@@ -120,9 +115,9 @@ def test_connect_args():
         engine.dispose()
 
     engine = create_engine(URL(
-        user=CONNECTION_PARAMETERS2['user'],
-        password=CONNECTION_PARAMETERS2['password'],
-        account=CONNECTION_PARAMETERS2['account'],
+        user=CONNECTION_PARAMETERS['user'],
+        password=CONNECTION_PARAMETERS['password'],
+        account=CONNECTION_PARAMETERS['account'],
     )
     )
     try:
@@ -132,9 +127,9 @@ def test_connect_args():
         engine.dispose()
 
     engine = create_engine(URL(
-        user=CONNECTION_PARAMETERS2['user'],
-        password=CONNECTION_PARAMETERS2['password'],
-        account=CONNECTION_PARAMETERS2['account'],
+        user=CONNECTION_PARAMETERS['user'],
+        password=CONNECTION_PARAMETERS['password'],
+        account=CONNECTION_PARAMETERS['account'],
         warehouse='testwh'
     )
     )
