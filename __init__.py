@@ -4,20 +4,6 @@
 # Copyright (c) 2012-2019 Snowflake Computing Inc. All right reserved.
 #
 
-from . import base
-from . import snowdialect
-from .custom_commands import (
-    MergeInto,
-    CSVFormatter,
-    JSONFormatter,
-    PARQUETFormatter,
-    CopyIntoStorage,
-    AWSBucket,
-    AzureContainer,
-    ExternalStage
-)
-from .util import _url as URL
-from .version import VERSION
 from sqlalchemy.types import (
     BIGINT,
     BINARY,
@@ -35,6 +21,19 @@ from sqlalchemy.types import (
     TIMESTAMP,
     VARCHAR,
 )
+
+from . import base, snowdialect
+from .custom_commands import (
+    AWSBucket,
+    AzureContainer,
+    CopyIntoStorage,
+    CreateStage,
+    CSVFormatter,
+    ExternalStage,
+    JSONFormatter,
+    MergeInto,
+    PARQUETFormatter,
+)
 from .custom_types import (
     ARRAY,
     BYTEINT,
@@ -42,17 +41,19 @@ from .custom_types import (
     DEC,
     DOUBLE,
     FIXED,
-    OBJECT,
     NUMBER,
+    OBJECT,
     STRING,
     TEXT,
     TIMESTAMP_LTZ,
-    TIMESTAMP_TZ,
     TIMESTAMP_NTZ,
+    TIMESTAMP_TZ,
     TINYINT,
     VARBINARY,
     VARIANT,
 )
+from .util import _url as URL
+from .version import VERSION
 
 SNOWFLAKE_CONNECTOR_VERSION = '.'.join(str(v) for v in VERSION[0:3])
 
@@ -103,4 +104,5 @@ __all__ = (
     'AWSBucket',
     'AzureContainer',
     'ExternalStage',
+    'CreateStage',
 )

@@ -2,7 +2,15 @@ import logging
 import re
 
 import pytest
-from snowflake.sqlalchemy import URL, AzureContainer, CopyIntoStorage, CSVFormatter, ExternalStage, PARQUETFormatter
+from snowflake.sqlalchemy import (
+    URL,
+    AzureContainer,
+    CopyIntoStorage,
+    CreateStage,
+    CSVFormatter,
+    ExternalStage,
+    PARQUETFormatter,
+)
 from sqlalchemy import Column, Integer, MetaData, String, Table
 from sqlalchemy.engine.mock import MockConnection, create_mock_engine
 from sqlalchemy.schema import CreateTable
@@ -83,7 +91,7 @@ def test_create_table(connection, engine):
     )
 
 
-def test_copy_into_storage(connection, engine):
+def test_copy_into_storage_csv(connection, engine):
     metadata = MetaData()
     target_table = Table(
         "TEST_IMPORT",
@@ -152,12 +160,17 @@ def test_create_parquet_format(connection, engine):
     assert repr(formatter) == "expected command here"
 
 
-@pytest.mark.xfail
 def test_create_stage(connection, engine):
     stage = ExternalStage(
-        "AZURE_STAGE",
-        path="azure://bysnow.blob.core.windows.net/ml-poc/",
+        name="AZURE_STAGE",
         namespace="ML_POC.PUBLIC",
     )
-    rep = repr(stage)
-    assert rep == "expected command here"
+    container = AzureContainer(
+        account="bysnow",
+        container="ml-poc").credentials('saas_token')
+    create_stage = CreateStage(stage=stage, container=container)
+    actual = create_stage.compile()
+    expected = "CREATE OR REPLACE STAGE ML_POC.PUBLIC.AZURE_STAGE " \
+               "URL='azure://bysnow.blob.core.windows.net/ml-poc' " \
+               "CREDENTIALS=(AZURE_SAS_TOKEN='saas_token')"
+    assert actual == expected

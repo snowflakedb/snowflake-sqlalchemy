@@ -8,6 +8,7 @@ import codecs
 from collections.abc import Sequence
 
 from sqlalchemy import false, true
+from sqlalchemy.sql.ddl import DDLElement
 from sqlalchemy.sql.dml import UpdateBase
 from sqlalchemy.sql.elements import ClauseElement
 from sqlalchemy.util.compat import string_types
@@ -352,6 +353,30 @@ class ExternalStage(ClauseElement):
     def __repr__(self):
         return "@{}{}{}".format(self.namespace, self.name, self.path)
 
+    @classmethod
+    def from_root_stage(cls, root_stage, path):
+        # This extends an existing root stage with or without path with an
+        # additional sub-path
+        return cls(root_stage.name, root_stage.path + "/" + path, root_stage.namespace)
+
+
+class CreateStage(DDLElement):
+    __visit_name__ = "create_stage"
+
+    def __init__(self, container, stage):
+        super().__init__()
+        self.container = container
+        self.stage = stage
+
+    def compile(self, bind=None, dialect=None, **kw):
+        return "CREATE OR REPLACE STAGE {}{} URL={}".format(
+            self.stage.namespace,
+            self.stage.name,
+            self.container.__repr__())
+
+    def __str__(self):
+        return self.compile()
+
 
 class AWSBucket(ClauseElement):
     """AWS S3 bucket descriptor"""
@@ -424,7 +449,7 @@ class AzureContainer(ClauseElement):
         self.container = container
         self.path = path
         self.encryption_used = {}
-        self.credential_used = {}
+        self.credentials_used = {}
 
     @classmethod
     def from_uri(cls, uri):
