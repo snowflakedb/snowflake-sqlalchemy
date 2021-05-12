@@ -14,7 +14,7 @@ from sqlalchemy.sql import compiler, expression
 from sqlalchemy.sql.elements import quoted_name
 from sqlalchemy.util.compat import string_types
 
-from .custom_commands import AWSBucket, AzureContainer
+from .custom_commands import AWSBucket, AzureContainer, ExternalStage
 
 RESERVED_WORDS = frozenset([
     "ALL",  # ANSI Reserved words
@@ -187,7 +187,13 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         if isinstance(copy_into.from_, Table):
             from_ = copy_into.from_
         # this is intended to catch AWSBucket and AzureContainer
-        elif isinstance(copy_into.from_, AWSBucket) or isinstance(copy_into.from_, AzureContainer):
+        elif isinstance(
+                copy_into.from_, AWSBucket
+        ) or isinstance(
+            copy_into.from_, AzureContainer
+        ) or isinstance(
+            copy_into.from_, ExternalStage
+        ):
             from_ = copy_into.from_._compiler_dispatch(self, **kw)
         # everything else (selects, etc.)
         else:
@@ -214,18 +220,18 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         options_list = list(formatter.options.items())
         if kw.get('deterministic', False):
             options_list.sort(key=operator.itemgetter(0))
-        return 'FILE_FORMAT=(TYPE={}{})'.format(formatter.file_format,
-                                                (' ' + ' '.join([("{}='{}'" if isinstance(value, str)
-                                                                  else "{}={}").format(
-                                                    name,
-                                                    value._compiler_dispatch(self, **kw) if getattr(value,
-                                                                                                    '_compiler_dispatch',
-                                                                                                    False) else str(
-                                                        value))
-                                                    for name, value in options_list])) if formatter.options else "")
-
-    def visit_external_stage(self, stage, **kw):
-        return "@{}{}{}".format(stage.namespace, stage.name, stage.path)
+        return 'FILE_FORMAT=(TYPE={}{})'.format(
+            formatter.file_format,
+            ' ' + ' '.join(
+                ["{}={}".format(
+                    name,
+                    value._compiler_dispatch(self, **kw) if getattr(value,
+                                                                    '_compiler_dispatch',
+                                                                    False)
+                    else formatter.value_repr(value))
+                for name, value in options_list]
+            )
+        ) if formatter.options else ""
 
     def visit_aws_bucket(self, aws_bucket, **kw):
         credentials_list = list(aws_bucket.credentials_used.items())
@@ -265,6 +271,9 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         return (uri,
                 credentials if azure_container.credentials_used else '',
                 encryption if azure_container.encryption_used else '')
+
+    def visit_external_stage(self, external_stage, **kw):
+        return external_stage.__repr__()
 
     def delete_extra_from_clause(self, delete_stmt, from_table,
                                  extra_froms, from_hints, **kw):
@@ -376,6 +385,9 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
             text += " CLUSTER BY ({0})".format(
                 ", ".join(self.denormalize_column_name(key) for key in cluster))
         return text
+
+    def visit_create_stage(self, create_stage, **kw):
+        return create_stage.__repr__()
 
 
 class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):

@@ -11,9 +11,11 @@ from snowflake.sqlalchemy import (
     ExternalStage,
     PARQUETFormatter,
 )
+from snowflake.sqlalchemy.snowdialect import SnowflakeDialect
 from sqlalchemy import Column, Integer, MetaData, String, Table
 from sqlalchemy.engine.mock import MockConnection, create_mock_engine
 from sqlalchemy.schema import CreateTable
+from sqlalchemy.sql import select, text
 
 USER_NAME = "foo"
 USER_PASSWORD = "foobar"
@@ -101,11 +103,10 @@ def test_copy_into_storage_csv(connection, engine):
     )
     metadata.create_all(engine)
 
-    src_container = AzureContainer.from_uri(
-        "azure://bysnow.blob.core.windows.net/ml-poc/testdata"
+    root_stage = ExternalStage(
+        name="AZURE_STAGE",
+        namespace="ML_POC.PUBLIC",
     )
-    # workaround for a bug
-    src_container.credentials_used = {}
     formatter = (
         CSVFormatter()
         .compression("AUTO")
@@ -121,43 +122,55 @@ def test_copy_into_storage_csv(connection, engine):
         .error_on_column_count_mismatch(True)
     )
     copy_into = CopyIntoStorage(
-        from_=src_container, into=target_table, formatter=formatter
+        from_=ExternalStage.from_root_stage(root_stage, "testdata"),
+        into=target_table,
+        formatter=formatter
     )
     copy_into.copy_options = {"pattern": "'.*csv'", "force": "TRUE"}
-    result = copy_into.__repr__()
+    result = copy_into.compile(dialect=SnowflakeDialect()).string
     expected = (
         r"COPY INTO TEST_IMPORT "
-        r"FROM 'azure://bysnow.blob.core.windows.net/ml-poc/testdata' "
-        r"FILE_FORMAT=(TYPE=csv COMPRESSION = 'auto' FIELD_DELIMITER = ',' "
-        r"RECORD_DELIMITER = '\n' FIELD_OPTIONALLY_ENCLOSED_BY = None "
-        r"ESCAPE = None ESCAPE_UNENCLOSED_FIELD = '\134' DATE_FORMAT = 'AUTO' "
-        r"NULL_IF = ('\N') SKIP_HEADER = 1 TRIM_SPACE = False "
-        r"ERROR_ON_COLUMN_COUNT_MISMATCH = True) pattern = '.*csv' force = TRUE"
+        r"FROM @ML_POC.PUBLIC.AZURE_STAGE/testdata "
+        r"FILE_FORMAT=(TYPE=csv COMPRESSION='auto' FIELD_DELIMITER=',' "
+        r"RECORD_DELIMITER='\n' FIELD_OPTIONALLY_ENCLOSED_BY=None "
+        r"ESCAPE=None ESCAPE_UNENCLOSED_FIELD='\134' DATE_FORMAT='AUTO' "
+        r"NULL_IF=('\N') SKIP_HEADER=1 TRIM_SPACE=False "
+        r"ERROR_ON_COLUMN_COUNT_MISMATCH=True) pattern = '.*csv' force = TRUE"
     )
     assert result == expected
 
 
-@pytest.mark.xfail
-def test_create_csv_format(connection, engine):
-    formatter = (
-        CSVFormatter()
-        .compression("AUTO")
-        .field_delimiter(",")
-        .record_delimiter("\n")
-        .field_optionally_enclosed_by(None)
-        .escape(None)
-        .escape_unenclosed_field(r"\134")
-        .date_format("AUTO")
-        .null_if("\\N")
+def test_copy_into_storage_parquet(connection, engine):
+    metadata = MetaData()
+    target_table = Table(
+        "TEST_IMPORT",
+        metadata,
+        Column("COL1", Integer, primary_key=True),
+        Column("COL2", String),
     )
-    # sql = formatter.compile()
-    assert repr(formatter) == "expected command here"
+    metadata.create_all(engine)
+    root_stage = ExternalStage(
+        name="AZURE_STAGE",
+        namespace="ML_POC.PUBLIC",
+    )
+    sel_statement = select(text("Col1"), text("Col2")).select_from(ExternalStage.from_root_stage(root_stage, "testdata/out.parquet"))
 
+    formatter = PARQUETFormatter().compression("AUTO").binary_as_text(True)
 
-@pytest.mark.xfail
-def test_create_parquet_format(connection, engine):
-    formatter = PARQUETFormatter()
-    assert repr(formatter) == "expected command here"
+    copy_into = CopyIntoStorage(
+        from_=sel_statement,
+        into=target_table,
+        formatter=formatter
+    )
+    copy_into.copy_options = {"force": "TRUE"}
+    result = copy_into.compile(dialect=SnowflakeDialect()).string
+    expected = (
+        "COPY INTO TEST_IMPORT "
+        "FROM (SELECT Col1, Col2 \n"
+        "FROM @ML_POC.PUBLIC.AZURE_STAGE/testdata/out.parquet) "
+        "FILE_FORMAT=(TYPE=parquet COMPRESSION='AUTO' BINARY_AS_TEXT=true) force = TRUE"
+    )
+    assert result == expected
 
 
 def test_create_stage(connection, engine):
@@ -169,7 +182,7 @@ def test_create_stage(connection, engine):
         account="bysnow",
         container="ml-poc").credentials('saas_token')
     create_stage = CreateStage(stage=stage, container=container)
-    actual = create_stage.compile()
+    actual = create_stage.compile(dialect=SnowflakeDialect()).string
     expected = "CREATE OR REPLACE STAGE ML_POC.PUBLIC.AZURE_STAGE " \
                "URL='azure://bysnow.blob.core.windows.net/ml-poc' " \
                "CREDENTIALS=(AZURE_SAS_TOKEN='saas_token')"

@@ -11,6 +11,7 @@ from sqlalchemy import false, true
 from sqlalchemy.sql.ddl import DDLElement
 from sqlalchemy.sql.dml import UpdateBase
 from sqlalchemy.sql.elements import ClauseElement
+from sqlalchemy.sql.roles import FromClauseRole
 from sqlalchemy.util.compat import string_types
 
 NoneType = type(None)
@@ -132,7 +133,7 @@ class CopyFormatter(ClauseElement):
         self.options = {}
 
     @staticmethod
-    def _value_repr(value):
+    def value_repr(value):
         """
         Make a SQL-suitable representation of "value":
         - if string: enclose in quotes
@@ -332,10 +333,24 @@ class PARQUETFormatter(CopyFormatter):
         self.options['SNAPPY_COMPRESSION'] = translate_bool(comp)
         return self
 
+    def compression(self, comp):
+        if not isinstance(comp, str):
+            raise TypeError("Comp should be a str value")
+        self.options['COMPRESSION'] = comp
+        return self
 
-class ExternalStage(ClauseElement):
+    def binary_as_text(self, value):
+        """Enable, or disable binary as text"""
+        if not isinstance(value, bool):
+            raise TypeError("binary_as_text should be a Boolean value")
+        self.options['BINARY_AS_TEXT'] = translate_bool(value)
+        return self
+
+
+class ExternalStage(ClauseElement, FromClauseRole):
     """External Stage descriptor"""
     __visit_name__ = "external_stage"
+    _hide_froms = ()
 
     @staticmethod
     def prepare_namespace(namespace):
@@ -368,14 +383,11 @@ class CreateStage(DDLElement):
         self.container = container
         self.stage = stage
 
-    def compile(self, bind=None, dialect=None, **kw):
+    def __repr__(self):
         return "CREATE OR REPLACE STAGE {}{} URL={}".format(
             self.stage.namespace,
             self.stage.name,
             self.container.__repr__())
-
-    def __str__(self):
-        return self.compile()
 
 
 class AWSBucket(ClauseElement):
