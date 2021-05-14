@@ -230,8 +230,8 @@ class SnowflakeCompiler(compiler.SQLCompiler):
                                                                     False)
                     else formatter.value_repr(value))
                 for name, value in options_list]
-            )
-        ) if formatter.options else ""
+            ) if formatter.options else ""
+        )
 
     def visit_aws_bucket(self, aws_bucket, **kw):
         credentials_list = list(aws_bucket.credentials_used.items())

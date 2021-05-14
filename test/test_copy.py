@@ -14,7 +14,7 @@ from snowflake.sqlalchemy import (
     PARQUETFormatter,
 )
 from sqlalchemy import Column, Integer, MetaData, Sequence, String, Table
-from sqlalchemy.sql import select
+from sqlalchemy.sql import select, text
 
 
 def test_external_stage(sql_compiler):
@@ -30,7 +30,7 @@ def test_external_stage(sql_compiler):
     assert sql_compiler(ExternalStage(name="name", path=None, namespace=None)) == "@name"
 
 
-def test_copy_into_location(engine_testaccount, sql_compiler):
+def test_copy_into_location(engine_testaccount, sql_compiler, connection_type):
     meta = MetaData()
     conn = engine_testaccount.connect()
     food_items = Table("python_tests_foods", meta,
@@ -91,6 +91,9 @@ def test_copy_into_location(engine_testaccount, sql_compiler):
     copy_stmt_7 = CopyIntoStorage(from_=food_items, into=ExternalStage(name="stage_name", path="prefix/file", namespace="name"), formatter=CSVFormatter())
     assert sql_compiler(copy_stmt_7) == "COPY INTO @name.stage_name/prefix/file FROM python_tests_foods FILE_FORMAT=(TYPE=csv)"
 
+    if connection_type == "mock":
+        return  # run following tests only against snowflake
+
     # NOTE Other than expect known compiled text, submit it to RegressionTests environment and expect them to fail, but
     # because of the right reasons
     try:
@@ -105,3 +108,82 @@ def test_copy_into_location(engine_testaccount, sql_compiler):
     finally:
         conn.close()
         food_items.drop(engine_testaccount)
+
+
+def test_copy_into_storage_csv_extended(sql_compiler):
+    # COPY INTO STOARGE using a CSV format with extended options
+    metadata = MetaData()
+    target_table = Table(
+        "TEST_IMPORT",
+        metadata,
+        Column("COL1", Integer, primary_key=True),
+        Column("COL2", String),
+    )
+
+    root_stage = ExternalStage(
+        name="AZURE_STAGE",
+        namespace="ML_POC.PUBLIC",
+    )
+    formatter = (
+        CSVFormatter()
+        .compression("AUTO")
+        .field_delimiter(",")
+        .record_delimiter(r"\n")
+        .field_optionally_enclosed_by(None)
+        .escape(None)
+        .escape_unenclosed_field(r"\134")
+        .date_format("AUTO")
+        .null_if([r"\N"])
+        .skip_header(1)
+        .trim_space(False)
+        .error_on_column_count_mismatch(True)
+    )
+    copy_into = CopyIntoStorage(
+        from_=ExternalStage.from_root_stage(root_stage, "testdata"),
+        into=target_table,
+        formatter=formatter
+    )
+    copy_into.copy_options = {"pattern": "'.*csv'", "force": "TRUE"}
+    result = sql_compiler(copy_into)
+    expected = (
+        r"COPY INTO TEST_IMPORT "
+        r"FROM @ML_POC.PUBLIC.AZURE_STAGE/testdata "
+        r"FILE_FORMAT=(TYPE=csv COMPRESSION='auto' DATE_FORMAT='AUTO' "
+        r"ERROR_ON_COLUMN_COUNT_MISMATCH=True ESCAPE=None "
+        r"ESCAPE_UNENCLOSED_FIELD='\134' FIELD_DELIMITER=',' "
+        r"FIELD_OPTIONALLY_ENCLOSED_BY=None NULL_IF=('\N') RECORD_DELIMITER='\n' "
+        r"SKIP_HEADER=1 TRIM_SPACE=False) force = TRUE pattern = '.*csv'"
+    )
+    assert result == expected
+
+
+def test_copy_into_storage_parquet_extended(sql_compiler):
+    metadata = MetaData()
+    target_table = Table(
+        "TEST_IMPORT",
+        metadata,
+        Column("COL1", Integer, primary_key=True),
+        Column("COL2", String),
+    )
+    root_stage = ExternalStage(
+        name="AZURE_STAGE",
+        namespace="ML_POC.PUBLIC",
+    )
+    sel_statement = select(text("Col1"), text("Col2")).select_from(ExternalStage.from_root_stage(root_stage, "testdata/out.parquet"))
+
+    formatter = PARQUETFormatter().compression("AUTO").binary_as_text(True)
+
+    copy_into = CopyIntoStorage(
+        from_=sel_statement,
+        into=target_table,
+        formatter=formatter
+    )
+    copy_into.copy_options = {"force": "TRUE"}
+    result = sql_compiler(copy_into)
+    expected = (
+        "COPY INTO TEST_IMPORT "
+        "FROM (SELECT Col1, Col2 "
+        "FROM @ML_POC.PUBLIC.AZURE_STAGE/testdata/out.parquet) "
+        "FILE_FORMAT=(TYPE=parquet BINARY_AS_TEXT=true COMPRESSION='AUTO') force = TRUE"
+    )
+    assert result == expected
