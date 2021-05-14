@@ -1,5 +1,12 @@
 
-from snowflake.sqlalchemy import AzureContainer, CreateStage, ExternalStage
+from snowflake.sqlalchemy import (
+    AzureContainer,
+    CreateFileFormat,
+    CreateStage,
+    CSVFormatter,
+    ExternalStage,
+    PARQUETFormatter,
+)
 
 
 def test_create_stage(sql_compiler):
@@ -15,4 +22,20 @@ def test_create_stage(sql_compiler):
     expected = "CREATE OR REPLACE STAGE ML_POC.PUBLIC.AZURE_STAGE " \
                "URL='azure://bysnow.blob.core.windows.net/ml-poc' " \
                "CREDENTIALS=(AZURE_SAS_TOKEN='saas_token')"
+    assert actual == expected
+
+
+def test_create_csv_format(sql_compiler):
+    create_format = CreateFileFormat(format_name="ML_POC.PUBLIC.CSV_FILE_FORMAT",
+                                     formatter=CSVFormatter().field_delimiter(","))
+    actual = sql_compiler(create_format)
+    expected = "CREATE OR REPLACE FILE FORMAT ML_POC.PUBLIC.CSV_FILE_FORMAT TYPE='csv' FIELD_DELIMITER = ','"
+    assert actual == expected
+
+
+def test_create_parquet_format(sql_compiler):
+    create_format = CreateFileFormat(format_name="ML_POC.PUBLIC.CSV_FILE_FORMAT",
+                                     formatter=PARQUETFormatter().compression("AUTO"))
+    actual = sql_compiler(create_format)
+    expected = "CREATE OR REPLACE FILE FORMAT ML_POC.PUBLIC.CSV_FILE_FORMAT TYPE='parquet' COMPRESSION = 'AUTO'"
     assert actual == expected

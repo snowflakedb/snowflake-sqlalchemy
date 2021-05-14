@@ -27,6 +27,7 @@ from .custom_commands import (
     AWSBucket,
     AzureContainer,
     CopyIntoStorage,
+    CreateFileFormat,
     CreateStage,
     CSVFormatter,
     ExternalStage,
@@ -95,7 +96,6 @@ __all__ = (
     'TINYINT',
     'VARBINARY',
     'VARIANT',
-
     'MergeInto',
     'CSVFormatter',
     'JSONFormatter',
@@ -105,4 +105,5 @@ __all__ = (
     'AzureContainer',
     'ExternalStage',
     'CreateStage',
+    'CreateFileFormat',
 )

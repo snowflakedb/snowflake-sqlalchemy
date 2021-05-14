@@ -375,6 +375,15 @@ class ExternalStage(ClauseElement, FromClauseRole):
         return cls(root_stage.name, root_stage.path + "/" + path, root_stage.namespace)
 
 
+class CreateFileFormat(DDLElement):
+    __visit_name__ = "create_file_format"
+
+    def __init__(self, format_name, formatter):
+        super().__init__()
+        self.format_name = format_name
+        self.formatter = formatter
+
+
 class CreateStage(DDLElement):
     __visit_name__ = "create_stage"
 
@@ -382,12 +391,6 @@ class CreateStage(DDLElement):
         super().__init__()
         self.container = container
         self.stage = stage
-
-    def __repr__(self):
-        return "CREATE OR REPLACE STAGE {}{} URL={}".format(
-            self.stage.namespace,
-            self.stage.name,
-            self.container.__repr__())
 
 
 class AWSBucket(ClauseElement):
