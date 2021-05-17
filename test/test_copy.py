@@ -7,6 +7,7 @@ import pytest
 from snowflake.sqlalchemy import (
     AWSBucket,
     AzureContainer,
+    CopyFormatter,
     CopyIntoStorage,
     CSVFormatter,
     ExternalStage,
@@ -157,7 +158,7 @@ def test_copy_into_storage_csv_extended(sql_compiler):
     assert result == expected
 
 
-def test_copy_into_storage_parquet_extended(sql_compiler):
+def test_copy_into_storage_parquet_named_format(sql_compiler):
     metadata = MetaData()
     target_table = Table(
         "TEST_IMPORT",
@@ -171,7 +172,7 @@ def test_copy_into_storage_parquet_extended(sql_compiler):
     )
     sel_statement = select(text("Col1"), text("Col2")).select_from(ExternalStage.from_root_stage(root_stage, "testdata/out.parquet"))
 
-    formatter = PARQUETFormatter().compression("AUTO").binary_as_text(True)
+    formatter = CopyFormatter(format_name="parquet_file_format")
 
     copy_into = CopyIntoStorage(
         from_=sel_statement,
@@ -184,6 +185,6 @@ def test_copy_into_storage_parquet_extended(sql_compiler):
         "COPY INTO TEST_IMPORT "
         "FROM (SELECT Col1, Col2 "
         "FROM @ML_POC.PUBLIC.AZURE_STAGE/testdata/out.parquet) "
-        "FILE_FORMAT=(TYPE=parquet BINARY_AS_TEXT=true COMPRESSION='AUTO') force = TRUE"
+        "FILE_FORMAT=(format_name = parquet_file_format) force = TRUE"
     )
     assert result == expected

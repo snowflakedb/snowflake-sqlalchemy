@@ -133,20 +133,26 @@ class CopyFormatter(ClauseElement):
     """
     __visit_name__ = 'copy_formatter'
 
-    def __init__(self):
-        self.options = {}
+    def __init__(self, format_name=None):
+        if format_name:
+            self.options = {"format_name": format_name}
+        else:
+            self.options = {}
 
     @staticmethod
-    def value_repr(value):
+    def value_repr(name, value):
         """
         Make a SQL-suitable representation of "value":
-        - if string: enclose in quotes: "value"
-        - if tuple of length 1: enclose the only element in brackets: (value)
+        - in case of a format name: return it without quotes
+        - in case of a string: enclose in quotes: "value"
+        - in case of a tuple of length 1: enclose the only element in brackets: (value)
             Standard stringification of Python would append a trailing comma: (value,)
             which is not correct in SQL
         - otherwise: just convert to str as is: value
         """
-        if isinstance(value, str):
+        if name == "format_name":
+            return value
+        elif isinstance(value, str):
             return "'{}'".format(value)
         elif isinstance(value, tuple) and len(value) == 1:
             return "('{}')".format(str(value[0]))
@@ -156,7 +162,7 @@ class CopyFormatter(ClauseElement):
     def __repr__(self):
         return 'FILE_FORMAT=(TYPE={}{})'.format(
             self.file_format,
-            (' ' + ' '.join(["{} = {}".format(name, self._value_repr(value))
+            (' ' + ' '.join(["{} = {}".format(name, self._value_repr(name, value))
                              for name, value in self.options.items()])) if self.options else ""
         )
 

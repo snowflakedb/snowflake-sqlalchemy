@@ -26,6 +26,7 @@ from . import base, snowdialect
 from .custom_commands import (
     AWSBucket,
     AzureContainer,
+    CopyFormatter,
     CopyIntoStorage,
     CreateFileFormat,
     CreateStage,
@@ -100,6 +101,7 @@ __all__ = (
     'CSVFormatter',
     'JSONFormatter',
     'PARQUETFormatter',
+    'CopyFormatter',
     'CopyIntoStorage',
     'AWSBucket',
     'AzureContainer',

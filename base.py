@@ -220,6 +220,10 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         options_list = list(formatter.options.items())
         if kw.get('deterministic', False):
             options_list.sort(key=operator.itemgetter(0))
+        if "format_name" in formatter.options:
+            return "FILE_FORMAT=(format_name = {})".format(
+                formatter.options["format_name"]
+            )
         return 'FILE_FORMAT=(TYPE={}{})'.format(
             formatter.file_format,
             ' ' + ' '.join(
@@ -228,7 +232,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
                     value._compiler_dispatch(self, **kw) if getattr(value,
                                                                     '_compiler_dispatch',
                                                                     False)
-                    else formatter.value_repr(value))
+                    else formatter.value_repr(name, value))
                 for name, value in options_list]
             ) if formatter.options else ""
         )
@@ -404,7 +408,7 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
             file_format.format_name,
             file_format.formatter.file_format
         ) + " " .join(
-            ["{} = {}".format(name, file_format.formatter.value_repr(value))
+            ["{} = {}".format(name, file_format.formatter.value_repr(name, value))
              for name, value
              in file_format.formatter.options.items()]
         )
