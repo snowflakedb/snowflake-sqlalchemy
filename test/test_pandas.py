@@ -5,13 +5,15 @@
 #
 import random
 import string
+import uuid
 
 import numpy as np
 import pandas as pd
 import pytest
 import snowflake.sqlalchemy
 import sqlalchemy
-from snowflake.connector.pandas_tools import pd_writer
+from snowflake.connector import ProgrammingError
+from snowflake.connector.pandas_tools import make_pd_writer, pd_writer
 from sqlalchemy import Column, ForeignKey, Integer, MetaData, Sequence, String, Table
 
 
@@ -260,3 +262,35 @@ def test_pandas_writeback(engine_testaccount):
     assert (pd.read_sql_table(table_name, engine_testaccount).rename(
         columns={'newest_version': 'NEWEST_VERSION', 'name': 'NAME'}
     ) == sf_connector_version_df).all().all()
+
+
+@pytest.mark.parametrize("quote_identifiers", [False, True])
+def test_pandas_make_pd_writer(engine_testaccount, quote_identifiers):
+    table_name = f"test_table_{uuid.uuid4().hex}".upper()
+    test_df = pd.DataFrame({"a": range(10), "b": range(10, 20)})
+
+    def write_to_db():
+        test_df.to_sql(
+            table_name,
+            engine_testaccount,
+            index=False,
+            method=make_pd_writer(quote_identifiers=quote_identifiers),
+        )
+
+    try:
+        if quote_identifiers:
+            with pytest.raises(ProgrammingError, match=r".*SQL compilation error.*\ninvalid identifier '\"a\"'.*") as e:
+                write_to_db()
+        else:
+            write_to_db()
+            results = sorted(
+                engine_testaccount.execute(f"SELECT * FROM {table_name}").fetchall(),
+                key=lambda x: x[0],
+            )
+            # Verify that all 10 entries were written to the DB
+            for i in range(10):
+                assert results[i] == (i, i + 10)
+            assert len(results) == 10
+    finally:
+        engine_testaccount.execute(f"DROP TABLE IF EXISTS {table_name}")
+

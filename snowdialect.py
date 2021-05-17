@@ -29,7 +29,7 @@ from snowflake.connector.constants import UTF8
 from .custom_types import (
     TIMESTAMP_LTZ, TIMESTAMP_TZ, TIMESTAMP_NTZ, VARIANT, OBJECT, ARRAY
 )
-from snowflake.connector import errors as sf_errors, ProgrammingError
+from snowflake.connector import errors as sf_errors
 
 colspecs = {}
 
