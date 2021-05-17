@@ -41,9 +41,9 @@ def on_public_ci(on_travis, on_appveyor):
     return on_travis or on_appveyor
 
 
-# @pytest.fixture(scope="session", params=["mock", "snowflake"])
+@pytest.fixture(scope="session", params=["mock", "snowflake"])
 # @pytest.fixture(scope="session", params=["snowflake"])
-@pytest.fixture(scope="session", params=["mock"])
+# @pytest.fixture(scope="session", params=["mock"])
 def connection_type(request):
     """
     Use this fixture to specify if the tests are executed against an actual Snowflake
