@@ -4,12 +4,15 @@
 # Copyright (c) 2012-2019 Snowflake Computing Inc. All right reserved.
 #
 
+import pytest
 from sqlalchemy import Integer, Sequence, String
 from sqlalchemy.schema import Column, MetaData, Table
 from sqlalchemy.sql import select
 
 
-def test_insert_table(engine_testaccount):
+def test_insert_table(engine_testaccount, connection_type):
+    if connection_type == "mock":
+        pytest.skip()
     metadata = MetaData()
     users = Table('users', metadata,
                   Column('id', Integer, Sequence('user_id_seq'),

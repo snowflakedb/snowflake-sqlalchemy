@@ -127,6 +127,10 @@ class CopyInto(UpdateBase):
 
 
 class CopyFormatter(ClauseElement):
+    """
+    Base class for Formatter specifications inside a COPY INTO statement. May also
+    be used to create a named format.
+    """
     __visit_name__ = 'copy_formatter'
 
     def __init__(self):
@@ -136,10 +140,11 @@ class CopyFormatter(ClauseElement):
     def value_repr(value):
         """
         Make a SQL-suitable representation of "value":
-        - if string: enclose in quotes
-        - if tuple of length 1: enclose element 1 in brackets to prevent printing of
-            pythonic trailing comma
-        - otherwise: just convert to str as is
+        - if string: enclose in quotes: "value"
+        - if tuple of length 1: enclose the only element in brackets: (value)
+            Standard stringification of Python would append a trailing comma: (value,)
+            which is not correct in SQL
+        - otherwise: just convert to str as is: value
         """
         if isinstance(value, str):
             return "'{}'".format(value)
@@ -279,18 +284,28 @@ class CSVFormatter(CopyFormatter):
         return self
 
     def skip_header(self, skip_header):
+        """
+        Number of header rows to be skipped at the beginning of the file
+        """
         if not isinstance(skip_header, int):
             raise TypeError("skip_header  should be an int")
         self.options['SKIP_HEADER'] = skip_header
         return self
 
     def trim_space(self, trim_space):
+        """
+        Remove leading or trailing white spaces
+        """
         if not isinstance(trim_space, bool):
-            raise TypeError("skip_header  should be a bool")
+            raise TypeError("trim_space should be a bool")
         self.options['TRIM_SPACE'] = trim_space
         return self
 
     def error_on_column_count_mismatch(self, error_on_col_count_mismatch):
+        """
+        Generate a parsing error if the number of delimited columns (i.e. fields) in
+        an input data file does not match the number of columns in the corresponding table.
+        """
         if not isinstance(error_on_col_count_mismatch, bool):
             raise TypeError("skip_header  should be a bool")
         self.options['ERROR_ON_COLUMN_COUNT_MISMATCH'] = error_on_col_count_mismatch
@@ -334,6 +349,9 @@ class PARQUETFormatter(CopyFormatter):
         return self
 
     def compression(self, comp):
+        """
+        Set compression type
+        """
         if not isinstance(comp, str):
             raise TypeError("Comp should be a str value")
         self.options['COMPRESSION'] = comp
@@ -370,12 +388,18 @@ class ExternalStage(ClauseElement, FromClauseRole):
 
     @classmethod
     def from_root_stage(cls, root_stage, path):
-        # This extends an existing root stage with or without path with an
-        # additional sub-path
+        """
+        Extend an existing root stage (with or without path) with an
+        additional sub-path
+        """
         return cls(root_stage.name, root_stage.path + "/" + path, root_stage.namespace)
 
 
 class CreateFileFormat(DDLElement):
+    """
+    Encapsulates a CREATE FILE FORMAT statement; using a format description (as in
+    a COPY INTO statement) and a format name.
+    """
     __visit_name__ = "create_file_format"
 
     def __init__(self, format_name, formatter):
@@ -385,6 +409,10 @@ class CreateFileFormat(DDLElement):
 
 
 class CreateStage(DDLElement):
+    """
+    Encapsulates a CREATE STAGE statement, using a container (physical base for the
+    stage) and the actual ExternalStage object.
+    """
     __visit_name__ = "create_stage"
 
     def __init__(self, container, stage):

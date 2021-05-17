@@ -4,6 +4,7 @@
 # Copyright (c) 2012-2019 Snowflake Computing Inc. All right reserved.
 #
 
+
 import os
 import sys
 import time
@@ -41,8 +42,13 @@ def on_public_ci(on_travis, on_appveyor):
 
 
 # @pytest.fixture(scope="session", params=["mock", "snowflake"])
+# @pytest.fixture(scope="session", params=["snowflake"])
 @pytest.fixture(scope="session", params=["mock"])
 def connection_type(request):
+    """
+    Use this fixture to specify if the tests are executed against an actual Snowflake
+    engine or only against a Mock engine (which does not actually execute it), or both
+    """
     return request.param
 
 

@@ -387,12 +387,19 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
         return text
 
     def visit_create_stage(self, create_stage, **kw):
+        """
+        This visitor will create the SQL representation for a CREATE STAGE command.
+        """
         return "CREATE OR REPLACE STAGE {}{} URL={}".format(
             create_stage.stage.namespace,
             create_stage.stage.name,
             create_stage.container.__repr__())
 
     def visit_create_file_format(self, file_format, **kw):
+        """
+        This visitor will create the SQL representation for a CREATE FILE FORMAT
+        command.
+        """
         return "CREATE OR REPLACE FILE FORMAT {} TYPE='{}' ".format(
             file_format.format_name,
             file_format.formatter.file_format

@@ -5,6 +5,7 @@
 #
 import os
 
+import pytest
 from parameters import CONNECTION_PARAMETERS
 
 try:
@@ -43,11 +44,14 @@ def _get_engine_with_qmark(
     return engine
 
 
-def test_qmark_bulk_insert(db_parameters):
+def test_qmark_bulk_insert(db_parameters, connection_type):
     """
     Bulk insert using qmark paramstyle
     """
     import snowflake.connector
+    if connection_type == "mock":
+        pytest.skip()
+
     snowflake.connector.paramstyle = u'qmark'
 
     engine = _get_engine_with_qmark(db_parameters)
