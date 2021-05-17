@@ -86,26 +86,18 @@ def test_connect_args():
     host:port
     """
     from sqlalchemy import create_engine
+
     engine = create_engine(
-        'snowflake://{user}:{password}@{account}/{database}/{schema}'.format(
+        'snowflake://{user}:{password}@{host}:{port}/{database}/{schema}'
+        '?account={account}&protocol={protocol}'.format(
             user=CONNECTION_PARAMETERS['user'],
-            password=CONNECTION_PARAMETERS['password'],
             account=CONNECTION_PARAMETERS['account'],
+            password=CONNECTION_PARAMETERS['password'],
+            host=f"{CONNECTION_PARAMETERS['account']}.{CONNECTION_PARAMETERS['host']}",
+            port=CONNECTION_PARAMETERS['port'],
             database=CONNECTION_PARAMETERS['database'],
             schema=CONNECTION_PARAMETERS['schema'],
-        )
-    )
-    try:
-        results = engine.execute('select current_version()').fetchone()
-        assert results is not None
-    finally:
-        engine.dispose()
-
-    engine = create_engine(
-        'snowflake://{user}:{password}@{account}/'.format(
-            user=CONNECTION_PARAMETERS['user'],
-            password=CONNECTION_PARAMETERS['password'],
-            account=CONNECTION_PARAMETERS['account'],
+            protocol=CONNECTION_PARAMETERS['protocol'],
         )
     )
     try:
@@ -118,8 +110,10 @@ def test_connect_args():
         user=CONNECTION_PARAMETERS['user'],
         password=CONNECTION_PARAMETERS['password'],
         account=CONNECTION_PARAMETERS['account'],
-    )
-    )
+        host=CONNECTION_PARAMETERS['host'],
+        port=CONNECTION_PARAMETERS['port'],
+        protocol=CONNECTION_PARAMETERS['protocol'],
+    ))
     try:
         results = engine.execute('select current_version()').fetchone()
         assert results is not None
@@ -130,7 +124,10 @@ def test_connect_args():
         user=CONNECTION_PARAMETERS['user'],
         password=CONNECTION_PARAMETERS['password'],
         account=CONNECTION_PARAMETERS['account'],
-        warehouse='testwh'
+        host=CONNECTION_PARAMETERS['host'],
+        port=CONNECTION_PARAMETERS['port'],
+        protocol=CONNECTION_PARAMETERS['protocol'],
+        warehouse='testwh',
     )
     )
     try:
