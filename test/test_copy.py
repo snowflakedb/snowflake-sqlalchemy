@@ -112,7 +112,17 @@ def test_copy_into_location(engine_testaccount, sql_compiler, connection_type):
 
 
 def test_copy_into_storage_csv_extended(sql_compiler):
-    # COPY INTO STOARGE using a CSV format with extended options
+    """
+    This test compiles the SQL to read CSV data from a stage and insert it into a
+    table.
+    The CSV formatting statements are inserted inline, i.e. no explicit SQL definition
+    of that format is necessary.
+    The Stage is a named stage, i.e. we assume that a CREATE STAGE statement was
+    executed before. This way, the COPY INTO statement does not need to know any
+    security details (credentials or tokens)
+    """
+    # target table definition (NB: this could be omitted for the test, since the
+    # SQL statement copies the whole CSV and assumes the target structure matches)
     metadata = MetaData()
     target_table = Table(
         "TEST_IMPORT",
@@ -121,10 +131,13 @@ def test_copy_into_storage_csv_extended(sql_compiler):
         Column("COL2", String),
     )
 
+    # define a source stage (root path)
     root_stage = ExternalStage(
         name="AZURE_STAGE",
         namespace="ML_POC.PUBLIC",
     )
+
+    # define a CSV formatter
     formatter = (
         CSVFormatter()
         .compression("AUTO")
@@ -139,12 +152,17 @@ def test_copy_into_storage_csv_extended(sql_compiler):
         .trim_space(False)
         .error_on_column_count_mismatch(True)
     )
+
+    # define CopyInto object; reads all CSV data (=> pattern) from
+    # the sub-path "testdata" beneath the root stage
     copy_into = CopyIntoStorage(
         from_=ExternalStage.from_root_stage(root_stage, "testdata"),
         into=target_table,
         formatter=formatter
     )
     copy_into.copy_options = {"pattern": "'.*csv'", "force": "TRUE"}
+
+    # check that the result is as expected
     result = sql_compiler(copy_into)
     expected = (
         r"COPY INTO TEST_IMPORT "
@@ -159,6 +177,17 @@ def test_copy_into_storage_csv_extended(sql_compiler):
 
 
 def test_copy_into_storage_parquet_named_format(sql_compiler):
+    """
+    This test compiles the SQL to read Parquet data from a stage and insert it into a
+    table. The source file is accessed using a SELECT statement.
+    The Parquet formatting definitions are defined in a named format which was
+    explicitly created before.
+    The Stage is a named stage, i.e. we assume that a CREATE STAGE statement was
+    executed before. This way, the COPY INTO statement does not need to know any
+    security details (credentials or tokens)
+    """
+    # target table definition (NB: this could be omitted for the test, as long as
+    # the statement is not executed)
     metadata = MetaData()
     target_table = Table(
         "TEST_IMPORT",
@@ -166,24 +195,39 @@ def test_copy_into_storage_parquet_named_format(sql_compiler):
         Column("COL1", Integer, primary_key=True),
         Column("COL2", String),
     )
+
+    # define a source stage (root path)
     root_stage = ExternalStage(
         name="AZURE_STAGE",
         namespace="ML_POC.PUBLIC",
     )
-    sel_statement = select(text("Col1"), text("Col2")).select_from(ExternalStage.from_root_stage(root_stage, "testdata/out.parquet"))
 
+    # define the SELECT statement to access the source file.
+    # we can probably defined source table metadata and use SQLAlchemy Column objects
+    # instead of texts, but this seems to be the easiest way.
+    sel_statement = select(
+        text("$1:COL1::number"),
+        text("$1:COL2::varchar")
+    ).select_from(
+        ExternalStage.from_root_stage(root_stage, "testdata/out.parquet")
+    )
+
+    # use an existing source format.
     formatter = CopyFormatter(format_name="parquet_file_format")
 
+    # setup CopyInto object
     copy_into = CopyIntoStorage(
         from_=sel_statement,
         into=target_table,
         formatter=formatter
     )
     copy_into.copy_options = {"force": "TRUE"}
+
+    # compile and check the result
     result = sql_compiler(copy_into)
     expected = (
         "COPY INTO TEST_IMPORT "
-        "FROM (SELECT Col1, Col2 "
+        "FROM (SELECT $1:COL1::number, $1:COL2::varchar "
         "FROM @ML_POC.PUBLIC.AZURE_STAGE/testdata/out.parquet) "
         "FILE_FORMAT=(format_name = parquet_file_format) force = TRUE"
     )
