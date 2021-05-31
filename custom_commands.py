@@ -93,18 +93,16 @@ class CopyInto(UpdateBase):
     __visit_name__ = 'copy_into'
     _bind = None
 
-    def __init__(self, from_, into, formatter):
+    def __init__(self, from_, into):
         self.from_ = from_
         self.into = into
-        self.formatter = formatter
         self.copy_options = {}
 
     def __repr__(self):
         options = (' ' + ' '.join(["{} = {}".format(n, str(v)) for n, v in
                                    self.copy_options.items()])) if self.copy_options else ''
-        return "COPY INTO {} FROM {} {}{}".format(self.into.__str__(),
+        return "COPY INTO {} FROM {} {}".format(self.into.__str__(),
                                                   self.from_.__repr__(),
-                                                  self.formatter.__repr__(),
                                                   options)
 
     def bind(self):
@@ -384,21 +382,24 @@ class ExternalStage(ClauseElement, FromClauseRole):
     def prepare_path(path):
         return "/{}".format(path) if not path.startswith("/") else path
 
-    def __init__(self, name, path=None, namespace=None):
+    def __init__(self, name, path=None, namespace=None, file_format=None):
         self.name = name
         self.path = self.prepare_path(path) if path else ""
         self.namespace = self.prepare_namespace(namespace) if namespace else ""
+        self.file_format = file_format
 
     def __repr__(self):
-        return "@{}{}{}".format(self.namespace, self.name, self.path)
+        if self.file_format is None:
+            return "@{}{}{}".format(self.namespace, self.name, self.path)
+        return "@{}{}{} (file_format => {})".format(self.namespace, self.name, self.path, self.file_format)
 
     @classmethod
-    def from_root_stage(cls, root_stage, path):
+    def from_root_stage(cls, root_stage, path, file_format=None):
         """
         Extend an existing root stage (with or without path) with an
         additional sub-path
         """
-        return cls(root_stage.name, root_stage.path + "/" + path, root_stage.namespace)
+        return cls(root_stage.name, root_stage.path + "/" + path, root_stage.namespace, file_format)
 
 
 class CreateFileFormat(DDLElement):
