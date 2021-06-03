@@ -108,10 +108,10 @@ class CopyInto(UpdateBase):
     def bind(self):
         return None
 
-    def overwrite(self, overwrite):
+    def force(self, overwrite):
         if not isinstance(overwrite, bool):
             raise TypeError("Parameter overwrite should  be a boolean value")
-        self.copy_options.update({'OVERWRITE': translate_bool(overwrite)})
+        self.copy_options.update({'FORCE': translate_bool(overwrite)})
 
     def single(self, single_file):
         if not isinstance(single_file, bool):
