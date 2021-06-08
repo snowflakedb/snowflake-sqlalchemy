@@ -180,7 +180,6 @@ class SnowflakeCompiler(compiler.SQLCompiler):
                 " SET %s" % sets if merge_into_clause.set else "")
 
     def visit_copy_into(self, copy_into, **kw):
-        formatter = copy_into.formatter._compiler_dispatch(self, **kw)
         into = (copy_into.into if isinstance(copy_into.into, Table)
                 else copy_into.into._compiler_dispatch(self, **kw))
         from_ = None
@@ -214,7 +213,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             options += " {}".format(credentials)
         if encryption:
             options += " {}".format(encryption)
-        return "COPY INTO {} FROM {} {}{}".format(into, from_, formatter, options)
+        return "COPY INTO {} FROM {} {}".format(into, from_, options)
 
     def visit_copy_formatter(self, formatter, **kw):
         options_list = list(formatter.options.items())
