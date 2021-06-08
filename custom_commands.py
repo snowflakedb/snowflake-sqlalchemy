@@ -93,17 +93,24 @@ class CopyInto(UpdateBase):
     __visit_name__ = 'copy_into'
     _bind = None
 
-    def __init__(self, from_, into):
+    def __init__(self, from_, into, formatter=None):
         self.from_ = from_
         self.into = into
+        self.formatter = formatter
         self.copy_options = {}
 
     def __repr__(self):
         options = (' ' + ' '.join(["{} = {}".format(n, str(v)) for n, v in
                                    self.copy_options.items()])) if self.copy_options else ''
+
+        if self.formatter is not None:
+            return "COPY INTO {} FROM {} {}{}".format(self.into.__str__(),
+                                                      self.from_.__repr__(),
+                                                      self.formatter.__repr__(),
+                                                      options)
         return "COPY INTO {} FROM {} {}".format(self.into.__str__(),
-                                                  self.from_.__repr__(),
-                                                  options)
+                                                self.from_.__repr__(),
+                                                options)
 
     def bind(self):
         return None
