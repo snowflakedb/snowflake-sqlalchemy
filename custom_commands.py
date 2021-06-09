@@ -112,19 +112,6 @@ class CopyInto(UpdateBase):
         self.formatter = formatter
         self.copy_options = {}
 
-    def __repr__(self):
-        options = (' ' + ' '.join(["{} = {}".format(n, str(v)) for n, v in
-                                   self.copy_options.items()])) if self.copy_options else ''
-
-        if self.formatter is not None:
-            return "COPY INTO {} FROM {} {}{}".format(self.into.__str__(),
-                                                      self.from_.__repr__(),
-                                                      self.formatter.__repr__(),
-                                                      options)
-        return "COPY INTO {} FROM {} {}".format(self.into.__str__(),
-                                                self.from_.__repr__(),
-                                                options)
-
     def bind(self):
         return None
 
@@ -167,7 +154,8 @@ class CopyFormatter(ClauseElement):
     @staticmethod
     def value_repr(name, value):
         """
-        Make a SQL-suitable representation of "value":
+        Make a SQL-suitable representation of "value". This is called from
+        the corresponding visitor function (base.py/visit_copy_formatter())
         - in case of a format name: return it without quotes
         - in case of a string: enclose in quotes: "value"
         - in case of a tuple of length 1: enclose the only element in brackets: (value)
@@ -183,13 +171,6 @@ class CopyFormatter(ClauseElement):
             return "('{}')".format(str(value[0]))
         else:
             return str(value)
-
-    def __repr__(self):
-        return 'FILE_FORMAT=(TYPE={}{})'.format(
-            self.file_format,
-            (' ' + ' '.join(["{} = {}".format(name, self._value_repr(name, value))
-                             for name, value in self.options.items()])) if self.options else ""
-        )
 
 
 class CSVFormatter(CopyFormatter):
@@ -414,11 +395,6 @@ class ExternalStage(ClauseElement, FromClauseRole):
         self.path = self.prepare_path(path) if path else ""
         self.namespace = self.prepare_namespace(namespace) if namespace else ""
         self.file_format = file_format
-
-    def __repr__(self):
-        if self.file_format is None:
-            return "@{}{}{}".format(self.namespace, self.name, self.path)
-        return "@{}{}{} (file_format => {})".format(self.namespace, self.name, self.path, self.file_format)
 
     @classmethod
     def from_root_stage(cls, root_stage, path, file_format=None):

@@ -280,7 +280,14 @@ class SnowflakeCompiler(compiler.SQLCompiler):
                 encryption if azure_container.encryption_used else '')
 
     def visit_external_stage(self, external_stage, **kw):
-        return external_stage.__repr__()
+        if external_stage.file_format is None:
+            return "@{}{}{}".format(external_stage.namespace,
+                                    external_stage.name,
+                                    external_stage.path)
+        return "@{}{}{} (file_format => {})".format(external_stage.namespace,
+                                                    external_stage.name,
+                                                    external_stage.path,
+                                                    external_stage.file_format)
 
     def delete_extra_from_clause(self, delete_stmt, from_table,
                                  extra_froms, from_hints, **kw):
