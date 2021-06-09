@@ -6,6 +6,7 @@
 
 import codecs
 from collections.abc import Sequence
+from typing import List
 
 from sqlalchemy import false, true
 from sqlalchemy.sql.ddl import DDLElement
@@ -86,6 +87,18 @@ class MergeInto(UpdateBase):
         return clause
 
 
+class FilesOption:
+    """
+    Class to represent FILES option for the snowflake COPY INTO statement
+    """
+    def __init__(self, file_names: List[str]) -> None:
+        self.file_names = file_names
+
+    def __str__(self) -> str:
+        the_files = ["'" + f.replace("'", "\\'") + "'" for f in self.file_names]
+        return f"({','.join(the_files)})"
+
+
 class CopyInto(UpdateBase):
     """Copy Into Command base class, for documentation see:
     https://docs.snowflake.net/manuals/sql-reference/sql/copy-into-location.html"""
@@ -130,6 +143,8 @@ class CopyInto(UpdateBase):
             raise TypeError("Parameter max_size should be an integer value")
         self.copy_options.update({'MAX_FILE_SIZE': max_size})
 
+    def files(self, file_names: List[str]) -> None:
+        self.copy_options.update({'FILES': FilesOption(file_names)})
 
 class CopyFormatter(ClauseElement):
     """
