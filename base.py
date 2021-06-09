@@ -180,7 +180,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
                 " SET %s" % sets if merge_into_clause.set else "")
 
     def visit_copy_into(self, copy_into, **kw):
-        if copy_into.formatter:
+        if hasattr(copy_into, "formatter") and copy_into.formatter is not None:
             formatter = copy_into.formatter._compiler_dispatch(self, **kw)
         else:
             formatter = ""

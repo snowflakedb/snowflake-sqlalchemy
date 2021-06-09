@@ -132,19 +132,24 @@ class CopyInto(UpdateBase):
         if not isinstance(force, bool):
             raise TypeError("Parameter force should  be a boolean value")
         self.copy_options.update({'FORCE': translate_bool(force)})
+        return self
 
     def single(self, single_file):
         if not isinstance(single_file, bool):
             raise TypeError("Parameter single_file should  be a boolean value")
         self.copy_options.update({'SINGLE': translate_bool(single_file)})
+        return self
 
     def maxfilesize(self, max_size):
         if not isinstance(max_size, int):
             raise TypeError("Parameter max_size should be an integer value")
         self.copy_options.update({'MAX_FILE_SIZE': max_size})
+        return self
 
-    def files(self, file_names: List[str]) -> None:
+    def files(self, file_names: List[str]) -> 'CopyInto':
         self.copy_options.update({'FILES': FilesOption(file_names)})
+        return self
+
 
 class CopyFormatter(ClauseElement):
     """

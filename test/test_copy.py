@@ -232,3 +232,60 @@ def test_copy_into_storage_parquet_named_format(sql_compiler):
         "FILE_FORMAT=(format_name = parquet_file_format) force = TRUE"
     )
     assert result == expected
+
+
+def test_copy_into_storage_parquet_2(sql_compiler):
+    """
+    This test compiles the SQL to read Parquet data from a stage and insert it into a
+    table. The source file is accessed using a SELECT statement.
+    The Parquet formatting definitions are defined in a named format which was
+    explicitly created before. The format is specified as a property of the stage,
+    not the CopyInto object.
+    The Stage is a named stage, i.e. we assume that a CREATE STAGE statement was
+    executed before. This way, the COPY INTO statement does not need to know any
+    security details (credentials or tokens).
+    The FORCE option is set using the corresponding function in CopyInto.
+    The FILES option is set to choose the files to upload
+    """
+    # target table definition (NB: this could be omitted for the test, as long as
+    # the statement is not executed)
+    metadata = MetaData()
+    target_table = Table(
+        "TEST_IMPORT",
+        metadata,
+        Column("COL1", Integer, primary_key=True),
+        Column("COL2", String),
+    )
+
+    # define a source stage (root path)
+    root_stage = ExternalStage(
+        name="AZURE_STAGE",
+        namespace="ML_POC.PUBLIC",
+    )
+
+    # define the SELECT statement to access the source file.
+    # we can probably defined source table metadata and use SQLAlchemy Column objects
+    # instead of texts, but this seems to be the easiest way.
+    sel_statement = select(
+        text("$1:COL1::number"),
+        text("$1:COL2::varchar")
+    ).select_from(
+        ExternalStage.from_root_stage(root_stage, "testdata/out.parquet", file_format="parquet_file_format")
+    )
+
+    # setup CopyInto object
+    copy_into = CopyIntoStorage(
+        from_=sel_statement,
+        into=target_table,
+    ).force(True).files(["foo.txt", "bar.txt"])
+
+    # compile and check the result
+    result = sql_compiler(copy_into)
+    expected = (
+        "COPY INTO TEST_IMPORT "
+        "FROM (SELECT $1:COL1::number, $1:COL2::varchar "
+        "FROM @ML_POC.PUBLIC.AZURE_STAGE/testdata/out.parquet "
+        "(file_format => parquet_file_format))  FILES = ('foo.txt','bar.txt') "
+        "FORCE = true"
+    )
+    assert result == expected
