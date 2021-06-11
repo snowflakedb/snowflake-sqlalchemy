@@ -137,6 +137,10 @@ class CopyInto(UpdateBase):
         self.copy_options.update({'FILES': FilesOption(file_names)})
         return self
 
+    def pattern(self, pattern: str) -> 'CopyInto':
+        self.copy_options.update({'PATTERN': pattern})
+        return self
+
 
 class CopyFormatter(ClauseElement):
     """
