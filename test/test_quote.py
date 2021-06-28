@@ -4,13 +4,10 @@
 # Copyright (c) 2012-2019 Snowflake Computing Inc. All right reserved.
 #
 
-import pytest
 from sqlalchemy import Column, Integer, MetaData, Sequence, String, Table, inspect
 
 
-def test_table_name_with_reserved_words(engine_testaccount, db_parameters, connection_type):
-    if connection_type == "mock":
-        pytest.skip()
+def test_table_name_with_reserved_words(engine_testaccount, db_parameters):
     metadata = MetaData()
     test_table_name = 'insert'
     insert_table = Table(test_table_name, metadata,

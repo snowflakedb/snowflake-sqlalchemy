@@ -81,7 +81,7 @@ def _create_users_addresses_tables_without_sequence(engine_testaccount,
     return users, addresses
 
 
-def test_connect_args(connection_type):
+def test_connect_args():
     """
     Tests connect string
 
@@ -89,9 +89,6 @@ def test_connect_args(connection_type):
     host:port
     """
     from sqlalchemy import create_engine
-    if connection_type == "mock":
-        pytest.skip()
-
     engine = create_engine(
         'snowflake://{user}:{password}@{account}/{database}/{schema}'.format(
             user=CONNECTION_PARAMETERS2['user'],
@@ -178,12 +175,10 @@ def test_create_drop_tables(engine_testaccount):
         users.drop(engine_testaccount)
 
 
-def test_insert_tables(engine_testaccount, connection_type):
+def test_insert_tables(engine_testaccount):
     """
     Inserts data into tables
     """
-    if connection_type == "mock":
-        pytest.skip()
     metadata = MetaData()
     users, addresses = _create_users_addresses_tables(
         engine_testaccount, metadata)
@@ -367,12 +362,10 @@ DROP TABLE IF EXISTS user
 """)
 
 
-def test_inspect_column(engine_testaccount, connection_type):
+def test_inspect_column(engine_testaccount):
     """
     Tests Inspect
     """
-    if connection_type == "mock":
-        pytest.skip()
     metadata = MetaData()
     users, addresses = _create_users_addresses_tables_without_sequence(
         engine_testaccount,
@@ -405,14 +398,12 @@ def test_inspect_column(engine_testaccount, connection_type):
         users.drop(engine_testaccount)
 
 
-def test_get_indexes(engine_testaccount, connection_type):
+def test_get_indexes(engine_testaccount):
     """
     Tests get indexes
 
     NOTE: Snowflake doesn't support indexes
     """
-    if connection_type == "mock":
-        pytest.skip()
     metadata = MetaData()
     users, addresses = _create_users_addresses_tables_without_sequence(
         engine_testaccount,
@@ -426,12 +417,10 @@ def test_get_indexes(engine_testaccount, connection_type):
         users.drop(engine_testaccount)
 
 
-def test_get_primary_keys(engine_testaccount, connection_type):
+def test_get_primary_keys(engine_testaccount):
     """
     Tests get primary keys
     """
-    if connection_type == "mock":
-        pytest.skip()
     metadata = MetaData()
     users, addresses = _create_users_addresses_tables_without_sequence(
         engine_testaccount,
@@ -450,12 +439,10 @@ def test_get_primary_keys(engine_testaccount, connection_type):
         users.drop(engine_testaccount)
 
 
-def test_get_foreign_keys(engine_testaccount, connection_type):
+def test_get_foreign_keys(engine_testaccount):
     """
     Tests foreign keys
     """
-    if connection_type == "mock":
-        pytest.skip()
     metadata = MetaData()
     fk_name = 'fk_users_id_from_addresses'
     users, addresses = _create_users_addresses_tables(
@@ -472,12 +459,10 @@ def test_get_foreign_keys(engine_testaccount, connection_type):
         users.drop(engine_testaccount)
 
 
-def test_get_multile_column_primary_key(engine_testaccount, connection_type):
+def test_get_multile_column_primary_key(engine_testaccount):
     """
     Tests multicolumn primary key with and without autoincrement
     """
-    if connection_type == "mock":
-        pytest.skip()
     metadata = MetaData()
     mytable = Table('mytable', metadata,
                     Column('gid',
@@ -509,10 +494,8 @@ def test_get_multile_column_primary_key(engine_testaccount, connection_type):
         mytable.drop(engine_testaccount)
 
 
-def test_create_table_with_cluster_by(engine_testaccount, connection_type):
+def test_create_table_with_cluster_by(engine_testaccount):
     # Test case for https://github.com/snowflakedb/snowflake-sqlalchemy/pull/14
-    if connection_type == "mock":
-        pytest.skip()
     metadata = MetaData()
     user = Table('clustered_user', metadata,
                  Column('Id', Integer, primary_key=True),
@@ -527,12 +510,10 @@ def test_create_table_with_cluster_by(engine_testaccount, connection_type):
         user.drop(engine_testaccount)
 
 
-def test_view_names(engine_testaccount, connection_type):
+def test_view_names(engine_testaccount):
     """
     Tests all views
     """
-    if connection_type == "mock":
-        pytest.skip()
     inspector = inspect(engine_testaccount)
 
     information_schema_views = inspector.get_view_names(
@@ -541,12 +522,10 @@ def test_view_names(engine_testaccount, connection_type):
     assert 'table_constraints' in information_schema_views
 
 
-def test_view_definition(engine_testaccount, db_parameters, connection_type):
+def test_view_definition(engine_testaccount, db_parameters):
     """
     Tests view definition
     """
-    if connection_type == "mock":
-        pytest.skip()
     test_table_name = "test_table_sqlalchemy"
     test_view_name = "testview_sqlalchemy"
     engine_testaccount.execute("""
@@ -575,12 +554,10 @@ SELECT * FROM {1} WHERE id > 10""".format(
             "DROP VIEW IF EXISTS {0}".format(test_view_name)))
 
 
-def test_view_comment_reading(engine_testaccount, db_parameters, connection_type):
+def test_view_comment_reading(engine_testaccount, db_parameters):
     """
     Tests reading a comment from a view once it's defined
     """
-    if connection_type == "mock":
-        pytest.skip()
     test_table_name = "test_table_sqlalchemy"
     test_view_name = "testview_sqlalchemy"
     engine_testaccount.execute("""
@@ -633,9 +610,7 @@ CREATE TEMPORARY TABLE {0} (col1 integer, col2 string)
         pass
 
 
-def test_create_table_with_schema(engine_testaccount, db_parameters, connection_type):
-    if connection_type == "mock":
-        pytest.skip()
+def test_create_table_with_schema(engine_testaccount, db_parameters):
     metadata = MetaData()
     new_schema = db_parameters['schema'] + "_NEW"
     engine_testaccount.execute(text(
@@ -660,12 +635,10 @@ def test_create_table_with_schema(engine_testaccount, db_parameters, connection_
 
 
 @pytest.mark.skipif(os.getenv("SNOWFLAKE_GCP") is not None, reason="PUT and GET is not supported for GCP yet")
-def test_copy(engine_testaccount, connection_type):
+def test_copy(engine_testaccount):
     """
     COPY must be in a transaction
     """
-    if connection_type == "mock":
-        pytest.skip()
     metadata = MetaData()
     users, addresses = _create_users_addresses_tables_without_sequence(
         engine_testaccount,
@@ -712,26 +685,22 @@ DROP TABLE IF EXISTS {0}
 """.format(db_parameters['name'])))
 
 
-def test_get_schemas(engine_testaccount, connection_type):
+def test_get_schemas(engine_testaccount):
     """
     Tests get schemas from inspect.
 
     Although the method get_schema_names is not part of DefaultDialect,
     inspect() may call the method if exists.
     """
-    if connection_type == "mock":
-        pytest.skip()
     inspector = inspect(engine_testaccount)
 
     schemas = inspector.get_schema_names()
     assert 'information_schema' in schemas
 
 
-def test_column_metadata(engine_testaccount, connection_type):
+def test_column_metadata(engine_testaccount):
     from sqlalchemy.ext.declarative import declarative_base
 
-    if connection_type == "mock":
-        pytest.skip()
     Base = declarative_base()
 
     class Appointment(Base):
@@ -785,15 +754,13 @@ def _get_engine_with_columm_metadata_cache(
     return engine
 
 
-def test_many_table_column_metadta(db_parameters, connection_type):
+def test_many_table_column_metadta(db_parameters):
     """
     Get dozens of table metadata with column metadata cache.
 
     cache_column_metadata=True will cache all column metadata for all tables
     in the schema.
     """
-    if connection_type == "mock":
-        pytest.skip()
     engine = _get_engine_with_columm_metadata_cache(db_parameters)
     RE_SUFFIX_NUM = re.compile(r'.*(\d+)$')
     metadata = MetaData()
@@ -847,11 +814,8 @@ def test_many_table_column_metadta(db_parameters, connection_type):
     assert cnt == total_objects * 2, 'total number of test objects'
 
 
-def test_cache_time(engine_testaccount, db_parameters, connection_type):
+def test_cache_time(engine_testaccount, db_parameters):
     """Check whether Inspector cache is working"""
-    if connection_type == "mock":
-        pytest.skip()
-
     # Set up necessary tables
     metadata = MetaData()
     total_objects = 10
@@ -902,10 +866,8 @@ def test_cache_time(engine_testaccount, db_parameters, connection_type):
 
 
 @pytest.mark.timeout(15)
-def test_region(connection_type):
+def test_region():
     from sqlalchemy import create_engine
-    if connection_type == "mock":
-        pytest.skip()
     engine = create_engine(URL(
         user='testuser',
         password='testpassword',
@@ -923,10 +885,8 @@ def test_region(connection_type):
 
 
 @pytest.mark.timeout(15)
-def test_azure(connection_type):
+def test_azure():
     from sqlalchemy import create_engine
-    if connection_type == "mock":
-        pytest.skip()
     engine = create_engine(URL(
         user='testuser',
         password='testpassword',
@@ -958,9 +918,7 @@ def test_load_dialect():
     (False, False, True),
     (False, True, True),
     (True, True, False)])
-def test_upsert(engine_testaccount, update_flag, insert_flag, delete_flag, conditional_flag, connection_type):
-    if connection_type == "mock":
-        pytest.skip()
+def test_upsert(engine_testaccount, update_flag, insert_flag, delete_flag, conditional_flag):
     meta = MetaData()
     users = Table('users', meta,
                   Column('id', Integer, Sequence('user_id_seq'), primary_key=True),
@@ -1066,10 +1024,8 @@ def test_deterministic_merge_into(sql_compiler):
                                   "onboarding_users.id, onboarding_users.name)"
 
 
-def test_comments(engine_testaccount, connection_type):
+def test_comments(engine_testaccount):
     """Tests strictly reading column comment through SQLAlchemy"""
-    if connection_type == "mock":
-        pytest.skip()
     table_name = ''.join(random.choice(string.ascii_uppercase) for _ in range(5))
     try:
         engine_testaccount.execute("create table public.{} (\"col1\" text);".format(table_name))
@@ -1082,10 +1038,8 @@ def test_comments(engine_testaccount, connection_type):
         engine_testaccount.execute("drop table public.{}".format(table_name))
 
 
-def test_comment_sqlalchemy(db_parameters, engine_testaccount, on_public_ci, connection_type):
+def test_comment_sqlalchemy(db_parameters, engine_testaccount, on_public_ci):
     """Testing adding/reading column and table comments through SQLAlchemy"""
-    if connection_type == "mock":
-        pytest.skip()
     new_schema = db_parameters['schema'] + '2'
     # Use same table name in 2 different schemas to make sure comment retrieval works properly
     table_name = ''.join(random.choice(string.ascii_uppercase) for _ in range(5))
@@ -1132,10 +1086,8 @@ def test_comment_sqlalchemy(db_parameters, engine_testaccount, on_public_ci, con
         engine2.dispose()
 
 
-def test_special_schema_character(db_parameters, on_public_ci, connection_type):
+def test_special_schema_character(db_parameters, on_public_ci):
     """Make sure we decode special characters correctly"""
-    if connection_type == "mock":
-        pytest.skip()
     if on_public_ci:
         pytest.skip("Public CIs cannot create Schemas and Databases")
     # Constants
@@ -1165,9 +1117,7 @@ def test_special_schema_character(db_parameters, on_public_ci, connection_type):
     assert [(database, schema)] == sf_connection == sa_connection
 
 
-def test_autoincrement(engine_testaccount, connection_type):
-    if connection_type == "mock":
-        pytest.skip()
+def test_autoincrement(engine_testaccount):
     metadata = MetaData()
     users = Table('users', metadata,
                Column('uid', Integer, Sequence('id_seq'), primary_key=True),
@@ -1212,11 +1162,9 @@ def test_autoincrement(engine_testaccount, connection_type):
         users.drop(engine_testaccount)
 
 
-def test_get_too_many_columns(engine_testaccount, db_parameters, connection_type):
+def test_get_too_many_columns(engine_testaccount, db_parameters):
     """Check whether Inspector cache is working, when there are too many column to cache whole schema's columns"""
     # Set up necessary tables
-    if connection_type == "mock":
-        pytest.skip()
     metadata = MetaData()
     total_objects = 10
     for idx in range(total_objects):
@@ -1269,11 +1217,8 @@ def test_get_too_many_columns(engine_testaccount, db_parameters, connection_type
         assert outcome
 
 
-def test_too_many_columns_detection(engine_testaccount, db_parameters, connection_type):
+def test_too_many_columns_detection(engine_testaccount, db_parameters):
     """This tests whether a too many column error actually triggers the more granular table version"""
-    if connection_type == "mock":
-        pytest.skip()
-
     # Set up a single table
     metadata = MetaData()
     Table('users', metadata,
@@ -1326,9 +1271,7 @@ def test_too_many_columns_detection(engine_testaccount, db_parameters, connectio
     metadata.drop_all(engine_testaccount)
 
 
-def test_empty_comments(engine_testaccount, connection_type):
-    if connection_type == "mock":
-        pytest.skip()
+def test_empty_comments(engine_testaccount):
     """Test that no comment returns None"""
     table_name = ''.join(random.choice(string.ascii_uppercase) for _ in range(5))
     try:

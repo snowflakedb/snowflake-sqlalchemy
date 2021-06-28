@@ -91,10 +91,10 @@ class FilesOption:
     """
     Class to represent FILES option for the snowflake COPY INTO statement
     """
-    def __init__(self, file_names: List[str]) -> None:
+    def __init__(self, file_names: List[str]):
         self.file_names = file_names
 
-    def __str__(self) -> str:
+    def __str__(self):
         the_files = ["'" + f.replace("'", "\\'") + "'" for f in self.file_names]
         return f"({','.join(the_files)})"
 
@@ -133,11 +133,11 @@ class CopyInto(UpdateBase):
         self.copy_options.update({'MAX_FILE_SIZE': max_size})
         return self
 
-    def files(self, file_names: List[str]) -> 'CopyInto':
+    def files(self, file_names):
         self.copy_options.update({'FILES': FilesOption(file_names)})
         return self
 
-    def pattern(self, pattern: str) -> 'CopyInto':
+    def pattern(self, pattern):
         self.copy_options.update({'PATTERN': pattern})
         return self
 
@@ -416,10 +416,11 @@ class CreateFileFormat(DDLElement):
     """
     __visit_name__ = "create_file_format"
 
-    def __init__(self, format_name, formatter):
+    def __init__(self, format_name, formatter, replace_if_exists=False):
         super().__init__()
         self.format_name = format_name
         self.formatter = formatter
+        self.replace_if_exists = replace_if_exists
 
 
 class CreateStage(DDLElement):
@@ -429,10 +430,11 @@ class CreateStage(DDLElement):
     """
     __visit_name__ = "create_stage"
 
-    def __init__(self, container, stage):
+    def __init__(self, container, stage, replace_if_exists=False):
         super().__init__()
         self.container = container
         self.stage = stage
+        self.replace_if_exists = replace_if_exists
 
 
 class AWSBucket(ClauseElement):

@@ -49,9 +49,7 @@ def _create_users_addresses_tables_without_sequence(engine_testaccount,
     return users, addresses
 
 
-def test_a_simple_read_sql(engine_testaccount, connection_type):
-    if connection_type == "mock":
-        pytest.skip()
+def test_a_simple_read_sql(engine_testaccount):
     metadata = MetaData()
     users, addresses = _create_users_addresses_tables(
         engine_testaccount, metadata)
@@ -114,9 +112,7 @@ def get_engine_with_numpy(db_parameters, user=None, password=None,
     return engine
 
 
-def test_numpy_datatypes(db_parameters, connection_type):
-    if connection_type == "mock":
-        pytest.skip()
+def test_numpy_datatypes(db_parameters):
     engine = get_engine_with_numpy(db_parameters)
     try:
         specific_date = np.datetime64('2016-03-04T12:03:05.123456789')
@@ -140,9 +136,7 @@ def test_numpy_datatypes(db_parameters, connection_type):
         engine.dispose()
 
 
-def test_to_sql(db_parameters, connection_type):
-    if connection_type == "mock":
-        pytest.skip()
+def test_to_sql(db_parameters):
     engine = get_engine_with_numpy(db_parameters)
     total_rows = 10000
     engine.execute("""
@@ -163,9 +157,7 @@ create or replace table dst(c1 float)
     assert df.cnt.values[0] == total_rows
 
 
-def test_no_indexes(engine_testaccount, db_parameters, connection_type):
-    if connection_type == "mock":
-        pytest.skip()
+def test_no_indexes(engine_testaccount, db_parameters):
     conn = engine_testaccount.connect()
     data = pd.DataFrame([('1.0.0',), ('1.0.1',)])
     with pytest.raises(NotImplementedError) as exc:
@@ -173,9 +165,8 @@ def test_no_indexes(engine_testaccount, db_parameters, connection_type):
     assert str(exc.value) == "Snowflake does not support indexes"
 
 
-def test_timezone(db_parameters, connection_type):
-    if connection_type == "mock":
-        pytest.skip()
+def test_timezone(db_parameters):
+
     test_table_name = ''.join([random.choice(string.ascii_letters) for _ in range(5)])
 
     sa_engine = sqlalchemy.create_engine(snowflake.sqlalchemy.URL(

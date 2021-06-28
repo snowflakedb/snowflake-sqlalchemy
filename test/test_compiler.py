@@ -23,7 +23,7 @@ table2 = table(
 class TestSnowflakeCompiler(AssertsCompiledSQL):
     __dialect__ = "snowflake"
 
-    def test_multi_table_delete(self, connection):
+    def test_multi_table_delete(self):
         statement = table1.delete().where(table1.c.id == table2.c.id)
         self.assert_compile(
             statement,

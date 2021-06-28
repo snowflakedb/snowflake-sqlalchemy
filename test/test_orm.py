@@ -10,12 +10,10 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session, relationship
 
 
-def test_basic_orm(engine_testaccount, connection_type):
+def test_basic_orm(engine_testaccount):
     """
     Tests declarative
     """
-    if connection_type == "mock":
-        pytest.skip()
     Base = declarative_base()
 
     class User(Base):
@@ -42,12 +40,10 @@ def test_basic_orm(engine_testaccount, connection_type):
         Base.metadata.drop_all(engine_testaccount)
 
 
-def test_orm_one_to_many_relationship(engine_testaccount, connection_type):
+def test_orm_one_to_many_relationship(engine_testaccount):
     """
     Tests One to Many relationship
     """
-    if connection_type == "mock":
-        pytest.skip()
     Base = declarative_base()
 
     class User(Base):
@@ -110,12 +106,10 @@ def test_orm_one_to_many_relationship(engine_testaccount, connection_type):
         Base.metadata.drop_all(engine_testaccount)
 
 
-def test_delete_cascade(engine_testaccount, connection_type):
+def test_delete_cascade(engine_testaccount):
     """
     Test delete cascade
     """
-    if connection_type == "mock":
-        pytest.skip()
     Base = declarative_base()
 
     class User(Base):
@@ -202,12 +196,10 @@ def test_orm_query(engine_testaccount):
         # MultipleResultsFound if not one result
 
 
-def test_schema_including_db(engine_testaccount, db_parameters, connection_type):
+def test_schema_including_db(engine_testaccount, db_parameters):
     """
     Test schema parameter including database separated by a dot.
     """
-    if connection_type == "mock":
-        pytest.skip()
     Base = declarative_base()
 
     namespace = '{0}.{1}'.format(

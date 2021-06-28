@@ -4,7 +4,6 @@
 # Copyright (c) 2012-2019 Snowflake Computing Inc. All right reserved.
 #
 
-
 import os
 import sys
 import time
@@ -17,7 +16,6 @@ from parameters import CONNECTION_PARAMETERS
 from snowflake.connector.compat import IS_WINDOWS
 from snowflake.sqlalchemy import URL, dialect
 from sqlalchemy import create_engine
-from sqlalchemy.engine.mock import create_mock_engine
 
 if os.getenv('TRAVIS') == 'true':
     TEST_SCHEMA = 'TRAVIS_JOB_{0}'.format(os.getenv('TRAVIS_JOB_ID'))
@@ -39,17 +37,6 @@ def on_appveyor():
 @pytest.fixture(scope='session')
 def on_public_ci(on_travis, on_appveyor):
     return on_travis or on_appveyor
-
-
-@pytest.fixture(scope="session", params=["mock", "snowflake"])
-# @pytest.fixture(scope="session", params=["snowflake"])
-# @pytest.fixture(scope="session", params=["mock"])
-def connection_type(request):
-    """
-    Use this fixture to specify if the tests are executed against an actual Snowflake
-    engine or only against a Mock engine (which does not actually execute it), or both
-    """
-    return request.param
 
 
 def help():
@@ -161,6 +148,14 @@ def get_engine(user=None, password=None, account=None, schema=None):
     return engine, ret
 
 
+@pytest.fixture()
+def engine_testaccount(request):
+    engine, _ = get_engine()
+    request.addfinalizer(engine.dispose)
+    return engine
+
+
+@pytest.fixture(scope='session', autouse=True)
 def init_test_schema(request, db_parameters):
     ret = db_parameters
     with snowflake.connector.connect(
@@ -190,7 +185,6 @@ def init_test_schema(request, db_parameters):
                 "DROP SCHEMA IF EXISTS {0}".format(TEST_SCHEMA))
 
     request.addfinalizer(fin)
-    return con
 
 
 @pytest.fixture(scope='session')
@@ -198,49 +192,3 @@ def sql_compiler():
     return lambda sql_command: str(sql_command.compile(dialect=dialect(),
                                                        compile_kwargs={'literal_binds': True,
                                                                        'deterministic': True})).replace('\n', '')
-
-
-def mock_engine(db_parameters):
-    def echo_sql(sql, *args, **kwargs):
-        """
-        This highly sophisticated executor returns the sql query in the selected dialect.
-        The only purpose is to check if a sql statement was translated as expected
-        """
-        if isinstance(sql, str):
-            echo = sql
-        else:
-            echo = sql.compile(dialect=engine.dialect)
-        logger.info(f"sql: {echo}")
-        return echo
-
-    ret = db_parameters
-    url = URL(
-        user=ret['user'],
-        password=ret['password'],
-        host=ret['host'],
-        port=ret['port'],
-        database=ret['database'],
-        schema=TEST_SCHEMA,
-        account=ret['account'],
-        protocol=ret['protocol']
-    )
-    engine = create_mock_engine(url, echo_sql)
-    return engine
-
-
-@pytest.fixture(scope="session")
-def connection(request, connection_type, db_parameters):
-    if connection_type == "snowflake":
-        return init_test_schema(request, db_parameters)
-    else:
-        return mock_engine(db_parameters).connect()
-
-
-@pytest.fixture()
-def engine_testaccount(request, connection_type, db_parameters):
-    if connection_type == "snowflake":
-        engine, _ = get_engine()
-        request.addfinalizer(engine.dispose)
-        return engine
-    else:
-        return mock_engine(db_parameters)

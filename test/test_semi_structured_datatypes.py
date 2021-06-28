@@ -65,12 +65,10 @@ def test_insert_semi_structured_datatypes(engine_testaccount):
         test_variant.drop(engine_testaccount)
 
 
-def test_inspect_semi_structured_datatypes(engine_testaccount, connection_type):
+def test_inspect_semi_structured_datatypes(engine_testaccount):
     """
     Inspects semi-structured data type columns
     """
-    if connection_type == "mock":
-        pytest.skip()
     table_name = "test_variant2"
     metadata = MetaData()
     test_variant = Table(

@@ -6,7 +6,6 @@
 
 from datetime import datetime
 
-import pytest
 import pytz
 from parameters import CONNECTION_PARAMETERS
 from snowflake.sqlalchemy import TIMESTAMP_LTZ, TIMESTAMP_NTZ, TIMESTAMP_TZ
@@ -42,12 +41,10 @@ def test_create_table_timestamp_datatypes(engine_testaccount):
         test_timestamp.drop(engine_testaccount)
 
 
-def test_inspect_timestamp_datatypes(engine_testaccount, connection_type):
+def test_inspect_timestamp_datatypes(engine_testaccount):
     """
     Create table including timestamp data types
     """
-    if connection_type == "mock":
-        pytest.skip()
     metadata = MetaData()
     table_name = "test_timestamp0"
     test_timestamp = Table(
