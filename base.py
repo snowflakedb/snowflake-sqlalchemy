@@ -407,7 +407,7 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
         return "CREATE OR REPLACE STAGE {}{} URL={}".format(
             create_stage.stage.namespace,
             create_stage.stage.name,
-            create_stage.container.__repr__())
+            repr(create_stage.container))
 
     def visit_create_file_format(self, file_format, **kw):
         """
