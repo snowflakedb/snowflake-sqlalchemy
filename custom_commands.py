@@ -117,7 +117,7 @@ class CopyInto(UpdateBase):
 
     def force(self, force):
         if not isinstance(force, bool):
-            raise TypeError("Parameter force should  be a boolean value")
+            raise TypeError("Parameter force should be a boolean value")
         self.copy_options.update({'FORCE': translate_bool(force)})
         return self
 
