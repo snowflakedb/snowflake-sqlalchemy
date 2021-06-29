@@ -153,7 +153,7 @@ def test_copy_into_storage_csv_extended(sql_compiler):
     # define CopyInto object; reads all CSV data (=> pattern) from
     # the sub-path "testdata" beneath the root stage
     copy_into = CopyIntoStorage(
-        from_=ExternalStage.from_root_stage(root_stage, "testdata"),
+        from_=ExternalStage.from_parent_stage(root_stage, "testdata"),
         into=target_table,
         formatter=formatter
     )
@@ -206,7 +206,7 @@ def test_copy_into_storage_parquet_named_format(sql_compiler):
         text("$1:COL1::number"),
         text("$1:COL2::varchar")
     ).select_from(
-        ExternalStage.from_root_stage(root_stage, "testdata/out.parquet")
+        ExternalStage.from_parent_stage(root_stage, "testdata/out.parquet")
     )
 
     # use an existing source format.
@@ -267,7 +267,7 @@ def test_copy_into_storage_parquet_files(sql_compiler):
         text("$1:COL1::number"),
         text("$1:COL2::varchar")
     ).select_from(
-        ExternalStage.from_root_stage(root_stage, "testdata/out.parquet", file_format="parquet_file_format")
+        ExternalStage.from_parent_stage(root_stage, "testdata/out.parquet", file_format="parquet_file_format")
     )
 
     # setup CopyInto object
@@ -324,7 +324,7 @@ def test_copy_into_storage_parquet_pattern(sql_compiler):
         text("$1:COL1::number"),
         text("$1:COL2::varchar")
     ).select_from(
-        ExternalStage.from_root_stage(root_stage, "testdata/out.parquet", file_format="parquet_file_format")
+        ExternalStage.from_parent_stage(root_stage, "testdata/out.parquet", file_format="parquet_file_format")
     )
 
     # setup CopyInto object

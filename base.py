@@ -224,9 +224,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         if kw.get('deterministic', False):
             options_list.sort(key=operator.itemgetter(0))
         if "format_name" in formatter.options:
-            return "FILE_FORMAT=(format_name = {})".format(
-                formatter.options["format_name"]
-            )
+            return f"FILE_FORMAT=(format_name = {formatter.options['format_name']})"
         return 'FILE_FORMAT=(TYPE={}{})'.format(
             formatter.file_format,
             ' ' + ' '.join(

@@ -4,7 +4,6 @@
 # Copyright (c) 2012-2019 Snowflake Computing Inc. All right reserved.
 #
 
-import codecs
 from collections.abc import Sequence
 from typing import List
 
@@ -112,6 +111,13 @@ class CopyInto(UpdateBase):
         self.formatter = formatter
         self.copy_options = {}
 
+    def __repr__(self):
+        """
+        repr for debugging / logging purposes only. For compilation logic, see
+        the corresponding visitor in base.py
+        """
+        return f"COPY INTO {self.into} FROM {repr(self.from_)} {repr(self.formatter)} ({self.copy_options})"
+
     def bind(self):
         return None
 
@@ -150,10 +156,16 @@ class CopyFormatter(ClauseElement):
     __visit_name__ = 'copy_formatter'
 
     def __init__(self, format_name=None):
+        self.options = dict()
         if format_name:
-            self.options = {"format_name": format_name}
-        else:
-            self.options = {}
+            self.options["format_name"] = format_name
+
+    def __repr__(self):
+        """
+        repr for debugging / logging purposes only. For compilation logic, see
+        the corresponding visitor in base.py
+        """
+        return f"FILE_FORMAT=({self.options})"
 
     @staticmethod
     def value_repr(name, value):
@@ -190,7 +202,7 @@ class CSVFormatter(CopyFormatter):
         self.options['COMPRESSION'] = comp_type
         return self
 
-    def _check_delimiter(self, delimiter, delimiter_txt, allow_int=True):
+    def _check_delimiter(self, delimiter, delimiter_txt):
         """
         Check if a delimiter is either a string of length 1 or an integer. In case of
         a string delimiter, take into account that the actual string may be longer,
@@ -199,10 +211,10 @@ class CSVFormatter(CopyFormatter):
         if isinstance(delimiter, NoneType):
             return
         if isinstance(delimiter, string_types):
-            delimiter_processed = codecs.escape_decode(bytes(delimiter, "utf-8"))[0].decode("utf-8")
+            delimiter_processed = delimiter.encode().decode("unicode_escape")
             if len(delimiter_processed) == 1:
                 return
-        if allow_int and isinstance(delimiter, int):
+        if isinstance(delimiter, int):
             return
         raise TypeError(
             "{} should be a single character, that is either a string, or a number".format(delimiter_txt))
@@ -400,13 +412,19 @@ class ExternalStage(ClauseElement, FromClauseRole):
         self.namespace = self.prepare_namespace(namespace) if namespace else ""
         self.file_format = file_format
 
+    def __repr__(self):
+        return f"@{self.namespace}{self.name}{self.path} ({self.file_format})"
+
     @classmethod
-    def from_root_stage(cls, root_stage, path, file_format=None):
+    def from_parent_stage(cls, parent_stage, path, file_format=None):
         """
-        Extend an existing root stage (with or without path) with an
+        Extend an existing parent stage (with or without path) with an
         additional sub-path
         """
-        return cls(root_stage.name, root_stage.path + "/" + path, root_stage.namespace, file_format)
+        return cls(parent_stage.name,
+                   parent_stage.path + "/" + path,
+                   parent_stage.namespace,
+                   file_format)
 
 
 class CreateFileFormat(DDLElement):
