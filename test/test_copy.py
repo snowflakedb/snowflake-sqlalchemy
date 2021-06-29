@@ -7,6 +7,7 @@ import pytest
 from snowflake.sqlalchemy import (
     AWSBucket,
     AzureContainer,
+    CopyFormatter,
     CopyIntoStorage,
     CSVFormatter,
     ExternalStage,
@@ -14,7 +15,7 @@ from snowflake.sqlalchemy import (
     PARQUETFormatter,
 )
 from sqlalchemy import Column, Integer, MetaData, Sequence, String, Table
-from sqlalchemy.sql import select
+from sqlalchemy.sql import select, text
 
 
 def test_external_stage(sql_compiler):
@@ -105,3 +106,239 @@ def test_copy_into_location(engine_testaccount, sql_compiler):
     finally:
         conn.close()
         food_items.drop(engine_testaccount)
+
+
+def test_copy_into_storage_csv_extended(sql_compiler):
+    """
+    This test compiles the SQL to read CSV data from a stage and insert it into a
+    table.
+    The CSV formatting statements are inserted inline, i.e. no explicit SQL definition
+    of that format is necessary.
+    The Stage is a named stage, i.e. we assume that a CREATE STAGE statement was
+    executed before. This way, the COPY INTO statement does not need to know any
+    security details (credentials or tokens)
+    """
+    # target table definition (NB: this could be omitted for the test, since the
+    # SQL statement copies the whole CSV and assumes the target structure matches)
+    metadata = MetaData()
+    target_table = Table(
+        "TEST_IMPORT",
+        metadata,
+        Column("COL1", Integer, primary_key=True),
+        Column("COL2", String),
+    )
+
+    # define a source stage (root path)
+    root_stage = ExternalStage(
+        name="AZURE_STAGE",
+        namespace="ML_POC.PUBLIC",
+    )
+
+    # define a CSV formatter
+    formatter = (
+        CSVFormatter()
+        .compression("AUTO")
+        .field_delimiter(",")
+        .record_delimiter(r"\n")
+        .field_optionally_enclosed_by(None)
+        .escape(None)
+        .escape_unenclosed_field(r"\134")
+        .date_format("AUTO")
+        .null_if([r"\N"])
+        .skip_header(1)
+        .trim_space(False)
+        .error_on_column_count_mismatch(True)
+    )
+
+    # define CopyInto object; reads all CSV data (=> pattern) from
+    # the sub-path "testdata" beneath the root stage
+    copy_into = CopyIntoStorage(
+        from_=ExternalStage.from_parent_stage(root_stage, "testdata"),
+        into=target_table,
+        formatter=formatter
+    )
+    copy_into.copy_options = {"pattern": "'.*csv'", "force": "TRUE"}
+
+    # check that the result is as expected
+    result = sql_compiler(copy_into)
+    expected = (
+        r"COPY INTO TEST_IMPORT "
+        r"FROM @ML_POC.PUBLIC.AZURE_STAGE/testdata "
+        r"FILE_FORMAT=(TYPE=csv COMPRESSION='auto' DATE_FORMAT='AUTO' "
+        r"ERROR_ON_COLUMN_COUNT_MISMATCH=True ESCAPE=None "
+        r"ESCAPE_UNENCLOSED_FIELD='\134' FIELD_DELIMITER=',' "
+        r"FIELD_OPTIONALLY_ENCLOSED_BY=None NULL_IF=('\N') RECORD_DELIMITER='\n' "
+        r"SKIP_HEADER=1 TRIM_SPACE=False) force = TRUE pattern = '.*csv'"
+    )
+    assert result == expected
+
+
+def test_copy_into_storage_parquet_named_format(sql_compiler):
+    """
+    This test compiles the SQL to read Parquet data from a stage and insert it into a
+    table. The source file is accessed using a SELECT statement.
+    The Parquet formatting definitions are defined in a named format which was
+    explicitly created before.
+    The Stage is a named stage, i.e. we assume that a CREATE STAGE statement was
+    executed before. This way, the COPY INTO statement does not need to know any
+    security details (credentials or tokens)
+    """
+    # target table definition (NB: this could be omitted for the test, as long as
+    # the statement is not executed)
+    metadata = MetaData()
+    target_table = Table(
+        "TEST_IMPORT",
+        metadata,
+        Column("COL1", Integer, primary_key=True),
+        Column("COL2", String),
+    )
+
+    # define a source stage (root path)
+    root_stage = ExternalStage(
+        name="AZURE_STAGE",
+        namespace="ML_POC.PUBLIC",
+    )
+
+    # define the SELECT statement to access the source file.
+    # we can probably defined source table metadata and use SQLAlchemy Column objects
+    # instead of texts, but this seems to be the easiest way.
+    sel_statement = select(
+        text("$1:COL1::number"),
+        text("$1:COL2::varchar")
+    ).select_from(
+        ExternalStage.from_parent_stage(root_stage, "testdata/out.parquet")
+    )
+
+    # use an existing source format.
+    formatter = CopyFormatter(format_name="parquet_file_format")
+
+    # setup CopyInto object
+    copy_into = CopyIntoStorage(
+        from_=sel_statement,
+        into=target_table,
+        formatter=formatter
+    )
+    copy_into.copy_options = {"force": "TRUE"}
+
+    # compile and check the result
+    result = sql_compiler(copy_into)
+    expected = (
+        "COPY INTO TEST_IMPORT "
+        "FROM (SELECT $1:COL1::number, $1:COL2::varchar "
+        "FROM @ML_POC.PUBLIC.AZURE_STAGE/testdata/out.parquet) "
+        "FILE_FORMAT=(format_name = parquet_file_format) force = TRUE"
+    )
+    assert result == expected
+
+
+def test_copy_into_storage_parquet_files(sql_compiler):
+    """
+    This test compiles the SQL to read Parquet data from a stage and insert it into a
+    table. The source file is accessed using a SELECT statement.
+    The Parquet formatting definitions are defined in a named format which was
+    explicitly created before. The format is specified as a property of the stage,
+    not the CopyInto object.
+    The Stage is a named stage, i.e. we assume that a CREATE STAGE statement was
+    executed before. This way, the COPY INTO statement does not need to know any
+    security details (credentials or tokens).
+    The FORCE option is set using the corresponding function in CopyInto.
+    The FILES option is set to choose the files to upload
+    """
+    # target table definition (NB: this could be omitted for the test, as long as
+    # the statement is not executed)
+    metadata = MetaData()
+    target_table = Table(
+        "TEST_IMPORT",
+        metadata,
+        Column("COL1", Integer, primary_key=True),
+        Column("COL2", String),
+    )
+
+    # define a source stage (root path)
+    root_stage = ExternalStage(
+        name="AZURE_STAGE",
+        namespace="ML_POC.PUBLIC",
+    )
+
+    # define the SELECT statement to access the source file.
+    # we can probably defined source table metadata and use SQLAlchemy Column objects
+    # instead of texts, but this seems to be the easiest way.
+    sel_statement = select(
+        text("$1:COL1::number"),
+        text("$1:COL2::varchar")
+    ).select_from(
+        ExternalStage.from_parent_stage(root_stage, "testdata/out.parquet", file_format="parquet_file_format")
+    )
+
+    # setup CopyInto object
+    copy_into = CopyIntoStorage(
+        from_=sel_statement,
+        into=target_table,
+    ).force(True).files(["foo.txt", "bar.txt"])
+
+    # compile and check the result
+    result = sql_compiler(copy_into)
+    expected = (
+        "COPY INTO TEST_IMPORT "
+        "FROM (SELECT $1:COL1::number, $1:COL2::varchar "
+        "FROM @ML_POC.PUBLIC.AZURE_STAGE/testdata/out.parquet "
+        "(file_format => parquet_file_format))  FILES = ('foo.txt','bar.txt') "
+        "FORCE = true"
+    )
+    assert result == expected
+
+
+def test_copy_into_storage_parquet_pattern(sql_compiler):
+    """
+    This test compiles the SQL to read Parquet data from a stage and insert it into a
+    table. The source file is accessed using a SELECT statement.
+    The Parquet formatting definitions are defined in a named format which was
+    explicitly created before. The format is specified as a property of the stage,
+    not the CopyInto object.
+    The Stage is a named stage, i.e. we assume that a CREATE STAGE statement was
+    executed before. This way, the COPY INTO statement does not need to know any
+    security details (credentials or tokens).
+    The FORCE option is set using the corresponding function in CopyInto.
+    The PATTERN option is set to choose multiple files
+    """
+    # target table definition (NB: this could be omitted for the test, as long as
+    # the statement is not executed)
+    metadata = MetaData()
+    target_table = Table(
+        "TEST_IMPORT",
+        metadata,
+        Column("COL1", Integer, primary_key=True),
+        Column("COL2", String),
+    )
+
+    # define a source stage (root path)
+    root_stage = ExternalStage(
+        name="AZURE_STAGE",
+        namespace="ML_POC.PUBLIC",
+    )
+
+    # define the SELECT statement to access the source file.
+    # we can probably defined source table metadata and use SQLAlchemy Column objects
+    # instead of texts, but this seems to be the easiest way.
+    sel_statement = select(
+        text("$1:COL1::number"),
+        text("$1:COL2::varchar")
+    ).select_from(
+        ExternalStage.from_parent_stage(root_stage, "testdata/out.parquet", file_format="parquet_file_format")
+    )
+
+    # setup CopyInto object
+    copy_into = CopyIntoStorage(
+        from_=sel_statement,
+        into=target_table,
+    ).force(True).pattern("'.*csv'")
+
+    # compile and check the result
+    result = sql_compiler(copy_into)
+    expected = (
+        "COPY INTO TEST_IMPORT "
+        "FROM (SELECT $1:COL1::number, $1:COL2::varchar "
+        "FROM @ML_POC.PUBLIC.AZURE_STAGE/testdata/out.parquet "
+        "(file_format => parquet_file_format))  FORCE = true PATTERN = '.*csv'"
+    )
+    assert result == expected

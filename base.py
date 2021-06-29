@@ -14,7 +14,7 @@ from sqlalchemy.sql import compiler, expression
 from sqlalchemy.sql.elements import quoted_name
 from sqlalchemy.util.compat import string_types
 
-from .custom_commands import AWSBucket, AzureContainer
+from .custom_commands import AWSBucket, AzureContainer, ExternalStage
 
 RESERVED_WORDS = frozenset([
     "ALL",  # ANSI Reserved words
@@ -180,14 +180,23 @@ class SnowflakeCompiler(compiler.SQLCompiler):
                 " SET %s" % sets if merge_into_clause.set else "")
 
     def visit_copy_into(self, copy_into, **kw):
-        formatter = copy_into.formatter._compiler_dispatch(self, **kw)
+        if hasattr(copy_into, "formatter") and copy_into.formatter is not None:
+            formatter = copy_into.formatter._compiler_dispatch(self, **kw)
+        else:
+            formatter = ""
         into = (copy_into.into if isinstance(copy_into.into, Table)
                 else copy_into.into._compiler_dispatch(self, **kw))
         from_ = None
         if isinstance(copy_into.from_, Table):
             from_ = copy_into.from_
         # this is intended to catch AWSBucket and AzureContainer
-        elif isinstance(copy_into.from_, AWSBucket) or isinstance(copy_into.from_, AzureContainer):
+        elif isinstance(
+                copy_into.from_, AWSBucket
+        ) or isinstance(
+            copy_into.from_, AzureContainer
+        ) or isinstance(
+            copy_into.from_, ExternalStage
+        ):
             from_ = copy_into.from_._compiler_dispatch(self, **kw)
         # everything else (selects, etc.)
         else:
@@ -214,18 +223,21 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         options_list = list(formatter.options.items())
         if kw.get('deterministic', False):
             options_list.sort(key=operator.itemgetter(0))
-        return 'FILE_FORMAT=(TYPE={}{})'.format(formatter.file_format,
-                                                (' ' + ' '.join([("{}='{}'" if isinstance(value, str)
-                                                                  else "{}={}").format(
-                                                    name,
-                                                    value._compiler_dispatch(self, **kw) if getattr(value,
-                                                                                                    '_compiler_dispatch',
-                                                                                                    False) else str(
-                                                        value))
-                                                    for name, value in options_list])) if formatter.options else "")
-
-    def visit_external_stage(self, stage, **kw):
-        return "@{}{}{}".format(stage.namespace, stage.name, stage.path)
+        if "format_name" in formatter.options:
+            return f"FILE_FORMAT=(format_name = {formatter.options['format_name']})"
+        return 'FILE_FORMAT=(TYPE={}{})'.format(
+            formatter.file_format,
+            ' ' + ' '.join(
+                [
+                    "{}={}".format(
+                        name,
+                        value._compiler_dispatch(self, **kw)
+                        if hasattr(value, '_compiler_dispatch')
+                        else formatter.value_repr(name, value)
+                    ) for name, value in options_list
+                ]
+            ) if formatter.options else ""
+        )
 
     def visit_aws_bucket(self, aws_bucket, **kw):
         credentials_list = list(aws_bucket.credentials_used.items())
@@ -265,6 +277,16 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         return (uri,
                 credentials if azure_container.credentials_used else '',
                 encryption if azure_container.encryption_used else '')
+
+    def visit_external_stage(self, external_stage, **kw):
+        if external_stage.file_format is None:
+            return "@{}{}{}".format(external_stage.namespace,
+                                    external_stage.name,
+                                    external_stage.path)
+        return "@{}{}{} (file_format => {})".format(external_stage.namespace,
+                                                    external_stage.name,
+                                                    external_stage.path,
+                                                    external_stage.file_format)
 
     def delete_extra_from_clause(self, delete_stmt, from_table,
                                  extra_froms, from_hints, **kw):
@@ -376,6 +398,31 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
             text += " CLUSTER BY ({0})".format(
                 ", ".join(self.denormalize_column_name(key) for key in cluster))
         return text
+
+    def visit_create_stage(self, create_stage, **kw):
+        """
+        This visitor will create the SQL representation for a CREATE STAGE command.
+        """
+        return "CREATE {}STAGE {}{} URL={}".format(
+            "OR REPLACE " if create_stage.replace_if_exists else "",
+            create_stage.stage.namespace,
+            create_stage.stage.name,
+            repr(create_stage.container))
+
+    def visit_create_file_format(self, file_format, **kw):
+        """
+        This visitor will create the SQL representation for a CREATE FILE FORMAT
+        command.
+        """
+        return "CREATE {}FILE FORMAT {} TYPE='{}' {}".format(
+            "OR REPLACE " if file_format.replace_if_exists else "",
+            file_format.format_name,
+            file_format.formatter.file_format,
+            " ".join(
+                ["{} = {}".format(name, file_format.formatter.value_repr(name, value))
+                 for name, value
+                 in file_format.formatter.options.items()])
+        )
 
 
 class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):

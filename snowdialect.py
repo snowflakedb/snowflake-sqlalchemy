@@ -5,31 +5,45 @@
 #
 
 import operator
-from six.moves.urllib_parse import unquote_plus
+from functools import reduce
 
 import sqlalchemy.types as sqltypes
 from six import iteritems
-from sqlalchemy import util as sa_util
+from six.moves.urllib_parse import unquote_plus
+from snowflake.connector import errors as sf_errors
+from snowflake.connector.constants import UTF8
 from sqlalchemy import event as sa_vnt
-from functools import reduce
 from sqlalchemy import exc as sa_exc
+from sqlalchemy import util as sa_util
+from sqlalchemy.engine import default, reflection
+from sqlalchemy.schema import Table
 from sqlalchemy.sql import text
 from sqlalchemy.sql.elements import quoted_name
-from sqlalchemy.schema import Table
-from sqlalchemy.engine import default, reflection
 from sqlalchemy.types import (
-    CHAR, DATE, DATETIME, INTEGER, SMALLINT, BIGINT, DECIMAL, TIME, TIMESTAMP, VARCHAR, BINARY, BOOLEAN, FLOAT, REAL
+    BIGINT,
+    BINARY,
+    BOOLEAN,
+    CHAR,
+    DATE,
+    DATETIME,
+    DECIMAL,
+    FLOAT,
+    INTEGER,
+    REAL,
+    SMALLINT,
+    TIME,
+    TIMESTAMP,
+    VARCHAR,
 )
 
 from .base import (
-    SnowflakeDDLCompiler, SnowflakeCompiler, SnowflakeExecutionContext, SnowflakeIdentifierPreparer,
-    SnowflakeTypeCompiler
+    SnowflakeCompiler,
+    SnowflakeDDLCompiler,
+    SnowflakeExecutionContext,
+    SnowflakeIdentifierPreparer,
+    SnowflakeTypeCompiler,
 )
-from snowflake.connector.constants import UTF8
-from .custom_types import (
-    TIMESTAMP_LTZ, TIMESTAMP_TZ, TIMESTAMP_NTZ, VARIANT, OBJECT, ARRAY
-)
-from snowflake.connector import errors as sf_errors
+from .custom_types import ARRAY, OBJECT, TIMESTAMP_LTZ, TIMESTAMP_NTZ, TIMESTAMP_TZ, VARIANT
 
 colspecs = {}
 
