@@ -170,7 +170,7 @@ class CopyFormatter(ClauseElement):
         if name == "format_name":
             return value
         elif isinstance(value, str):
-            return "'{}'".format(value)
+            return f"'{value}'"
         elif isinstance(value, tuple) and len(value) == 1:
             return "('{}')".format(str(value[0]))
         else:
