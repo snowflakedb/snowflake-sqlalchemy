@@ -198,7 +198,7 @@ class CSVFormatter(CopyFormatter):
         """
         if isinstance(delimiter, NoneType):
             return
-        if isinstance(delimiter, string_types):
+        elif isinstance(delimiter, string_types):
             delimiter_processed = codecs.escape_decode(bytes(delimiter, "utf-8"))[0].decode("utf-8")
             if len(delimiter_processed) == 1:
                 return
