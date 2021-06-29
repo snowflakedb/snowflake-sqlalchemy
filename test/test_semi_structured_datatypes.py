@@ -12,11 +12,6 @@ from snowflake.sqlalchemy import ARRAY, OBJECT, VARIANT
 from sqlalchemy import Column, Integer, MetaData, Table, inspect
 from sqlalchemy.sql import select
 
-try:
-    from parameters import (CONNECTION_PARAMETERS2)
-except ImportError:
-    CONNECTION_PARAMETERS2 = CONNECTION_PARAMETERS
-
 
 def test_create_table_semi_structured_datatypes(engine_testaccount):
     """

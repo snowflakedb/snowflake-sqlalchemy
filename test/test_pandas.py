@@ -5,12 +5,15 @@
 #
 import random
 import string
+import uuid
 
 import numpy as np
 import pandas as pd
 import pytest
 import snowflake.sqlalchemy
 import sqlalchemy
+from snowflake.connector import ProgrammingError
+from snowflake.connector.pandas_tools import make_pd_writer, pd_writer
 from sqlalchemy import Column, ForeignKey, Integer, MetaData, Sequence, String, Table
 
 
@@ -58,7 +61,10 @@ def test_a_simple_read_sql(engine_testaccount):
         # inserts data with an implicitly generated id
         ins = users.insert().values(name='jack', fullname='Jack Jones')
         results = engine_testaccount.execute(ins)
-        assert results.inserted_primary_key == [1], 'sequence value'
+        # Note: SQLAlchemy 1.4 changed what ``inserted_primary_key`` returns
+        #  a cast is here to make sure the test works with both older and newer
+        #  versions
+        assert list(results.inserted_primary_key) == [1], 'sequence value'
         results.close()
 
         # inserts data with the given id
@@ -238,3 +244,53 @@ def test_timezone(db_parameters):
         assert(np.issubdtype(result2.FLOAT_COL, np.float64))
     finally:
         sa_engine.execute('DROP TABLE {table};'.format(table=test_table_name))
+
+
+def test_pandas_writeback(engine_testaccount):
+    sf_connector_version_data = [
+        ('snowflake-connector-python', '1.2.23'),
+        ('snowflake-sqlalchemy', '1.1.1'),
+        ('snowflake-connector-go', '0.0.1'),
+        ('snowflake-go', '1.0.1'),
+        ('snowflake-odbc', '3.12.3'),
+    ]
+    table_name = 'driver_versions'
+    # Note: column names have to be all upper case because our sqlalchemy connector creates it in a case insensitive way
+    sf_connector_version_df = pd.DataFrame(sf_connector_version_data, columns=['NAME', 'NEWEST_VERSION'])
+    sf_connector_version_df.to_sql(table_name, engine_testaccount, index=False, method=pd_writer)
+
+    assert (pd.read_sql_table(table_name, engine_testaccount).rename(
+        columns={'newest_version': 'NEWEST_VERSION', 'name': 'NAME'}
+    ) == sf_connector_version_df).all().all()
+
+
+@pytest.mark.parametrize("quote_identifiers", [False, True])
+def test_pandas_make_pd_writer(engine_testaccount, quote_identifiers):
+    table_name = f"test_table_{uuid.uuid4().hex}".upper()
+    test_df = pd.DataFrame({"a": range(10), "b": range(10, 20)})
+
+    def write_to_db():
+        test_df.to_sql(
+            table_name,
+            engine_testaccount,
+            index=False,
+            method=make_pd_writer(quote_identifiers=quote_identifiers),
+        )
+
+    try:
+        if quote_identifiers:
+            with pytest.raises(ProgrammingError, match=r".*SQL compilation error.*\ninvalid identifier '\"a\"'.*") as e:
+                write_to_db()
+        else:
+            write_to_db()
+            results = sorted(
+                engine_testaccount.execute(f"SELECT * FROM {table_name}").fetchall(),
+                key=lambda x: x[0],
+            )
+            # Verify that all 10 entries were written to the DB
+            for i in range(10):
+                assert results[i] == (i, i + 10)
+            assert len(results) == 10
+    finally:
+        engine_testaccount.execute(f"DROP TABLE IF EXISTS {table_name}")
+
