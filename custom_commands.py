@@ -538,8 +538,8 @@ class AzureContainer(ClauseElement):
             '/' + self.path if self.path else ""
         )
         return '{}{}{}'.format(uri,
-                               ' ' + credentials if self.credentials_used else '',
-                               ' ' + encryption if self.encryption_used else '')
+                               f' {credentials}' if self.credentials_used else '',
+                               f' {encryption}' if self.encryption_used else '')
 
     def credentials(self, azure_sas_token):
         self.credentials_used = {'AZURE_SAS_TOKEN': azure_sas_token}
