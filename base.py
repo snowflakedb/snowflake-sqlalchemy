@@ -230,13 +230,14 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         return 'FILE_FORMAT=(TYPE={}{})'.format(
             formatter.file_format,
             ' ' + ' '.join(
-                ["{}={}".format(
-                    name,
-                    value._compiler_dispatch(self, **kw) if getattr(value,
-                                                                    '_compiler_dispatch',
-                                                                    False)
-                    else formatter.value_repr(name, value))
-                for name, value in options_list]
+                [
+                    "{}={}".format(
+                        name,
+                        value._compiler_dispatch(self, **kw)
+                        if hasattr(value, '_compiler_dispatch')
+                        else formatter.value_repr(name, value)
+                    ) for name, value in options_list
+              	]
             ) if formatter.options else ""
         )
 
