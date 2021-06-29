@@ -202,7 +202,7 @@ class CSVFormatter(CopyFormatter):
             delimiter_processed = codecs.escape_decode(bytes(delimiter, "utf-8"))[0].decode("utf-8")
             if len(delimiter_processed) == 1:
                 return
-        if allow_int and isinstance(delimiter, int):
+        elif allow_int and isinstance(delimiter, int):
             return
         raise TypeError(
             "{} should be a single character, that is either a string, or a number".format(delimiter_txt))
