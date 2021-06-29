@@ -43,7 +43,6 @@ from .base import (
     SnowflakeIdentifierPreparer,
     SnowflakeTypeCompiler,
 )
-from .custom_types import ARRAY, OBJECT, TIMESTAMP_LTZ, TIMESTAMP_NTZ, TIMESTAMP_TZ, VARIANT
 
 colspecs = {}
 

@@ -7,11 +7,6 @@ import os
 
 from parameters import CONNECTION_PARAMETERS
 
-try:
-    from parameters import (CONNECTION_PARAMETERS2)
-except ImportError:
-    CONNECTION_PARAMETERS2 = CONNECTION_PARAMETERS
-
 THIS_DIR = os.path.dirname(os.path.realpath(__file__))
 
 
