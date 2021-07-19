@@ -10,6 +10,10 @@ https://github.com/snowflakedb/snowflake-sqlalchemy
 Release Notes
 -------------------------------------------------------------------------------
 
+- v1.2.5 (July 20,2021)
+
+    - Various custom command bug fixes and additions.
+
 - v1.2.4 (October 05,2020)
 
     - Fixed an issue where inspector would not properly switch to table wide column retrieving when schema wide column retrieving was taking too long to respond.
