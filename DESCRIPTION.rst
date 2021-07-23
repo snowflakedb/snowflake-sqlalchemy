@@ -10,6 +10,10 @@ https://github.com/snowflakedb/snowflake-sqlalchemy
 Release Notes
 -------------------------------------------------------------------------------
 
+- v1.3.0 (July 23,2021)
+
+    - Raising minimum version of SQLAlchemy to match used features.
+
 - v1.2.5 (July 20,2021)
 
     - Various custom command bug fixes and additions.
