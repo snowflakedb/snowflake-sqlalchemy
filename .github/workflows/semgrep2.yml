@@ -7,7 +7,7 @@ jobs:
   semgrep:
     name: Scan
     runs-on: ubuntu-latest
-    if: (github.actor != 'dependabot[bot]')
+    if: (github.actor != 'dependabot[bot]') && (github.event.pull_request.user.login != 'whitesource-for-github-com[bot]')
     steps:
       - uses: actions/checkout@v2
       - uses: returntocorp/semgrep-action@v1
