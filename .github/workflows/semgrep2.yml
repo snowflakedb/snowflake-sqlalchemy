@@ -1,7 +1,6 @@
 name: Semgrep
 
-on:
-  pull_request: {}
+on: pull_request
 
 jobs:
   semgrep:
