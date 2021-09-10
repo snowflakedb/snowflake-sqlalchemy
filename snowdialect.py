@@ -19,6 +19,7 @@ from sqlalchemy.engine import default, reflection
 from sqlalchemy.schema import Table
 from sqlalchemy.sql import text
 from sqlalchemy.sql.elements import quoted_name
+from sqlalchemy.sql.sqltypes import String
 from sqlalchemy.types import (
     BIGINT,
     BINARY,
@@ -102,7 +103,7 @@ class SnowflakeDialect(default.DefaultDialect):
     #  unicode strings
     supports_unicode_statements = True
     supports_unicode_binds = True
-    returns_unicode_strings = True
+    returns_unicode_strings = String.RETURNS_UNICODE
     description_encoding = None
 
     # No lastrowid support. See SNOW-11155

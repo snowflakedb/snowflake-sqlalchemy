@@ -4,8 +4,9 @@
 # Copyright (c) 2012-2019 Snowflake Computing Inc. All right reserved.
 #
 
+import enum
 import pytest
-from sqlalchemy import Column, ForeignKey, Integer, Sequence, String
+from sqlalchemy import Column, ForeignKey, Integer, Sequence, String, Enum
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session, relationship
 
@@ -16,12 +17,17 @@ def test_basic_orm(engine_testaccount):
     """
     Base = declarative_base()
 
+    class UserStatus(enum.Enum):
+        ACTIVE = "active",
+        INACTIVE = "inactive"
+
     class User(Base):
         __tablename__ = 'user'
 
         id = Column(Integer, Sequence('user_id_seq'), primary_key=True)
         name = Column(String)
         fullname = Column(String)
+        status = Column(Enum(UserStatus), default=UserStatus.ACTIVE)
 
         def __repr__(self):
             return "<User(%r, %r)>" % (self.name, self.fullname)
