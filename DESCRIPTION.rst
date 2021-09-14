@@ -10,6 +10,10 @@ https://github.com/snowflakedb/snowflake-sqlalchemy
 Release Notes
 -------------------------------------------------------------------------------
 
+- v1.3.2 (September 14,2021)
+
+    - Fixed a breaking change introduced in SQLAlchemy 1.4 that changed the behavior of returns_unicode_strings.
+
 - v1.3.1 (July 23,2021)
 
     - Raising minimum version of SQLAlchemy to match used features.
