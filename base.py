@@ -288,6 +288,12 @@ class SnowflakeCompiler(compiler.SQLCompiler):
                                                     external_stage.path,
                                                     external_stage.file_format)
 
+    def visit_json_getitem_op_binary(self, binary, operator, **kw):
+        return '%s[%s]' % (
+            self.process(binary.left, **kw),
+            self.process(binary.right, **kw)
+        )
+
     def delete_extra_from_clause(self, delete_stmt, from_table,
                                  extra_froms, from_hints, **kw):
         return "USING " + ', '.join(
