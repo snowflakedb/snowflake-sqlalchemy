@@ -265,3 +265,37 @@ def test_schema_including_dot(engine_testaccount, db_parameters):
         'SELECT {db}."{schema}.{schema}".{db}.users.id'.format(
             db=db_parameters['database'].lower(),
             schema=db_parameters['schema'].lower()))
+
+
+def test_schema_translate_map(engine_testaccount, db_parameters):
+    """
+    Test schema translate map execution option works replaces schema correctly
+    """
+    Base = declarative_base()
+
+    namespace = '{0}.{1}'.format(
+        db_parameters['database'], db_parameters['schema'])
+    schema_map = 'A'
+
+    class User(Base):
+        __tablename__ = 'users'
+        __table_args__ = {
+            'schema': schema_map
+        }
+
+        id = Column(Integer, Sequence('user_id_orm_seq', schema=namespace),
+                    primary_key=True)
+        name = Column(String)
+        fullname = Column(String)
+
+    with engine_testaccount.connect().execution_options(
+            schema_translate_map={schema_map: db_parameters['schema']}) as con:
+        session = Session(bind=con)
+        Base.metadata.create_all(con)
+        query = session.query(User.id)
+
+        # assert the precompiled query contains the schema_map and not the actual schema
+        assert str(query).startswith(f'SELECT "{schema_map.upper()}".{User.__tablename__}.id')
+
+        # run query and see it works
+        query.all()
