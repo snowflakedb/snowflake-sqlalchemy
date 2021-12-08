@@ -6,7 +6,7 @@
 
 import enum
 import pytest
-from sqlalchemy import Column, ForeignKey, Integer, Sequence, String, Enum
+from sqlalchemy import Column, ForeignKey, Integer, Sequence, String, Enum, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session, relationship
 
@@ -267,14 +267,13 @@ def test_schema_including_dot(engine_testaccount, db_parameters):
             schema=db_parameters['schema'].lower()))
 
 
-def test_schema_translate_map(engine_testaccount, db_parameters):
+def test_schema_translate_map(engine_testaccount, db_parameters, sql_compiler):
     """
     Test schema translate map execution option works replaces schema correctly
     """
     Base = declarative_base()
 
-    namespace = '{0}.{1}'.format(
-        db_parameters['database'], db_parameters['schema'])
+    namespace = f"{db_parameters['database']}.{db_parameters['schema']}"
     schema_map = 'A'
 
     class User(Base):
@@ -292,10 +291,22 @@ def test_schema_translate_map(engine_testaccount, db_parameters):
             schema_translate_map={schema_map: db_parameters['schema']}) as con:
         session = Session(bind=con)
         Base.metadata.create_all(con)
-        query = session.query(User.id)
+        try:
+            query = session.query(User)
 
-        # assert the precompiled query contains the schema_map and not the actual schema
-        assert str(query).startswith(f'SELECT "{schema_map.upper()}".{User.__tablename__}.id')
+            # insert some data in a way that makes sure that we're working in the right testing schema
+            con.execute(text(f"insert into {db_parameters['schema']}.{User.__tablename__} values (0, 'testuser', 'test_user')"))
 
-        # run query and see it works
-        query.all()
+            # assert the precompiled query contains the schema_map and not the actual schema
+            assert str(query).startswith(f'SELECT "{schema_map}".{User.__tablename__}')
+
+            # run query and see that schema translation was done corectly
+            results = query.all()
+            assert len(results) == 1
+            user = results.pop()
+            assert user.id == 0
+            assert user.name == "testuser"
+            assert user.fullname == "test_user"
+        finally:
+            Base.metadata.drop_all(con)
+
