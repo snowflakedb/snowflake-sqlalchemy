@@ -140,7 +140,11 @@ class SnowflakeIdentifierPreparer(compiler.IdentifierPreparer):
                 pre_idx += 1
         if pre_idx < idx:
             ret.append(schema[pre_idx:idx])
-        return ret
+
+        # convert the returning strings back to quoted_name types, and assign the original 'quote' attribute on it
+        quoted_ret = [quoted_name(value, quote=getattr(schema, 'quote', None)) for value in ret]
+
+        return quoted_ret
 
 
 class SnowflakeCompiler(compiler.SQLCompiler):
