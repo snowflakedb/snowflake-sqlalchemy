@@ -10,6 +10,10 @@ https://github.com/snowflakedb/snowflake-sqlalchemy
 Release Notes
 -------------------------------------------------------------------------------
 
+- v1.3.3(December 19,2021)
+
+   - Fixed an issue where quote arguments were stripped from identifiers.
+   
 - v1.3.2 (September 14,2021)
 
     - Fixed a breaking change introduced in SQLAlchemy 1.4 that changed the behavior of returns_unicode_strings.
