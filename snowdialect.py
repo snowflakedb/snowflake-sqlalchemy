@@ -44,7 +44,7 @@ from .base import (
     SnowflakeIdentifierPreparer,
     SnowflakeTypeCompiler,
 )
-from .custom_types import ARRAY, OBJECT, TIMESTAMP_LTZ, TIMESTAMP_NTZ, TIMESTAMP_TZ, VARIANT
+from .custom_types import ARRAY, OBJECT, TIMESTAMP_LTZ, TIMESTAMP_NTZ, TIMESTAMP_TZ, VARIANT, GEOGRAPHY
 
 colspecs = {}
 
@@ -82,6 +82,7 @@ ischema_names = {
     'VARIANT': VARIANT,
     'OBJECT': OBJECT,
     'ARRAY': ARRAY,
+    'GEOGRAPHY': GEOGRAPHY,
 }
 
 

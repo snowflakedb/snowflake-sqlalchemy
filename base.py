@@ -487,6 +487,8 @@ class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
     def visit_TIMESTAMP(self, type_, **kw):
         return "TIMESTAMP"
 
+    def visit_GEOGRAPHY(self, type_, **kw):
+        return "GEOGRAPHY"
 
 construct_arguments = [
     (Table, {
