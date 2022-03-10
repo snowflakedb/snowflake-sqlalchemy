@@ -428,6 +428,24 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
                  in file_format.formatter.options.items()])
         )
 
+    def visit_drop_table_comment(self, drop, **kw):
+        """Snowflake does not support setting table comments as NULL.
+
+        Reflection has to account for this and convert any empty comments to NULL.
+        """
+        table_name = self.preparer.format_table(drop.element)
+        return "COMMENT ON TABLE {} IS ''".format(table_name)
+
+    def visit_drop_column_comment(self, drop, **kw):
+        """Snowflake does not support directly setting column comments as NULL.
+
+        Instead we are forced to use the ALTER COLUMN ... UNSET COMMENT instead.
+        """
+        return "ALTER TABLE {} ALTER COLUMN {} UNSET COMMENT".format(
+            self.preparer.format_table(drop.element.table),
+            self.preparer.format_column(drop.element)
+        )
+
 
 class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
     def visit_BYTEINT(self, type_, **kw):
