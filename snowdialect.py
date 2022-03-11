@@ -91,6 +91,9 @@ class SnowflakeDialect(default.DefaultDialect):
     max_identifier_length = 65535
     cte_follows_insert = True
 
+    # TODO: support SQL caching, for more info see: https://docs.sqlalchemy.org/en/14/core/connections.html#caching-for-third-party-dialects
+    supports_statement_cache = False
+
     encoding = UTF8
     default_paramstyle = 'pyformat'
     colspecs = colspecs
