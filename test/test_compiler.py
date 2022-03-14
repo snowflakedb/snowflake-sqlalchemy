@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from sqlalchemy import Integer, String, and_, select
+from sqlalchemy import Integer, JSON, String, and_, select
 from sqlalchemy.sql import column, quoted_name, table
 from sqlalchemy.testing import AssertsCompiledSQL
 
@@ -9,7 +9,8 @@ table1 = table(
     'table1',
     column('id', Integer),
     column('name', String),
-    column('value', Integer)
+    column('value', Integer),
+    column('metadata', JSON)
 )
 
 table2 = table(
@@ -18,7 +19,6 @@ table2 = table(
     column('name', String),
     column('value', Integer)
 )
-
 
 class TestSnowflakeCompiler(AssertsCompiledSQL):
     __dialect__ = "snowflake"
@@ -52,6 +52,15 @@ class TestSnowflakeCompiler(AssertsCompiledSQL):
             statement,
             "UPDATE table1 SET name=table2.name FROM table2 "
             "WHERE table1.id = table2.name"
+        )
+
+
+    def test_json_getitem(self):
+        statement = table1.select() \
+            .with_only_columns([table1.c.metadata['size'].label('size')])
+        self.assert_compile(
+            statement,
+            "SELECT table1.metadata['size'] AS size FROM table1"
         )
 
 
