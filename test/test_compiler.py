@@ -18,7 +18,7 @@ table2 = table(
     column('id', Integer),
     column('name', String),
     column('value', Integer),
-    schema="test"
+    schema="test",
 )
 
 
