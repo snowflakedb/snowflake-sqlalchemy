@@ -449,6 +449,8 @@ def test_get_foreign_keys(engine_testaccount):
         foreign_keys = inspector.get_foreign_keys('addresses')
         assert foreign_keys[0]['name'] == fk_name
         assert foreign_keys[0]['constrained_columns'] == ['user_id']
+        assert foreign_keys[0]['referred_table'] == 'users'
+        assert foreign_keys[0]['referred_schema'] == None
     finally:
         addresses.drop(engine_testaccount)
         users.drop(engine_testaccount)
