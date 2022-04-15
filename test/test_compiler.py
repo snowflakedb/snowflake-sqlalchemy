@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from sqlalchemy import Integer, String, and_, select
+from sqlalchemy.schema import DropColumnComment, DropTableComment
 from sqlalchemy.sql import column, quoted_name, table
 from sqlalchemy.testing import AssertsCompiledSQL
 
@@ -16,7 +17,8 @@ table2 = table(
     'table2',
     column('id', Integer),
     column('name', String),
-    column('value', Integer)
+    column('value', Integer),
+    schema="test",
 )
 
 
@@ -27,7 +29,7 @@ class TestSnowflakeCompiler(AssertsCompiledSQL):
         statement = table1.delete().where(table1.c.id == table2.c.id)
         self.assert_compile(
             statement,
-            "DELETE FROM table1 USING table2 WHERE table1.id = table2.id",
+            "DELETE FROM table1 USING test.table2 WHERE table1.id = test.table2.id",
             dialect='snowflake'
         )
 
@@ -39,8 +41,8 @@ class TestSnowflakeCompiler(AssertsCompiledSQL):
         ))
         self.assert_compile(
             statement,
-            "DELETE FROM table1 USING table2 WHERE table1.id = table2.id "
-            "AND table1.name = table2.name "
+            "DELETE FROM table1 USING test.table2 WHERE table1.id = test.table2.id "
+            "AND table1.name = test.table2.name "
             "AND table1.id >= %(id_1)s",
         )
 
@@ -50,9 +52,17 @@ class TestSnowflakeCompiler(AssertsCompiledSQL):
             .where(table1.c.id == table2.c.name)
         self.assert_compile(
             statement,
-            "UPDATE table1 SET name=table2.name FROM table2 "
-            "WHERE table1.id = table2.name"
+            "UPDATE table1 SET name=test.table2.name FROM test.table2 "
+            "WHERE table1.id = test.table2.name"
         )
+
+    def test_drop_table_comment(self):
+        self.assert_compile(DropTableComment(table1), "COMMENT ON TABLE table1 IS ''")
+        self.assert_compile(DropTableComment(table2), "COMMENT ON TABLE test.table2 IS ''")
+
+    def test_drop_column_comment(self):
+        self.assert_compile(DropColumnComment(table1.c.id), "ALTER TABLE table1 ALTER COLUMN id UNSET COMMENT")
+        self.assert_compile(DropColumnComment(table2.c.id), "ALTER TABLE test.table2 ALTER COLUMN id UNSET COMMENT")
 
 
 def test_quoted_name_label(engine_testaccount):
