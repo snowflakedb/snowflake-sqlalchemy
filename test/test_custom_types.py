@@ -10,6 +10,7 @@ def test_string_conversions():
         'TIMESTAMP_TZ',
         'TIMESTAMP_LTZ',
         'TIMESTAMP_NTZ',
+        'GEOGRAPHY',
     ]
     sf_types = [
         'TEXT',
