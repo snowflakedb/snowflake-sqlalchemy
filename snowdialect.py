@@ -312,7 +312,7 @@ class SnowflakeDialect(default.DefaultDialect):
                     # referred schema should be None in context where it doesn't need to be specified
                     # https://docs.sqlalchemy.org/en/14/core/reflection.html#reflection-schema-qualified-interaction
                     'referred_schema': (referred_schema
-                                        if referred_schema not in [self.default_schema_name, current_schema]
+                                        if referred_schema not in (self.default_schema_name, current_schema)
                                         else None),
                     'referred_table': self.normalize_name(row['pk_table_name']),
                     'referred_columns': [self.normalize_name(row['pk_column_name'])],
