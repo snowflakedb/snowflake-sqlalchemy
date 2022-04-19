@@ -26,9 +26,11 @@ from sqlalchemy import (
     LargeBinary,
     MetaData,
     Numeric,
+    PrimaryKeyConstraint,
     Sequence,
     String,
     Table,
+    UniqueConstraint,
     create_engine,
     dialects,
     inspect,
@@ -40,7 +42,7 @@ from sqlalchemy.sql import and_, not_, or_, select
 THIS_DIR = os.path.dirname(os.path.realpath(__file__))
 
 
-def _create_users_addresses_tables(engine_testaccount, metadata, fk=None):
+def _create_users_addresses_tables(engine_testaccount, metadata, fk=None, pk=None, uq=None):
     users = Table('users', metadata,
                   Column('id', Integer, Sequence('user_id_seq'),
                          primary_key=True),
@@ -49,11 +51,12 @@ def _create_users_addresses_tables(engine_testaccount, metadata, fk=None):
                   )
 
     addresses = Table('addresses', metadata,
-                      Column('id', Integer, Sequence('address_id_seq'),
-                             primary_key=True),
+                      Column('id', Integer, Sequence('address_id_seq')),
                       Column('user_id', None,
                              ForeignKey('users.id', name=fk)),
-                      Column('email_address', String, nullable=False)
+                      Column('email_address', String, nullable=False),
+                      PrimaryKeyConstraint('id', name=pk),
+                      UniqueConstraint('email_address', name=uq)
                       )
     metadata.create_all(engine_testaccount)
     return users, addresses
@@ -412,9 +415,11 @@ def test_get_indexes(engine_testaccount):
         users.drop(engine_testaccount)
 
 
-def test_get_primary_keys(engine_testaccount):
+def test_get_check_constraints(engine_testaccount):
     """
-    Tests get primary keys
+    Tests get check constraints
+
+    NOTE: Snowflake doesn't support check constraints
     """
     metadata = MetaData()
     users, addresses = _create_users_addresses_tables_without_sequence(
@@ -422,13 +427,55 @@ def test_get_primary_keys(engine_testaccount):
         metadata)
     try:
         inspector = inspect(engine_testaccount)
+        assert inspector.get_check_constraints("users") == []
+
+    finally:
+        addresses.drop(engine_testaccount)
+        users.drop(engine_testaccount)
+
+
+def test_get_primary_keys(engine_testaccount):
+    """
+    Tests get primary keys
+    """
+    metadata = MetaData()
+    pk_name = "pk_addresses"
+    users, addresses = _create_users_addresses_tables(
+        engine_testaccount,
+        metadata,
+        pk=pk_name)
+    try:
+        inspector = inspect(engine_testaccount)
 
         primary_keys = inspector.get_pk_constraint('users')
+        assert primary_keys['name'].startswith("SYS_CONSTRAINT_")
         assert primary_keys['constrained_columns'] == ['id']
 
         primary_keys = inspector.get_pk_constraint('addresses')
+        assert primary_keys['name'] == pk_name
         assert primary_keys['constrained_columns'] == ['id']
 
+    finally:
+        addresses.drop(engine_testaccount)
+        users.drop(engine_testaccount)
+
+
+def test_get_unique_constraints(engine_testaccount):
+    """
+    Tests unqiue constraints
+    """
+    metadata = MetaData()
+    uq_name = 'uq_addresses_email_address'
+    users, addresses = _create_users_addresses_tables(
+        engine_testaccount,
+        metadata,
+        uq=uq_name)
+
+    try:
+        inspector = inspect(engine_testaccount)
+        unique_constraints = inspector.get_unique_constraints('addresses')
+        assert unique_constraints[0]['name'] == uq_name
+        assert unique_constraints[0]['column_names'] == ['email_address']
     finally:
         addresses.drop(engine_testaccount)
         users.drop(engine_testaccount)
@@ -451,6 +498,38 @@ def test_get_foreign_keys(engine_testaccount):
         assert foreign_keys[0]['constrained_columns'] == ['user_id']
         assert foreign_keys[0]['referred_table'] == 'users'
         assert foreign_keys[0]['referred_schema'] == None
+    finally:
+        addresses.drop(engine_testaccount)
+        users.drop(engine_testaccount)
+
+
+def test_naming_convention_constraint_names(engine_testaccount):
+    metadata = MetaData(naming_convention={
+        "uq": "uq_%(table_name)s_%(column_0_name)s",
+        "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
+        "pk": "pk_%(table_name)s"
+    })
+
+    users = Table(
+        # long name to force foreign key over the max identifier length
+        'users' + ("s" * 250),
+        metadata,
+        Column('id', Integer, primary_key=True),
+    )
+    addresses = Table(
+        'addresses',
+        metadata,
+        Column('id', Integer, primary_key=True),
+        Column('user_id', None, ForeignKey(users.c.id)),
+        Column('email_address', String, nullable=False, unique=True)
+    )
+    metadata.create_all(engine_testaccount)
+
+    try:
+        inspector = inspect(engine_testaccount)
+        assert inspector.get_unique_constraints("addresses")[0]["name"] == "uq_addresses_email_address"
+        assert inspector.get_pk_constraint("addresses")["name"] == "pk_addresses"
+        assert inspector.get_foreign_keys("addresses")[0]["name"] == "fk_addresses_user_id_users" + ("s" * 221) + "_ee5a"
     finally:
         addresses.drop(engine_testaccount)
         users.drop(engine_testaccount)
