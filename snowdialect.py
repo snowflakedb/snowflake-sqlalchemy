@@ -4,6 +4,7 @@
 # Copyright (c) 2012-2019 Snowflake Computing Inc. All right reserved.
 #
 
+from collections import defaultdict
 import operator
 from functools import reduce
 
@@ -89,7 +90,7 @@ ischema_names = {
 class SnowflakeDialect(default.DefaultDialect):
     name = 'snowflake'
     driver = 'snowflake'
-    max_identifier_length = 65535
+    max_identifier_length = 255
     cte_follows_insert = True
 
     # TODO: support SQL caching, for more info see: https://docs.sqlalchemy.org/en/14/core/connections.html#caching-for-third-party-dialects
@@ -276,6 +277,11 @@ class SnowflakeDialect(default.DefaultDialect):
         return []
 
     @reflection.cache
+    def get_check_constraints(self, connection, table_name, schema, **kw):
+        # check constraints are not supported by Snowflake
+        return []
+
+    @reflection.cache
     def _get_schema_primary_keys(self, connection, schema, **kw):
         result = connection.execute(text(
             "SHOW /* sqlalchemy:_get_schema_primary_keys */PRIMARY KEYS IN SCHEMA {0}".format(schema)
@@ -284,7 +290,7 @@ class SnowflakeDialect(default.DefaultDialect):
         for row in result:
             table_name = self.normalize_name(row['table_name'])
             if table_name not in ans:
-                ans[table_name] = {'constrained_columns': [], 'name': None}
+                ans[table_name] = {'constrained_columns': [], 'name': self.normalize_name(row['constraint_name'])}
             ans[table_name]['constrained_columns'].append(self.normalize_name(row['column_name']))
         return ans
 
@@ -299,6 +305,40 @@ class SnowflakeDialect(default.DefaultDialect):
             **kw
         ).get(table_name, {'constrained_columns': [],
                            'name': None})
+
+    @reflection.cache
+    def _get_schema_unique_constraints(self, connection, schema, **kw):
+        result = connection.execute(text(
+            "SHOW /* sqlalchemy:_get_schema_unique_constraints */ UNIQUE KEYS IN SCHEMA {0}".format(schema)
+        ))
+        unique_constraints = {}
+        for row in result:
+            name = self.normalize_name(row['constraint_name'])
+            if name not in unique_constraints:
+                unique_constraints[name] = {
+                    'column_names': [self.normalize_name(row['column_name'])],
+                    'name': name,
+                    'table_name': self.normalize_name(row['table_name'])
+                }
+            else:
+                unique_constraints[name]['column_names'].append(self.normalize_name(row['column_name']))
+
+        ans = defaultdict(list)
+        for constraint in unique_constraints.values():
+            table_name = constraint.pop('table_name')
+            ans[table_name].append(constraint)
+        return ans
+
+    def get_unique_constraints(self, connection, table_name, schema, **kw):
+        schema = schema or self.default_schema_name
+        current_database, current_schema = self._current_database_schema(connection, **kw)
+        full_schema_name = self._denormalize_quote_join(
+            current_database, schema if schema else current_schema)
+        return self._get_schema_unique_constraints(
+            connection,
+            self.denormalize_name(full_schema_name),
+            **kw
+        ).get(table_name, [])
 
     @reflection.cache
     def _get_schema_foreign_keys(self, connection, schema, **kw):
