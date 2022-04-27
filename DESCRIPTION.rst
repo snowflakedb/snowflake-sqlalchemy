@@ -10,6 +10,13 @@ https://github.com/snowflakedb/snowflake-sqlalchemy
 Release Notes
 -------------------------------------------------------------------------------
 
+- v1.3.4(April 27,2022)
+
+   - fix dialect identifier max length and relevant schema introspection.
+   - Add geography support to snowflake-sqlalchemy.
+   - Set foreign key referred schema to None when needed.
+   - set supports_statement_cache=False in dialect class.
+   
 - v1.3.3(December 19,2021)
 
    - Fixed an issue where quote arguments were stripped from identifiers.
