@@ -12,9 +12,9 @@ Release Notes
 
 - v1.3.4(April 27,2022)
 
-   - fix dialect identifier max length and relevant schema introspection.
-   - Add geography support to snowflake-sqlalchemy.
-   - Set foreign key referred schema to None when needed.
+   - Fixed a bug where identifier max length was set to the wrong value and added relevant schema introspection
+   - Add support for geography type
+   - Fixed a bug where foreign key's referred schema was set incorrectly
    - set supports_statement_cache=False in dialect class.
    
 - v1.3.3(December 19,2021)
