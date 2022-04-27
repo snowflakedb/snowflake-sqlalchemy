@@ -10,6 +10,13 @@ https://github.com/snowflakedb/snowflake-sqlalchemy
 Release Notes
 -------------------------------------------------------------------------------
 
+- v1.3.4(April 27,2022)
+
+   - Fixed a bug where identifier max length was set to the wrong value and added relevant schema introspection
+   - Add support for geography type
+   - Fixed a bug where foreign key's referred schema was set incorrectly
+   - Disabled new SQLAlchemy option for statement caching until support gets added
+   
 - v1.3.3(December 19,2021)
 
    - Fixed an issue where quote arguments were stripped from identifiers.
