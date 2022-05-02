@@ -306,6 +306,9 @@ class SnowflakeCompiler(compiler.SQLCompiler):
                                  fromhints=from_hints, **kw)
             for t in extra_froms)
 
+    def get_from_hint_text(self, table, text):
+        return text
+
 
 class SnowflakeExecutionContext(default.DefaultExecutionContext):
     def fire_sequence(self, seq, type_):
