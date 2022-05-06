@@ -1,6 +1,6 @@
-.svn
+test/parameters*.py
+
 # Byte-compiled / optimized / DLL files
-.tox
 __pycache__/
 *.py[cod]
 *$py.class
@@ -81,7 +81,7 @@ celerybeat-schedule
 .env
 
 # virtualenv
-venv/
+venv*/
 ENV/
 
 # Spyder project settings
@@ -94,9 +94,14 @@ ENV/
 *.swp
 
 # others
+.tox/
 generated_version.py
 *coverage.xml
-parameters.py
+
+# Editor specific
+.idea/
+.vscode/
+*.code-workspace
 
 # WhiteSource Scan
 wss-*agent.config
