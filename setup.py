@@ -83,7 +83,7 @@ setup(
     ],
     extras_require={
         'development': [
-            'pytest<6.1.0',
+            'pytest<7.2.0',
             'pytest-cov',
             'pytest-rerunfailures',
             'pytest-timeout',
