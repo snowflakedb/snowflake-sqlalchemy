@@ -74,4 +74,4 @@ jobs:
          PARAMETERS_SECRET: ${{ secrets.PARAMETERS_SECRET }}
        run: |
          gpg --quiet --batch --yes --decrypt --passphrase="$PARAMETERS_SECRET" \
-         .github/workflows/parameters/public/parameters_${{ matrix.cloud-provider }}.py.gpg > test/parameters.py
+         .github/workflows/parameters/parameters_${{ matrix.cloud-provider }}.py.gpg > test/parameters.py
