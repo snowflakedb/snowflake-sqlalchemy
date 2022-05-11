@@ -508,6 +508,7 @@ class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
     def visit_GEOGRAPHY(self, type_, **kw):
         return "GEOGRAPHY"
 
+
 construct_arguments = [
     (Table, {
         "clusterby": None

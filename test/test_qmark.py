@@ -5,8 +5,6 @@
 #
 import os
 
-from parameters import CONNECTION_PARAMETERS
-
 THIS_DIR = os.path.dirname(os.path.realpath(__file__))
 
 

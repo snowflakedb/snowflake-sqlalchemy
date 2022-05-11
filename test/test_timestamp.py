@@ -7,13 +7,13 @@
 from datetime import datetime
 
 import pytz
-from parameters import CONNECTION_PARAMETERS
 from snowflake.sqlalchemy import TIMESTAMP_LTZ, TIMESTAMP_NTZ, TIMESTAMP_TZ
 from sqlalchemy import Column, Integer, MetaData, Table
 from sqlalchemy.sql import select
 
 PST_TZ = "America/Los_Angeles"
 JST_TZ = "Asia/Tokyo"
+
 
 def test_create_table_timestamp_datatypes(engine_testaccount):
     """

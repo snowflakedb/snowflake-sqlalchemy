@@ -279,7 +279,7 @@ def test_pandas_make_pd_writer(engine_testaccount, quote_identifiers):
 
     try:
         if quote_identifiers:
-            with pytest.raises(ProgrammingError, match=r".*SQL compilation error.*\ninvalid identifier '\"a\"'.*") as e:
+            with pytest.raises(ProgrammingError, match=r".*SQL compilation error.*\ninvalid identifier '\"a\"'.*"):
                 write_to_db()
         else:
             write_to_db()

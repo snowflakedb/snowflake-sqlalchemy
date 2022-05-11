@@ -186,7 +186,7 @@ def test_insert_tables(engine_testaccount):
         # Note: SQLAlchemy 1.4 changed what ``inserted_primary_key`` returns
         #  a cast is here to make sure the test works with both older and newer
         #  versions
-        assert list(results.inserted_primary_key) == [1,], 'sequence value'
+        assert list(results.inserted_primary_key) == [1], 'sequence value'
         results.close()
 
         # inserts data with the given id
@@ -497,7 +497,7 @@ def test_get_foreign_keys(engine_testaccount):
         assert foreign_keys[0]['name'] == fk_name
         assert foreign_keys[0]['constrained_columns'] == ['user_id']
         assert foreign_keys[0]['referred_table'] == 'users'
-        assert foreign_keys[0]['referred_schema'] == None
+        assert foreign_keys[0]['referred_schema'] is None
     finally:
         addresses.drop(engine_testaccount)
         users.drop(engine_testaccount)

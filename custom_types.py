@@ -48,5 +48,6 @@ class TIMESTAMP_LTZ(SnowflakeType):
 class TIMESTAMP_NTZ(SnowflakeType):
     __visit_name__ = 'TIMESTAMP_NTZ'
 
+
 class GEOGRAPHY(SnowflakeType):
     __visit_name__ = 'GEOGRAPHY'
