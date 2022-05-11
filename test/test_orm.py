@@ -5,8 +5,9 @@
 #
 
 import enum
+
 import pytest
-from sqlalchemy import Column, ForeignKey, Integer, Sequence, String, Enum, text
+from sqlalchemy import Column, Enum, ForeignKey, Integer, Sequence, String, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session, relationship
 
@@ -30,7 +31,7 @@ def test_basic_orm(engine_testaccount):
         status = Column(Enum(UserStatus), default=UserStatus.ACTIVE)
 
         def __repr__(self):
-            return "<User(%r, %r)>" % (self.name, self.fullname)
+            return "<User({!r}, {!r})>".format(self.name, self.fullname)
 
     Base.metadata.create_all(engine_testaccount)
     try:
@@ -60,7 +61,7 @@ def test_orm_one_to_many_relationship(engine_testaccount):
         fullname = Column(String)
 
         def __repr__(self):
-            return "<User(%r, %r)>" % (self.name, self.fullname)
+            return "<User({!r}, {!r})>".format(self.name, self.fullname)
 
     class Address(Base):
         __tablename__ = 'address'
@@ -129,7 +130,7 @@ def test_delete_cascade(engine_testaccount):
                                  cascade="all, delete, delete-orphan")
 
         def __repr__(self):
-            return "<User(%r, %r)>" % (self.name, self.fullname)
+            return "<User({!r}, {!r})>".format(self.name, self.fullname)
 
     class Address(Base):
         __tablename__ = 'address'
@@ -186,7 +187,7 @@ def test_orm_query(engine_testaccount):
         fullname = Column(String)
 
         def __repr__(self):
-            return "<User(%r, %r)>" % (self.name, self.fullname)
+            return "<User({!r}, {!r})>".format(self.name, self.fullname)
 
     Base.metadata.create_all(engine_testaccount)
 
@@ -208,7 +209,7 @@ def test_schema_including_db(engine_testaccount, db_parameters):
     """
     Base = declarative_base()
 
-    namespace = '{0}.{1}'.format(
+    namespace = '{}.{}'.format(
         db_parameters['database'], db_parameters['schema'])
 
     class User(Base):
@@ -309,4 +310,3 @@ def test_schema_translate_map(engine_testaccount, db_parameters, sql_compiler):
             assert user.fullname == "test_user"
         finally:
             Base.metadata.drop_all(con)
-

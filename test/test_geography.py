@@ -1,11 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+from json import loads
+
 from parameters import CONNECTION_PARAMETERS
 from snowflake.sqlalchemy import GEOGRAPHY
 from sqlalchemy import Column, Integer, MetaData, Table
 from sqlalchemy.sql import select
-from json import loads
+
 
 def test_create_table_geography_datatypes(engine_testaccount):
     """
@@ -64,4 +66,3 @@ def test_inspect_geography_datatypes(engine_testaccount):
         assert loads(rows[2]) == loads(test_point1)
     finally:
         test_geography.drop(engine_testaccount)
-

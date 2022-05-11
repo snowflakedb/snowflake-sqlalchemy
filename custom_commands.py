@@ -44,15 +44,15 @@ class MergeInto(UpdateBase):
         def __repr__(self):
             if self.command == 'INSERT':
                 sets, sets_tos = zip(*self.set.items())
-                return "WHEN NOT MATCHED%s THEN %s (%s) VALUES (%s)" % (
+                return "WHEN NOT MATCHED{} THEN {} ({}) VALUES ({})".format(
                     " AND %s" % self.predicate if self.predicate is not None else "",
                     self.command,
                     ", ".join(sets),
                     ", ".join(map(str, sets_tos)))
             else:
                 # WHEN MATCHED clause
-                sets = ", ".join(["%s = %s" % (set[0], set[1]) for set in self.set.items()]) if self.set else ""
-                return "WHEN MATCHED%s THEN %s%s" % (" AND %s" % self.predicate if self.predicate is not None else "",
+                sets = ", ".join(["{} = {}".format(set[0], set[1]) for set in self.set.items()]) if self.set else ""
+                return "WHEN MATCHED{} THEN {}{}".format(" AND %s" % self.predicate if self.predicate is not None else "",
                                                      self.command,
                                                      " SET %s" % sets if self.set else "")
 
@@ -66,7 +66,7 @@ class MergeInto(UpdateBase):
 
     def __repr__(self):
         clauses = " ".join([repr(clause) for clause in self.clauses])
-        return "MERGE INTO %s USING %s ON %s" % (self.target, self.source, self.on) + (
+        return "MERGE INTO {} USING {} ON {}".format(self.target, self.source, self.on) + (
             ' ' + clauses if clauses else ''
         )
 

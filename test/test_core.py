@@ -605,14 +605,14 @@ def test_view_definition(engine_testaccount, db_parameters):
     test_table_name = "test_table_sqlalchemy"
     test_view_name = "testview_sqlalchemy"
     engine_testaccount.execute("""
-CREATE OR REPLACE TABLE {0} (
+CREATE OR REPLACE TABLE {} (
     id INTEGER,
     name STRING
 )
 """.format(test_table_name))
     sql = """
-CREATE OR REPLACE VIEW {0} AS
-SELECT * FROM {1} WHERE id > 10""".format(
+CREATE OR REPLACE VIEW {} AS
+SELECT * FROM {} WHERE id > 10""".format(
         test_view_name, test_table_name)
     engine_testaccount.execute(text(sql).execution_options(
         autocommit=True))
@@ -625,9 +625,9 @@ SELECT * FROM {1} WHERE id > 10""".format(
         assert inspector.get_view_names() == [test_view_name]
     finally:
         engine_testaccount.execute(text(
-            "DROP TABLE IF EXISTS {0}".format(test_table_name)))
+            "DROP TABLE IF EXISTS {}".format(test_table_name)))
         engine_testaccount.execute(text(
-            "DROP VIEW IF EXISTS {0}".format(test_view_name)))
+            "DROP VIEW IF EXISTS {}".format(test_view_name)))
 
 
 def test_view_comment_reading(engine_testaccount, db_parameters):
@@ -662,9 +662,9 @@ SELECT * FROM {} WHERE id > 10""".format(
         assert str(inspector.get_columns(test_table_name)) == str(inspector.get_columns(test_view_name))
     finally:
         engine_testaccount.execute(text(
-            "DROP TABLE IF EXISTS {0}".format(test_table_name)))
+            "DROP TABLE IF EXISTS {}".format(test_table_name)))
         engine_testaccount.execute(text(
-            "DROP VIEW IF EXISTS {0}".format(test_view_name)))
+            "DROP VIEW IF EXISTS {}".format(test_view_name)))
 
 
 @pytest.mark.skip("Temp table cannot be viewed for some reason")
@@ -673,7 +673,7 @@ def test_get_temp_table_names(engine_testaccount):
     temp_table_name = "temp_table"
     for idx in range(num_of_temp_tables):
         engine_testaccount.execute(text("""
-CREATE TEMPORARY TABLE {0} (col1 integer, col2 string)
+CREATE TEMPORARY TABLE {} (col1 integer, col2 string)
 """.format(temp_table_name + str(idx))).execution_options(
             autocommit=True))
     for row in engine_testaccount.execute("SHOW TABLES"):
@@ -690,7 +690,7 @@ def test_create_table_with_schema(engine_testaccount, db_parameters):
     metadata = MetaData()
     new_schema = db_parameters['schema'] + "_NEW"
     engine_testaccount.execute(text(
-        "CREATE OR REPLACE SCHEMA \"{0}\"".format(new_schema)))
+        "CREATE OR REPLACE SCHEMA \"{}\"".format(new_schema)))
     Table('users', metadata,
           Column('id', Integer, Sequence('user_id_seq'),
                  primary_key=True),
@@ -707,7 +707,7 @@ def test_create_table_with_schema(engine_testaccount, db_parameters):
     finally:
         metadata.drop_all(engine_testaccount)
         engine_testaccount.execute(
-            text("DROP SCHEMA IF EXISTS \"{0}\"".format(new_schema)))
+            text("DROP SCHEMA IF EXISTS \"{}\"".format(new_schema)))
 
 
 @pytest.mark.skipif(os.getenv("SNOWFLAKE_GCP") is not None, reason="PUT and GET is not supported for GCP yet")
@@ -740,24 +740,24 @@ how to integrate with SQLAlchemy core API yet.
 """)
 def test_transaction(engine_testaccount, db_parameters):
     engine_testaccount.execute(text("""
-CREATE TABLE {0} (c1 number)""".format(db_parameters['name'])))
+CREATE TABLE {} (c1 number)""".format(db_parameters['name'])))
     trans = engine_testaccount.connect().begin()
     try:
         engine_testaccount.execute(text("""
-INSERT INTO {0} VALUES(123)
+INSERT INTO {} VALUES(123)
         """.format(db_parameters['name'])))
         trans.commit()
         engine_testaccount.execute(text("""
-INSERT INTO {0} VALUES(456)
+INSERT INTO {} VALUES(456)
         """.format(db_parameters['name'])))
         trans.rollback()
         results = engine_testaccount.execute("""
-SELECT * FROM {0}
+SELECT * FROM {}
 """.format(db_parameters['name'])).fetchall()
         assert results == [(123,)]
     finally:
         engine_testaccount.execute(text("""
-DROP TABLE IF EXISTS {0}
+DROP TABLE IF EXISTS {}
 """.format(db_parameters['name'])))
 
 
@@ -934,7 +934,7 @@ def test_cache_time(engine_testaccount, db_parameters):
         harass_inspector()
         time2 = time.time() - m_time
         time1 = m_time - s_time
-        print("Ran inspector through tables twice, times:\n\tfirst: {0}\n\tsecond: {1}".format(time1, time2))
+        print("Ran inspector through tables twice, times:\n\tfirst: {}\n\tsecond: {}".format(time1, time2))
         if time2 < time1 * 0.01:
             outcome = True
             break
@@ -1131,7 +1131,7 @@ def test_comment_sqlalchemy(db_parameters, engine_testaccount, on_public_ci):
     con2 = None
     if not on_public_ci:
         con2 = engine2.connect()
-        con2.execute("CREATE SCHEMA IF NOT EXISTS {0}".format(new_schema))
+        con2.execute("CREATE SCHEMA IF NOT EXISTS {}".format(new_schema))
     inspector = inspect(engine_testaccount)
     metadata1 = MetaData()
     metadata2 = MetaData()
@@ -1161,7 +1161,7 @@ def test_comment_sqlalchemy(db_parameters, engine_testaccount, on_public_ci):
         mytable1.drop(engine_testaccount)
         if not on_public_ci:
             mytable2.drop(engine2)
-            con2.execute("DROP SCHEMA IF EXISTS {0}".format(new_schema))
+            con2.execute("DROP SCHEMA IF EXISTS {}".format(new_schema))
             con2.close()
         engine2.dispose()
 
@@ -1176,8 +1176,8 @@ def test_special_schema_character(db_parameters, on_public_ci):
     # Setup
     options = dict(**db_parameters)
     conn = connect(**options)
-    conn.cursor().execute("CREATE OR REPLACE DATABASE \"{0}\"".format(database))
-    conn.cursor().execute("CREATE OR REPLACE SCHEMA \"{0}\"".format(schema))
+    conn.cursor().execute("CREATE OR REPLACE DATABASE \"{}\"".format(database))
+    conn.cursor().execute("CREATE OR REPLACE SCHEMA \"{}\"".format(schema))
     conn.close()
     # Test
     options.update({'database': '"' + database + '"',
@@ -1192,7 +1192,7 @@ def test_special_schema_character(db_parameters, on_public_ci):
     sf_conn.close()
     # Teardown
     conn = connect(**options)
-    conn.cursor().execute("DROP DATABASE IF EXISTS \"{0}\"".format(database))
+    conn.cursor().execute("DROP DATABASE IF EXISTS \"{}\"".format(database))
     conn.close()
     assert [(database, schema)] == sf_connection == sa_connection
 
@@ -1289,7 +1289,7 @@ def test_get_too_many_columns(engine_testaccount, db_parameters):
             harass_inspector()
             time2 = time.time() - m_time
             time1 = m_time - s_time
-            print("Ran inspector through tables twice, times:\n\tfirst: {0}\n\tsecond: {1}".format(time1, time2))
+            print("Ran inspector through tables twice, times:\n\tfirst: {}\n\tsecond: {}".format(time1, time2))
             if time2 < time1 * 0.01:
                 outcome = True
                 break

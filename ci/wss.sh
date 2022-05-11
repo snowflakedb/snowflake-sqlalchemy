@@ -135,7 +135,7 @@ python.resolveHierarchyTree=false
 python.resolveSetupPyFiles=true
 python.runPipenvPreStep=false
 #python.IgnorePipenvInstallErrors=true
-python.resolveGlobalPackages=false  
+python.resolveGlobalPackages=false
 
 ###########################################################################################
 # Includes/Excludes Glob patterns - Please use only one exclude line and one include line #

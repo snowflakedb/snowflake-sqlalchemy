@@ -18,7 +18,7 @@ from snowflake.sqlalchemy import URL, dialect
 from sqlalchemy import create_engine
 
 if os.getenv('TRAVIS') == 'true':
-    TEST_SCHEMA = 'TRAVIS_JOB_{0}'.format(os.getenv('TRAVIS_JOB_ID'))
+    TEST_SCHEMA = 'TRAVIS_JOB_{}'.format(os.getenv('TRAVIS_JOB_ID'))
 else:
     TEST_SCHEMA = (
             'sqlalchemy_tests_' + str(uuid.uuid4()).replace('-', '_'))
@@ -182,7 +182,7 @@ def init_test_schema(request, db_parameters):
                 protocol=ret1['protocol']
         ) as con1:
             con1.cursor().execute(
-                "DROP SCHEMA IF EXISTS {0}".format(TEST_SCHEMA))
+                "DROP SCHEMA IF EXISTS {}".format(TEST_SCHEMA))
 
     request.addfinalizer(fin)
 

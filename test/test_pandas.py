@@ -148,7 +148,7 @@ def test_to_sql(db_parameters):
     engine.execute("""
 create or replace table src(c1 float)
  as select random(123) from table(generator(timelimit=>1))
- limit {0}
+ limit {}
 """.format(total_rows))
     engine.execute("""
 create or replace table dst(c1 float)
@@ -293,4 +293,3 @@ def test_pandas_make_pd_writer(engine_testaccount, quote_identifiers):
             assert len(results) == 10
     finally:
         engine_testaccount.execute(f"DROP TABLE IF EXISTS {table_name}")
-

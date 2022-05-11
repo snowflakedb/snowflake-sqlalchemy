@@ -4,8 +4,8 @@
 # Copyright (c) 2012-2019 Snowflake Computing Inc. All right reserved.
 #
 
-from collections import defaultdict
 import operator
+from collections import defaultdict
 from functools import reduce
 
 import sqlalchemy.types as sqltypes
@@ -45,7 +45,7 @@ from .base import (
     SnowflakeIdentifierPreparer,
     SnowflakeTypeCompiler,
 )
-from .custom_types import ARRAY, OBJECT, TIMESTAMP_LTZ, TIMESTAMP_NTZ, TIMESTAMP_TZ, VARIANT, GEOGRAPHY
+from .custom_types import ARRAY, GEOGRAPHY, OBJECT, TIMESTAMP_LTZ, TIMESTAMP_NTZ, TIMESTAMP_TZ, VARIANT
 
 colspecs = {}
 
@@ -173,7 +173,7 @@ class SnowflakeDialect(default.DefaultDialect):
                 opts['schema'] = name_spaces[1]
             else:
                 raise sa_exc.ArgumentError(
-                    "Invalid name space is specified: {0}".format(
+                    "Invalid name space is specified: {}".format(
                         opts['database']
                     ))
         if '.snowflakecomputing.com' not in opts['host'] and not opts.get(
@@ -209,7 +209,7 @@ class SnowflakeDialect(default.DefaultDialect):
         full_name = self._denormalize_quote_join(schema, object_name)
         try:
             results = connection.execute(
-                text("DESC {0} /* sqlalchemy:_has_object */ {1}".format(
+                text("DESC {} /* sqlalchemy:_has_object */ {}".format(
                     object_type, full_name)))
             row = results.fetchone()
             have = row is not None
@@ -284,7 +284,7 @@ class SnowflakeDialect(default.DefaultDialect):
     @reflection.cache
     def _get_schema_primary_keys(self, connection, schema, **kw):
         result = connection.execute(text(
-            "SHOW /* sqlalchemy:_get_schema_primary_keys */PRIMARY KEYS IN SCHEMA {0}".format(schema)
+            "SHOW /* sqlalchemy:_get_schema_primary_keys */PRIMARY KEYS IN SCHEMA {}".format(schema)
         ))
         ans = {}
         for row in result:
@@ -309,7 +309,7 @@ class SnowflakeDialect(default.DefaultDialect):
     @reflection.cache
     def _get_schema_unique_constraints(self, connection, schema, **kw):
         result = connection.execute(text(
-            "SHOW /* sqlalchemy:_get_schema_unique_constraints */ UNIQUE KEYS IN SCHEMA {0}".format(schema)
+            "SHOW /* sqlalchemy:_get_schema_unique_constraints */ UNIQUE KEYS IN SCHEMA {}".format(schema)
         ))
         unique_constraints = {}
         for row in result:
@@ -344,7 +344,7 @@ class SnowflakeDialect(default.DefaultDialect):
     def _get_schema_foreign_keys(self, connection, schema, **kw):
         _, current_schema = self._current_database_schema(connection, **kw)
         result = connection.execute(text(
-            "SHOW /* sqlalchemy:_get_schema_foreign_keys */ IMPORTED KEYS IN SCHEMA {0}".format(schema)
+            "SHOW /* sqlalchemy:_get_schema_foreign_keys */ IMPORTED KEYS IN SCHEMA {}".format(schema)
         ))
         foreign_key_map = {}
         for row in result:
@@ -559,7 +559,7 @@ class SnowflakeDialect(default.DefaultDialect):
         current_schema = schema
         if schema:
             cursor = connection.execute(text(
-                "SHOW /* sqlalchemy:get_table_names */ TABLES IN {0}".format(
+                "SHOW /* sqlalchemy:get_table_names */ TABLES IN {}".format(
                     self._denormalize_quote_join(schema))))
         else:
             cursor = connection.execute(text(
@@ -578,8 +578,8 @@ class SnowflakeDialect(default.DefaultDialect):
         schema = schema or self.default_schema_name
         if schema:
             cursor = connection.execute(text(
-                "SHOW /* sqlalchemy:get_view_names */ VIEWS IN {0}".format(
-                    self._denormalize_quote_join((schema)))))
+                "SHOW /* sqlalchemy:get_view_names */ VIEWS IN {}".format(
+                    self._denormalize_quote_join(schema))))
         else:
             cursor = connection.execute(text(
                 "SHOW /* sqlalchemy:get_view_names */ VIEWS"))
@@ -595,13 +595,13 @@ class SnowflakeDialect(default.DefaultDialect):
         if schema:
             cursor = connection.execute(text(
                 "SHOW /* sqlalchemy:get_view_definition */ VIEWS "
-                "LIKE '{0}' IN {1}".format(
+                "LIKE '{}' IN {}".format(
                     self._denormalize_quote_join(view_name),
                     self._denormalize_quote_join(schema))))
         else:
             cursor = connection.execute(text(
                 "SHOW /* sqlalchemy:get_view_definition */ VIEWS "
-                "LIKE '{0}'".format(
+                "LIKE '{}'".format(
                     self._denormalize_quote_join(view_name))))
 
         n2i = self.__class__._map_name_to_idx(cursor)
@@ -618,7 +618,7 @@ class SnowflakeDialect(default.DefaultDialect):
         if schema:
             cursor = connection.execute(text(
                 "SHOW /* sqlalchemy:get_temp_table_names */ TABLES "
-                "IN {0}".format(
+                "IN {}".format(
                     self._denormalize_quote_join(schema))))
         else:
             cursor = connection.execute(text(

@@ -4,12 +4,10 @@
 # Copyright (c) 2012-2019 Snowflake Computing Inc. All right reserved.
 #
 
-from sqlalchemy import exc
-
-from snowflake.connector.compat import IS_STR
-
 from urllib.parse import quote_plus
 
+from snowflake.connector.compat import IS_STR
+from sqlalchemy import exc
 from sqlalchemy.engine.url import _rfc_1738_quote
 
 
