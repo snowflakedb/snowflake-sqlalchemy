@@ -6,10 +6,10 @@
 
 
 def test_cte():
-    from snowflake.sqlalchemy import snowdialect
     from datetime import date
-    from sqlalchemy import (MetaData, Table, Column, Integer,
-                            Date, select, literal)
+
+    from snowflake.sqlalchemy import snowdialect
+    from sqlalchemy import Column, Date, Integer, MetaData, Table, literal, select
     metadata = MetaData()
     visitors = Table('visitors', metadata, Column('product_id', Integer), Column('date1', Date),
                      Column('count', Integer))

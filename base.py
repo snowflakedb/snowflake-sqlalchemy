@@ -99,7 +99,7 @@ class SnowflakeIdentifierPreparer(compiler.IdentifierPreparer):
         """
         Unilaterally identifier-quote any number of strings.
         """
-        return tuple([self.quote(i) for i in ids if i is not None])
+        return tuple(self.quote(i) for i in ids if i is not None)
 
     def quote_schema(self, schema, force=None):
         """

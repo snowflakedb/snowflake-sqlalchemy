@@ -20,8 +20,8 @@ def _get_engine_with_qmark(
     if account is not None:
         db_parameters['account'] = account
 
-    from sqlalchemy import create_engine
     from snowflake.sqlalchemy import URL
+    from sqlalchemy import create_engine
 
     engine = create_engine(URL(
         user=db_parameters['user'],

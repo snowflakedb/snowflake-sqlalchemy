@@ -812,9 +812,9 @@ def _get_engine_with_columm_metadata_cache(
     if account is not None:
         db_parameters['account'] = account
 
-    from sqlalchemy.pool import NullPool
-    from sqlalchemy import create_engine
     from snowflake.sqlalchemy import URL
+    from sqlalchemy import create_engine
+    from sqlalchemy.pool import NullPool
     engine = create_engine(URL(
         user=db_parameters['user'],
         password=db_parameters['password'],

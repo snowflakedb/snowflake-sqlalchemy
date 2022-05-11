@@ -1,4 +1,3 @@
-
 from snowflake.sqlalchemy import (
     AzureContainer,
     CreateFileFormat,

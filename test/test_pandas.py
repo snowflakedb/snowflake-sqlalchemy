@@ -92,8 +92,8 @@ def get_engine_with_numpy(db_parameters, user=None, password=None,
     """
     Creates a connection using the parameters defined in JDBC connect string
     """
-    from sqlalchemy import create_engine
     from snowflake.sqlalchemy import URL
+    from sqlalchemy import create_engine
 
     if user is not None:
         db_parameters['user'] = user
