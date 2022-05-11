@@ -94,7 +94,7 @@ def test_connect_args():
             user=CONNECTION_PARAMETERS['user'],
             account=CONNECTION_PARAMETERS['account'],
             password=CONNECTION_PARAMETERS['password'],
-            host=f"{CONNECTION_PARAMETERS['account']}.{CONNECTION_PARAMETERS['host']}",
+            host=CONNECTION_PARAMETERS['host'],
             port=CONNECTION_PARAMETERS['port'],
             database=CONNECTION_PARAMETERS['database'],
             schema=CONNECTION_PARAMETERS['schema'],
