@@ -83,20 +83,14 @@ setup(
     ],
     extras_require={
         'development': [
-            'pytest<6.1.0',
+            'pytest',
             'pytest-cov',
             'pytest-rerunfailures',
             'pytest-timeout',
-            'coverage',
-            'pexpect',
             'mock',
             'pytz',
-            'pytzdata',
-            'Cython',
-            'more-itertools',
             'numpy',
-            'pandas==0.24.2;python_version=="3.5"',
-            'pandas>=1.0.0,<1.1.0;python_version>"3.5"',
+            'pandas',
         ]
     },
 )
