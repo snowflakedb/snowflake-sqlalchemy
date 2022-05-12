@@ -35,7 +35,7 @@ setup(
 
     install_requires=[
         'sqlalchemy<2.0.0,>=1.4.0',
-        'snowflake-connector-python<3.0.0',
+        'snowflake-connector-python<3.0.0',  # Keep in sync with extras dependency
     ],
     namespace_packages=[
         'snowflake'
@@ -90,7 +90,9 @@ setup(
             'mock',
             'pytz',
             'numpy',
-            'pandas',
-        ]
+        ],
+        # This is mostly for testing, but users might also want to install
+        #  our connector with appropiate optional dependencies through this package
+        'pandas': ['snowflake-connector-python[pandas]<3.0.0']  # Keep in sync with requirements
     },
 )
