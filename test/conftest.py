@@ -17,6 +17,11 @@ from snowflake.connector.compat import IS_WINDOWS
 from snowflake.sqlalchemy import URL, dialect
 from sqlalchemy import create_engine
 
+CLOUD_PROVIDERS = {"aws", "azure", "gcp"}
+EXTERNAL_SKIP_TAGS = {"internal"}
+INTERNAL_SKIP_TAGS = {"external"}
+RUNNING_ON_GH = os.getenv("GITHUB_ACTIONS") == "true"
+
 if os.getenv('TRAVIS') == 'true':
     TEST_SCHEMA = 'TRAVIS_JOB_{}'.format(os.getenv('TRAVIS_JOB_ID'))
 else:
@@ -192,3 +197,29 @@ def sql_compiler():
     return lambda sql_command: str(sql_command.compile(dialect=dialect(),
                                                        compile_kwargs={'literal_binds': True,
                                                                        'deterministic': True})).replace('\n', '')
+
+
+def running_on_public_ci() -> bool:
+    """Whether or not tests are currently running on one of our public CIs."""
+    return os.getenv("GITHUB_ACTIONS") == "true"
+
+
+def pytest_runtest_setup(item) -> None:
+    """Ran before calling each test, used to decide whether a test should be skipped."""
+    test_tags = [mark.name for mark in item.iter_markers()]
+
+    # Get what cloud providers the test is marked for if any
+    test_supported_providers = CLOUD_PROVIDERS.intersection(test_tags)
+    # Default value means that we are probably running on a developer's machine, allow everything in this case
+    current_provider = os.getenv("cloud_provider", "dev")
+    if test_supported_providers:
+        # If test is tagged for specific cloud providers add the default cloud_provider as supported too
+        test_supported_providers.add("dev")
+        if current_provider not in test_supported_providers:
+            pytest.skip(
+                f"cannot run unit test against cloud provider {current_provider}"
+            )
+    if EXTERNAL_SKIP_TAGS.intersection(test_tags) and running_on_public_ci():
+        pytest.skip("cannot run this test on external CI")
+    elif INTERNAL_SKIP_TAGS.intersection(test_tags) and not running_on_public_ci():
+        pytest.skip("cannot run this test on internal CI")
