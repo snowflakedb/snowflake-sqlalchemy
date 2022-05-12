@@ -1166,6 +1166,7 @@ def test_comment_sqlalchemy(db_parameters, engine_testaccount, on_public_ci):
         engine2.dispose()
 
 
+@pytest.mark.internal
 def test_special_schema_character(db_parameters, on_public_ci):
     """Make sure we decode special characters correctly"""
     if on_public_ci:
