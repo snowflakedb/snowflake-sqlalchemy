@@ -418,14 +418,16 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
         This visitor will create the SQL representation for a CREATE FILE FORMAT
         command.
         """
-        return "CREATE {}FILE FORMAT {} TYPE='{}' {}".format(
-            "OR REPLACE " if file_format.replace_if_exists else "",
+        return "CREATE {}FILE FORMAT {}{} TYPE='{}' {}{}".format(
+            "OR REPLACE " if file_format.or_replace else "",
+            "IF NOT EXISTS " if file_format.if_not_exists else "",
             file_format.format_name,
             file_format.formatter.file_format,
             " ".join(
                 ["{} = {}".format(name, file_format.formatter.value_repr(name, value))
                  for name, value
-                 in file_format.formatter.options.items()])
+                 in file_format.formatter.options.items()]),
+            " COMMENT = '{}'".format(file_format.comment) if file_format.comment else ""
         )
 
     def visit_drop_table_comment(self, drop, **kw):
