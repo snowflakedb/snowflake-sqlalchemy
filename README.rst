@@ -1,7 +1,7 @@
 Snowflake SQLAlchemy
 ********************************************************************************
 
-.. image:: https://codecov.io/gh/snowflakedb/snowflake-sqlalchemy/branch/master/graph/badge.svg
+.. image:: https://codecov.io/gh/snowflakedb/snowflake-sqlalchemy/branch/main/graph/badge.svg
     :target: https://codecov.io/gh/snowflakedb/snowflake-sqlalchemy
 
 .. image:: https://img.shields.io/pypi/v/snowflake-sqlalchemy.svg
