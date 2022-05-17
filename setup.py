@@ -31,7 +31,6 @@ setup(
     url='https://www.snowflake.net/',
     keywords="Snowflake db database cloud analytics warehouse",
     download_url='https://www.snowflake.net/',
-    use_2to3=False,
 
     install_requires=[
         'sqlalchemy<2.0.0,>=1.4.0',
