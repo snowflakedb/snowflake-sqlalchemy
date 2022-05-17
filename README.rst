@@ -3,7 +3,6 @@ Snowflake SQLAlchemy
 
 .. image:: https://codecov.io/gh/snowflakedb/snowflake-sqlalchemy/branch/main/graph/badge.svg?token=1kmCWB3WRS
     :target: https://codecov.io/gh/snowflakedb/snowflake-sqlalchemy
-    
 
 .. image:: https://img.shields.io/pypi/v/snowflake-sqlalchemy.svg
     :target: https://pypi.python.org/pypi/snowflake-sqlalchemy/
