@@ -36,9 +36,6 @@ setup(
         'sqlalchemy<2.0.0,>=1.4.0',
         'snowflake-connector-python<3.0.0',  # Keep in sync with extras dependency
     ],
-    namespace_packages=[
-        'snowflake'
-    ],
     packages=[
         'snowflake.sqlalchemy',
     ],
