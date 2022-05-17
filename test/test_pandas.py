@@ -92,8 +92,8 @@ def get_engine_with_numpy(db_parameters, user=None, password=None,
     """
     Creates a connection using the parameters defined in JDBC connect string
     """
-    from sqlalchemy import create_engine
     from snowflake.sqlalchemy import URL
+    from sqlalchemy import create_engine
 
     if user is not None:
         db_parameters['user'] = user
@@ -148,7 +148,7 @@ def test_to_sql(db_parameters):
     engine.execute("""
 create or replace table src(c1 float)
  as select random(123) from table(generator(timelimit=>1))
- limit {0}
+ limit {}
 """.format(total_rows))
     engine.execute("""
 create or replace table dst(c1 float)
@@ -279,7 +279,7 @@ def test_pandas_make_pd_writer(engine_testaccount, quote_identifiers):
 
     try:
         if quote_identifiers:
-            with pytest.raises(ProgrammingError, match=r".*SQL compilation error.*\ninvalid identifier '\"a\"'.*") as e:
+            with pytest.raises(ProgrammingError, match=r".*SQL compilation error.*\ninvalid identifier '\"a\"'.*"):
                 write_to_db()
         else:
             write_to_db()
@@ -293,4 +293,3 @@ def test_pandas_make_pd_writer(engine_testaccount, quote_identifiers):
             assert len(results) == 10
     finally:
         engine_testaccount.execute(f"DROP TABLE IF EXISTS {table_name}")
-

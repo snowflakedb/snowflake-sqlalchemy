@@ -31,14 +31,10 @@ setup(
     url='https://www.snowflake.net/',
     keywords="Snowflake db database cloud analytics warehouse",
     download_url='https://www.snowflake.net/',
-    use_2to3=False,
 
     install_requires=[
         'sqlalchemy<2.0.0,>=1.4.0',
-        'snowflake-connector-python<3.0.0',
-    ],
-    namespace_packages=[
-        'snowflake'
+        'snowflake-connector-python<3.0.0',  # Keep in sync with extras dependency
     ],
     packages=[
         'snowflake.sqlalchemy',
@@ -83,20 +79,16 @@ setup(
     ],
     extras_require={
         'development': [
-            'pytest<6.1.0',
+            'pytest',
             'pytest-cov',
             'pytest-rerunfailures',
             'pytest-timeout',
-            'coverage',
-            'pexpect',
             'mock',
             'pytz',
-            'pytzdata',
-            'Cython',
-            'more-itertools',
             'numpy',
-            'pandas==0.24.2;python_version=="3.5"',
-            'pandas>=1.0.0,<1.1.0;python_version>"3.5"',
-        ]
+        ],
+        # This is mostly for testing, but users might also want to install
+        #  our connector with appropiate optional dependencies through this package
+        'pandas': ['snowflake-connector-python[pandas]<3.0.0']  # Keep in sync with requirements
     },
 )

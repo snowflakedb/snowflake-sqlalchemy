@@ -85,7 +85,7 @@ AUTOCOMMIT_REGEXP = re.compile(
 
 
 class SnowflakeIdentifierPreparer(compiler.IdentifierPreparer):
-    reserved_words = set([x.lower() for x in RESERVED_WORDS])
+    reserved_words = {x.lower() for x in RESERVED_WORDS}
 
     def __init__(self, dialect, **kw):
         quote = '"'
@@ -99,7 +99,7 @@ class SnowflakeIdentifierPreparer(compiler.IdentifierPreparer):
         """
         Unilaterally identifier-quote any number of strings.
         """
-        return tuple([self.quote(i) for i in ids if i is not None])
+        return tuple(self.quote(i) for i in ids if i is not None)
 
     def quote_schema(self, schema, force=None):
         """
@@ -154,7 +154,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
 
     def visit_merge_into(self, merge_into, **kw):
         clauses = " ".join(clause._compiler_dispatch(self, **kw) for clause in merge_into.clauses)
-        return "MERGE INTO %s USING %s ON %s" % (merge_into.target, merge_into.source, merge_into.on) + (
+        return "MERGE INTO {} USING {} ON {}".format(merge_into.target, merge_into.source, merge_into.on) + (
             " " + clauses if clauses else ""
         )
 
@@ -164,7 +164,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             sets, sets_tos = list(sets), list(sets_tos)
             if kw.get('deterministic', False):
                 sets, sets_tos = zip(*sorted(merge_into_clause.set.items(), key=operator.itemgetter(0)))
-            return "WHEN NOT MATCHED%s THEN %s (%s) VALUES (%s)" % (
+            return "WHEN NOT MATCHED{} THEN {} ({}) VALUES ({})".format(
                 " AND %s" % merge_into_clause.predicate._compiler_dispatch(
                     self, **kw) if merge_into_clause.predicate is not None else "",
                 merge_into_clause.command,
@@ -175,9 +175,9 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             if kw.get('deterministic', False):
                 set_list.sort(key=operator.itemgetter(0))
             sets = ", ".join(
-                ["%s = %s" % (set[0], set[1]._compiler_dispatch(self, **kw)) for set in
+                ["{} = {}".format(set[0], set[1]._compiler_dispatch(self, **kw)) for set in
                  set_list]) if merge_into_clause.set else ""
-            return "WHEN MATCHED%s THEN %s%s" % (
+            return "WHEN MATCHED{} THEN {}{}".format(
                 " AND %s" % merge_into_clause.predicate._compiler_dispatch(
                     self, **kw) if merge_into_clause.predicate is not None else "",
                 merge_into_clause.command,
@@ -399,7 +399,7 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
         info = table.dialect_options['snowflake']
         cluster = info.get('clusterby')
         if cluster:
-            text += " CLUSTER BY ({0})".format(
+            text += " CLUSTER BY ({})".format(
                 ", ".join(self.denormalize_column_name(key) for key in cluster))
         return text
 
@@ -507,6 +507,7 @@ class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
 
     def visit_GEOGRAPHY(self, type_, **kw):
         return "GEOGRAPHY"
+
 
 construct_arguments = [
     (Table, {

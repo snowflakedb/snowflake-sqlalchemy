@@ -9,7 +9,7 @@ Snowflake SQLAlchemy
 
 .. image:: http://img.shields.io/:license-Apache%202-brightgreen.svg
     :target: http://www.apache.org/licenses/LICENSE-2.0.txt
-    
+
 Snowflake SQLAlchemy runs on the top of the Snowflake Connector for Python as a `dialect <http://docs.sqlalchemy.org/en/latest/dialects/>`_ to bridge a Snowflake database and SQLAlchemy applications.
 
 Prerequisites
@@ -64,7 +64,7 @@ Verifying Your Installation
             connection.close()
             engine.dispose()
 
-#. Replace :code:`<your_user_login_name>`, :code:`<your_password>`, and :code:`<your_account_name>` with the appropriate values for your Snowflake account and user. For more details, see `Connection Parameters`_ (in 
+#. Replace :code:`<your_user_login_name>`, :code:`<your_password>`, and :code:`<your_account_name>` with the appropriate values for your Snowflake account and user. For more details, see `Connection Parameters`_ (in
    this topic).
 
 #. Execute the sample code. For example, if you created a file named :code:`validate.py`:
@@ -89,9 +89,9 @@ Snowflake SQLAlchemy uses the following syntax for the connection string used to
 
     .. code-block:: python
 
-     'snowflake://<user_login_name>:<password>@<account_name>' 
+     'snowflake://<user_login_name>:<password>@<account_name>'
 
-Where: 
+Where:
 
 - :code:`<user_login_name>` is the login name for your Snowflake user.
 - :code:`<password>` is the password for your Snowflake user.
@@ -113,12 +113,12 @@ You can optionally specify the initial database and schema for the Snowflake ses
 The following example calls the :code:`create_engine` method with the user name :code:`testuser1`, password :code:`0123456`, account name :code:`abc123`, database :code:`testdb`, schema :code:`public`, warehouse :code:`testwh`, and role :code:`myrole`:
 
     .. code-block:: python
-      
+
         from sqlalchemy import create_engine
         engine = create_engine(
             'snowflake://testuser1:0123456@abc123/testdb/public?warehouse=testwh&role=myrole'
         )
- 
+
 Other parameters, such as :code:`timezone`, can also be specified as a URI parameter or in :code:`connect_args` parameters. For example:
 
     .. code-block:: python
@@ -128,7 +128,7 @@ Other parameters, such as :code:`timezone`, can also be specified as a URI param
             'snowflake://testuser1:0123456@abc123/testdb/public?warehouse=testwh&role=myrole',
             connect_args={
                 'timezone': 'America/Los_Angeles',
-            } 
+            }
         )
 
 For convenience, you can use the :code:`snowflake.sqlalchemy.URL` method to construct the connection string and connect to the database. The following example constructs the same connection string from the previous example:
@@ -157,7 +157,7 @@ Use the supported environment variables, :code:`HTTPS_PROXY`, :code:`HTTP_PROXY`
 Opening and Closing Connection
 -------------------------------------------------------------------------------
 
-Open a connection by executing :code:`engine.connect()`; avoid using :code:`engine.execute()`. Make certain to close the connection by executing :code:`connection.close()` before 
+Open a connection by executing :code:`engine.connect()`; avoid using :code:`engine.execute()`. Make certain to close the connection by executing :code:`connection.close()` before
 :code:`engine.dispose()`; otherwise, the Python Garbage collector removes the resources required to communicate with Snowflake, preventing the Python connector from closing the session properly.
 
     .. code-block:: python
@@ -183,7 +183,7 @@ Auto-increment Behavior
 Auto-incrementing a value requires the :code:`Sequence` object. Include the :code:`Sequence` object in the primary key column to automatically increment the value as each new record is inserted. For example:
 
     .. code-block:: python
-     
+
             t = Table('mytable', metadata,
                 Column('id', Integer, Sequence('id_seq'), primary_key=True),
                 Column(...), ...
@@ -220,9 +220,9 @@ The following example shows the round trip of :code:`numpy.datetime64` data:
             role='myrole',
             numpy=True,
         ))
-    
+
         specific_date = np.datetime64('2016-03-04T12:03:05.123456789Z')
-        
+
         connection = engine.connect()
         connection.execute(
             "CREATE OR REPLACE TABLE ts_tbl(c1 TIMESTAMP_NTZ)")
@@ -238,7 +238,7 @@ The following :code:`NumPy` data types are supported:
 - numpy.float64
 - numpy.datatime64
 
-Cache Column Metadata 
+Cache Column Metadata
 -------------------------------------------------------------------------------
 
 SQLAlchemy provides `the runtime inspection API <http://docs.sqlalchemy.org/en/latest/core/inspection.html>`_ to get the runtime information about the various objects. One of the common use case is get all tables and their column metadata in a schema in order to construct a schema catalog. For example, `alembic <http://alembic.zzzcomputing.com/>`_ on top of SQLAlchemy manages database schema migrations. A pseudo code flow is as follows:
@@ -255,8 +255,8 @@ SQLAlchemy provides `the runtime inspection API <http://docs.sqlalchemy.org/en/l
 
 In this flow, a potential problem is it may take quite a while as queries run on each table. The results are cached but getting column metadata is expensive.
 
-To mitigate the problem, Snowflake SQLAlchemy takes a flag :code:`cache_column_metadata=True` such that all of column metadata for all tables are cached when :code:`get_table_names` is called and the rest of :code:`get_columns`, :code:`get_primary_keys` and :code:`get_foreign_keys` can take advantage of the cache.  
-        
+To mitigate the problem, Snowflake SQLAlchemy takes a flag :code:`cache_column_metadata=True` such that all of column metadata for all tables are cached when :code:`get_table_names` is called and the rest of :code:`get_columns`, :code:`get_primary_keys` and :code:`get_foreign_keys` can take advantage of the cache.
+
     .. code-block:: python
 
         engine = create_engine(URL(

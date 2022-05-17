@@ -1,4 +1,4 @@
-This package includes the Snowflake SQLAlchemy, which supports Snowsql dialects for SQLAlchemy 
+This package includes the Snowflake SQLAlchemy, which supports Snowsql dialects for SQLAlchemy
 http://www.sqlalchemy.org/
 
 Snowflake Documentation is available at:
@@ -16,11 +16,11 @@ Release Notes
    - Add support for geography type
    - Fixed a bug where foreign key's referred schema was set incorrectly
    - Disabled new SQLAlchemy option for statement caching until support gets added
-   
+
 - v1.3.3(December 19,2021)
 
    - Fixed an issue where quote arguments were stripped from identifiers.
-   
+
 - v1.3.2 (September 14,2021)
 
     - Fixed a breaking change introduced in SQLAlchemy 1.4 that changed the behavior of returns_unicode_strings.
@@ -38,13 +38,13 @@ Release Notes
     - Fixed an issue where inspector would not properly switch to table wide column retrieving when schema wide column retrieving was taking too long to respond.
 
 - v1.2.3 (March 30, 2020)
- 
+
     - Update tox.ini
     - Add external stage to COPY INTO custom command.
     - Bumped pandas to newest versions
 
 - v1.2.2 (March 9, 2020)
- 
+
     - Allow get_table_comment to fetch view comments too
 
 - v1.2.1 (February 18,2020)
@@ -77,7 +77,7 @@ Release Notes
     - Fix SQLAlchemy not working with global url
 
 - v1.1.15 (September 30, 2019)
-   
+
     - Incorrect SQL generated for INSERT with CTE
     - Type Synonyms not exported to top-level module #109
 
@@ -107,14 +107,14 @@ Release Notes
 
 - v1.1.9 (February 11, 2019)
 
-    - Fix an issue in v1.1.8 
+    - Fix an issue in v1.1.8
 
 - v1.1.8 (February 8, 2019)
 
     - Fixed a dependency
 
 - v1.1.7 (February 8, 2019)
-		
+
     - Added Upsert in sql-alchemy
     - CopyIntoS3 command in SQLAlchemy
 
