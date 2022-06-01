@@ -12,7 +12,7 @@ def test_table_with_sequence(engine_testaccount, db_parameters):
     metadata = MetaData()
     test_table_name = 'sequence'
     sequence_table = Table(test_table_name, metadata,
-                           Column('id', Integer, autoincrement=Sequence(test_table_name + '_id_seq'), primary_key=True),
+                           Column('id', Integer, Sequence(test_table_name + '_id_seq'), primary_key=True),
                            Column('data', String(39))
                            )
     sequence_table.create(engine_testaccount)
