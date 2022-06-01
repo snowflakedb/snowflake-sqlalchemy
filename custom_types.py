@@ -5,6 +5,7 @@
 #
 
 import sqlalchemy.types as sqltypes
+import sqlalchemy.util as util
 
 TEXT = sqltypes.VARCHAR
 CHARACTER = sqltypes.CHAR
@@ -51,3 +52,9 @@ class TIMESTAMP_NTZ(SnowflakeType):
 
 class GEOGRAPHY(SnowflakeType):
     __visit_name__ = 'GEOGRAPHY'
+
+
+class _CUSTOM_DECIMAL(SnowflakeType, sqltypes.DECIMAL):
+    @util.memoized_property
+    def _type_affinity(self):
+        return sqltypes.INTEGER if self.precision == 38 and self.scale == 0 else sqltypes.DECIMAL

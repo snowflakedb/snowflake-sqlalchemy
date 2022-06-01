@@ -9,7 +9,7 @@ import re
 
 from sqlalchemy import util as sa_util
 from sqlalchemy.engine import default
-from sqlalchemy.schema import Table
+from sqlalchemy.schema import Sequence, Table
 from sqlalchemy.sql import compiler, expression
 from sqlalchemy.sql.elements import quoted_name
 from sqlalchemy.util.compat import string_types
@@ -362,7 +362,10 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
         if column.table is not None \
                 and column is column.table._autoincrement_column and \
                 column.server_default is None:
-            colspec.append('AUTOINCREMENT')
+            if isinstance(column.default, Sequence):
+                colspec.append(f"DEFAULT {column.default.name}.nextval")
+            else:
+                colspec.append('AUTOINCREMENT')
 
         return ' '.join(colspec)
 
