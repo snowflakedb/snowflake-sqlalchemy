@@ -11,7 +11,7 @@ def test_table_name_with_reserved_words(engine_testaccount, db_parameters):
     metadata = MetaData()
     test_table_name = 'insert'
     insert_table = Table(test_table_name, metadata,
-                         Column('id', Integer, Sequence(test_table_name + '_id_seq'),
+                         Column('id', Integer, Sequence(f"{test_table_name}_id_seq"),
                                 primary_key=True),
                          Column('name', String),
                          Column('fullname', String),
@@ -22,10 +22,10 @@ def test_table_name_with_reserved_words(engine_testaccount, db_parameters):
         inspector = inspect(engine_testaccount)
         columns_in_insert = inspector.get_columns(test_table_name)
         assert len(columns_in_insert) == 3
-        assert columns_in_insert[0]['autoincrement'], 'autoincrement'
-        assert columns_in_insert[0]['default'] is None, 'default'
-        assert columns_in_insert[0]['name'] == 'id', 'name'
-        assert columns_in_insert[0]['primary_key'], 'primary key'
+        assert columns_in_insert[0]['autoincrement'] is False
+        assert f"{test_table_name}_id_seq.nextval" in columns_in_insert[0]['default'].lower()
+        assert columns_in_insert[0]['name'] == 'id'
+        assert columns_in_insert[0]['primary_key']
         assert not columns_in_insert[0]['nullable']
 
         columns_in_insert = inspector.get_columns(test_table_name, schema=db_parameters['schema'])
