@@ -10,12 +10,13 @@ from sqlalchemy import Column, Integer, MetaData, Sequence, String, Table, selec
 def test_table_with_sequence(engine_testaccount, db_parameters):
     # https://github.com/snowflakedb/snowflake-sqlalchemy/issues/124
     test_table_name = 'sequence'
+    test_sequence_name = f'{test_table_name}_id_seq'
     sequence_table = Table(test_table_name, MetaData(),
-                           Column('id', Integer, Sequence(f'{test_table_name}_id_seq'), primary_key=True),
+                           Column('id', Integer, Sequence(test_sequence_name), primary_key=True),
                            Column('data', String(39))
                            )
     sequence_table.create(engine_testaccount)
-    seq = Sequence(test_table_name + '_id_seq')
+    seq = Sequence(test_sequence_name)
     try:
         engine_testaccount.execute(sequence_table.insert(), [{'data': 'test_insert_1'}])
 
