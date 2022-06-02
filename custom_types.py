@@ -57,4 +57,4 @@ class GEOGRAPHY(SnowflakeType):
 class _CUSTOM_DECIMAL(SnowflakeType, sqltypes.DECIMAL):
     @util.memoized_property
     def _type_affinity(self):
-        return sqltypes.INTEGER if self.precision == 38 and self.scale == 0 else sqltypes.DECIMAL
+        return sqltypes.INTEGER if self.scale == 0 else sqltypes.DECIMAL

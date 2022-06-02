@@ -9,10 +9,9 @@ from sqlalchemy import Column, Integer, MetaData, Sequence, String, Table, selec
 
 def test_table_with_sequence(engine_testaccount, db_parameters):
     # https://github.com/snowflakedb/snowflake-sqlalchemy/issues/124
-    metadata = MetaData()
     test_table_name = 'sequence'
-    sequence_table = Table(test_table_name, metadata,
-                           Column('id', Integer, Sequence(test_table_name + '_id_seq'), primary_key=True),
+    sequence_table = Table(test_table_name, MetaData(),
+                           Column('id', Integer, Sequence(f'{test_table_name}_id_seq'), primary_key=True),
                            Column('data', String(39))
                            )
     sequence_table.create(engine_testaccount)
@@ -20,12 +19,11 @@ def test_table_with_sequence(engine_testaccount, db_parameters):
     try:
         engine_testaccount.execute(sequence_table.insert(), [{'data': 'test_insert_1'}])
 
-        select_stmt = select([sequence_table])
+        select_stmt = select([sequence_table]).order_by('id')
         result = engine_testaccount.execute(select_stmt).fetchall()
         assert result == [(1, 'test_insert_1')]
 
-        metadata_autoload = MetaData()
-        autoload_sequence_table = Table(test_table_name, metadata_autoload, autoload=True, autoload_with=engine_testaccount)
+        autoload_sequence_table = Table(test_table_name, MetaData(), autoload=True, autoload_with=engine_testaccount)
 
         engine_testaccount.execute(autoload_sequence_table.insert(),
                                    [{'data': 'multi_insert_1'}, {'data': 'multi_insert_2'}])
@@ -45,14 +43,12 @@ def test_table_with_sequence(engine_testaccount, db_parameters):
     finally:
         sequence_table.drop(engine_testaccount)
         seq.drop(engine_testaccount)
-    return sequence_table
 
 
 def test_table_with_autoincrement(engine_testaccount, db_parameters):
     # https://github.com/snowflakedb/snowflake-sqlalchemy/issues/124
-    metadata = MetaData()
     test_table_name = 'sequence'
-    autoincrement_table = Table(test_table_name, metadata,
+    autoincrement_table = Table(test_table_name, MetaData(),
                                 Column('id', Integer, autoincrement=True, primary_key=True),
                                 Column('data', String(39))
                                 )
@@ -60,12 +56,11 @@ def test_table_with_autoincrement(engine_testaccount, db_parameters):
     try:
         engine_testaccount.execute(autoincrement_table.insert(), [{'data': 'test_insert_1'}])
 
-        select_stmt = select([autoincrement_table])
+        select_stmt = select([autoincrement_table]).order_by('id')
         result = engine_testaccount.execute(select_stmt).fetchall()
         assert result == [(1, 'test_insert_1')]
 
-        metadata_autoload = MetaData()
-        autoload_sequence_table = Table(test_table_name, metadata_autoload, autoload=True, autoload_with=engine_testaccount)
+        autoload_sequence_table = Table(test_table_name, MetaData(), autoload=True, autoload_with=engine_testaccount)
 
         engine_testaccount.execute(autoload_sequence_table.insert(),
                                    [{'data': 'multi_insert_1'}, {'data': 'multi_insert_2'}])
@@ -81,4 +76,3 @@ def test_table_with_autoincrement(engine_testaccount, db_parameters):
         ]
     finally:
         autoincrement_table.drop(engine_testaccount)
-    return autoincrement_table
