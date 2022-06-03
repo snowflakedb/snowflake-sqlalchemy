@@ -45,7 +45,7 @@ from .base import (
     SnowflakeIdentifierPreparer,
     SnowflakeTypeCompiler,
 )
-from .custom_types import ARRAY, GEOGRAPHY, OBJECT, TIMESTAMP_LTZ, TIMESTAMP_NTZ, TIMESTAMP_TZ, VARIANT
+from .custom_types import _CUSTOM_DECIMAL, ARRAY, GEOGRAPHY, OBJECT, TIMESTAMP_LTZ, TIMESTAMP_NTZ, TIMESTAMP_TZ, VARIANT
 
 colspecs = {}
 
@@ -65,7 +65,7 @@ ischema_names = {
     'FLOAT': FLOAT,
     'INT': INTEGER,
     'INTEGER': INTEGER,
-    'NUMBER': DECIMAL,
+    'NUMBER': _CUSTOM_DECIMAL,
     # 'OBJECT': ?
     'REAL': REAL,
     'BYTEINT': SMALLINT,
@@ -609,7 +609,7 @@ class SnowflakeDialect(default.DefaultDialect):
             ret = cursor.fetchone()
             if ret:
                 return ret[n2i['text']]
-        except Exxception:
+        except Exception:
             pass
         return None
 

@@ -10,6 +10,11 @@ https://github.com/snowflakedb/snowflake-sqlalchemy
 Release Notes
 -------------------------------------------------------------------------------
 
+- v1.3.5(Unreleased)
+
+   - Fixed a bug where insert with autoincrement failed due to incompatible column type affinity #124
+   - Fixed a bug when creating a column with sequence, default value was set incorrectly
+
 - v1.3.4(April 27,2022)
 
    - Fixed a bug where identifier max length was set to the wrong value and added relevant schema introspection
