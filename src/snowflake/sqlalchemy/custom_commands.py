@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 #
 # Copyright (c) 2012-2019 Snowflake Computing Inc. All right reserved.
 #
@@ -51,7 +50,7 @@ class MergeInto(UpdateBase):
                     ", ".join(map(str, sets_tos)))
             else:
                 # WHEN MATCHED clause
-                sets = ", ".join(["{} = {}".format(set[0], set[1]) for set in self.set.items()]) if self.set else ""
+                sets = ", ".join([f"{set[0]} = {set[1]}" for set in self.set.items()]) if self.set else ""
                 return "WHEN MATCHED{} THEN {}{}".format(" AND %s" % self.predicate if self.predicate is not None else "",
                                                      self.command,
                                                      " SET %s" % sets if self.set else "")
@@ -66,7 +65,7 @@ class MergeInto(UpdateBase):
 
     def __repr__(self):
         clauses = " ".join([repr(clause) for clause in self.clauses])
-        return "MERGE INTO {} USING {} ON {}".format(self.target, self.source, self.on) + (
+        return f"MERGE INTO {self.target} USING {self.source} ON {self.on}" + (
             ' ' + clauses if clauses else ''
         )
 
@@ -198,7 +197,7 @@ class CSVFormatter(CopyFormatter):
             comp_type = comp_type.lower()
         _available_options = ['auto', 'gzip', 'bz2', 'brotli', 'zstd', 'deflate', 'raw_deflate', None]
         if comp_type not in _available_options:
-            raise TypeError("Compression type should be one of : {}".format(_available_options))
+            raise TypeError(f"Compression type should be one of : {_available_options}")
         self.options['COMPRESSION'] = comp_type
         return self
 
@@ -217,7 +216,7 @@ class CSVFormatter(CopyFormatter):
         if isinstance(delimiter, int):
             return
         raise TypeError(
-            "{} should be a single character, that is either a string, or a number".format(delimiter_txt))
+            f"{delimiter_txt} should be a single character, that is either a string, or a number")
 
     def record_delimiter(self, deli_type):
         """Character that separates records in an unloaded file."""
@@ -273,7 +272,7 @@ class CSVFormatter(CopyFormatter):
             bin_fmt = bin_fmt.lower()
         _available_options = ['hex', 'base64', 'utf8']
         if bin_fmt not in _available_options:
-            raise TypeError("Binary format should be one of : {}".format(_available_options))
+            raise TypeError(f"Binary format should be one of : {_available_options}")
         self.options['BINARY_FORMAT'] = bin_fmt
         return self
 
@@ -299,7 +298,7 @@ class CSVFormatter(CopyFormatter):
         """Character used to enclose strings. Either None, ', or \"."""
         _available_options = [None, '\'', '"']
         if enc not in _available_options:
-            raise TypeError("Enclosing string should be one of : {}".format(_available_options))
+            raise TypeError(f"Enclosing string should be one of : {_available_options}")
         self.options['FIELD_OPTIONALLY_ENCLOSED_BY'] = enc
         return self
 
@@ -351,7 +350,7 @@ class JSONFormatter(CopyFormatter):
             comp_type = comp_type.lower()
         _available_options = ['auto', 'gzip', 'bz2', 'brotli', 'zstd', 'deflate', 'raw_deflate', None]
         if comp_type not in _available_options:
-            raise TypeError("Compression type should be one of : {}".format(_available_options))
+            raise TypeError(f"Compression type should be one of : {_available_options}")
         self.options['COMPRESSION'] = comp_type
         return self
 
@@ -400,11 +399,11 @@ class ExternalStage(ClauseElement, FromClauseRole):
 
     @staticmethod
     def prepare_namespace(namespace):
-        return "{}.".format(namespace) if not namespace.endswith(".") else namespace
+        return f"{namespace}." if not namespace.endswith(".") else namespace
 
     @staticmethod
     def prepare_path(path):
-        return "/{}".format(path) if not path.startswith("/") else path
+        return f"/{path}" if not path.startswith("/") else path
 
     def __init__(self, name, path=None, namespace=None, file_format=None):
         self.name = name
@@ -468,7 +467,7 @@ class AWSBucket(ClauseElement):
     @classmethod
     def from_uri(cls, uri):
         if uri[0:5] != 's3://':
-            raise ValueError("Invalid AWS bucket URI: {}".format(uri))
+            raise ValueError(f"Invalid AWS bucket URI: {uri}")
         b = uri[5:].split('/', 1)
         if len(b) == 1:
             bucket, path = b[0], None
@@ -478,7 +477,7 @@ class AWSBucket(ClauseElement):
 
     def __repr__(self):
         credentials = 'CREDENTIALS=({})'.format(
-            ' '.join("{}='{}'".format(n, v) for n, v in self.credentials_used.items())
+            ' '.join(f"{n}='{v}'" for n, v in self.credentials_used.items())
         )
         encryption = 'ENCRYPTION=({})'.format(
             ' '.join(("{}='{}'" if isinstance(v, string_types) else "{}={}").format(n, v)
@@ -531,10 +530,10 @@ class AzureContainer(ClauseElement):
     @classmethod
     def from_uri(cls, uri):
         if uri[0:8] != 'azure://':
-            raise ValueError("Invalid Azure Container URI: {}".format(uri))
+            raise ValueError(f"Invalid Azure Container URI: {uri}")
         account, uri = uri[8:].split('.', 1)
         if uri[0:22] != 'blob.core.windows.net/':
-            raise ValueError("Invalid Azure Container URI: {}".format(uri))
+            raise ValueError(f"Invalid Azure Container URI: {uri}")
         b = uri[22:].split('/', 1)
         if len(b) == 1:
             container, path = b[0], None
@@ -544,7 +543,7 @@ class AzureContainer(ClauseElement):
 
     def __repr__(self):
         credentials = 'CREDENTIALS=({})'.format(
-            ' '.join("{}='{}'".format(n, v) for n, v in self.credentials_used.items())
+            ' '.join(f"{n}='{v}'" for n, v in self.credentials_used.items())
         )
         encryption = 'ENCRYPTION=({})'.format(
             ' '.join(("{}='{}'" if isinstance(v, string_types) else "{}={}").format(n, v) for n, v in

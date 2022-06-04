@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 #
 # Copyright (c) 2012-2019 Snowflake Computing Inc. All right reserved.
 #
@@ -243,7 +242,7 @@ def test_timezone(db_parameters):
         assert(np.issubdtype(result2.DECIMAL_COL, np.float64))
         assert(np.issubdtype(result2.FLOAT_COL, np.float64))
     finally:
-        sa_engine.execute('DROP TABLE {table};'.format(table=test_table_name))
+        sa_engine.execute(f'DROP TABLE {test_table_name};')
 
 
 def test_pandas_writeback(engine_testaccount):

@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 #
 # Copyright (c) 2012-2019 Snowflake Computing Inc. All right reserved.
 #
@@ -90,7 +89,7 @@ class SnowflakeIdentifierPreparer(compiler.IdentifierPreparer):
     def __init__(self, dialect, **kw):
         quote = '"'
 
-        super(SnowflakeIdentifierPreparer, self).__init__(
+        super().__init__(
             dialect,
             initial_quote=quote,
             escape_quote=quote)
@@ -154,7 +153,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
 
     def visit_merge_into(self, merge_into, **kw):
         clauses = " ".join(clause._compiler_dispatch(self, **kw) for clause in merge_into.clauses)
-        return "MERGE INTO {} USING {} ON {}".format(merge_into.target, merge_into.source, merge_into.on) + (
+        return f"MERGE INTO {merge_into.target} USING {merge_into.source} ON {merge_into.on}" + (
             " " + clauses if clauses else ""
         )
 
@@ -175,7 +174,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             if kw.get('deterministic', False):
                 set_list.sort(key=operator.itemgetter(0))
             sets = ", ".join(
-                ["{} = {}".format(set[0], set[1]._compiler_dispatch(self, **kw)) for set in
+                [f"{set[0]} = {set[1]._compiler_dispatch(self, **kw)}" for set in
                  set_list]) if merge_into_clause.set else ""
             return "WHEN MATCHED{} THEN {}{}".format(
                 " AND %s" % merge_into_clause.predicate._compiler_dispatch(
@@ -218,10 +217,10 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             n, v._compiler_dispatch(self, **kw) if getattr(v, 'compiler_dispatch', False) else str(v)
         ) for n, v in options_list])) if copy_into.copy_options else ''
         if credentials:
-            options += " {}".format(credentials)
+            options += f" {credentials}"
         if encryption:
-            options += " {}".format(encryption)
-        return "COPY INTO {} FROM {} {}{}".format(into, from_, formatter, options)
+            options += f" {encryption}"
+        return f"COPY INTO {into} FROM {from_} {formatter}{options}"
 
     def visit_copy_formatter(self, formatter, **kw):
         options_list = list(formatter.options.items())
@@ -248,7 +247,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         if kw.get('deterministic', False):
             credentials_list.sort(key=operator.itemgetter(0))
         credentials = 'CREDENTIALS=({})'.format(
-            ' '.join("{}='{}'".format(n, v) for n, v in credentials_list)
+            ' '.join(f"{n}='{v}'" for n, v in credentials_list)
         )
         encryption_list = list(aws_bucket.encryption_used.items())
         if kw.get('deterministic', False):
@@ -265,7 +264,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         credentials_list = list(azure_container.credentials_used.items())
         if kw.get('deterministic', False):
             credentials_list.sort(key=operator.itemgetter(0))
-        credentials = 'CREDENTIALS=({})'.format(' '.join("{}='{}'".format(n, v) for n, v in credentials_list))
+        credentials = 'CREDENTIALS=({})'.format(' '.join(f"{n}='{v}'" for n, v in credentials_list))
         encryption_list = list(azure_container.encryption_used.items())
         if kw.get('deterministic', False):
             encryption_list.sort(key=operator.itemgetter(0))
@@ -426,7 +425,7 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
             file_format.format_name,
             file_format.formatter.file_format,
             " ".join(
-                ["{} = {}".format(name, file_format.formatter.value_repr(name, value))
+                [f"{name} = {file_format.formatter.value_repr(name, value)}"
                  for name, value
                  in file_format.formatter.options.items()])
         )
@@ -437,7 +436,7 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
         Reflection has to account for this and convert any empty comments to NULL.
         """
         table_name = self.preparer.format_table(drop.element)
-        return "COMMENT ON TABLE {} IS ''".format(table_name)
+        return f"COMMENT ON TABLE {table_name} IS ''"
 
     def visit_drop_column_comment(self, drop, **kw):
         """Snowflake does not support directly setting column comments as NULL.

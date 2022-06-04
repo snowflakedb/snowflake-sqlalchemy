@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 #
 # Copyright (c) 2012-2019 Snowflake Computing Inc. All right reserved.
 #
@@ -8,10 +7,10 @@ import random
 import re
 import string
 import time
+from unittest.mock import patch
 
 import pytest
 from conftest import get_engine
-from mock import patch
 from parameters import CONNECTION_PARAMETERS
 from snowflake.connector import Error, ProgrammingError, connect
 from snowflake.sqlalchemy import URL, MergeInto, dialect
@@ -625,9 +624,9 @@ SELECT * FROM {} WHERE id > 10""".format(
         assert inspector.get_view_names() == [test_view_name]
     finally:
         engine_testaccount.execute(text(
-            "DROP TABLE IF EXISTS {}".format(test_table_name)))
+            f"DROP TABLE IF EXISTS {test_table_name}"))
         engine_testaccount.execute(text(
-            "DROP VIEW IF EXISTS {}".format(test_view_name)))
+            f"DROP VIEW IF EXISTS {test_view_name}"))
 
 
 def test_view_comment_reading(engine_testaccount, db_parameters):
@@ -662,9 +661,9 @@ SELECT * FROM {} WHERE id > 10""".format(
         assert str(inspector.get_columns(test_table_name)) == str(inspector.get_columns(test_view_name))
     finally:
         engine_testaccount.execute(text(
-            "DROP TABLE IF EXISTS {}".format(test_table_name)))
+            f"DROP TABLE IF EXISTS {test_table_name}"))
         engine_testaccount.execute(text(
-            "DROP VIEW IF EXISTS {}".format(test_view_name)))
+            f"DROP VIEW IF EXISTS {test_view_name}"))
 
 
 @pytest.mark.skip("Temp table cannot be viewed for some reason")
@@ -690,7 +689,7 @@ def test_create_table_with_schema(engine_testaccount, db_parameters):
     metadata = MetaData()
     new_schema = db_parameters['schema'] + "_NEW"
     engine_testaccount.execute(text(
-        "CREATE OR REPLACE SCHEMA \"{}\"".format(new_schema)))
+        f"CREATE OR REPLACE SCHEMA \"{new_schema}\""))
     Table('users', metadata,
           Column('id', Integer, Sequence('user_id_seq'),
                  primary_key=True),
@@ -707,7 +706,7 @@ def test_create_table_with_schema(engine_testaccount, db_parameters):
     finally:
         metadata.drop_all(engine_testaccount)
         engine_testaccount.execute(
-            text("DROP SCHEMA IF EXISTS \"{}\"".format(new_schema)))
+            text(f"DROP SCHEMA IF EXISTS \"{new_schema}\""))
 
 
 @pytest.mark.skipif(os.getenv("SNOWFLAKE_GCP") is not None, reason="PUT and GET is not supported for GCP yet")
@@ -934,7 +933,7 @@ def test_cache_time(engine_testaccount, db_parameters):
         harass_inspector()
         time2 = time.time() - m_time
         time1 = m_time - s_time
-        print("Ran inspector through tables twice, times:\n\tfirst: {}\n\tsecond: {}".format(time1, time2))
+        print(f"Ran inspector through tables twice, times:\n\tfirst: {time1}\n\tsecond: {time2}")
         if time2 < time1 * 0.01:
             outcome = True
             break
@@ -1108,14 +1107,14 @@ def test_comments(engine_testaccount):
     """Tests strictly reading column comment through SQLAlchemy"""
     table_name = ''.join(random.choice(string.ascii_uppercase) for _ in range(5))
     try:
-        engine_testaccount.execute("create table public.{} (\"col1\" text);".format(table_name))
-        engine_testaccount.execute("alter table public.{} alter \"col1\" comment 'this is my comment'".format(table_name))
-        engine_testaccount.execute("select comment from information_schema.columns where table_name='{}'".format(table_name)).fetchall()
+        engine_testaccount.execute(f"create table public.{table_name} (\"col1\" text);")
+        engine_testaccount.execute(f"alter table public.{table_name} alter \"col1\" comment 'this is my comment'")
+        engine_testaccount.execute(f"select comment from information_schema.columns where table_name='{table_name}'").fetchall()
         inspector = inspect(engine_testaccount)
         columns = inspector.get_columns(table_name, schema='PUBLIC')
-        assert columns[0].get('comment') == u'this is my comment'
+        assert columns[0].get('comment') == 'this is my comment'
     finally:
-        engine_testaccount.execute("drop table public.{}".format(table_name))
+        engine_testaccount.execute(f"drop table public.{table_name}")
 
 
 def test_comment_sqlalchemy(db_parameters, engine_testaccount, on_public_ci):
@@ -1131,7 +1130,7 @@ def test_comment_sqlalchemy(db_parameters, engine_testaccount, on_public_ci):
     con2 = None
     if not on_public_ci:
         con2 = engine2.connect()
-        con2.execute("CREATE SCHEMA IF NOT EXISTS {}".format(new_schema))
+        con2.execute(f"CREATE SCHEMA IF NOT EXISTS {new_schema}")
     inspector = inspect(engine_testaccount)
     metadata1 = MetaData()
     metadata2 = MetaData()
@@ -1161,7 +1160,7 @@ def test_comment_sqlalchemy(db_parameters, engine_testaccount, on_public_ci):
         mytable1.drop(engine_testaccount)
         if not on_public_ci:
             mytable2.drop(engine2)
-            con2.execute("DROP SCHEMA IF EXISTS {}".format(new_schema))
+            con2.execute(f"DROP SCHEMA IF EXISTS {new_schema}")
             con2.close()
         engine2.dispose()
 
@@ -1175,8 +1174,8 @@ def test_special_schema_character(db_parameters, on_public_ci):
     # Setup
     options = dict(**db_parameters)
     conn = connect(**options)
-    conn.cursor().execute("CREATE OR REPLACE DATABASE \"{}\"".format(database))
-    conn.cursor().execute("CREATE OR REPLACE SCHEMA \"{}\"".format(schema))
+    conn.cursor().execute(f"CREATE OR REPLACE DATABASE \"{database}\"")
+    conn.cursor().execute(f"CREATE OR REPLACE SCHEMA \"{schema}\"")
     conn.close()
     # Test
     options.update({'database': '"' + database + '"',
@@ -1191,7 +1190,7 @@ def test_special_schema_character(db_parameters, on_public_ci):
     sf_conn.close()
     # Teardown
     conn = connect(**options)
-    conn.cursor().execute("DROP DATABASE IF EXISTS \"{}\"".format(database))
+    conn.cursor().execute(f"DROP DATABASE IF EXISTS \"{database}\"")
     conn.close()
     assert [(database, schema)] == sf_connection == sa_connection
 
@@ -1288,7 +1287,7 @@ def test_get_too_many_columns(engine_testaccount, db_parameters):
             harass_inspector()
             time2 = time.time() - m_time
             time1 = m_time - s_time
-            print("Ran inspector through tables twice, times:\n\tfirst: {}\n\tsecond: {}".format(time1, time2))
+            print(f"Ran inspector through tables twice, times:\n\tfirst: {time1}\n\tsecond: {time2}")
             if time2 < time1 * 0.01:
                 outcome = True
                 break
@@ -1358,11 +1357,11 @@ def test_empty_comments(engine_testaccount):
     """Test that no comment returns None"""
     table_name = ''.join(random.choice(string.ascii_uppercase) for _ in range(5))
     try:
-        engine_testaccount.execute("create table public.{} (\"col1\" text);".format(table_name))
-        engine_testaccount.execute("select comment from information_schema.columns where table_name='{}'".format(table_name)).fetchall()
+        engine_testaccount.execute(f"create table public.{table_name} (\"col1\" text);")
+        engine_testaccount.execute(f"select comment from information_schema.columns where table_name='{table_name}'").fetchall()
         inspector = inspect(engine_testaccount)
         columns = inspector.get_columns(table_name, schema='PUBLIC')
         assert inspector.get_table_comment(table_name, schema='PUBLIC') == {'text': None}
         assert all([c['comment'] is None for c in columns])
     finally:
-        engine_testaccount.execute("drop table public.{}".format(table_name))
+        engine_testaccount.execute(f"drop table public.{table_name}")

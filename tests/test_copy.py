@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 #
 # Copyright (c) 2012-2019 Snowflake Computing Inc. All right reserved.
 #
@@ -102,7 +101,7 @@ def test_copy_into_location(engine_testaccount, sql_compiler):
             with pytest.raises(Exception) as exc:
                 conn.execute(stmnt)
             if not any(map(lambda reason: reason in str(exc) or reason in str(exc.value), acceptable_exc_reasons)):
-                raise Exception("Not acceptable exception: {} {}".format(str(exc), str(exc.value)))
+                raise Exception(f"Not acceptable exception: {str(exc)} {str(exc.value)}")
     finally:
         conn.close()
         food_items.drop(engine_testaccount)

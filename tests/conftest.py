@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 #
 # Copyright (c) 2012-2019 Snowflake Computing Inc. All right reserved.
 #
@@ -173,7 +172,7 @@ def init_test_schema(request, db_parameters):
             protocol=ret['protocol']
     ) as con:
         con.cursor().execute(
-            "CREATE SCHEMA IF NOT EXISTS {}".format(TEST_SCHEMA))
+            f"CREATE SCHEMA IF NOT EXISTS {TEST_SCHEMA}")
 
     def fin():
         ret1 = db_parameters
@@ -187,7 +186,7 @@ def init_test_schema(request, db_parameters):
                 protocol=ret1['protocol']
         ) as con1:
             con1.cursor().execute(
-                "DROP SCHEMA IF EXISTS {}".format(TEST_SCHEMA))
+                f"DROP SCHEMA IF EXISTS {TEST_SCHEMA}")
 
     request.addfinalizer(fin)
 

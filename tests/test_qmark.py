@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 #
 # Copyright (c) 2012-2019 Snowflake Computing Inc. All right reserved.
 #
@@ -41,7 +40,7 @@ def test_qmark_bulk_insert(db_parameters):
     Bulk insert using qmark paramstyle
     """
     import snowflake.connector
-    snowflake.connector.paramstyle = u'qmark'
+    snowflake.connector.paramstyle = 'qmark'
 
     engine = _get_engine_with_qmark(db_parameters)
     con = engine.connect()
@@ -66,4 +65,4 @@ def test_qmark_bulk_insert(db_parameters):
     finally:
         con.close()
         engine.dispose()
-        snowflake.connector.paramstyle = u'pyformat'
+        snowflake.connector.paramstyle = 'pyformat'

@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 #
 # Copyright (c) 2012-2019 Snowflake Computing Inc. All right reserved.
 #
@@ -31,7 +30,7 @@ def test_basic_orm(engine_testaccount):
         status = Column(Enum(UserStatus), default=UserStatus.ACTIVE)
 
         def __repr__(self):
-            return "<User({!r}, {!r})>".format(self.name, self.fullname)
+            return f"<User({self.name!r}, {self.fullname!r})>"
 
     Base.metadata.create_all(engine_testaccount)
     try:
@@ -61,7 +60,7 @@ def test_orm_one_to_many_relationship(engine_testaccount):
         fullname = Column(String)
 
         def __repr__(self):
-            return "<User({!r}, {!r})>".format(self.name, self.fullname)
+            return f"<User({self.name!r}, {self.fullname!r})>"
 
     class Address(Base):
         __tablename__ = 'address'
@@ -130,7 +129,7 @@ def test_delete_cascade(engine_testaccount):
                                  cascade="all, delete, delete-orphan")
 
         def __repr__(self):
-            return "<User({!r}, {!r})>".format(self.name, self.fullname)
+            return f"<User({self.name!r}, {self.fullname!r})>"
 
     class Address(Base):
         __tablename__ = 'address'
@@ -187,7 +186,7 @@ def test_orm_query(engine_testaccount):
         fullname = Column(String)
 
         def __repr__(self):
-            return "<User({!r}, {!r})>".format(self.name, self.fullname)
+            return f"<User({self.name!r}, {self.fullname!r})>"
 
     Base.metadata.create_all(engine_testaccount)
 

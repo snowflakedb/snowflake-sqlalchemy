@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 from sqlalchemy import Integer, String, and_, select
 from sqlalchemy.schema import DropColumnComment, DropTableComment

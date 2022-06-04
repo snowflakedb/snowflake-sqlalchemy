@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 #
 # Copyright (c) 2012-2019 Snowflake Computing Inc. All right reserved.
 #
@@ -7,10 +6,9 @@
 import operator
 from collections import defaultdict
 from functools import reduce
+from urllib.parse import unquote_plus
 
 import sqlalchemy.types as sqltypes
-from six import iteritems
-from six.moves.urllib_parse import unquote_plus
 from snowflake.connector import errors as sf_errors
 from snowflake.connector.constants import UTF8
 from sqlalchemy import event as sa_vnt
@@ -179,9 +177,9 @@ class SnowflakeDialect(default.DefaultDialect):
         if '.snowflakecomputing.com' not in opts['host'] and not opts.get(
                 'port'):
             opts['account'] = opts['host']
-            if u'.' in opts['account']:
+            if '.' in opts['account']:
                 # remove region subdomain
-                opts['account'] = opts['account'][0:opts['account'].find(u'.')]
+                opts['account'] = opts['account'][0:opts['account'].find('.')]
                 # remove external ID
                 opts['account'] = opts['account'].split('-')[0]
             opts['host'] = opts['host'] + '.snowflakecomputing.com'
@@ -284,7 +282,7 @@ class SnowflakeDialect(default.DefaultDialect):
     @reflection.cache
     def _get_schema_primary_keys(self, connection, schema, **kw):
         result = connection.execute(text(
-            "SHOW /* sqlalchemy:_get_schema_primary_keys */PRIMARY KEYS IN SCHEMA {}".format(schema)
+            f"SHOW /* sqlalchemy:_get_schema_primary_keys */PRIMARY KEYS IN SCHEMA {schema}"
         ))
         ans = {}
         for row in result:
@@ -309,7 +307,7 @@ class SnowflakeDialect(default.DefaultDialect):
     @reflection.cache
     def _get_schema_unique_constraints(self, connection, schema, **kw):
         result = connection.execute(text(
-            "SHOW /* sqlalchemy:_get_schema_unique_constraints */ UNIQUE KEYS IN SCHEMA {}".format(schema)
+            f"SHOW /* sqlalchemy:_get_schema_unique_constraints */ UNIQUE KEYS IN SCHEMA {schema}"
         ))
         unique_constraints = {}
         for row in result:
@@ -344,7 +342,7 @@ class SnowflakeDialect(default.DefaultDialect):
     def _get_schema_foreign_keys(self, connection, schema, **kw):
         _, current_schema = self._current_database_schema(connection, **kw)
         result = connection.execute(text(
-            "SHOW /* sqlalchemy:_get_schema_foreign_keys */ IMPORTED KEYS IN SCHEMA {}".format(schema)
+            f"SHOW /* sqlalchemy:_get_schema_foreign_keys */ IMPORTED KEYS IN SCHEMA {schema}"
         ))
         foreign_key_map = {}
         for row in result:
@@ -368,10 +366,10 @@ class SnowflakeDialect(default.DefaultDialect):
                 foreign_key_map[name]['referred_columns'].append(self.normalize_name(row['pk_column_name']))
 
         ans = {}
-        for _, v in iteritems(foreign_key_map):
+        for _, v in foreign_key_map.items():
             if v['table_name'] not in ans:
                 ans[v['table_name']] = []
-            ans[v['table_name']].append({k2: v2 for k2, v2 in iteritems(v) if k2 != 'table_name'})
+            ans[v['table_name']].append({k2: v2 for k2, v2 in v.items() if k2 != 'table_name'})
         return ans
 
     def get_foreign_keys(self, connection, table_name, schema=None, **kw):
@@ -648,7 +646,7 @@ class SnowflakeDialect(default.DefaultDialect):
         sql_command = "SHOW /* sqlalchemy:_get_table_comment */ " \
                       "TABLES LIKE '{}'{}".format(
                                         table_name,
-                                        (' IN SCHEMA {}'.format(self.normalize_name(schema))) if schema else ''
+                                        (f' IN SCHEMA {self.normalize_name(schema)}') if schema else ''
                                     )
         cursor = connection.execute(text(sql_command))
         return cursor.fetchone()
@@ -660,7 +658,7 @@ class SnowflakeDialect(default.DefaultDialect):
         sql_command = "SHOW /* sqlalchemy:_get_view_comment */ " \
             "VIEWS LIKE '{}'{}".format(
                 table_name,
-                (' IN SCHEMA {}'.format(self.normalize_name(schema))) if schema else ''
+                (f' IN SCHEMA {self.normalize_name(schema)}') if schema else ''
             )
         cursor = connection.execute(text(sql_command))
         return cursor.fetchone()
