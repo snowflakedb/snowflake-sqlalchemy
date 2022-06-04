@@ -30,7 +30,7 @@ Create a virtualenv, with ``parameters.py`` in a test directory.
         pip install Cython
         pip install pytest numpy pandas
         pip install dist/snowflake_sqlalchemy*.whl
-        vim test/parameters.py
+        vim tests/parameters.py
 
 In the ``parameters.py`` file, include the connection information in a Python dictionary.
 

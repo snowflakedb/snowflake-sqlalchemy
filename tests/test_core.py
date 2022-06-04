@@ -1169,8 +1169,6 @@ def test_comment_sqlalchemy(db_parameters, engine_testaccount, on_public_ci):
 @pytest.mark.internal
 def test_special_schema_character(db_parameters, on_public_ci):
     """Make sure we decode special characters correctly"""
-    if on_public_ci:
-        pytest.skip("Public CIs cannot create Schemas and Databases")
     # Constants
     database = "a/b/c"  # "'/'.join([choice(ascii_lowercase) for _ in range(3)])
     schema = "d/e/f"  # '/'.join([choice(ascii_lowercase) for _ in range(3)])

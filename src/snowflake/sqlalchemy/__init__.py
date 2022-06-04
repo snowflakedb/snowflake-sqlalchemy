@@ -4,6 +4,13 @@
 # Copyright (c) 2012-2019 Snowflake Computing Inc. All right reserved.
 #
 
+import sys
+
+if sys.version_info < (3, 8):
+    import importlib_metadata
+else:
+    import importlib.metadata as importlib_metadata
+
 from sqlalchemy.types import (
     BIGINT,
     BINARY,
@@ -56,13 +63,10 @@ from .custom_types import (
     VARIANT,
 )
 from .util import _url as URL
-from .version import VERSION
-
-SNOWFLAKE_CONNECTOR_VERSION = '.'.join(str(v) for v in VERSION[0:3])
 
 base.dialect = dialect = snowdialect.dialect
 
-__version__ = SNOWFLAKE_CONNECTOR_VERSION
+__version__ = importlib_metadata.version("snowflake-sqlalchemy")
 
 __all__ = (
     'BIGINT',
