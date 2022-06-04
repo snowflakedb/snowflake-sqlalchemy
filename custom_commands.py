@@ -434,11 +434,17 @@ class CreateFileFormat(DDLElement):
     """
     __visit_name__ = "create_file_format"
 
-    def __init__(self, format_name, formatter, replace_if_exists=False):
+    def __init__(self, format_name, formatter, replace_if_exists=False, if_not_exists=False, comment=None):
         super().__init__()
         self.format_name = format_name
         self.formatter = formatter
-        self.replace_if_exists = replace_if_exists
+        self.or_replace = replace_if_exists
+        self.if_not_exists = if_not_exists
+        self.comment = comment
+
+        if self.or_replace and self.if_not_exists:
+            raise ValueError("Can't replace and create if not exists in the same time {} file format.".format(
+                format_name))
 
 
 class CreateStage(DDLElement):

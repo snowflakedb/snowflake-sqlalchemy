@@ -76,6 +76,27 @@ def test_create_csv_format(sql_compiler):
                "TYPE='csv' FIELD_DELIMITER = ','"
     assert actual == expected
 
+    create_format_if_not_exists = CreateFileFormat(
+        format_name="ML_POC.PUBLIC.CSV_FILE_FORMAT",
+        formatter=CSVFormatter().field_delimiter(","),
+        if_not_exists=True
+    )
+    actual = sql_compiler(create_format_if_not_exists)
+    expected = "CREATE FILE FORMAT IF NOT EXISTS ML_POC.PUBLIC.CSV_FILE_FORMAT " \
+               "TYPE='csv' FIELD_DELIMITER = ','"
+    assert actual == expected
+
+    create_format_with_comment = CreateFileFormat(
+        format_name="ML_POC.PUBLIC.CSV_FILE_FORMAT",
+        formatter=CSVFormatter().field_delimiter(","),
+        replace_if_exists=True,
+        comment='my nice file format comment'
+    )
+    actual = sql_compiler(create_format_with_comment)
+    expected = "CREATE OR REPLACE FILE FORMAT ML_POC.PUBLIC.CSV_FILE_FORMAT " \
+               "TYPE='csv' FIELD_DELIMITER = ',' COMMENT = 'my nice file format comment'"
+    assert actual == expected
+
 
 def test_create_parquet_format(sql_compiler):
     """
