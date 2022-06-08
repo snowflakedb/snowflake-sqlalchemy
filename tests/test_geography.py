@@ -2,9 +2,10 @@
 
 from json import loads
 
-from snowflake.sqlalchemy import GEOGRAPHY
 from sqlalchemy import Column, Integer, MetaData, Table
 from sqlalchemy.sql import select
+
+from snowflake.sqlalchemy import GEOGRAPHY
 
 
 def test_create_table_geography_datatypes(engine_testaccount):
@@ -17,8 +18,8 @@ def test_create_table_geography_datatypes(engine_testaccount):
     test_geography = Table(
         table_name,
         metadata,
-        Column('id', Integer, primary_key=True),
-        Column('geo', GEOGRAPHY),
+        Column("id", Integer, primary_key=True),
+        Column("geo", GEOGRAPHY),
     )
     metadata.create_all(engine_testaccount)
     try:
@@ -36,20 +37,17 @@ def test_inspect_geography_datatypes(engine_testaccount):
     test_geography = Table(
         table_name,
         metadata,
-        Column('id', Integer, primary_key=True),
-        Column('geo1', GEOGRAPHY),
-        Column('geo2', GEOGRAPHY))
+        Column("id", Integer, primary_key=True),
+        Column("geo1", GEOGRAPHY),
+        Column("geo2", GEOGRAPHY),
+    )
     metadata.create_all(engine_testaccount)
 
     try:
-        test_point = 'POINT(-122.35 37.55)'
+        test_point = "POINT(-122.35 37.55)"
         test_point1 = '{"coordinates": [-122.35,37.55],"type": "Point"}'
 
-        ins = test_geography.insert().values(
-            id=1,
-            geo1=test_point,
-            geo2=test_point1
-        )
+        ins = test_geography.insert().values(id=1, geo1=test_point, geo2=test_point1)
 
         results = engine_testaccount.execute(ins)
         results.close()

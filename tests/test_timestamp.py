@@ -6,9 +6,10 @@
 from datetime import datetime
 
 import pytz
-from snowflake.sqlalchemy import TIMESTAMP_LTZ, TIMESTAMP_NTZ, TIMESTAMP_TZ
 from sqlalchemy import Column, Integer, MetaData, Table
 from sqlalchemy.sql import select
+
+from snowflake.sqlalchemy import TIMESTAMP_LTZ, TIMESTAMP_NTZ, TIMESTAMP_TZ
 
 PST_TZ = "America/Los_Angeles"
 JST_TZ = "Asia/Tokyo"
@@ -23,10 +24,11 @@ def test_create_table_timestamp_datatypes(engine_testaccount):
     test_timestamp = Table(
         table_name,
         metadata,
-        Column('id', Integer, primary_key=True),
-        Column('tsntz', TIMESTAMP_NTZ),
-        Column('tsltz', TIMESTAMP_LTZ),
-        Column('tstz', TIMESTAMP_TZ))
+        Column("id", Integer, primary_key=True),
+        Column("tsntz", TIMESTAMP_NTZ),
+        Column("tsltz", TIMESTAMP_LTZ),
+        Column("tstz", TIMESTAMP_TZ),
+    )
     metadata.create_all(engine_testaccount)
     try:
         assert test_timestamp is not None
@@ -43,20 +45,21 @@ def test_inspect_timestamp_datatypes(engine_testaccount):
     test_timestamp = Table(
         table_name,
         metadata,
-        Column('id', Integer, primary_key=True),
-        Column('tsntz', TIMESTAMP_NTZ),
-        Column('tsltz', TIMESTAMP_LTZ),
-        Column('tstz', TIMESTAMP_TZ))
+        Column("id", Integer, primary_key=True),
+        Column("tsntz", TIMESTAMP_NTZ),
+        Column("tsltz", TIMESTAMP_LTZ),
+        Column("tstz", TIMESTAMP_TZ),
+    )
     metadata.create_all(engine_testaccount)
     try:
         current_utctime = datetime.utcnow()
-        current_localtime = pytz.utc.localize(
-            current_utctime,
-            is_dst=False).astimezone(pytz.timezone(PST_TZ))
+        current_localtime = pytz.utc.localize(current_utctime, is_dst=False).astimezone(
+            pytz.timezone(PST_TZ)
+        )
         current_localtime_without_tz = datetime.now()
         current_localtime_with_other_tz = pytz.utc.localize(
-            current_localtime_without_tz,
-            is_dst=False).astimezone(pytz.timezone(JST_TZ))
+            current_localtime_without_tz, is_dst=False
+        ).astimezone(pytz.timezone(JST_TZ))
 
         ins = test_timestamp.insert().values(
             id=1,
