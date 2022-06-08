@@ -1,2 +1,2 @@
 include *.rst *.py
-prune test
+prune tests
