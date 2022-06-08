@@ -1245,8 +1245,8 @@ def test_deterministic_merge_into(sql_compiler):
         name=onboarding_users.c.name,
         fullname=onboarding_users.c.fullname,
     ).where(
-        onboarding_users.c.fullname is not None
-    )  # NOQA
+        onboarding_users.c.fullname != None  # NOQA
+    )
     assert (
         sql_compiler(merge)
         == "MERGE INTO users USING onboarding_users ON users.id = onboarding_users.id "
