@@ -19,38 +19,37 @@ VARBINARY = sqltypes.BINARY
 
 
 class SnowflakeType(sqltypes.TypeEngine):
-
     def _default_dialect(self):
         # Get around circular import
-        return __import__('snowflake.sqlalchemy').sqlalchemy.dialect()
+        return __import__("snowflake.sqlalchemy").sqlalchemy.dialect()
 
 
 class VARIANT(SnowflakeType):
-    __visit_name__ = 'VARIANT'
+    __visit_name__ = "VARIANT"
 
 
 class OBJECT(SnowflakeType):
-    __visit_name__ = 'OBJECT'
+    __visit_name__ = "OBJECT"
 
 
 class ARRAY(SnowflakeType):
-    __visit_name__ = 'ARRAY'
+    __visit_name__ = "ARRAY"
 
 
 class TIMESTAMP_TZ(SnowflakeType):
-    __visit_name__ = 'TIMESTAMP_TZ'
+    __visit_name__ = "TIMESTAMP_TZ"
 
 
 class TIMESTAMP_LTZ(SnowflakeType):
-    __visit_name__ = 'TIMESTAMP_LTZ'
+    __visit_name__ = "TIMESTAMP_LTZ"
 
 
 class TIMESTAMP_NTZ(SnowflakeType):
-    __visit_name__ = 'TIMESTAMP_NTZ'
+    __visit_name__ = "TIMESTAMP_NTZ"
 
 
 class GEOGRAPHY(SnowflakeType):
-    __visit_name__ = 'GEOGRAPHY'
+    __visit_name__ = "GEOGRAPHY"
 
 
 class _CUSTOM_DECIMAL(SnowflakeType, sqltypes.DECIMAL):
