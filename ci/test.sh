@@ -4,7 +4,7 @@
 #
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 SQLALCHEMY_DIR="$( dirname "${THIS_DIR}")"
-PARAMETERS_DIR="${CONNECTOR_DIR}/.github/workflows/parameters/private"
+PARAMETERS_DIR="${CONNECTOR_DIR}/.github/workflows/parameters"
 
 cd "${SQLALCHEMY_DIR}"
 
