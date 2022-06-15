@@ -18,7 +18,7 @@ fi
 PARAMS_FILE="${PARAMETERS_DIR}/parameters_aws.py.gpg"
 [ ${cloud_provider} == azure ] && PARAMS_FILE="${PARAMETERS_DIR}/parameters_azure.py.gpg"
 [ ${cloud_provider} == gcp ] && PARAMS_FILE="${PARAMETERS_DIR}/parameters_gcp.py.gpg"
-gpg --quiet --batch --yes --decrypt --passphrase="${PARAMETERS_SECRET}" ${PARAMS_FILE} > test/parameters.py
+gpg --quiet --batch --yes --decrypt --passphrase="${PARAMETERS_SECRET}" ${PARAMS_FILE} > tests/parameters.py
 
 # Download artifacts made by build
 aws s3 cp --recursive --only-show-errors s3://sfc-jenkins/repository/sqlalchemy/linux/${client_git_branch}/${client_git_commit}/ dist
