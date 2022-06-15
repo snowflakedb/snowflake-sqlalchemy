@@ -32,7 +32,7 @@ else
 fi
 
 echo "[Info] Start building dokcer image"
-docker build -t ${CONTAINER_NAME}:1.0 --build-arg BASE_IMAGE=$BASE_IMAGE  --build-arg GOSU_URL="$GOSU_URL" . -f Dockerfile
+docker build --pull -t ${CONTAINER_NAME}:1.0 --build-arg BASE_IMAGE=$BASE_IMAGE  --build-arg GOSU_URL="$GOSU_URL" . -f Dockerfile
 
 user_id=$(id -u $USER)
 docker run --network=host \

@@ -6,8 +6,6 @@ THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 SQLALCHEMY_DIR="$( dirname "${THIS_DIR}")"
 PARAMETERS_DIR="${CONNECTOR_DIR}/.github/workflows/parameters/private"
 
-log INFO "Testing SQLAlchemy in ${PYTHON_ENV}"
-
 cd "${SQLALCHEMY_DIR}"
 
 # Check Requirements
