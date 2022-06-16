@@ -13,14 +13,6 @@ SQLALCHEMY_DIR="$( dirname "${THIS_DIR}")"
 # Install one copy of tox
 python3 -m pip install -U tox tox-external-wheels
 
-source ${THIS_DIR}/log_analyze_setup.sh
-
-if [[ -d ${CLIENT_LOG_DIR_PATH_DOCKER} ]]; then
-    rm -rf ${CLIENT_LOG_DIR_PATH_DOCKER}/*
-else
-    mkdir ${CLIENT_LOG_DIR_PATH_DOCKER}
-fi
-
 # Run tests
 cd $SQLALCHEMY_DIR
 for PYTHON_VERSION in ${PYTHON_VERSIONS}; do
