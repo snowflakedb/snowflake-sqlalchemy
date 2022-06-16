@@ -31,21 +31,22 @@ else
   GOSU_URL=https://github.com/tianon/gosu/releases/download/1.14/gosu-amd64
 fi
 
-echo "[Info] Start building dokcer image"
+echo "[Info] Start building docker image"
 docker build --pull -t ${CONTAINER_NAME}:1.0 --build-arg BASE_IMAGE=$BASE_IMAGE  --build-arg GOSU_URL="$GOSU_URL" . -f Dockerfile
 
-user_id=$(id -u $USER)
+user_id=$(id -u ${USER})
 docker run --network=host \
     -e TERM=vt102 \
     -e PIP_DISABLE_PIP_VERSION_CHECK=1 \
     -e OPENSSL_FIPS=1 \
-    -e LOCAL_USER_ID=$user_id \
+    -e LOCAL_USER_ID=${user_id} \
     -e AWS_ACCESS_KEY_ID \
     -e AWS_SECRET_ACCESS_KEY \
     -e SF_REGRESS_LOGS \
     -e SF_PROJECT_ROOT \
     -e cloud_provider \
     -e JENKINS_HOME \
+    -e is_old_driver \
     -e GITHUB_ACTIONS \
     --mount type=bind,source="${SQLALCHEMY_DIR}",target=/home/user/snowflake-sqlalchemy \
     ${CONTAINER_NAME}:1.0 \
