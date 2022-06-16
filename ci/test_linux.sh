@@ -11,7 +11,7 @@ THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 SQLALCHEMY_DIR="$( dirname "${THIS_DIR}")"
 
 # Install one copy of tox
-python3 -m pip install -U tox tox-external-wheels
+python3 -m pip install --pre tox
 
 # Run tests
 cd $SQLALCHEMY_DIR
@@ -21,5 +21,5 @@ for PYTHON_VERSION in ${PYTHON_VERSIONS}; do
     SQLALCHEMY_WHL=$(ls $SQLALCHEMY_DIR/dist/snowflake_sqlalchemy-*-py2.py3-none-any.whl | sort -r | head -n 1)
     TEST_ENVLIST=fix_lint,py${SHORT_VERSION}-ci,py${SHORT_VERSION}-coverage
     echo "[Info] Running tox for ${TEST_ENVLIST}"
-    python3 -m tox -e ${TEST_ENVLIST} --external_wheels ${SQLALCHEMY_WHL}
+    python3 -m tox -e ${TEST_ENVLIST} --installpkg ${SQLALCHEMY_WHL}
 done

@@ -5,8 +5,8 @@ FROM $BASE_IMAGE
 # This is to solve permission issue, read https://denibertovic.com/posts/handling-permissions-with-docker-volumes/
 ARG GOSU_URL=https://github.com/tianon/gosu/releases/download/1.14/gosu-amd64
 ENV GOSU_PATH $GOSU_URL
-RUN curl -o /usr/local/bin/gosu -SL $GOSU_PATH
-RUN chmod +x /usr/local/bin/gosu
+RUN curl -o /usr/local/bin/gosu -SL $GOSU_PATH \
+    && chmod +x /usr/local/bin/gosu
 
 COPY scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh

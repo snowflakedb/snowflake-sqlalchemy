@@ -31,8 +31,7 @@ else
   GOSU_URL=https://github.com/tianon/gosu/releases/download/1.14/gosu-amd64
 fi
 
-echo "[Info] Start building docker image"
-docker build --pull -t ${CONTAINER_NAME}:1.0 --build-arg BASE_IMAGE=$BASE_IMAGE  --build-arg GOSU_URL="$GOSU_URL" . -f Dockerfile
+echo "[Info] Start building docker image and testing"
 
 user_id=$(id -u ${USER})
 docker run --network=host \
@@ -49,5 +48,5 @@ docker run --network=host \
     -e is_old_driver \
     -e GITHUB_ACTIONS \
     --mount type=bind,source="${SQLALCHEMY_DIR}",target=/home/user/snowflake-sqlalchemy \
-    ${CONTAINER_NAME}:1.0 \
+    $(docker build --pull --build-arg BASE_IMAGE=$BASE_IMAGE --build-arg GOSU_URL="$GOSU_URL" -q .) \
     /home/user/snowflake-sqlalchemy/ci/test_linux.sh ${PYTHON_ENV}
