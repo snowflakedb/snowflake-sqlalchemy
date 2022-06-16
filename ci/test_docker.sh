@@ -15,7 +15,7 @@ SQLALCHEMY_DIR="$( dirname "${THIS_DIR}")"
 WORKSPACE=${WORKSPACE:-$SQLALCHEMY_DIR}
 source $THIS_DIR/set_base_image.sh
 
-cd $SQLALCHEMY_DIR/docker/sqlalchemy_build
+cd $THIS_DIR/docker/sqlalchemy_build
 
 CONTAINER_NAME=test_sqlalchemy
 
