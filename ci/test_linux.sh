@@ -29,5 +29,5 @@ for PYTHON_VERSION in ${PYTHON_VERSIONS}; do
     SQLALCHEMY_WHL=$(ls $SQLALCHEMY_DIR/dist/snowflake_sqlalchemy-*-py2.py3-none-any.whl | sort -r | head -n 1)
     TEST_ENVLIST=fix_lint,py${SHORT_VERSION}-ci,py${SHORT_VERSION}-coverage
     echo "[Info] Running tox for ${TEST_ENVLIST}"
-    python3 -m tox -e ${TEST_ENVLIST} --external_wheels ${CONNECTOR_WHL}
+    python3 -m tox -e ${TEST_ENVLIST} --external_wheels ${SQLALCHEMY_WHL}
 done
