@@ -11,7 +11,7 @@ THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 SQLALCHEMY_DIR="$( dirname "${THIS_DIR}")"
 
 # Install one copy of tox
-python3 -m pip install --pre tox
+python3 -m pip install -U tox
 
 # Run tests
 cd $SQLALCHEMY_DIR
