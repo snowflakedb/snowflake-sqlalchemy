@@ -45,7 +45,6 @@ docker run --network=host \
     -e SF_PROJECT_ROOT \
     -e cloud_provider \
     -e JENKINS_HOME \
-    -e is_old_driver \
     -e GITHUB_ACTIONS \
     --mount type=bind,source="${SQLALCHEMY_DIR}",target=/home/user/snowflake-sqlalchemy \
     $(docker build --pull --build-arg BASE_IMAGE=$BASE_IMAGE --build-arg GOSU_URL="$GOSU_URL" -q .) \
