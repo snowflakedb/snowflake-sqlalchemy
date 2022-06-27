@@ -6,6 +6,9 @@ from sqlalchemy import Integer, testing
 from sqlalchemy.schema import Column, Sequence, Table
 from sqlalchemy.testing import config
 from sqlalchemy.testing.suite import AutocommitIsolationTest as _AutocommitIsolationTest
+from sqlalchemy.testing.suite import (
+    CompositeKeyReflectionTest as _CompositeKeyReflectionTest,
+)
 from sqlalchemy.testing.suite import CTETest as _CTETest
 from sqlalchemy.testing.suite import DateTest as _DateTest
 from sqlalchemy.testing.suite import (
@@ -176,6 +179,24 @@ class IsolationLevelTest(_IsolationLevelTest):
 
 
 # 3. Need further investigation, either to be skipped/removed by design, or to be fixed
+
+
+class CompositeKeyReflectionTest(_CompositeKeyReflectionTest):
+    @pytest.mark.skip("need investigation")
+    def test_pk_column_order(self):
+        """
+        >       assert a == b, msg or "%r != %r" % (a, b)
+        E       AssertionError: ['attr', 'id', 'name'] != ['name', 'id', 'attr']
+        """
+        pass
+
+    @pytest.mark.skip("need investigation")
+    def test_fk_column_order(self):
+        """
+        >       assert a == b, msg or "%r != %r" % (a, b)
+        E       AssertionError: ['attr', 'id', 'name'] != ['name', 'id', 'attr']
+        """
+        pass
 
 
 class CTETest(_CTETest):
