@@ -20,7 +20,7 @@ jobs:
         run: python -c "import sys; print(sys.version)"
       - name: Upgrade setuptools, pip and wheel
         run: python -m pip install -U setuptools pip wheel
-      - name: Install Snowflake SQlAlchemy
+      - name: Install Snowflake SQLAlchemy
         shell: bash
         run: python -m pip install .
       - name: Generate reqs file name
