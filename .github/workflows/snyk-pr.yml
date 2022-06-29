@@ -21,7 +21,7 @@ jobs:
         token: ${{ secrets.whitesource_action_token }}
         path: whitesource-actions
 
-    - name: pr
+    - name: snyk pr
       uses: ./whitesource-actions/snyk-pr
       env:
         pr_title: ${{ github.event.pull_request.title }}
