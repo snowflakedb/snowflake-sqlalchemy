@@ -12,9 +12,10 @@ import pytest
 from sqlalchemy import create_engine
 
 import snowflake.connector
-from parameters import CONNECTION_PARAMETERS
 from snowflake.connector.compat import IS_WINDOWS
 from snowflake.sqlalchemy import URL, dialect
+
+from .parameters import CONNECTION_PARAMETERS
 
 CLOUD_PROVIDERS = {"aws", "azure", "gcp"}
 EXTERNAL_SKIP_TAGS = {"internal"}
