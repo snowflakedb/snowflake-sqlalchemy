@@ -403,7 +403,6 @@ class SnowflakeDialect(default.DefaultDialect):
                 )
 
         ans = {}
-
         for _, v in foreign_key_map.items():
             if v["table_name"] not in ans:
                 ans[v["table_name"]] = []
