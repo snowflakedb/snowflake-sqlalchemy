@@ -1,4 +1,4 @@
-name: Snyk Issue
+name: Snyk Issue # I have read the CLA Document and I hereby sign the CLA
 
 on:
   schedule:
