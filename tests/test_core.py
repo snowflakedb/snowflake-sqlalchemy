@@ -10,7 +10,6 @@ import time
 from unittest.mock import patch
 
 import pytest
-from conftest import get_engine
 from sqlalchemy import (
     REAL,
     Boolean,
@@ -34,10 +33,12 @@ from sqlalchemy import (
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.sql import and_, not_, or_, select
 
-from parameters import CONNECTION_PARAMETERS
 from snowflake.connector import Error, ProgrammingError, connect
 from snowflake.sqlalchemy import URL, MergeInto, dialect
 from snowflake.sqlalchemy.snowdialect import SnowflakeDialect
+
+from .conftest import get_engine
+from .parameters import CONNECTION_PARAMETERS
 
 THIS_DIR = os.path.dirname(os.path.realpath(__file__))
 
