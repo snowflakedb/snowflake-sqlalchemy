@@ -1,7 +1,7 @@
-#!/usr/bin/env python
 #
-# Copyright (c) 2012-2019 Snowflake Computing Inc. All right reserved.
+# Copyright (c) 2012-2022 Snowflake Computing Inc. All rights reserved.
 #
+
 import pytest
 from sqlalchemy import Column, Integer, MetaData, Sequence, String, Table
 from sqlalchemy.sql import select, text

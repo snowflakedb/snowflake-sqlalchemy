@@ -36,7 +36,6 @@ pip install --upgrade snowflake-sqlalchemy
    which connects to Snowflake and displays the Snowflake version:
 
     ```python
-    #!/usr/bin/env python
     from sqlalchemy import create_engine
 
     engine = create_engine(

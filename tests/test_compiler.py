@@ -1,4 +1,6 @@
-#!/usr/bin/env python
+#
+# Copyright (c) 2012-2022 Snowflake Computing Inc. All rights reserved.
+#
 
 from sqlalchemy import Integer, String, and_, select
 from sqlalchemy.schema import DropColumnComment, DropTableComment
