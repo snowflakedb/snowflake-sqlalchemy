@@ -48,7 +48,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
         with:
-          token: ${{ secrets.PAT }}
+          token: ${{ secrets.SNOWFLAKE_GITHUB_TOKEN }}
       - name: Download requirement files
         uses: actions/download-artifact@v2
         with:
