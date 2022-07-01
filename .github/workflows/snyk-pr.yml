@@ -28,4 +28,4 @@ jobs:
       with:
         jira_token: ${{ secrets.jira_token_public_repo }}
         gh_token: ${{ secrets.github_token }}
-        amend: false 
+        amend: false
