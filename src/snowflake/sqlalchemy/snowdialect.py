@@ -791,6 +791,19 @@ class SnowflakeDialect(default.DefaultDialect):
 
         return [self.normalize_name(row[1]) for row in cursor]
 
+    @reflection.cache
+    def get_sequence_names(self, connection, schema=None, **kw):
+        sql_command = "SHOW SEQUENCES {}".format(
+            f"IN SCHEMA {self.normalize_name(schema)}" if schema else ""
+        )
+        try:
+            cursor = connection.execute(text(sql_command))
+            return [self.normalize_name(row[0]) for row in cursor]
+        except sa_exc.ProgrammingError as pe:
+            if pe.orig.errno == 2003:
+                # Schema does not exist
+                return []
+
     def _get_table_comment(self, connection, table_name, schema=None, **kw):
         """
         Returns comment of table in a dictionary as described by SQLAlchemy spec.

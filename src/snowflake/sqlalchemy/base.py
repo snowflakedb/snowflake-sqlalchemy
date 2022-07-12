@@ -398,9 +398,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
 class SnowflakeExecutionContext(default.DefaultExecutionContext):
     def fire_sequence(self, seq, type_):
         return self._execute_scalar(
-            "SELECT "
-            + self.dialect.identifier_preparer.format_sequence(seq)
-            + ".nextval",
+            "SELECT " + self.identifier_preparer.format_sequence(seq) + ".nextval",
             type_,
         )
 
@@ -461,7 +459,9 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
             and column.server_default is None
         ):
             if isinstance(column.default, Sequence):
-                colspec.append(f"DEFAULT {column.default.name}.nextval")
+                colspec.append(
+                    f"DEFAULT {self.dialect.identifier_preparer.format_sequence(column.default)}.nextval"
+                )
             else:
                 colspec.append("AUTOINCREMENT")
 

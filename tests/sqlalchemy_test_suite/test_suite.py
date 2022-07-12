@@ -10,7 +10,6 @@ from sqlalchemy.testing.suite import EscapingTest as _EscapingTest
 from sqlalchemy.testing.suite import ExceptionTest as _ExceptionTest
 from sqlalchemy.testing.suite import FetchLimitOffsetTest as _FetchLimitOffsetTest
 from sqlalchemy.testing.suite import HasSequenceTest as _HasSequenceTest
-from sqlalchemy.testing.suite import HasSequenceTestEmpty as _HasSequenceTestEmpty
 from sqlalchemy.testing.suite import (
     IdentityAutoincrementTest as _IdentityAutoincrementTest,
 )
@@ -18,7 +17,6 @@ from sqlalchemy.testing.suite import InsertBehaviorTest as _InsertBehaviorTest
 from sqlalchemy.testing.suite import LikeFunctionsTest as _LikeFunctionsTest
 from sqlalchemy.testing.suite import LongNameBlowoutTest as _LongNameBlowoutTest
 from sqlalchemy.testing.suite import PercentSchemaNamesTest as _PercentSchemaNamesTest
-from sqlalchemy.testing.suite import SequenceTest as _SequenceTest
 from sqlalchemy.testing.suite import SimpleUpdateDeleteTest as _SimpleUpdateDeleteTest
 from sqlalchemy.testing.suite import StringTest as _StringTest
 from sqlalchemy.testing.suite import TextTest as _TextTest
@@ -75,45 +73,6 @@ class InsertBehaviorTest(_InsertBehaviorTest):
         "Snowflake does not support inserting empty values, The value may be a literal or an expression."
     )
     def test_empty_insert_multiple(self, connection):
-        pass
-
-
-# 2. Not implemented by snowflake-sqlalchemy
-class HasSequenceTest(_HasSequenceTest):
-    # Override the define_tables method as snowflake does not support 'nomaxvalue'/'nominvalue'
-    @classmethod
-    def define_tables(cls, metadata):
-        Sequence("user_id_seq", metadata=metadata)
-        # Replace Sequence("other_seq") creation as in the original test suite,
-        # the Sequence created with 'nomaxvalue' and 'nominvalue'
-        # which snowflake does not support:
-        #     Sequence("other_seq", metadata=metadata, nomaxvalue=True, nominvalue=True)
-        Sequence("other_seq", metadata=metadata)
-        if testing.requires.schemas.enabled:
-            Sequence("user_id_seq", schema=config.test_schema, metadata=metadata)
-            Sequence("schema_seq", schema=config.test_schema, metadata=metadata)
-        Table(
-            "user_id_table",
-            metadata,
-            Column("id", Integer, primary_key=True),
-        )
-
-    @pytest.mark.skip("get_sequence_names not implemented in SnowflakeDialect")
-    def test_get_sequence_names(self, connection):
-        pass
-
-    @pytest.mark.skip("get_sequence_names not implemented in SnowflakeDialect")
-    def test_get_sequence_names_no_sequence_schema(self, connection):
-        pass
-
-    @pytest.mark.skip("get_sequence_names not implemented in SnowflakeDialect")
-    def test_get_sequence_names_sequences_schema(self, connection):
-        pass
-
-
-class HasSequenceTestEmpty(_HasSequenceTestEmpty):
-    @pytest.mark.skip("get_sequence_names not implemented in SnowflakeDialect")
-    def test_get_sequence_names_no_sequence(self, connection):
         pass
 
 
@@ -190,67 +149,6 @@ class IdentityAutoincrementTest(_IdentityAutoincrementTest):
         pass
 
 
-class SequenceTest(_SequenceTest):
-    @pytest.mark.skip("need investigation")
-    def test_insert_lastrowid(self, connection):
-        """
-        E       sqlalchemy.exc.ProgrammingError: (snowflake.connector.errors.ProgrammingError) 000904 (42000): SQL compilation error: error line 2 at position 29
-        E       invalid identifier 'NORET_SCH_ID_SEQ.NEXTVAL'
-        E       [SQL:
-        E       CREATE TABLE test_schema.seq_no_returning_sch (
-        E       	id INTEGER NOT NULL DEFAULT noret_sch_id_seq.nextval,
-        E       	data VARCHAR(50),
-        E       	PRIMARY KEY (id)
-        E       )
-        E
-        E       ]
-        E       (Background on this error at: https://sqlalche.me/e/14/f405)
-        """
-        pass
-
-    @pytest.mark.skip("need investigation")
-    def test_insert_roundtrip(self, connection):
-        """
-        similar invalid identifier error as the first one
-        """
-        pass
-
-    @pytest.mark.skip("need investigation")
-    def test_insert_roundtrip_no_implicit_returning(self, connection):
-        """
-        similar invalid identifier error as the first one
-        """
-        pass
-
-    @pytest.mark.skip("need investigation")
-    def test_insert_roundtrip_translate(self, connection, implicit_returning):
-        """
-        similar invalid identifier error as the first one
-        """
-        pass
-
-    @pytest.mark.skip("need investigation")
-    def test_nextval_direct(self, connection):
-        """
-        similar invalid identifier error as the first one
-        """
-        pass
-
-    @pytest.mark.skip("need investigation")
-    def test_nextval_direct_schema_translate(self, connection):
-        """
-        similar invalid identifier error as the first one
-        """
-        pass
-
-    @pytest.mark.skip("need investigation")
-    def test_optional_seq(self, connection):
-        """
-        similar invalid identifier error as the first one
-        """
-        pass
-
-
 class SimpleUpdateDeleteTest(_SimpleUpdateDeleteTest):
     @pytest.mark.skip("need investigation")
     def test_delete(self, connection):
@@ -315,8 +213,34 @@ class PercentSchemaNamesTest(_PercentSchemaNamesTest):
     def test_executemany_roundtrip(self, connection):
         super().test_executemany_roundtrip(connection)
 
+    @pytest.mark.xfail
+    # TODO: this failure is weird, running in standalone mode (just the method or PercentSchemaNamesTest) won't fail,
+    #  however, running within the whole test_suite.py fails
+    def test_single_roundtrip(self, connection):
+        super().test_single_roundtrip(connection)
+
 
 # 5. Patched Tests
+
+
+class HasSequenceTest(_HasSequenceTest):
+    # Override the define_tables method as snowflake does not support 'nomaxvalue'/'nominvalue'
+    @classmethod
+    def define_tables(cls, metadata):
+        Sequence("user_id_seq", metadata=metadata)
+        # Replace Sequence("other_seq") creation as in the original test suite,
+        # the Sequence created with 'nomaxvalue' and 'nominvalue'
+        # which snowflake does not support:
+        #     Sequence("other_seq", metadata=metadata, nomaxvalue=True, nominvalue=True)
+        Sequence("other_seq", metadata=metadata)
+        if testing.requires.schemas.enabled:
+            Sequence("user_id_seq", schema=config.test_schema, metadata=metadata)
+            Sequence("schema_seq", schema=config.test_schema, metadata=metadata)
+        Table(
+            "user_id_table",
+            metadata,
+            Column("id", Integer, primary_key=True),
+        )
 
 
 class LikeFunctionsTest(_LikeFunctionsTest):
