@@ -21,7 +21,6 @@ from sqlalchemy.types import (
     BINARY,
     BOOLEAN,
     CHAR,
-    DATE,
     DATETIME,
     DECIMAL,
     FLOAT,
@@ -31,6 +30,11 @@ from sqlalchemy.types import (
     TIME,
     TIMESTAMP,
     VARCHAR,
+    Date,
+    DateTime,
+    Float,
+    Numeric,
+    Time,
 )
 
 from snowflake.connector import errors as sf_errors
@@ -52,9 +56,20 @@ from .custom_types import (
     TIMESTAMP_NTZ,
     TIMESTAMP_TZ,
     VARIANT,
+    _CUSTOM_Date,
+    _CUSTOM_DateTime,
+    _CUSTOM_Float,
+    _CUSTOM_Numeric,
+    _CUSTOM_Time,
 )
 
-colspecs = {}
+colspecs = {
+    Date: _CUSTOM_Date,
+    DateTime: _CUSTOM_DateTime,
+    Time: _CUSTOM_Time,
+    Float: _CUSTOM_Float,
+    Numeric: _CUSTOM_Numeric,
+}
 
 ischema_names = {
     "BIGINT": BIGINT,
@@ -63,7 +78,6 @@ ischema_names = {
     "BOOLEAN": BOOLEAN,
     "CHAR": CHAR,
     "CHARACTER": CHAR,
-    "DATE": DATE,
     "DATETIME": DATETIME,
     "DEC": DECIMAL,
     "DECIMAL": DECIMAL,
@@ -164,6 +178,14 @@ class SnowflakeDialect(default.DefaultDialect):
     # and denormalize_name() must be provided.
     requires_name_normalize = True
 
+    multivalues_inserts = True
+
+    supports_schemas = True
+
+    sequences_optional = True
+
+    supports_is_distinct_from = True
+
     @classmethod
     def dbapi(cls):
         from snowflake import connector
@@ -261,14 +283,13 @@ class SnowflakeDialect(default.DefaultDialect):
 
     @reflection.cache
     def _current_database_schema(self, connection, **kw):
-        # "branches" a connection if one exists, otherwise creates one
-        # branched connections use the same underlying DBAPI but maintain separate references
-        with connection.connect() as sqla_con:
-            dbapi_con = sqla_con.connection
-            return (
-                self.normalize_name(dbapi_con.database),
-                self.normalize_name(dbapi_con.schema),
-            )
+        res = connection.exec_driver_sql(
+            "select current_database(), current_schema();"
+        ).fetchone()
+        return (
+            self.normalize_name(res[0]),
+            self.normalize_name(res[1]),
+        )
 
     def _get_default_schema_name(self, connection):
         # NOTE: no cache object is passed here
@@ -303,8 +324,10 @@ class SnowflakeDialect(default.DefaultDialect):
             )
         )
         ans = {}
+        key_sequence_order_map = defaultdict(list)
         for row in result:
             table_name = self.normalize_name(row["table_name"])
+            key_sequence_order_map[table_name].append(row["key_sequence"])
             if table_name not in ans:
                 ans[table_name] = {
                     "constrained_columns": [],
@@ -313,6 +336,15 @@ class SnowflakeDialect(default.DefaultDialect):
             ans[table_name]["constrained_columns"].append(
                 self.normalize_name(row["column_name"])
             )
+
+        for k, v in ans.items():
+            v["constrained_columns"] = [
+                col
+                for _, col in sorted(
+                    zip(key_sequence_order_map[k], v["constrained_columns"])
+                )
+            ]
+
         return ans
 
     def get_pk_constraint(self, connection, table_name, schema=None, **kw):
@@ -375,8 +407,10 @@ class SnowflakeDialect(default.DefaultDialect):
             )
         )
         foreign_key_map = {}
+        key_sequence_order_map = defaultdict(list)
         for row in result:
             name = self.normalize_name(row["fk_name"])
+            key_sequence_order_map[name].append(row["key_sequence"])
             if name not in foreign_key_map:
                 referred_schema = self.normalize_name(row["pk_schema_name"])
                 foreign_key_map[name] = {
@@ -394,6 +428,12 @@ class SnowflakeDialect(default.DefaultDialect):
                     "name": name,
                     "table_name": self.normalize_name(row["fk_table_name"]),
                 }
+                options = {}
+                if self.normalize_name(row["delete_rule"]) != "NO ACTION":
+                    options["ondelete"] = self.normalize_name(row["delete_rule"])
+                if self.normalize_name(row["update_rule"]) != "NO ACTION":
+                    options["onupdate"] = self.normalize_name(row["update_rule"])
+                foreign_key_map[name]["options"] = options
             else:
                 foreign_key_map[name]["constrained_columns"].append(
                     self.normalize_name(row["fk_column_name"])
@@ -403,7 +443,20 @@ class SnowflakeDialect(default.DefaultDialect):
                 )
 
         ans = {}
-        for _, v in foreign_key_map.items():
+
+        for k, v in foreign_key_map.items():
+            v["constrained_columns"] = [
+                col
+                for _, col in sorted(
+                    zip(key_sequence_order_map[k], v["constrained_columns"])
+                )
+            ]
+            v["referred_columns"] = [
+                col
+                for _, col in sorted(
+                    zip(key_sequence_order_map[k], v["referred_columns"])
+                )
+            ]
             if v["table_name"] not in ans:
                 ans[v["table_name"]] = []
             ans[v["table_name"]].append(

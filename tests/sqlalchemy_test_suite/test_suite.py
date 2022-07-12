@@ -5,19 +5,6 @@ import pytest
 from sqlalchemy import Integer, testing
 from sqlalchemy.schema import Column, Sequence, Table
 from sqlalchemy.testing import config
-from sqlalchemy.testing.suite import AutocommitIsolationTest as _AutocommitIsolationTest
-from sqlalchemy.testing.suite import (
-    CompositeKeyReflectionTest as _CompositeKeyReflectionTest,
-)
-from sqlalchemy.testing.suite import CTETest as _CTETest
-from sqlalchemy.testing.suite import DateTest as _DateTest
-from sqlalchemy.testing.suite import (
-    DateTimeCoercedToDateTimeTest as _DateTimeCoercedToDateTimeTest,
-)
-from sqlalchemy.testing.suite import (
-    DateTimeMicrosecondsTest as _DateTimeMicrosecondsTest,
-)
-from sqlalchemy.testing.suite import DateTimeTest as _DateTimeTest
 from sqlalchemy.testing.suite import DifficultParametersTest as _DifficultParametersTest
 from sqlalchemy.testing.suite import EscapingTest as _EscapingTest
 from sqlalchemy.testing.suite import ExceptionTest as _ExceptionTest
@@ -28,16 +15,13 @@ from sqlalchemy.testing.suite import (
     IdentityAutoincrementTest as _IdentityAutoincrementTest,
 )
 from sqlalchemy.testing.suite import InsertBehaviorTest as _InsertBehaviorTest
-from sqlalchemy.testing.suite import IsolationLevelTest as _IsolationLevelTest
-from sqlalchemy.testing.suite import LastrowidTest as _LastrowidTest
+from sqlalchemy.testing.suite import LikeFunctionsTest as _LikeFunctionsTest
 from sqlalchemy.testing.suite import LongNameBlowoutTest as _LongNameBlowoutTest
-from sqlalchemy.testing.suite import NumericTest as _NumericTest
+from sqlalchemy.testing.suite import PercentSchemaNamesTest as _PercentSchemaNamesTest
 from sqlalchemy.testing.suite import SequenceTest as _SequenceTest
 from sqlalchemy.testing.suite import SimpleUpdateDeleteTest as _SimpleUpdateDeleteTest
 from sqlalchemy.testing.suite import StringTest as _StringTest
 from sqlalchemy.testing.suite import TextTest as _TextTest
-from sqlalchemy.testing.suite import TimeMicrosecondsTest as _TimeMicrosecondsTest
-from sqlalchemy.testing.suite import TimeTest as _TimeTest
 from sqlalchemy.testing.suite import *  # noqa
 
 # 1. Unsupported by snowflake db
@@ -45,6 +29,7 @@ from sqlalchemy.testing.suite import *  # noqa
 del ComponentReflectionTest  # require indexes not supported by snowflake
 del HasIndexTest  # require indexes not supported by snowflake
 del QuotedNameArgumentTest  # require indexes not supported by snowflake
+del ComputedReflectionTest  # expression not GA yet, SNOW-169530
 
 
 class LongNameBlowoutTest(_LongNameBlowoutTest):
@@ -58,30 +43,6 @@ class FetchLimitOffsetTest(_FetchLimitOffsetTest):
         "Snowflake only takes non-negative integer constants for offset/limit"
     )
     def test_bound_offset(self, connection):
-        pass
-
-    @pytest.mark.skip(
-        "Snowflake only takes non-negative integer constants for offset/limit"
-    )
-    def test_expr_limit(self, connection):
-        pass
-
-    @pytest.mark.skip(
-        "Snowflake only takes non-negative integer constants for offset/limit"
-    )
-    def test_expr_limit_offset(self, connection):
-        pass
-
-    @pytest.mark.skip(
-        "Snowflake only takes non-negative integer constants for offset/limit"
-    )
-    def test_expr_limit_simple_offset(self, connection):
-        pass
-
-    @pytest.mark.skip(
-        "Snowflake only takes non-negative integer constants for offset/limit"
-    )
-    def test_expr_offset(self, connection):
         pass
 
     @pytest.mark.skip(
@@ -118,18 +79,6 @@ class InsertBehaviorTest(_InsertBehaviorTest):
 
 
 # 2. Not implemented by snowflake-sqlalchemy
-
-
-class AutocommitIsolationTest(_AutocommitIsolationTest):
-    @pytest.mark.skip("set_isolation_level not implemented in SnowflakeDialect")
-    def test_autocommit_on(self, connection_no_trans):
-        pass
-
-    @pytest.mark.skip("set_isolation_level not implemented in SnowflakeDialect")
-    def test_turn_autocommit_off_via_default_iso_level(self, connection_no_trans):
-        pass
-
-
 class HasSequenceTest(_HasSequenceTest):
     # Override the define_tables method as snowflake does not support 'nomaxvalue'/'nominvalue'
     @classmethod
@@ -168,109 +117,7 @@ class HasSequenceTestEmpty(_HasSequenceTestEmpty):
         pass
 
 
-class IsolationLevelTest(_IsolationLevelTest):
-    @pytest.mark.skip("get_isolation_level not implemented in SnowflakeDialect")
-    def test_all_levels(self):
-        pass
-
-    @pytest.mark.skip("get_isolation_level not implemented in SnowflakeDialect")
-    def test_non_default_isolation_level(self):
-        pass
-
-
 # 3. Need further investigation, either to be skipped/removed by design, or to be fixed
-
-
-class CompositeKeyReflectionTest(_CompositeKeyReflectionTest):
-    @pytest.mark.skip("need investigation")
-    def test_pk_column_order(self):
-        """
-        >       assert a == b, msg or "%r != %r" % (a, b)
-        E       AssertionError: ['attr', 'id', 'name'] != ['name', 'id', 'attr']
-        """
-        pass
-
-    @pytest.mark.skip("need investigation")
-    def test_fk_column_order(self):
-        """
-        >       assert a == b, msg or "%r != %r" % (a, b)
-        E       AssertionError: ['attr', 'id', 'name'] != ['name', 'id', 'attr']
-        """
-        pass
-
-
-class CTETest(_CTETest):
-    @pytest.mark.skip("need investigation")
-    def test_delete_from_round_trip(self, connection):
-        """
-        E       sqlalchemy.exc.ProgrammingError: (snowflake.connector.errors.ProgrammingError) 001003 (42000): SQL compilation error:
-        E       syntax error line 5 at position 1 unexpected 'DELETE'.
-        E       [SQL: WITH some_cte AS
-        E       (SELECT some_table.id AS id, some_table.data AS data, some_table.parent_id AS parent_id
-        E       FROM some_table
-        E       WHERE some_table.data IN (%(data_1_1)s, %(data_1_2)s, %(data_1_3)s))
-        E        DELETE FROM some_other_table USING some_cte WHERE some_other_table.data = some_cte.data]
-        E       [parameters: {'data_1_1': 'd2', 'data_1_2': 'd3', 'data_1_3': 'd4'}]
-        E       (Background on this error at: https://sqlalche.me/e/14/f405)
-        """
-        pass
-
-    @pytest.mark.skip("need investigation")
-    def test_delete_scalar_subq_round_trip(self, connection):
-        """
-                E       sqlalchemy.exc.ProgrammingError: (snowflake.connector.errors.ProgrammingError) 001003 (42000): SQL compilation error:
-        E       syntax error line 5 at position 1 unexpected 'DELETE'.
-        E       [SQL: WITH some_cte AS
-        E       (SELECT some_table.id AS id, some_table.data AS data, some_table.parent_id AS parent_id
-        E       FROM some_table
-        E       WHERE some_table.data IN (%(data_1_1)s, %(data_1_2)s, %(data_1_3)s))
-        E        DELETE FROM some_other_table WHERE some_other_table.data = (SELECT some_cte.data
-        E       FROM some_cte
-        E       WHERE some_cte.id = some_other_table.id)]
-        E       [parameters: {'data_1_1': 'd2', 'data_1_2': 'd3', 'data_1_3': 'd4'}]
-        E       (Background on this error at: https://sqlalche.me/e/14/f405)
-        """
-        pass
-
-
-class DateTest(_DateTest):
-    @pytest.mark.skip("need investigation")
-    def test_select_direct(self, connection):
-        """
-        >       assert a == b, msg or "%r != %r" % (a, b)
-        E       AssertionError: '2012-10-15' != datetime.date(2012, 10, 15)
-        """
-        pass
-
-
-class DateTimeCoercedToDateTimeTest(_DateTimeCoercedToDateTimeTest):
-    @pytest.mark.skip("need investigation")
-    def test_select_direct(self, connection):
-        """
-        >       assert a == b, msg or "%r != %r" % (a, b)
-        E       AssertionError: '2012-10-15 12:57:18' != datetime.datetime(2012, 10, 15, 12, 57, 18)
-        """
-        pass
-
-
-class DateTimeMicrosecondsTest(_DateTimeMicrosecondsTest):
-    @pytest.mark.skip("need investigation")
-    def test_select_direct(self, connection):
-        """
-        >       assert a == b, msg or "%r != %r" % (a, b)
-        E       AssertionError: '2012-10-15 12:57:18.000396' != datetime.datetime(2012, 10, 15, 12, 57, 18, 396)
-        """
-        pass
-
-
-class DateTimeTest(_DateTimeTest):
-    @pytest.mark.skip("need investigation")
-    def test_select_direct(self, connection):
-        """
-        >       assert a == b, msg or "%r != %r" % (a, b)
-        E       AssertionError: '2012-10-15 12:57:18' != datetime.datetime(2012, 10, 15, 12, 57, 18)
-        """
-        pass
 
 
 class DifficultParametersTest(_DifficultParametersTest):
@@ -339,26 +186,6 @@ class IdentityAutoincrementTest(_IdentityAutoincrementTest):
         E       [SQL: INSERT INTO tbl (desc) VALUES (%(desc)s)]
         E       [parameters: {'desc': 'row'}]
         E       (Background on this error at: https://sqlalche.me/e/14/gkpj)
-        """
-        pass
-
-
-class LastrowidTest(_LastrowidTest):
-    @pytest.mark.skip("need investigation")
-    def test_last_inserted_id(self, connection):
-        """
-        >       assert a == b, msg or "%r != %r" % (a, b)
-        E       AssertionError: (None,) != (2,)
-        """
-        pass
-
-
-class NumericTest(_NumericTest):
-    @pytest.mark.skip("need investigation")
-    def test_decimal_coerce_round_trip(self, connection):
-        """
-        >       assert a == b, msg or "%r != %r" % (a, b)
-        E       AssertionError: '15.7563' != Decimal('15.7563')
         """
         pass
 
@@ -478,21 +305,34 @@ class TextTest(_TextTest):
         pass
 
 
-class TimeMicrosecondsTest(_TimeMicrosecondsTest):
-    @pytest.mark.skip("need investigation")
-    def test_select_direct(self, connection):
-        """
-        >       assert a == b, msg or "%r != %r" % (a, b)
-        E       AssertionError: '12:57:18.000396' != datetime.time(12, 57, 18, 396)
-        """
-        pass
+# 4. Need fix in connector
 
 
-class TimeTest(_TimeTest):
-    @pytest.mark.skip("need investigation")
-    def test_select_direct(self, connection):
-        """
-        >       assert a == b, msg or "%r != %r" % (a, b)
-        E       AssertionError: '12:57:18' != datetime.time(12, 57, 18)
-        """
-        pass
+class PercentSchemaNamesTest(_PercentSchemaNamesTest):
+    @pytest.mark.xfail
+    # TODO: connector cursor "executemany" needs to handle double percentage like
+    #  "execute" using self._dbapi_connection._interpolate_empty_sequences
+    def test_executemany_roundtrip(self, connection):
+        super().test_executemany_roundtrip(connection)
+
+
+# 5. Patched Tests
+
+
+class LikeFunctionsTest(_LikeFunctionsTest):
+    @testing.requires.regexp_match
+    @testing.combinations(
+        ("a.cde.*", {1, 5, 6, 9}),
+        ("abc.*", {1, 5, 6, 9, 10}),
+        ("^abc.*", {1, 5, 6, 9, 10}),
+        (".*9cde.*", {8}),
+        ("^a.*", set(range(1, 11))),
+        (".*(b|c).*", set(range(1, 11))),
+        ("^(b|c).*", set()),
+    )
+    def test_regexp_match(self, text, expected):
+        super().test_regexp_match(text, expected)
+
+    def test_not_regexp_match(self):
+        col = self.tables.some_table.c.data
+        self._test(~col.regexp_match("a.cde.*"), {2, 3, 4, 7, 8, 10})

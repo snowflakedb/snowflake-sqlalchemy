@@ -359,6 +359,41 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             for t in extra_froms
         )
 
+    def _get_regexp_args(self, binary, kw):
+        string = self.process(binary.left, **kw)
+        pattern = self.process(binary.right, **kw)
+        flags = binary.modifiers["flags"]
+        if flags is not None:
+            flags = self.process(flags, **kw)
+        return string, pattern, flags
+
+    def visit_regexp_match_op_binary(self, binary, operator, **kw):
+        string, pattern, flags = self._get_regexp_args(binary, kw)
+        if flags is None:
+            return f"REGEXP_LIKE({string}, {pattern})"
+        else:
+            return f"REGEXP_LIKE({string}, {pattern}, {flags})"
+
+    def visit_regexp_replace_op_binary(self, binary, operator, **kw):
+        string, pattern, flags = self._get_regexp_args(binary, kw)
+        replacement = self.process(binary.modifiers["replacement"], **kw)
+        if flags is None:
+            return "REGEXP_REPLACE({}, {}, {})".format(
+                string,
+                pattern,
+                replacement,
+            )
+        else:
+            return "REGEXP_REPLACE({}, {}, {}, {})".format(
+                string,
+                pattern,
+                replacement,
+                flags,
+            )
+
+    def visit_not_regexp_match_op_binary(self, binary, operator, **kw):
+        return "NOT %s" % self.visit_regexp_match_op_binary(binary, operator, **kw)
+
 
 class SnowflakeExecutionContext(default.DefaultExecutionContext):
     def fire_sequence(self, seq, type_):
@@ -386,6 +421,10 @@ class SnowflakeExecutionContext(default.DefaultExecutionContext):
             return self.should_autocommit_text(self.unicode_statement)
         else:
             return autocommit and not self.isddl
+
+    def pre_exec(self):
+        if not self._dbapi_connection._interpolate_empty_sequences:
+            self._dbapi_connection._interpolate_empty_sequences = True
 
 
 class SnowflakeDDLCompiler(compiler.DDLCompiler):
