@@ -425,18 +425,29 @@ class SnowflakeExecutionContext(default.DefaultExecutionContext):
             return autocommit and not self.isddl
 
     def pre_exec(self):
-        if hasattr(self._dbapi_connection, "driver_connection"):
-            # _dbapi_connection is a _ConnectionFairy which proxies raw SnowflakeConnection
-            if (
-                not self._dbapi_connection.driver_connection._interpolate_empty_sequences
-            ):
+        if self.compiled:
+            # for compiled statements, percent is doubled for escape, we turn on _interpolate_empty_sequences
+            if hasattr(self._dbapi_connection, "driver_connection"):
+                # _dbapi_connection is a _ConnectionFairy which proxies raw SnowflakeConnection
                 self._dbapi_connection.driver_connection._interpolate_empty_sequences = (
                     True
                 )
-        else:
-            # _dbapi_connection is a raw SnowflakeConnection
-            if not self._dbapi_connection._interpolate_empty_sequences:
+            else:
+                # _dbapi_connection is a raw SnowflakeConnection
                 self._dbapi_connection._interpolate_empty_sequences = True
+
+    def post_exec(self):
+        if self.compiled:
+            # for compiled statements, percent is doubled for escapeafter execution
+            # we reset _interpolate_empty_sequences to false which is turned on in pre_exec
+            if hasattr(self._dbapi_connection, "driver_connection"):
+                # _dbapi_connection is a _ConnectionFairy which proxies raw SnowflakeConnection
+                self._dbapi_connection.driver_connection._interpolate_empty_sequences = (
+                    False
+                )
+            else:
+                # _dbapi_connection is a raw SnowflakeConnection
+                self._dbapi_connection._interpolate_empty_sequences = False
 
     @property
     def rowcount(self):
