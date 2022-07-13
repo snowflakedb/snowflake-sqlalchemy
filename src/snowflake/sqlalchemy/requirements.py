@@ -42,8 +42,7 @@ class Requirements(SuiteRequirements):
     # - fetch_percent: not supported in snowflake
     # - fetch_ties: not supported in snowflake
     # - supports_distinct_on: not supported in snowflake
-    # - identity_columns: not supported in snowflake
-    # - identity_columns_standard: not supported in snowflake
+    # - identity_columns_standard: not supported in snowflake, snowflake does not support identity with min max
 
     @property
     def table_ddl_if_exists(self):
@@ -157,7 +156,7 @@ class Requirements(SuiteRequirements):
 
     @property
     def datetime_timezone(self):
-        # by default snowflake uses TIMESTAMP_NTZ which contains no time zone info
+        # by default for datetime type, snowflake uses TIMESTAMP_NTZ which contains no time zone info
         # TODO: consider creating a new column type TIMESTAMP_TZ for the the time zone info
         # https://docs.snowflake.com/en/sql-reference/data-types-datetime.html#timestamp-ltz-timestamp-ntz-timestamp-tz
         return exclusions.closed()
@@ -165,7 +164,7 @@ class Requirements(SuiteRequirements):
     @property
     def time_timezone(self):
         # not supported in snowflake
-        # TODO: consider creating a new column type TIMEZONE_TZ which uses TIMESTAMP_TZ for the time zone info
+        # TODO: consider creating a new column type TIME_TZ which uses TIMESTAMP_TZ for the time zone info
         # https://docs.snowflake.com/en/sql-reference/data-types-datetime.html#time
         return exclusions.closed()
 
@@ -260,3 +259,12 @@ class Requirements(SuiteRequirements):
     def implements_get_lastrowid(self):
         # TODO: need connector lastrowid support, check SNOW-11155
         return exclusions.closed()
+
+    @property
+    def duplicate_key_raises_integrity_error(self):
+        # Snowflake allows duplicate value for primary key
+        return exclusions.closed()
+
+    @property
+    def identity_columns(self):
+        return exclusions.open()

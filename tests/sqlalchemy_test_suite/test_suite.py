@@ -5,21 +5,14 @@ import pytest
 from sqlalchemy import Integer, testing
 from sqlalchemy.schema import Column, Sequence, Table
 from sqlalchemy.testing import config
-from sqlalchemy.testing.suite import DifficultParametersTest as _DifficultParametersTest
-from sqlalchemy.testing.suite import EscapingTest as _EscapingTest
-from sqlalchemy.testing.suite import ExceptionTest as _ExceptionTest
+from sqlalchemy.testing.assertions import eq_
 from sqlalchemy.testing.suite import FetchLimitOffsetTest as _FetchLimitOffsetTest
 from sqlalchemy.testing.suite import HasSequenceTest as _HasSequenceTest
-from sqlalchemy.testing.suite import (
-    IdentityAutoincrementTest as _IdentityAutoincrementTest,
-)
 from sqlalchemy.testing.suite import InsertBehaviorTest as _InsertBehaviorTest
 from sqlalchemy.testing.suite import LikeFunctionsTest as _LikeFunctionsTest
 from sqlalchemy.testing.suite import LongNameBlowoutTest as _LongNameBlowoutTest
 from sqlalchemy.testing.suite import PercentSchemaNamesTest as _PercentSchemaNamesTest
 from sqlalchemy.testing.suite import SimpleUpdateDeleteTest as _SimpleUpdateDeleteTest
-from sqlalchemy.testing.suite import StringTest as _StringTest
-from sqlalchemy.testing.suite import TextTest as _TextTest
 from sqlalchemy.testing.suite import *  # noqa
 
 # 1. Unsupported by snowflake db
@@ -76,134 +69,7 @@ class InsertBehaviorTest(_InsertBehaviorTest):
         pass
 
 
-# 3. Need further investigation, either to be skipped/removed by design, or to be fixed
-
-
-class DifficultParametersTest(_DifficultParametersTest):
-    @pytest.mark.skip("need investigation")
-    def test_round_trip(self, name, connection, metadata):
-        """
-                Failing combinations are
-                ("%percent",),
-
-        E       sqlalchemy.exc.ProgrammingError: (snowflake.connector.errors.ProgrammingError) 000904 (42000): SQL compilation error: error line 1 at position 19
-        E       invalid identifier '"%percent"'
-        E       [SQL: INSERT INTO t (id, "%%percent") VALUES (%(id)s, %(Ppercent)s)]
-        E       [parameters: {'id': 1, 'Ppercent': 'some name'}]
-        E       (Background on this error at: https://sqlalche.me/e/14/f405)
-
-                ("more :: %colons%",),
-
-        E       sqlalchemy.exc.ProgrammingError: (snowflake.connector.errors.ProgrammingError) 000904 (42000): SQL compilation error: error line 1 at position 19
-        E       invalid identifier '"more :: %colons%"'
-        E       [SQL: INSERT INTO t (id, "more :: %%colons%%") VALUES (%(id)s, %(more CC PcolonsP)s)]
-        E       [parameters: {'id': 1, 'more CC PcolonsP': 'some name'}]
-
-                ("per % cent",),
-
-        E       sqlalchemy.exc.ProgrammingError: (snowflake.connector.errors.ProgrammingError) 000904 (42000): SQL compilation error: error line 1 at position 19
-        E       invalid identifier '"per % cent"'
-        E       [SQL: INSERT INTO t (id, "per %% cent") VALUES (%(id)s, %(per P cent)s)]
-        E       [parameters: {'id': 1, 'per P cent': 'some name'}]
-
-                ("percent%(ens)yah",),
-
-        E       sqlalchemy.exc.ProgrammingError: (snowflake.connector.errors.ProgrammingError) 000904 (42000): SQL compilation error: error line 1 at position 19
-        E       invalid identifier '"percent%(ens)yah"'
-        E       [SQL: INSERT INTO t (id, "percent%%(ens)yah") VALUES (%(id)s, %(percentPAensZyah)s)]
-        E       [parameters: {'id': 1, 'percentPAensZyah': 'some name'}]
-        """
-        pass
-
-
-class EscapingTest(_EscapingTest):
-    @pytest.mark.skip("need investigation")
-    def test_percent_sign_round_trip(self):
-        """
-        >       assert a == b, msg or "%r != %r" % (a, b)
-        E       AssertionError: None != 'some % value'
-        """
-        pass
-
-
-class ExceptionTest(_ExceptionTest):
-    @pytest.mark.skip("need investigation")
-    def test_integrity_error(self):
-        """
-        # assert outside the block so it works for AssertionError too !
-        >       assert success, "Callable did not raise an exception"
-        E       AssertionError: Callable did not raise an exception
-        """
-        pass
-
-
-class IdentityAutoincrementTest(_IdentityAutoincrementTest):
-    @pytest.mark.skip("need investigation")
-    def test_autoincrement_with_identity(self, connection):
-        """
-        E       sqlalchemy.exc.IntegrityError: (snowflake.connector.errors.IntegrityError) 100072 (22000): NULL result in a non-nullable column
-        E       [SQL: INSERT INTO tbl (desc) VALUES (%(desc)s)]
-        E       [parameters: {'desc': 'row'}]
-        E       (Background on this error at: https://sqlalche.me/e/14/gkpj)
-        """
-        pass
-
-
-class SimpleUpdateDeleteTest(_SimpleUpdateDeleteTest):
-    @pytest.mark.skip("need investigation")
-    def test_delete(self, connection):
-        """
-        >       assert not r.returns_rows
-        E       assert not True
-        E        +  where True = <sqlalchemy.engine.cursor.LegacyCursorResult object at 0x7fbcf82efdc0>.returns_rows
-        """
-        pass
-
-    @pytest.mark.skip("need investigation")
-    def test_update(self, connection):
-        """
-        >       assert not r.returns_rows
-        E       assert not True
-        E        +  where True = <sqlalchemy.engine.cursor.LegacyCursorResult object at 0x7fbd084e5c10>.returns_rows
-        """
-        pass
-
-
-class StringTest(_StringTest):
-    @pytest.mark.skip("need investigation")
-    def test_literal_backslashes(self, literal_round_trip):
-        """
-        'backslash one  backslash two \\ end' != ['backslash one \\ backslash two \\\\ end']
-
-        Expected :['backslash one \\ backslash two \\\\ end']
-        Actual   :'backslash one  backslash two \\ end'
-        """
-        pass
-
-
-class TextTest(_TextTest):
-    @pytest.mark.skip("need investigation")
-    def test_literal_backslashes(self, literal_round_trip):
-        """
-        'backslash one  backslash two \\ end' != ['backslash one \\ backslash two \\\\ end']
-
-        Expected :['backslash one \\ backslash two \\\\ end']
-        Actual   :'backslash one  backslash two \\ end'
-        """
-        pass
-
-    @pytest.mark.skip("need investigation")
-    def test_literal_percentsigns(self, literal_round_trip):
-        """
-        'percent %% signs %%%% percent' != ['percent % signs %% percent']
-
-        Expected :['percent % signs %% percent']
-        Actual   :'percent %% signs %%%% percent'
-        """
-        pass
-
-
-# 4. Need fix in connector
+# 3. Need fix in connector
 
 
 class PercentSchemaNamesTest(_PercentSchemaNamesTest):
@@ -213,14 +79,8 @@ class PercentSchemaNamesTest(_PercentSchemaNamesTest):
     def test_executemany_roundtrip(self, connection):
         super().test_executemany_roundtrip(connection)
 
-    @pytest.mark.xfail
-    # TODO: this failure is weird, running in standalone mode (just the method or PercentSchemaNamesTest) won't fail,
-    #  however, running within the whole test_suite.py fails
-    def test_single_roundtrip(self, connection):
-        super().test_single_roundtrip(connection)
 
-
-# 5. Patched Tests
+# 4. Patched Tests
 
 
 class HasSequenceTest(_HasSequenceTest):
@@ -260,3 +120,30 @@ class LikeFunctionsTest(_LikeFunctionsTest):
     def test_not_regexp_match(self):
         col = self.tables.some_table.c.data
         self._test(~col.regexp_match("a.cde.*"), {2, 3, 4, 7, 8, 10})
+
+
+class SimpleUpdateDeleteTest(_SimpleUpdateDeleteTest):
+    def test_update(self, connection):
+        t = self.tables.plain_pk
+        r = connection.execute(t.update().where(t.c.id == 2), dict(data="d2_new"))
+        assert not r.is_insert
+        # snowflake returns a row with numbers of rows updated and number of multi-joined rows updated
+        assert r.returns_rows
+        assert r.rowcount == 1
+
+        eq_(
+            connection.execute(t.select().order_by(t.c.id)).fetchall(),
+            [(1, "d1"), (2, "d2_new"), (3, "d3")],
+        )
+
+    def test_delete(self, connection):
+        t = self.tables.plain_pk
+        r = connection.execute(t.delete().where(t.c.id == 2))
+        assert not r.is_insert
+        # snowflake returns a row with number of rows deleted
+        assert r.returns_rows
+        assert r.rowcount == 1
+        eq_(
+            connection.execute(t.select().order_by(t.c.id)).fetchall(),
+            [(1, "d1"), (3, "d3")],
+        )

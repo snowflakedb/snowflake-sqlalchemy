@@ -186,6 +186,8 @@ class SnowflakeDialect(default.DefaultDialect):
 
     supports_is_distinct_from = True
 
+    supports_identity_columns = True
+
     @classmethod
     def dbapi(cls):
         from snowflake import connector
@@ -505,7 +507,9 @@ class SnowflakeDialect(default.DefaultDialect):
                    ic.is_nullable,
                    ic.column_default,
                    ic.is_identity,
-                   ic.comment
+                   ic.comment,
+                   ic.identity_start,
+                   ic.identity_increment
               FROM information_schema.columns ic
              WHERE ic.table_schema=:table_schema
              ORDER BY ic.ordinal_position"""
@@ -528,6 +532,8 @@ class SnowflakeDialect(default.DefaultDialect):
             column_default,
             is_identity,
             comment,
+            identity_start,
+            identity_increment,
         ) in result:
             table_name = self.normalize_name(table_name)
             column_name = self.normalize_name(column_name)
@@ -574,6 +580,11 @@ class SnowflakeDialect(default.DefaultDialect):
                     else False,
                 }
             )
+            if is_identity == "YES":
+                ans[table_name][-1]["identity"] = {
+                    "start": identity_start,
+                    "increment": identity_increment,
+                }
         return ans
 
     @reflection.cache
