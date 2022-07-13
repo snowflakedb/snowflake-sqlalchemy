@@ -20,7 +20,6 @@ from sqlalchemy.testing.suite import *  # noqa
 del ComponentReflectionTest  # require indexes not supported by snowflake
 del HasIndexTest  # require indexes not supported by snowflake
 del QuotedNameArgumentTest  # require indexes not supported by snowflake
-del ComputedReflectionTest  # expression not GA yet, SNOW-169530
 
 
 class LongNameBlowoutTest(_LongNameBlowoutTest):

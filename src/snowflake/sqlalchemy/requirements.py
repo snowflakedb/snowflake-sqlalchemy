@@ -7,43 +7,62 @@ from sqlalchemy.testing.requirements import SuiteRequirements
 
 
 class Requirements(SuiteRequirements):
+    """
+    stay-closed properties
 
-    # stay-closed properties
-    # - autocommit: sqlalchemy's autocommit isolation level concept does not apply to snowflake
-    # - isolation_level: snowflake only supports read committed
-    #   - ref docs: https://docs.snowflake.com/en/sql-reference/transactions.html#label-txn-autocommit
-    #               https://docs.sqlalchemy.org/en/14/core/connections.html#setting-transaction-isolation-levels-including-dbapi-autocommit
-    # - index_ddl_if_exists: index not supported in snowflake
-    # - non_updating_cascade: updating cascade supported
-    # - empty_inserts: not supported in snowflake
-    # - full_returning: not supported in snowflake
-    # - insert_executemany_returning: not supported in snowflake
-    # - returning: not supported in snowflake
-    # - indexes_with_expressions: index not supported in snowflake
-    # - check_constraint_reflection: not supported in snowflake
-    # - reflect_tables_no_columns: not supported in snowflake
-    # - server_side_cursors: no supported in snowflake
-    # - index_reflects_included_columns: index not supported in snowflake
-    # - savepoints: not supported in snowflake
-    # - two_phase_transactions: not supported in snowflake
-    # - async_dialect: no await used
-    # - fetch_expression: not supported in snowflake
-    # - fetch_percent: not supported in snowflake
-    # - fetch_ties: not supported in snowflake
-    # - supports_distinct_on: not supported in snowflake
-    # - identity_columns_standard: not supported in snowflake, snowflake does not support identity with min max
-    # - collate: TODO: order_by_collation
-    # - foreign_key_constraint_option_reflection_ondelete: TODO: check service side issue or by design?
-    # - fk_constraint_option_reflection_ondelete_restrict: TODO: check service side issue or by design?
-    # - foreign_key_constraint_option_reflection_onupdate: TODO: check service side issue or by design?
-    # - fk_constraint_option_reflection_onupdate_restrict: TODO: check service side issue or by design?
-    # - supports_lastrowid: TODO: not supported, check SNOW-11155
-    # - dbapi_lastrowid: TODO, not supported in snowflake python connector, support it in the future
-    # - computed_columns: TODO: not supported in snowflake yet, check SNOW-169530 for virtual column
-    # - computed_columns_default_persisted: TODO: not supported in snowflake yet, check SNOW-169530 for virtual column
-    # - computed_columns_reflect_persisted: TODO: not supported in snowflake yet, check SNOW-169530 for virtual column
-    # - computed_columns_virtual: TODO: not supported in snowflake yet, check SNOW-169530 for virtual column
-    # - computed_columns_stored: TODO: not supported in snowflake yet, check SNOW-169530 for virtual column
+    1. not supported in snowflake
+
+    - autocommit: sqlalchemy's autocommit isolation level concept does not apply to snowflake
+    - isolation_level: snowflake only supports read committed
+      - ref docs: https://docs.snowflake.com/en/sql-reference/transactions.html#label-txn-autocommit
+                  https://docs.sqlalchemy.org/en/14/core/connections.html#setting-transaction-isolation-levels-including-dbapi-autocommit
+    - index_ddl_if_exists: index not supported in snowflake
+    - non_updating_cascade: updating cascade supported
+    - empty_inserts: not supported in snowflake
+    - full_returning: not supported in snowflake
+    - insert_executemany_returning: not supported in snowflake
+    - returning: not supported in snowflake
+    - indexes_with_expressions: index not supported in snowflake
+    - check_constraint_reflection: not supported in snowflake
+    - reflect_tables_no_columns: not supported in snowflake
+    - server_side_cursors: no supported in snowflake
+    - index_reflects_included_columns: index not supported in snowflake
+    - savepoints: not supported in snowflake
+    - two_phase_transactions: not supported in snowflake
+    - async_dialect: no await used
+    - fetch_expression: not supported in snowflake
+    - fetch_percent: not supported in snowflake
+    - fetch_ties: not supported in snowflake
+    - supports_distinct_on: not supported in snowflake
+    - time_timezone: not supported in snowflake
+    - identity_columns_standard: not supported in snowflake, snowflake does not support setting identity with min max
+    - computed_columns: TODO: not supported in snowflake yet, check SNOW-169530 for virtual column
+    - computed_columns_default_persisted: TODO: not supported in snowflake yet, check SNOW-169530 for virtual column
+    - computed_columns_reflect_persisted: TODO: not supported in snowflake yet, check SNOW-169530 for virtual column
+    - computed_columns_virtual: TODO: not supported in snowflake yet, check SNOW-169530 for virtual column
+    - computed_columns_stored: TODO: not supported in snowflake yet, check SNOW-169530 for virtual column
+
+    2. potential service side issue / unclear service behavior
+
+    - foreign_key_constraint_option_reflection_ondelete: TODO: check service side issue or by design?
+    - fk_constraint_option_reflection_ondelete_restrict: TODO: check service side issue or by design?
+    - foreign_key_constraint_option_reflection_onupdate: TODO: check service side issue or by design?
+    - fk_constraint_option_reflection_onupdate_restrict: TODO: check service side issue or by design?
+
+    3. connector missing feature
+
+    - dbapi_lastrowid: TODO, not supported in snowflake python connector, support it in the future
+    - supports_lastrowid: TODO: not supported, check SNOW-11155
+
+    4. sqlalchemy potentially missing feature
+    note: not sure whether these to be supported
+
+    - collate: TODO: order_by_collation
+    - datetime_timezone: TODO: default for datetime type, snowflake uses TIMESTAMP_NTZ which
+                          contains no time zone info consider creating a new column type TIMESTAMP_TZ for the
+                          the time zone info
+      - ref: https://docs.snowflake.com/en/sql-reference/data-types-datetime.html#timestamp-ltz-timestamp-ntz-timestamp-tz
+    """
 
     @property
     def table_ddl_if_exists(self):
@@ -249,20 +268,6 @@ class Requirements(SuiteRequirements):
     def json_type(self):
         # TODO: need service/connector support
         # check https://snowflakecomputing.atlassian.net/browse/SNOW-52370
-        return exclusions.closed()
-
-    @property
-    def datetime_timezone(self):
-        # by default for datetime type, snowflake uses TIMESTAMP_NTZ which contains no time zone info
-        # TODO: consider creating a new column type TIMESTAMP_TZ for the the time zone info
-        # https://docs.snowflake.com/en/sql-reference/data-types-datetime.html#timestamp-ltz-timestamp-ntz-timestamp-tz
-        return exclusions.closed()
-
-    @property
-    def time_timezone(self):
-        # not supported in snowflake
-        # TODO: consider creating a new column type TIME_TZ which uses TIMESTAMP_TZ for the time zone info
-        # https://docs.snowflake.com/en/sql-reference/data-types-datetime.html#time
         return exclusions.closed()
 
     @property
