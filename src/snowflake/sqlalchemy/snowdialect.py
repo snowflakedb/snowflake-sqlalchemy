@@ -62,6 +62,7 @@ from .custom_types import (
     _CUSTOM_Numeric,
     _CUSTOM_Time,
 )
+from .util import _sort_columns_by_sequences
 
 colspecs = {
     Date: _CUSTOM_Date,
@@ -340,12 +341,9 @@ class SnowflakeDialect(default.DefaultDialect):
             )
 
         for k, v in ans.items():
-            v["constrained_columns"] = [
-                col
-                for _, col in sorted(
-                    zip(key_sequence_order_map[k], v["constrained_columns"])
-                )
-            ]
+            v["constrained_columns"] = _sort_columns_by_sequences(
+                key_sequence_order_map[k], v["constrained_columns"]
+            )
 
         return ans
 
@@ -447,18 +445,12 @@ class SnowflakeDialect(default.DefaultDialect):
         ans = {}
 
         for k, v in foreign_key_map.items():
-            v["constrained_columns"] = [
-                col
-                for _, col in sorted(
-                    zip(key_sequence_order_map[k], v["constrained_columns"])
-                )
-            ]
-            v["referred_columns"] = [
-                col
-                for _, col in sorted(
-                    zip(key_sequence_order_map[k], v["referred_columns"])
-                )
-            ]
+            v["constrained_columns"] = _sort_columns_by_sequences(
+                key_sequence_order_map[k], v["constrained_columns"]
+            )
+            v["referred_columns"] = _sort_columns_by_sequences(
+                key_sequence_order_map[k], v["referred_columns"]
+            )
             if v["table_name"] not in ans:
                 ans[v["table_name"]] = []
             ans[v["table_name"]].append(

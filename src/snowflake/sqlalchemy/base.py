@@ -392,7 +392,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             )
 
     def visit_not_regexp_match_op_binary(self, binary, operator, **kw):
-        return "NOT %s" % self.visit_regexp_match_op_binary(binary, operator, **kw)
+        return f"NOT {self.visit_regexp_match_op_binary(binary, operator, **kw)}"
 
     def render_literal_value(self, value, type_):
         # escape backslash
@@ -402,7 +402,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
 class SnowflakeExecutionContext(default.DefaultExecutionContext):
     def fire_sequence(self, seq, type_):
         return self._execute_scalar(
-            "SELECT " + self.identifier_preparer.format_sequence(seq) + ".nextval",
+            f"SELECT {self.identifier_preparer.format_sequence(seq)}.nextval",
             type_,
         )
 
