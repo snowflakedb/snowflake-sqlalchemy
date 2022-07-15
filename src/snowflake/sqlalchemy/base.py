@@ -400,6 +400,8 @@ class SnowflakeCompiler(compiler.SQLCompiler):
 
 
 class SnowflakeExecutionContext(default.DefaultExecutionContext):
+    INSERT_SQL_RE = re.compile(r"^insert\s+into", flags=re.IGNORECASE)
+
     def fire_sequence(self, seq, type_):
         return self._execute_scalar(
             f"SELECT {self.identifier_preparer.format_sequence(seq)}.nextval",
@@ -425,7 +427,7 @@ class SnowflakeExecutionContext(default.DefaultExecutionContext):
             return autocommit and not self.isddl
 
     def pre_exec(self):
-        if self.compiled:
+        if self.compiled and self.identifier_preparer._double_percents:
             # for compiled statements, percent is doubled for escape, we turn on _interpolate_empty_sequences
             if hasattr(self._dbapi_connection, "driver_connection"):
                 # _dbapi_connection is a _ConnectionFairy which proxies raw SnowflakeConnection
@@ -436,8 +438,15 @@ class SnowflakeExecutionContext(default.DefaultExecutionContext):
                 # _dbapi_connection is a raw SnowflakeConnection
                 self._dbapi_connection._interpolate_empty_sequences = True
 
+            # if the statement is executemany insert, setting _interpolate_empty_sequences to True is not enough,
+            # because executemany pre-processes the param binding and then pass None params to execute so
+            # _interpolate_empty_sequences condition not getting met for the command.
+            # Therefore, we manually revert the escape percent in the command here
+            if self.executemany and self.INSERT_SQL_RE.match(self.statement):
+                self.statement = self.statement.replace("%%", "%")
+
     def post_exec(self):
-        if self.compiled:
+        if self.compiled and self.identifier_preparer._double_percents:
             # for compiled statements, percent is doubled for escapeafter execution
             # we reset _interpolate_empty_sequences to false which is turned on in pre_exec
             if hasattr(self._dbapi_connection, "driver_connection"):
