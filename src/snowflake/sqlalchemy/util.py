@@ -63,3 +63,7 @@ def _url(**db_parameters):
             ret += sep(is_first_parameter) + p + "=" + encoded_value
             is_first_parameter = False
     return ret
+
+
+def _sort_columns_by_sequences(columns_sequences, columns):
+    return [col for _, col in sorted(zip(columns_sequences, columns))]

@@ -359,13 +359,50 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             for t in extra_froms
         )
 
+    def _get_regexp_args(self, binary, kw):
+        string = self.process(binary.left, **kw)
+        pattern = self.process(binary.right, **kw)
+        flags = binary.modifiers["flags"]
+        if flags is not None:
+            flags = self.process(flags, **kw)
+        return string, pattern, flags
+
+    def visit_regexp_match_op_binary(self, binary, operator, **kw):
+        string, pattern, flags = self._get_regexp_args(binary, kw)
+        if flags is None:
+            return f"REGEXP_LIKE({string}, {pattern})"
+        else:
+            return f"REGEXP_LIKE({string}, {pattern}, {flags})"
+
+    def visit_regexp_replace_op_binary(self, binary, operator, **kw):
+        string, pattern, flags = self._get_regexp_args(binary, kw)
+        replacement = self.process(binary.modifiers["replacement"], **kw)
+        if flags is None:
+            return "REGEXP_REPLACE({}, {}, {})".format(
+                string,
+                pattern,
+                replacement,
+            )
+        else:
+            return "REGEXP_REPLACE({}, {}, {}, {})".format(
+                string,
+                pattern,
+                replacement,
+                flags,
+            )
+
+    def visit_not_regexp_match_op_binary(self, binary, operator, **kw):
+        return f"NOT {self.visit_regexp_match_op_binary(binary, operator, **kw)}"
+
+    def render_literal_value(self, value, type_):
+        # escape backslash
+        return super().render_literal_value(value, type_).replace("\\", "\\\\")
+
 
 class SnowflakeExecutionContext(default.DefaultExecutionContext):
     def fire_sequence(self, seq, type_):
         return self._execute_scalar(
-            "SELECT "
-            + self.dialect.identifier_preparer.format_sequence(seq)
-            + ".nextval",
+            f"SELECT {self.identifier_preparer.format_sequence(seq)}.nextval",
             type_,
         )
 
@@ -387,6 +424,35 @@ class SnowflakeExecutionContext(default.DefaultExecutionContext):
         else:
             return autocommit and not self.isddl
 
+    def pre_exec(self):
+        if self.compiled:
+            # for compiled statements, percent is doubled for escape, we turn on _interpolate_empty_sequences
+            if hasattr(self._dbapi_connection, "driver_connection"):
+                # _dbapi_connection is a _ConnectionFairy which proxies raw SnowflakeConnection
+                self._dbapi_connection.driver_connection._interpolate_empty_sequences = (
+                    True
+                )
+            else:
+                # _dbapi_connection is a raw SnowflakeConnection
+                self._dbapi_connection._interpolate_empty_sequences = True
+
+    def post_exec(self):
+        if self.compiled:
+            # for compiled statements, percent is doubled for escapeafter execution
+            # we reset _interpolate_empty_sequences to false which is turned on in pre_exec
+            if hasattr(self._dbapi_connection, "driver_connection"):
+                # _dbapi_connection is a _ConnectionFairy which proxies raw SnowflakeConnection
+                self._dbapi_connection.driver_connection._interpolate_empty_sequences = (
+                    False
+                )
+            else:
+                # _dbapi_connection is a raw SnowflakeConnection
+                self._dbapi_connection._interpolate_empty_sequences = False
+
+    @property
+    def rowcount(self):
+        return self.cursor.rowcount
+
 
 class SnowflakeDDLCompiler(compiler.DDLCompiler):
     def denormalize_column_name(self, name):
@@ -406,6 +472,10 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
             self.dialect.type_compiler.process(column.type, type_expression=column),
         ]
 
+        has_identity = (
+            column.identity is not None and self.dialect.supports_identity_columns
+        )
+
         if not column.nullable:
             colspec.append("NOT NULL")
 
@@ -422,9 +492,14 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
             and column.server_default is None
         ):
             if isinstance(column.default, Sequence):
-                colspec.append(f"DEFAULT {column.default.name}.nextval")
+                colspec.append(
+                    f"DEFAULT {self.dialect.identifier_preparer.format_sequence(column.default)}.nextval"
+                )
             else:
                 colspec.append("AUTOINCREMENT")
+
+        if has_identity:
+            colspec.append(self.process(column.identity))
 
         return " ".join(colspec)
 
@@ -511,6 +586,14 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
             self.preparer.format_table(drop.element.table),
             self.preparer.format_column(drop.element),
         )
+
+    def visit_identity_column(self, identity, **kw):
+        text = " IDENTITY"
+        if identity.start is not None or identity.increment is not None:
+            start = 1 if identity.start is None else identity.start
+            increment = 1 if identity.increment is None else identity.increment
+            text += f"({start},{increment})"
+        return text
 
 
 class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):

@@ -21,7 +21,6 @@ from sqlalchemy.types import (
     BINARY,
     BOOLEAN,
     CHAR,
-    DATE,
     DATETIME,
     DECIMAL,
     FLOAT,
@@ -31,6 +30,11 @@ from sqlalchemy.types import (
     TIME,
     TIMESTAMP,
     VARCHAR,
+    Date,
+    DateTime,
+    Float,
+    Numeric,
+    Time,
 )
 
 from snowflake.connector import errors as sf_errors
@@ -52,9 +56,21 @@ from .custom_types import (
     TIMESTAMP_NTZ,
     TIMESTAMP_TZ,
     VARIANT,
+    _CUSTOM_Date,
+    _CUSTOM_DateTime,
+    _CUSTOM_Float,
+    _CUSTOM_Numeric,
+    _CUSTOM_Time,
 )
+from .util import _sort_columns_by_sequences
 
-colspecs = {}
+colspecs = {
+    Date: _CUSTOM_Date,
+    DateTime: _CUSTOM_DateTime,
+    Time: _CUSTOM_Time,
+    Float: _CUSTOM_Float,
+    Numeric: _CUSTOM_Numeric,
+}
 
 ischema_names = {
     "BIGINT": BIGINT,
@@ -63,7 +79,6 @@ ischema_names = {
     "BOOLEAN": BOOLEAN,
     "CHAR": CHAR,
     "CHARACTER": CHAR,
-    "DATE": DATE,
     "DATETIME": DATETIME,
     "DEC": DECIMAL,
     "DECIMAL": DECIMAL,
@@ -164,6 +179,16 @@ class SnowflakeDialect(default.DefaultDialect):
     # and denormalize_name() must be provided.
     requires_name_normalize = True
 
+    multivalues_inserts = True
+
+    supports_schemas = True
+
+    sequences_optional = True
+
+    supports_is_distinct_from = True
+
+    supports_identity_columns = True
+
     @classmethod
     def dbapi(cls):
         from snowflake import connector
@@ -261,14 +286,13 @@ class SnowflakeDialect(default.DefaultDialect):
 
     @reflection.cache
     def _current_database_schema(self, connection, **kw):
-        # "branches" a connection if one exists, otherwise creates one
-        # branched connections use the same underlying DBAPI but maintain separate references
-        with connection.connect() as sqla_con:
-            dbapi_con = sqla_con.connection
-            return (
-                self.normalize_name(dbapi_con.database),
-                self.normalize_name(dbapi_con.schema),
-            )
+        res = connection.exec_driver_sql(
+            "select current_database(), current_schema();"
+        ).fetchone()
+        return (
+            self.normalize_name(res[0]),
+            self.normalize_name(res[1]),
+        )
 
     def _get_default_schema_name(self, connection):
         # NOTE: no cache object is passed here
@@ -303,8 +327,10 @@ class SnowflakeDialect(default.DefaultDialect):
             )
         )
         ans = {}
+        key_sequence_order_map = defaultdict(list)
         for row in result:
             table_name = self.normalize_name(row["table_name"])
+            key_sequence_order_map[table_name].append(row["key_sequence"])
             if table_name not in ans:
                 ans[table_name] = {
                     "constrained_columns": [],
@@ -313,6 +339,12 @@ class SnowflakeDialect(default.DefaultDialect):
             ans[table_name]["constrained_columns"].append(
                 self.normalize_name(row["column_name"])
             )
+
+        for k, v in ans.items():
+            v["constrained_columns"] = _sort_columns_by_sequences(
+                key_sequence_order_map[k], v["constrained_columns"]
+            )
+
         return ans
 
     def get_pk_constraint(self, connection, table_name, schema=None, **kw):
@@ -375,8 +407,10 @@ class SnowflakeDialect(default.DefaultDialect):
             )
         )
         foreign_key_map = {}
+        key_sequence_order_map = defaultdict(list)
         for row in result:
             name = self.normalize_name(row["fk_name"])
+            key_sequence_order_map[name].append(row["key_sequence"])
             if name not in foreign_key_map:
                 referred_schema = self.normalize_name(row["pk_schema_name"])
                 foreign_key_map[name] = {
@@ -394,6 +428,12 @@ class SnowflakeDialect(default.DefaultDialect):
                     "name": name,
                     "table_name": self.normalize_name(row["fk_table_name"]),
                 }
+                options = {}
+                if self.normalize_name(row["delete_rule"]) != "NO ACTION":
+                    options["ondelete"] = self.normalize_name(row["delete_rule"])
+                if self.normalize_name(row["update_rule"]) != "NO ACTION":
+                    options["onupdate"] = self.normalize_name(row["update_rule"])
+                foreign_key_map[name]["options"] = options
             else:
                 foreign_key_map[name]["constrained_columns"].append(
                     self.normalize_name(row["fk_column_name"])
@@ -403,7 +443,14 @@ class SnowflakeDialect(default.DefaultDialect):
                 )
 
         ans = {}
-        for _, v in foreign_key_map.items():
+
+        for k, v in foreign_key_map.items():
+            v["constrained_columns"] = _sort_columns_by_sequences(
+                key_sequence_order_map[k], v["constrained_columns"]
+            )
+            v["referred_columns"] = _sort_columns_by_sequences(
+                key_sequence_order_map[k], v["referred_columns"]
+            )
             if v["table_name"] not in ans:
                 ans[v["table_name"]] = []
             ans[v["table_name"]].append(
@@ -452,7 +499,9 @@ class SnowflakeDialect(default.DefaultDialect):
                    ic.is_nullable,
                    ic.column_default,
                    ic.is_identity,
-                   ic.comment
+                   ic.comment,
+                   ic.identity_start,
+                   ic.identity_increment
               FROM information_schema.columns ic
              WHERE ic.table_schema=:table_schema
              ORDER BY ic.ordinal_position"""
@@ -475,6 +524,8 @@ class SnowflakeDialect(default.DefaultDialect):
             column_default,
             is_identity,
             comment,
+            identity_start,
+            identity_increment,
         ) in result:
             table_name = self.normalize_name(table_name)
             column_name = self.normalize_name(column_name)
@@ -521,6 +572,11 @@ class SnowflakeDialect(default.DefaultDialect):
                     else False,
                 }
             )
+            if is_identity == "YES":
+                ans[table_name][-1]["identity"] = {
+                    "start": identity_start,
+                    "increment": identity_increment,
+                }
         return ans
 
     @reflection.cache
@@ -737,6 +793,19 @@ class SnowflakeDialect(default.DefaultDialect):
         )
 
         return [self.normalize_name(row[1]) for row in cursor]
+
+    @reflection.cache
+    def get_sequence_names(self, connection, schema=None, **kw):
+        sql_command = "SHOW SEQUENCES {}".format(
+            f"IN SCHEMA {self.normalize_name(schema)}" if schema else ""
+        )
+        try:
+            cursor = connection.execute(text(sql_command))
+            return [self.normalize_name(row[0]) for row in cursor]
+        except sa_exc.ProgrammingError as pe:
+            if pe.orig.errno == 2003:
+                # Schema does not exist
+                return []
 
     def _get_table_comment(self, connection, table_name, schema=None, **kw):
         """
