@@ -9,7 +9,7 @@ Source code is also available at:
 
 # Release Notes
 
-- v1.3.5(Unreleased)
+- v1.4.0(July 19, 2022)
 
   - Added support for `regexp_match`, `regexp_replace` in `sqlalchemy.sql.expression.ColumnOperators`.
   - Added support for Identity Column.
