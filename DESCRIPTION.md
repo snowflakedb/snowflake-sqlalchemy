@@ -9,10 +9,17 @@ Source code is also available at:
 
 # Release Notes
 
-- v1.3.5(Unreleased)
+- v1.4.0(July 19, 2022)
 
-  - Fixed a bug where insert with autoincrement failed due to incompatible column type affinity #124
-  - Fixed a bug when creating a column with sequence, default value was set incorrectly
+  - Added support for `regexp_match`, `regexp_replace` in `sqlalchemy.sql.expression.ColumnOperators`.
+  - Added support for Identity Column.
+  - Added support for handling literals value of sql type `Date`, `DateTime`, `Time`, `Float` and `Numeric`, and converting the values into corresponding Python objects.
+  - Added support for `get_sequence_names` in `SnowflakeDialect`.
+  - Fixed a bug where insert with autoincrement failed due to incompatible column type affinity #124.
+  - Fixed a bug when creating a column with sequence, default value was set incorrectly.
+  - Fixed a bug that identifier having percents in a compiled statement was not interpolated.
+  - Fixed a bug when visiting sequence value from another schema, the sequence name is not formatted with the schema name.
+  - Fixed a bug where the sequence order of columns were not maintained when retrieving primary keys and foreign keys for a table.
 
 - v1.3.4(April 27,2022)
 
