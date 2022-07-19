@@ -96,6 +96,6 @@ def test_quoted_name_label(engine_testaccount):
 
     for t in test_cases:
         col = column("colname").label(t["label"])
-        sel_from_tbl = select([col]).group_by(col).select_from(table("abc"))
+        sel_from_tbl = select(col).group_by(col).select_from(table("abc"))
         compiled_result = sel_from_tbl.compile()
         assert str(compiled_result) == t["output"]

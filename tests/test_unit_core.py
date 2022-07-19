@@ -13,7 +13,7 @@ def test_create_connect_args():
     test_data = [
         (
             # 0: full host name and no account
-            URL(
+            URL.create(
                 "snowflake",
                 username="testuser",
                 password="testpassword",
@@ -29,7 +29,7 @@ def test_create_connect_args():
         ),
         (
             # 1: account name only
-            URL(
+            URL.create(
                 "snowflake",
                 username="testuser",
                 password="testpassword",
@@ -47,7 +47,7 @@ def test_create_connect_args():
         ),
         (
             # 2: account name including region
-            URL(
+            URL.create(
                 "snowflake",
                 username="testuser",
                 password="testpassword",
@@ -65,7 +65,7 @@ def test_create_connect_args():
         ),
         (
             # 3: full host including region
-            URL(
+            URL.create(
                 "snowflake",
                 username="testuser",
                 password="testpassword",
@@ -81,7 +81,7 @@ def test_create_connect_args():
         ),
         (
             # 4: full host including region and account
-            URL(
+            URL.create(
                 "snowflake",
                 username="testuser",
                 password="testpassword",
@@ -98,7 +98,7 @@ def test_create_connect_args():
         ),
         (
             # 5: full host including region and account including region
-            URL(
+            URL.create(
                 "snowflake",
                 username="testuser",
                 password="testpassword",
@@ -115,7 +115,7 @@ def test_create_connect_args():
         ),
         (
             # 6: full host including region and account including region
-            URL(
+            URL.create(
                 "snowflake",
                 username="testuser",
                 password="testpassword",
@@ -134,7 +134,7 @@ def test_create_connect_args():
         ),
         (
             # 7: Global URL
-            URL(
+            URL.create(
                 "snowflake",
                 username="testuser",
                 password="testpassword",

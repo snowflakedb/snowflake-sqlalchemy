@@ -33,10 +33,11 @@ def test_insert_table(engine_testaccount):
     conn = engine_testaccount.connect()
     try:
         # using multivalue insert
-        conn.execute(users.insert(data))
-        results = conn.execute(select([users]).order_by("id"))
+        with conn.begin():
+            conn.execute(users.insert().values(data))
+        results = conn.execute(select(users).order_by("id"))
         row = results.fetchone()
-        assert row["name"] == "testname1"
+        assert row._mapping["name"] == "testname1"
 
     finally:
         conn.close()

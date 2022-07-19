@@ -6,8 +6,7 @@ import enum
 
 import pytest
 from sqlalchemy import Column, Enum, ForeignKey, Integer, Sequence, String, text
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import Session, relationship
+from sqlalchemy.orm import Session, declarative_base, relationship
 
 
 def test_basic_orm(engine_testaccount):
@@ -297,11 +296,12 @@ def test_schema_translate_map(engine_testaccount, db_parameters, sql_compiler):
             query = session.query(User)
 
             # insert some data in a way that makes sure that we're working in the right testing schema
-            con.execute(
-                text(
-                    f"insert into {db_parameters['schema']}.{User.__tablename__} values (0, 'testuser', 'test_user')"
+            with con.begin():
+                con.execute(
+                    text(
+                        f"insert into {db_parameters['schema']}.{User.__tablename__} values (0, 'testuser', 'test_user')"
+                    )
                 )
-            )
 
             # assert the precompiled query contains the schema_map and not the actual schema
             assert str(query).startswith(f'SELECT "{schema_map}".{User.__tablename__}')

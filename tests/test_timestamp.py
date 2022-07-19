@@ -66,12 +66,13 @@ def test_inspect_timestamp_datatypes(engine_testaccount):
             tsltz=current_localtime,
             tstz=current_localtime_with_other_tz,
         )
-        results = engine_testaccount.execute(ins)
-        results.close()
+        conn = engine_testaccount.connect()
+        with conn.begin():
+            results = conn.execute(ins)
+            results.close()
 
         # select
-        conn = engine_testaccount.connect()
-        s = select([test_timestamp])
+        s = select(test_timestamp)
         results = conn.execute(s)
         rows = results.fetchone()
         results.close()

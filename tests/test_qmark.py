@@ -4,6 +4,8 @@
 
 import os
 
+from sqlalchemy import text
+
 THIS_DIR = os.path.dirname(os.path.realpath(__file__))
 
 
@@ -50,21 +52,24 @@ def test_qmark_bulk_insert(db_parameters):
     import pandas as pd
 
     try:
-        con.execute(
+        con.exec_driver_sql(
             """
             create or replace table src(c1 int, c2 string) as select seq8(),
             randstr(100, random()) from table(generator(rowcount=>100000))
             """
         )
-        con.execute(
+        con.exec_driver_sql(
             """
             create or replace table dst like src
             """
         )
-        for data in pd.read_sql_query("select * from src", engine, chunksize=16000):
-            data.to_sql(
-                "dst", engine, if_exists="append", index=False, index_label=None
-            )
+        with con.begin():
+            for data in pd.read_sql_query(
+                text("select * from src"), con, chunksize=16000
+            ):
+                data.to_sql(
+                    "dst", con, if_exists="append", index=False, index_label=None
+                )
 
     finally:
         con.close()
