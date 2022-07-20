@@ -9,7 +9,7 @@ from sqlalchemy import util as sa_util
 from sqlalchemy.engine import default
 from sqlalchemy.schema import Sequence, Table
 from sqlalchemy.sql import compiler, expression
-from sqlalchemy.sql.elements import quoted_name
+from sqlalchemy.sql.elements import BinaryExpression, quoted_name
 from sqlalchemy.util.compat import string_types
 
 from .custom_commands import AWSBucket, AzureContainer, ExternalStage
@@ -152,6 +152,10 @@ class SnowflakeIdentifierPreparer(compiler.IdentifierPreparer):
 class SnowflakeCompiler(compiler.SQLCompiler):
     def visit_sequence(self, sequence, **kw):
         return self.dialect.identifier_preparer.format_sequence(sequence) + ".nextval"
+
+    def visit_json_getitem_op_binary(self, a: BinaryExpression, b, **kw):
+        """Render keys selected from OBJECTs."""
+        return self.process(a.left, **kw) + "[" + self.process(a.right, **kw) + "]"
 
     def visit_merge_into(self, merge_into, **kw):
         clauses = " ".join(
