@@ -153,6 +153,7 @@ class SnowflakeIdentifierPreparer(compiler.IdentifierPreparer):
 
 class SnowflakeCompiler(compiler.SQLCompiler):
     def visit_insert(self, stmt, **kw):
+        # https://github.com/sqlalchemy/sqlalchemy/discussions/7894#discussioncomment-2520337
         insert_sql = super().visit_insert(stmt, **kw)
 
         columns = self.column_keys
