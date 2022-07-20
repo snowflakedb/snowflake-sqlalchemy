@@ -157,10 +157,11 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         clauses = " ".join(
             clause._compiler_dispatch(self, **kw) for clause in merge_into.clauses
         )
-        return (
-            f"MERGE INTO {merge_into.target} USING {merge_into.source} ON {merge_into.on}"
-            + (" " + clauses if clauses else "")
-        )
+        return "MERGE INTO %s USING %s ON %s" % (
+            self.process(merge_into.target, asfrom=True, **kw),
+            self.process(merge_into.source, asfrom=True, **kw),
+            self.process(merge_into.on, **kw),
+        ) + (" " + clauses if clauses else "")
 
     def visit_merge_into_clause(self, merge_into_clause, **kw):
         if merge_into_clause.command == "INSERT":
