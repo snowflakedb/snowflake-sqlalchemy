@@ -3,10 +3,13 @@
 #
 import datetime
 import decimal
+import json
 import re
 
 import sqlalchemy.types as sqltypes
 import sqlalchemy.util as util
+from sqlalchemy import sql
+from sqlalchemy.sql import expression
 
 TEXT = sqltypes.VARCHAR
 CHARACTER = sqltypes.CHAR
@@ -40,8 +43,34 @@ class VARIANT(SnowflakeType):
     __visit_name__ = "VARIANT"
 
 
-class OBJECT(SnowflakeType):
+class OBJECT(sqltypes.Indexable, SnowflakeType):
     __visit_name__ = "OBJECT"
+    comparator_factory = sqltypes.JSON.Comparator
+
+    def bind_expression(self, bindvalue: expression.BindParameter):
+        """Build the SQL string compoenent when inserted into a statement.
+
+        The OBJECT must be sent as a string and passed to the `parse_json` Snowflake
+        function when INSERTing or UPDATE-ing.
+        """
+        return sql.func.parse_json(bindvalue)
+
+    def process_bind_param(self, value, dialect):
+        """Process data before sending to connector as the value to bind."""
+        if value is not None:
+            value = json.dumps(value)
+
+        return value
+
+    def process_literal_param(self, value, dialect) -> str:
+        """Process data when binding literal string directly into statement."""
+        return f"'{self.process_bind_param(value, dialect)}'"
+
+    def process_result_value(self, value, dialect):
+        """Process the value recieved from the connector."""
+        if value is not None:
+            value = json.loads(value)
+        return value
 
 
 class ARRAY(SnowflakeType):
