@@ -55,22 +55,31 @@ class OBJECT(sqltypes.Indexable, SnowflakeType):
         """
         return sql.func.parse_json(bindvalue)
 
-    def process_bind_param(self, value, dialect):
-        """Process data before sending to connector as the value to bind."""
-        if value is not None:
-            value = json.dumps(value)
+    def bind_processor(self, dialect):
+        def process(value):
+            """Process data before sending to connector as the value to bind."""
+            if value is not None:
+                value = json.dumps(value)
 
-        return value
+            return value
 
-    def process_literal_param(self, value, dialect) -> str:
-        """Process data when binding literal string directly into statement."""
-        return f"'{self.process_bind_param(value, dialect)}'"
+        return process
 
-    def process_result_value(self, value, dialect):
-        """Process the value recieved from the connector."""
-        if value is not None:
-            value = json.loads(value)
-        return value
+    def literal_processor(self, dialect):
+        def process(value) -> str:
+            """Process data when binding literal string directly into statement."""
+            return f"'{self.bind_processor(dialect)(value)}'"
+
+        return process
+
+    def result_processor(self, dialect, coltype):
+        def process(value):
+            """Process the value recieved from the connector."""
+            if value is not None:
+                value = json.loads(value)
+            return value
+
+        return process
 
 
 class ARRAY(SnowflakeType):
