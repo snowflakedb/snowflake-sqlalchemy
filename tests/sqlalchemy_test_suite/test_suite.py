@@ -11,7 +11,6 @@ from sqlalchemy.testing.suite import HasSequenceTest as _HasSequenceTest
 from sqlalchemy.testing.suite import InsertBehaviorTest as _InsertBehaviorTest
 from sqlalchemy.testing.suite import LikeFunctionsTest as _LikeFunctionsTest
 from sqlalchemy.testing.suite import LongNameBlowoutTest as _LongNameBlowoutTest
-from sqlalchemy.testing.suite import PercentSchemaNamesTest as _PercentSchemaNamesTest
 from sqlalchemy.testing.suite import SimpleUpdateDeleteTest as _SimpleUpdateDeleteTest
 from sqlalchemy.testing.suite import *  # noqa
 
@@ -68,18 +67,7 @@ class InsertBehaviorTest(_InsertBehaviorTest):
         pass
 
 
-# 3. Need fix in connector
-
-
-class PercentSchemaNamesTest(_PercentSchemaNamesTest):
-    @pytest.mark.xfail
-    # TODO: connector cursor "executemany" needs to handle double percentage like
-    #  "execute" using self._dbapi_connection._interpolate_empty_sequences
-    def test_executemany_roundtrip(self, connection):
-        super().test_executemany_roundtrip(connection)
-
-
-# 4. Patched Tests
+# 2. Patched Tests
 
 
 class HasSequenceTest(_HasSequenceTest):
