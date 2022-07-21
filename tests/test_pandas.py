@@ -4,6 +4,7 @@
 
 import random
 import string
+import sys
 import uuid
 
 import numpy as np
@@ -302,7 +303,12 @@ def test_timezone(db_parameters):
         conn.exec_driver_sql(f"DROP TABLE {test_table_name};")
 
 
-def test_pandas_writeback(engine_testaccount):
+def test_pandas_writeback(engine_testaccount, run_v20_sqlalchemy):
+    if run_v20_sqlalchemy and sys.version_info < (3, 8):
+        pytest.skip(
+            "In Python 3.7, this test depends on pandas features of which the implementation is incompatible with sqlachemy 2.0, and pandas does not support Python 3.7 anymore."
+        )
+
     conn = engine_testaccount.connect()
     try:
         sf_connector_version_data = [

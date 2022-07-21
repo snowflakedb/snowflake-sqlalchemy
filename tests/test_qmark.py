@@ -3,7 +3,9 @@
 #
 
 import os
+import sys
 
+import pytest
 from sqlalchemy import text
 
 from snowflake.sqlalchemy import URL
@@ -39,10 +41,15 @@ def _get_engine_with_qmark(db_parameters, user=None, password=None, account=None
     return engine
 
 
-def test_qmark_bulk_insert(db_parameters):
+def test_qmark_bulk_insert(db_parameters, run_v20_sqlalchemy):
     """
     Bulk insert using qmark paramstyle
     """
+    if run_v20_sqlalchemy and sys.version_info < (3, 8):
+        pytest.skip(
+            "In Python 3.7, this test depends on pandas features of which the implementation is incompatible with sqlachemy 2.0, and pandas does not support Python 3.7 anymore."
+        )
+
     import snowflake.connector
 
     snowflake.connector.paramstyle = "qmark"
