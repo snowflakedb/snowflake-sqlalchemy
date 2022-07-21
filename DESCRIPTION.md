@@ -9,6 +9,9 @@ Source code is also available at:
 
 # Release Notes
 
+- v1.4.1(Unreleased)
+  - snowflake-sqlalchemy is now SQLAlchemy 2.0 compatible.
+
 - v1.4.0(July 20, 2022)
 
   - Added support for `regexp_match`, `regexp_replace` in `sqlalchemy.sql.expression.ColumnOperators`.
