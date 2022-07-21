@@ -25,18 +25,19 @@ from sqlalchemy import (
     String,
     Table,
     UniqueConstraint,
-    create_engine,
     dialects,
     inspect,
     text,
 )
 from sqlalchemy.exc import DBAPIError
+from sqlalchemy.pool import NullPool
 from sqlalchemy.sql import and_, not_, or_, select
 
 from snowflake.connector import Error, ProgrammingError, connect
 from snowflake.sqlalchemy import URL, MergeInto, dialect
 from snowflake.sqlalchemy.snowdialect import SnowflakeDialect
 
+from .conftest import create_engine_with_future_flag as create_engine
 from .conftest import get_engine
 from .parameters import CONNECTION_PARAMETERS
 
@@ -100,8 +101,6 @@ def test_connect_args():
     Snowflake connect string supports account name as a replacement of
     host:port
     """
-    from sqlalchemy import create_engine
-
     engine = create_engine(
         "snowflake://{user}:{password}@{host}:{port}/{database}/{schema}"
         "?account={account}&protocol={protocol}".format(
@@ -211,21 +210,22 @@ def test_insert_tables(engine_testaccount):
             conn.execute(ins, {"id": 2, "name": "wendy", "fullname": "Wendy Williams"})
 
         # verify the results
-        s = select(users)
-        results = conn.execute(s)
-        assert len([row for row in results]) == 2, "number of rows from users table"
-        results.close()
+        with conn.begin():
+            s = select(users)
+            results = conn.execute(s)
+            assert len([row for row in results]) == 2, "number of rows from users table"
+            results.close()
 
-        # fetchone
-        s = select(users).order_by("id")
-        results = conn.execute(s)
-        row = results.fetchone()
-        results.close()
-        assert row._mapping._data[2] == "Jack Jones", "user name"
-        assert row._mapping["fullname"] == "Jack Jones", "user name by dict"
-        assert (
-            row._mapping[users.c.fullname] == "Jack Jones"
-        ), "user name by Column object"
+            # fetchone
+            s = select(users).order_by("id")
+            results = conn.execute(s)
+            row = results.fetchone()
+            results.close()
+            assert row._mapping._data[2] == "Jack Jones", "user name"
+            assert row._mapping["fullname"] == "Jack Jones", "user name by dict"
+            assert (
+                row._mapping[users.c.fullname] == "Jack Jones"
+            ), "user name by Column object"
 
         with conn.begin():
             conn.execute(
@@ -653,23 +653,24 @@ def test_view_definition(engine_testaccount, db_parameters):
     test_table_name = "test_table_sqlalchemy"
     test_view_name = "testview_sqlalchemy"
     with engine_testaccount.connect() as conn:
-        conn.execute(
-            text(
-                """
-    CREATE OR REPLACE TABLE {} (
-        id INTEGER,
-        name STRING
-    )
-    """.format(
-                    test_table_name
+        with conn.begin():
+            conn.execute(
+                text(
+                    """
+        CREATE OR REPLACE TABLE {} (
+            id INTEGER,
+            name STRING
+        )
+        """.format(
+                        test_table_name
+                    )
                 )
             )
-        )
-        sql = """
-    CREATE OR REPLACE VIEW {} AS
-    SELECT * FROM {} WHERE id > 10""".format(
-            test_view_name, test_table_name
-        )
+            sql = """
+        CREATE OR REPLACE VIEW {} AS
+        SELECT * FROM {} WHERE id > 10""".format(
+                test_view_name, test_table_name
+            )
         with conn.begin():
             conn.execute(text(sql).execution_options(autocommit=True))
         try:
@@ -692,24 +693,24 @@ def test_view_comment_reading(engine_testaccount, db_parameters):
     test_table_name = "test_table_sqlalchemy"
     test_view_name = "testview_sqlalchemy"
     with engine_testaccount.connect() as conn:
-        conn.execute(
-            text(
-                """
-    CREATE OR REPLACE TABLE {} (
-        id INTEGER,
-        name STRING
-    )
-    """.format(
-                    test_table_name
+        with conn.begin():
+            conn.execute(
+                text(
+                    """
+        CREATE OR REPLACE TABLE {} (
+            id INTEGER,
+            name STRING
+        )
+        """.format(
+                        test_table_name
+                    )
                 )
             )
-        )
-        sql = """
-    CREATE OR REPLACE VIEW {} AS
-    SELECT * FROM {} WHERE id > 10""".format(
-            test_view_name, test_table_name
-        )
-        with conn.begin():
+            sql = """
+        CREATE OR REPLACE VIEW {} AS
+        SELECT * FROM {} WHERE id > 10""".format(
+                test_view_name, test_table_name
+            )
             conn.execute(text(sql).execution_options(autocommit=True))
             comment_text = "hello my viewing friends"
             sql = f"COMMENT ON VIEW {test_view_name} IS '{comment_text}';"
@@ -918,11 +919,6 @@ def _get_engine_with_columm_metadata_cache(
     if account is not None:
         db_parameters["account"] = account
 
-    from sqlalchemy import create_engine
-    from sqlalchemy.pool import NullPool
-
-    from snowflake.sqlalchemy import URL
-
     engine = create_engine(
         URL(
             user=db_parameters["user"],
@@ -1076,8 +1072,6 @@ def test_cache_time(engine_testaccount, db_parameters):
 
 @pytest.mark.timeout(15)
 def test_region():
-    from sqlalchemy import create_engine
-
     engine = create_engine(
         URL(
             user="testuser",
@@ -1099,8 +1093,6 @@ def test_region():
 
 @pytest.mark.timeout(15)
 def test_azure():
-    from sqlalchemy import create_engine
-
     engine = create_engine(
         URL(
             user="testuser",
@@ -1418,24 +1410,29 @@ def test_autoincrement(engine_testaccount):
         with connection.begin():
             connection.execute(users.insert(), [{"name": "sf1"}])
 
-        assert connection.execute(select(users)).fetchall() == [(1, "sf1")]
+        with connection.begin():
+            assert connection.execute(select(users)).fetchall() == [(1, "sf1")]
 
         with connection.begin():
             connection.execute(users.insert(), [{"name": "sf2"}, {"name": "sf3"}])
-        assert connection.execute(select(users)).fetchall() == [
-            (1, "sf1"),
-            (2, "sf2"),
-            (3, "sf3"),
-        ]
+
+        with connection.begin():
+            assert connection.execute(select(users)).fetchall() == [
+                (1, "sf1"),
+                (2, "sf2"),
+                (3, "sf3"),
+            ]
 
         with connection.begin():
             connection.execute(users.insert(), {"name": "sf4"})
-        assert connection.execute(select(users)).fetchall() == [
-            (1, "sf1"),
-            (2, "sf2"),
-            (3, "sf3"),
-            (4, "sf4"),
-        ]
+
+        with connection.begin():
+            assert connection.execute(select(users)).fetchall() == [
+                (1, "sf1"),
+                (2, "sf2"),
+                (3, "sf3"),
+                (4, "sf4"),
+            ]
 
         seq = Sequence("id_seq")
         nextid = connection.execute(seq)

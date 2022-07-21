@@ -9,7 +9,6 @@ import uuid
 import numpy as np
 import pandas as pd
 import pytest
-import sqlalchemy
 from sqlalchemy import (
     Column,
     ForeignKey,
@@ -21,10 +20,13 @@ from sqlalchemy import (
     select,
     text,
 )
+from sqlalchemy.pool import NullPool
 
-import snowflake.sqlalchemy
 from snowflake.connector import ProgrammingError
 from snowflake.connector.pandas_tools import make_pd_writer, pd_writer
+from snowflake.sqlalchemy import URL
+
+from .conftest import create_engine_with_future_flag as create_engine
 
 
 def _create_users_addresses_tables(engine_testaccount, metadata):
@@ -110,8 +112,6 @@ def get_engine_with_numpy(db_parameters, user=None, password=None, account=None)
     """
     Creates a connection using the parameters defined in JDBC connect string
     """
-    from sqlalchemy import create_engine
-
     from snowflake.sqlalchemy import URL
 
     if user is not None:
@@ -120,8 +120,6 @@ def get_engine_with_numpy(db_parameters, user=None, password=None, account=None)
         db_parameters["password"] = password
     if account is not None:
         db_parameters["account"] = account
-
-    from sqlalchemy.pool import NullPool
 
     engine = create_engine(
         URL(
@@ -146,19 +144,21 @@ def test_numpy_datatypes(db_parameters):
     conn = engine.connect()
     try:
         specific_date = np.datetime64("2016-03-04T12:03:05.123456789")
-        conn.exec_driver_sql(
-            "CREATE OR REPLACE TABLE {name}("
-            "c1 timestamp_ntz)".format(name=db_parameters["name"])
-        )
+        with conn.begin():
+            conn.exec_driver_sql(
+                "CREATE OR REPLACE TABLE {name}("
+                "c1 timestamp_ntz)".format(name=db_parameters["name"])
+            )
         with conn.begin():
             conn.exec_driver_sql(
                 "INSERT INTO {name}(c1) values(%s)".format(name=db_parameters["name"]),
                 (specific_date,),
             )
-        df = pd.read_sql_query(
-            text("SELECT * FROM {name}".format(name=db_parameters["name"])), conn
-        )
-        assert df.c1.values[0] == specific_date
+        with conn.begin():
+            df = pd.read_sql_query(
+                text("SELECT * FROM {name}".format(name=db_parameters["name"])), conn
+            )
+            assert df.c1.values[0] == specific_date
     finally:
         conn.exec_driver_sql(
             "DROP TABLE IF EXISTS {name}".format(name=db_parameters["name"])
@@ -212,8 +212,8 @@ def test_timezone(db_parameters):
 
     test_table_name = "".join([random.choice(string.ascii_letters) for _ in range(5)])
 
-    sa_engine = sqlalchemy.create_engine(
-        snowflake.sqlalchemy.URL(
+    sa_engine = create_engine(
+        URL(
             account=db_parameters["account"],
             password=db_parameters["password"],
             database=db_parameters["database"],
@@ -226,8 +226,8 @@ def test_timezone(db_parameters):
         )
     )
 
-    sa_engine2_raw_conn = sqlalchemy.create_engine(
-        snowflake.sqlalchemy.URL(
+    sa_engine2_raw_conn = create_engine(
+        URL(
             account=db_parameters["account"],
             password=db_parameters["password"],
             database=db_parameters["database"],
@@ -243,17 +243,18 @@ def test_timezone(db_parameters):
 
     conn = sa_engine.connect()
 
-    conn.exec_driver_sql(
-        """
-    CREATE OR REPLACE TABLE {table}(
-        tz_col timestamp_tz,
-        ntz_col timestamp_ntz,
-        decimal_col decimal(10,1),
-        float_col float
-    );""".format(
-            table=test_table_name
+    with conn.begin():
+        conn.exec_driver_sql(
+            """
+        CREATE OR REPLACE TABLE {table}(
+            tz_col timestamp_tz,
+            ntz_col timestamp_ntz,
+            decimal_col decimal(10,1),
+            float_col float
+        );""".format(
+                table=test_table_name
+            )
         )
-    )
 
     try:
         with conn.begin():

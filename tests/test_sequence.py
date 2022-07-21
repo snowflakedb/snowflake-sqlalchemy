@@ -23,8 +23,10 @@ def test_table_with_sequence(engine_testaccount, db_parameters):
             conn.execute(sequence_table.insert(), [{"data": "test_insert_1"}])
 
         select_stmt = select(sequence_table).order_by("id")
-        result = conn.execute(select_stmt).fetchall()
-        assert result == [(1, "test_insert_1")]
+
+        with conn.begin():
+            result = conn.execute(select_stmt).fetchall()
+            assert result == [(1, "test_insert_1")]
 
         autoload_sequence_table = Table(
             test_table_name, MetaData(), autoload_with=engine_testaccount
@@ -75,8 +77,10 @@ def test_table_with_autoincrement(engine_testaccount, db_parameters):
             conn.execute(autoincrement_table.insert(), [{"data": "test_insert_1"}])
 
         select_stmt = select(autoincrement_table).order_by("id")
-        result = conn.execute(select_stmt).fetchall()
-        assert result == [(1, "test_insert_1")]
+
+        with conn.begin():
+            result = conn.execute(select_stmt).fetchall()
+            assert result == [(1, "test_insert_1")]
 
         autoload_sequence_table = Table(
             test_table_name, MetaData(), autoload_with=engine_testaccount

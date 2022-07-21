@@ -6,6 +6,10 @@ import os
 
 from sqlalchemy import text
 
+from snowflake.sqlalchemy import URL
+
+from .conftest import create_engine_with_future_flag as create_engine
+
 THIS_DIR = os.path.dirname(os.path.realpath(__file__))
 
 
@@ -19,10 +23,6 @@ def _get_engine_with_qmark(db_parameters, user=None, password=None, account=None
         db_parameters["password"] = password
     if account is not None:
         db_parameters["account"] = account
-
-    from sqlalchemy import create_engine
-
-    from snowflake.sqlalchemy import URL
 
     engine = create_engine(
         URL(
@@ -52,17 +52,19 @@ def test_qmark_bulk_insert(db_parameters):
     import pandas as pd
 
     try:
-        con.exec_driver_sql(
-            """
-            create or replace table src(c1 int, c2 string) as select seq8(),
-            randstr(100, random()) from table(generator(rowcount=>100000))
-            """
-        )
-        con.exec_driver_sql(
-            """
-            create or replace table dst like src
-            """
-        )
+        with con.begin():
+            con.exec_driver_sql(
+                """
+                create or replace table src(c1 int, c2 string) as select seq8(),
+                randstr(100, random()) from table(generator(rowcount=>100000))
+                """
+            )
+            con.exec_driver_sql(
+                """
+                create or replace table dst like src
+                """
+            )
+
         with con.begin():
             for data in pd.read_sql_query(
                 text("select * from src"), con, chunksize=16000

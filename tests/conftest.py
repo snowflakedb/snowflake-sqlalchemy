@@ -6,6 +6,7 @@ import os
 import sys
 import time
 import uuid
+from functools import partial
 from logging import getLogger
 
 import pytest
@@ -26,6 +27,18 @@ if os.getenv("TRAVIS") == "true":
     TEST_SCHEMA = "TRAVIS_JOB_{}".format(os.getenv("TRAVIS_JOB_ID"))
 else:
     TEST_SCHEMA = "sqlalchemy_tests_" + str(uuid.uuid4()).replace("-", "_")
+
+create_engine_with_future_flag = create_engine
+
+
+def pytest_addoption(parser):
+    parser.addoption(
+        "--run_v20_sqlalchemy",
+        help="Use only 2.0 SQLAlchemy APIs, any legacy features (< 2.0) will not be supported."
+        "Turning on this option will set future flag to True on Engine and Session objects according to"
+        "the migration guide: https://docs.sqlalchemy.org/en/14/changelog/migration_20.html",
+        action="store_true",
+    )
 
 
 @pytest.fixture(scope="session")
@@ -139,7 +152,7 @@ def get_engine(user=None, password=None, account=None, schema=None):
 
     from sqlalchemy.pool import NullPool
 
-    engine = create_engine(
+    engine = create_engine_with_future_flag(
         URL(
             user=ret["user"],
             password=ret["password"],
@@ -201,6 +214,19 @@ def sql_compiler():
             compile_kwargs={"literal_binds": True, "deterministic": True},
         )
     ).replace("\n", "")
+
+
+@pytest.fixture(scope="session")
+def run_v20_sqlalchemy(pytestconfig):
+    return pytestconfig.option.run_v20_sqlalchemy
+
+
+def pytest_sessionstart(session):
+    # patch the create_engine with future flag
+    global create_engine_with_future_flag
+    create_engine_with_future_flag = partial(
+        create_engine, future=session.config.option.run_v20_sqlalchemy
+    )
 
 
 def running_on_public_ci() -> bool:
