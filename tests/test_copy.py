@@ -64,7 +64,7 @@ def test_copy_into_location(engine_testaccount, sql_compiler):
         "(KMS_KEY_ID='1234abcd-12ab-34cd-56ef-1234567890ab' TYPE='AWS_SSE_KMS')"
     )
     copy_stmt_2 = CopyIntoStorage(
-        from_=select([food_items]).where(food_items.c.id == 1),  # Test sub-query
+        from_=select(food_items).where(food_items.c.id == 1),  # Test sub-query
         into=AWSBucket.from_uri("s3://backup")
         .credentials(aws_role="some_iam_role")
         .encryption_aws_sse_s3(),

@@ -25,18 +25,19 @@ from sqlalchemy import (
     String,
     Table,
     UniqueConstraint,
-    create_engine,
     dialects,
     inspect,
     text,
 )
 from sqlalchemy.exc import DBAPIError
+from sqlalchemy.pool import NullPool
 from sqlalchemy.sql import and_, not_, or_, select
 
 from snowflake.connector import Error, ProgrammingError, connect
 from snowflake.sqlalchemy import URL, MergeInto, dialect
 from snowflake.sqlalchemy.snowdialect import SnowflakeDialect
 
+from .conftest import create_engine_with_future_flag as create_engine
 from .conftest import get_engine
 from .parameters import CONNECTION_PARAMETERS
 
@@ -87,6 +88,12 @@ def _create_users_addresses_tables_without_sequence(engine_testaccount, metadata
     return users, addresses
 
 
+def verify_engine_connection(engine):
+    with engine.connect() as conn:
+        results = conn.execute(text("select current_version()")).fetchone()
+        assert results is not None
+
+
 def test_connect_args():
     """
     Tests connect string
@@ -94,8 +101,6 @@ def test_connect_args():
     Snowflake connect string supports account name as a replacement of
     host:port
     """
-    from sqlalchemy import create_engine
-
     engine = create_engine(
         "snowflake://{user}:{password}@{host}:{port}/{database}/{schema}"
         "?account={account}&protocol={protocol}".format(
@@ -110,8 +115,7 @@ def test_connect_args():
         )
     )
     try:
-        results = engine.execute("select current_version()").fetchone()
-        assert results is not None
+        verify_engine_connection(engine)
     finally:
         engine.dispose()
 
@@ -126,8 +130,7 @@ def test_connect_args():
         )
     )
     try:
-        results = engine.execute("select current_version()").fetchone()
-        assert results is not None
+        verify_engine_connection(engine)
     finally:
         engine.dispose()
 
@@ -143,8 +146,7 @@ def test_connect_args():
         )
     )
     try:
-        results = engine.execute("select current_version()").fetchone()
-        assert results is not None
+        verify_engine_connection(engine)
     finally:
         engine.dispose()
 
@@ -153,7 +155,8 @@ def test_simple_sql(engine_testaccount):
     """
     Simple SQL by SQLAlchemy
     """
-    result = engine_testaccount.execute("show databases")
+    with engine_testaccount.connect() as conn:
+        result = conn.execute(text("show databases"))
     rows = [row for row in result]
     assert len(rows) >= 0, "show database results"
 
@@ -169,12 +172,13 @@ def test_create_drop_tables(engine_testaccount):
 
     try:
         # validate the tables exists
-        results = engine_testaccount.execute("desc table users")
-        assert len([row for row in results]) > 0, "users table doesn't exist"
+        with engine_testaccount.connect() as conn:
+            results = conn.execute(text("desc table users"))
+            assert len([row for row in results]) > 0, "users table doesn't exist"
 
-        # validate the tables exists
-        results = engine_testaccount.execute("desc table addresses")
-        assert len([row for row in results]) > 0, "addresses table doesn't exist"
+            # validate the tables exists
+            results = conn.execute(text("desc table addresses"))
+            assert len([row for row in results]) > 0, "addresses table doesn't exist"
     finally:
         # drop tables
         addresses.drop(engine_testaccount)
@@ -192,7 +196,8 @@ def test_insert_tables(engine_testaccount):
     try:
         # inserts data with an implicitly generated id
         ins = users.insert().values(name="jack", fullname="Jack Jones")
-        results = engine_testaccount.execute(ins)
+        with conn.begin():
+            results = conn.execute(ins)
         # Note: SQLAlchemy 1.4 changed what ``inserted_primary_key`` returns
         #  a cast is here to make sure the test works with both older and newer
         #  versions
@@ -201,54 +206,59 @@ def test_insert_tables(engine_testaccount):
 
         # inserts data with the given id
         ins = users.insert()
-        conn.execute(ins, id=2, name="wendy", fullname="Wendy Williams")
+        with conn.begin():
+            conn.execute(ins, {"id": 2, "name": "wendy", "fullname": "Wendy Williams"})
 
         # verify the results
-        s = select([users])
-        results = conn.execute(s)
-        assert len([row for row in results]) == 2, "number of rows from users table"
-        results.close()
+        with conn.begin():
+            s = select(users)
+            results = conn.execute(s)
+            assert len([row for row in results]) == 2, "number of rows from users table"
+            results.close()
 
-        # fetchone
-        s = select([users]).order_by("id")
-        results = conn.execute(s)
-        row = results.fetchone()
-        results.close()
-        assert row[2] == "Jack Jones", "user name"
-        assert row["fullname"] == "Jack Jones", "user name by dict"
-        assert row[users.c.fullname] == "Jack Jones", "user name by Column object"
+            # fetchone
+            s = select(users).order_by("id")
+            results = conn.execute(s)
+            row = results.fetchone()
+            results.close()
+            assert row._mapping._data[2] == "Jack Jones", "user name"
+            assert row._mapping["fullname"] == "Jack Jones", "user name by dict"
+            assert (
+                row._mapping[users.c.fullname] == "Jack Jones"
+            ), "user name by Column object"
 
-        conn.execute(
-            addresses.insert(),
-            [
-                {"user_id": 1, "email_address": "jack@yahoo.com"},
-                {"user_id": 1, "email_address": "jack@msn.com"},
-                {"user_id": 2, "email_address": "www@www.org"},
-                {"user_id": 2, "email_address": "wendy@aol.com"},
-            ],
-        )
+        with conn.begin():
+            conn.execute(
+                addresses.insert(),
+                [
+                    {"user_id": 1, "email_address": "jack@yahoo.com"},
+                    {"user_id": 1, "email_address": "jack@msn.com"},
+                    {"user_id": 2, "email_address": "www@www.org"},
+                    {"user_id": 2, "email_address": "wendy@aol.com"},
+                ],
+            )
 
         # more records
-        s = select([addresses])
+        s = select(addresses)
         results = conn.execute(s)
         assert len([row for row in results]) == 4, "number of rows from addresses table"
         results.close()
 
         # select specified column names
-        s = select([users.c.name, users.c.fullname]).order_by("name")
+        s = select(users.c.name, users.c.fullname).order_by("name")
         results = conn.execute(s)
         results.fetchone()
         row = results.fetchone()
-        assert row["name"] == "wendy", "name"
+        assert row._mapping["name"] == "wendy", "name"
 
         # join
-        s = select([users, addresses]).where(users.c.id == addresses.c.user_id)
+        s = select(users, addresses).where(users.c.id == addresses.c.user_id)
         results = conn.execute(s)
         results.fetchone()
         results.fetchone()
         results.fetchone()
         row = results.fetchone()
-        assert row["email_address"] == "wendy@aol.com", "email address"
+        assert row._mapping["email_address"] == "wendy@aol.com", "email address"
 
         # Operator
         assert (
@@ -297,7 +307,7 @@ def test_insert_tables(engine_testaccount):
 
         # example 3
         s = select(
-            [(users.c.fullname + ", " + addresses.c.email_address).label("title")]
+            (users.c.fullname + ", " + addresses.c.email_address).label("title")
         ).where(
             and_(
                 users.c.id == addresses.c.user_id,
@@ -308,13 +318,13 @@ def test_insert_tables(engine_testaccount):
                 ),
             )
         )
-        results = engine_testaccount.execute(s).fetchall()
+        results = conn.execute(s).fetchall()
         assert results[0][0] == "Wendy Williams, wendy@aol.com"
 
         # Aliases
         a1 = addresses.alias()
         a2 = addresses.alias()
-        s = select([users]).where(
+        s = select(users).where(
             and_(
                 users.c.id == a1.c.user_id,
                 users.c.id == a2.c.user_id,
@@ -322,7 +332,7 @@ def test_insert_tables(engine_testaccount):
                 a2.c.email_address == "jack@yahoo.com",
             )
         )
-        results = engine_testaccount.execute(s).fetchone()
+        results = conn.execute(s).fetchone()
         assert results == (1, "jack", "Jack Jones")
 
         # Joins
@@ -340,18 +350,18 @@ def test_insert_tables(engine_testaccount):
             "ON addresses.email_address LIKE users.name || :name_1"
         )
 
-        s = select([users.c.fullname]).select_from(
+        s = select(users.c.fullname).select_from(
             users.join(addresses, addresses.c.email_address.like(users.c.name + "%"))
         )
-        results = engine_testaccount.execute(s).fetchall()
+        results = conn.execute(s).fetchall()
         assert results[1] == ("Jack Jones",)
 
         s = (
-            select([users.c.fullname])
+            select(users.c.fullname)
             .select_from(users.outerjoin(addresses))
             .order_by(users.c.fullname)
         )
-        results = engine_testaccount.execute(s).fetchall()
+        results = conn.execute(s).fetchall()
         assert results[-1] == ("Wendy Williams",)
     finally:
         conn.close()
@@ -369,27 +379,28 @@ def test_reflextion(engine_testaccount):
     """
     Tests Reflection
     """
-    engine_testaccount.execute(
-        """
-CREATE OR REPLACE TABLE user (
-    id       Integer primary key,
-    name     String,
-    fullname String
-)
-"""
-    )
-    try:
-        meta = MetaData()
-        user_reflected = Table(
-            "user", meta, autoload=True, autoload_with=engine_testaccount
-        )
-        assert user_reflected.c == ["user.id", "user.name", "user.fullname"]
-    finally:
+    with engine_testaccount.connect() as conn:
         engine_testaccount.execute(
             """
-DROP TABLE IF EXISTS user
-"""
+    CREATE OR REPLACE TABLE user (
+        id       Integer primary key,
+        name     String,
+        fullname String
+    )
+    """
         )
+        try:
+            meta = MetaData()
+            user_reflected = Table(
+                "user", meta, autoload=True, autoload_with=engine_testaccount
+            )
+            assert user_reflected.c == ["user.id", "user.name", "user.fullname"]
+        finally:
+            conn.execute(
+                """
+    DROP TABLE IF EXISTS user
+    """
+            )
 
 
 def test_inspect_column(engine_testaccount):
@@ -641,33 +652,38 @@ def test_view_definition(engine_testaccount, db_parameters):
     """
     test_table_name = "test_table_sqlalchemy"
     test_view_name = "testview_sqlalchemy"
-    engine_testaccount.execute(
-        """
-CREATE OR REPLACE TABLE {} (
-    id INTEGER,
-    name STRING
-)
-""".format(
-            test_table_name
+    with engine_testaccount.connect() as conn:
+        with conn.begin():
+            conn.execute(
+                text(
+                    """
+        CREATE OR REPLACE TABLE {} (
+            id INTEGER,
+            name STRING
         )
-    )
-    sql = """
-CREATE OR REPLACE VIEW {} AS
-SELECT * FROM {} WHERE id > 10""".format(
-        test_view_name, test_table_name
-    )
-    engine_testaccount.execute(text(sql).execution_options(autocommit=True))
-    try:
-        inspector = inspect(engine_testaccount)
-        assert inspector.get_view_definition(test_view_name) == sql.strip()
-        assert (
-            inspector.get_view_definition(test_view_name, db_parameters["schema"])
-            == sql.strip()
-        )
-        assert inspector.get_view_names() == [test_view_name]
-    finally:
-        engine_testaccount.execute(text(f"DROP TABLE IF EXISTS {test_table_name}"))
-        engine_testaccount.execute(text(f"DROP VIEW IF EXISTS {test_view_name}"))
+        """.format(
+                        test_table_name
+                    )
+                )
+            )
+            sql = """
+        CREATE OR REPLACE VIEW {} AS
+        SELECT * FROM {} WHERE id > 10""".format(
+                test_view_name, test_table_name
+            )
+        with conn.begin():
+            conn.execute(text(sql).execution_options(autocommit=True))
+        try:
+            inspector = inspect(engine_testaccount)
+            assert inspector.get_view_definition(test_view_name) == sql.strip()
+            assert (
+                inspector.get_view_definition(test_view_name, db_parameters["schema"])
+                == sql.strip()
+            )
+            assert inspector.get_view_names() == [test_view_name]
+        finally:
+            conn.execute(text(f"DROP TABLE IF EXISTS {test_table_name}"))
+            conn.execute(text(f"DROP VIEW IF EXISTS {test_view_name}"))
 
 
 def test_view_comment_reading(engine_testaccount, db_parameters):
@@ -676,37 +692,41 @@ def test_view_comment_reading(engine_testaccount, db_parameters):
     """
     test_table_name = "test_table_sqlalchemy"
     test_view_name = "testview_sqlalchemy"
-    engine_testaccount.execute(
-        """
-CREATE OR REPLACE TABLE {} (
-    id INTEGER,
-    name STRING
-)
-""".format(
-            test_table_name
+    with engine_testaccount.connect() as conn:
+        with conn.begin():
+            conn.execute(
+                text(
+                    """
+        CREATE OR REPLACE TABLE {} (
+            id INTEGER,
+            name STRING
         )
-    )
-    sql = """
-CREATE OR REPLACE VIEW {} AS
-SELECT * FROM {} WHERE id > 10""".format(
-        test_view_name, test_table_name
-    )
-    engine_testaccount.execute(text(sql).execution_options(autocommit=True))
-    comment_text = "hello my viewing friends"
-    sql = f"COMMENT ON VIEW {test_view_name} IS '{comment_text}';"
-    engine_testaccount.execute(text(sql).execution_options(autocommit=True))
-    try:
-        inspector = inspect(engine_testaccount)
-        # NOTE: sqlalchemy doesn't have a way to get view comments specifically,
-        # but the code to get table comments should work for views too
-        assert inspector.get_table_comment(test_view_name) == {"text": comment_text}
-        assert inspector.get_table_comment(test_table_name) == {"text": None}
-        assert str(inspector.get_columns(test_table_name)) == str(
-            inspector.get_columns(test_view_name)
-        )
-    finally:
-        engine_testaccount.execute(text(f"DROP TABLE IF EXISTS {test_table_name}"))
-        engine_testaccount.execute(text(f"DROP VIEW IF EXISTS {test_view_name}"))
+        """.format(
+                        test_table_name
+                    )
+                )
+            )
+            sql = """
+        CREATE OR REPLACE VIEW {} AS
+        SELECT * FROM {} WHERE id > 10""".format(
+                test_view_name, test_table_name
+            )
+            conn.execute(text(sql).execution_options(autocommit=True))
+            comment_text = "hello my viewing friends"
+            sql = f"COMMENT ON VIEW {test_view_name} IS '{comment_text}';"
+            conn.execute(text(sql).execution_options(autocommit=True))
+        try:
+            inspector = inspect(engine_testaccount)
+            # NOTE: sqlalchemy doesn't have a way to get view comments specifically,
+            # but the code to get table comments should work for views too
+            assert inspector.get_table_comment(test_view_name) == {"text": comment_text}
+            assert inspector.get_table_comment(test_table_name) == {"text": None}
+            assert str(inspector.get_columns(test_table_name)) == str(
+                inspector.get_columns(test_view_name)
+            )
+        finally:
+            conn.execute(text(f"DROP TABLE IF EXISTS {test_table_name}"))
+            conn.execute(text(f"DROP VIEW IF EXISTS {test_view_name}"))
 
 
 @pytest.mark.skip("Temp table cannot be viewed for some reason")
@@ -736,24 +756,25 @@ CREATE TEMPORARY TABLE {} (col1 integer, col2 string)
 def test_create_table_with_schema(engine_testaccount, db_parameters):
     metadata = MetaData()
     new_schema = db_parameters["schema"] + "_NEW"
-    engine_testaccount.execute(text(f'CREATE OR REPLACE SCHEMA "{new_schema}"'))
-    Table(
-        "users",
-        metadata,
-        Column("id", Integer, Sequence("user_id_seq"), primary_key=True),
-        Column("name", String),
-        Column("fullname", String),
-        schema=new_schema,
-    )
-    metadata.create_all(engine_testaccount)
+    with engine_testaccount.connect() as conn:
+        conn.execute(text(f'CREATE OR REPLACE SCHEMA "{new_schema}"'))
+        Table(
+            "users",
+            metadata,
+            Column("id", Integer, Sequence("user_id_seq"), primary_key=True),
+            Column("name", String),
+            Column("fullname", String),
+            schema=new_schema,
+        )
+        metadata.create_all(engine_testaccount)
 
-    try:
-        inspector = inspect(engine_testaccount)
-        columns_in_users = inspector.get_columns("users", schema=new_schema)
-        assert columns_in_users is not None
-    finally:
-        metadata.drop_all(engine_testaccount)
-        engine_testaccount.execute(text(f'DROP SCHEMA IF EXISTS "{new_schema}"'))
+        try:
+            inspector = inspect(engine_testaccount)
+            columns_in_users = inspector.get_columns("users", schema=new_schema)
+            assert columns_in_users is not None
+        finally:
+            metadata.drop_all(engine_testaccount)
+            conn.execute(text(f'DROP SCHEMA IF EXISTS "{new_schema}"'))
 
 
 @pytest.mark.skipif(
@@ -764,23 +785,27 @@ def test_copy(engine_testaccount):
     """
     COPY must be in a transaction
     """
-    metadata = MetaData()
-    users, addresses = _create_users_addresses_tables_without_sequence(
-        engine_testaccount, metadata
-    )
-
-    try:
-        engine_testaccount.execute(
-            "PUT file://{file_name} @%users".format(
-                file_name=os.path.join(THIS_DIR, "data", "users.txt")
-            )
+    with engine_testaccount.connect() as conn:
+        metadata = MetaData()
+        users, addresses = _create_users_addresses_tables_without_sequence(
+            engine_testaccount, metadata
         )
-        engine_testaccount.execute("COPY INTO users")
-        results = engine_testaccount.execute("SELECT * FROM USERS").fetchall()
-        assert results is not None and len(results) > 0
-    finally:
-        addresses.drop(engine_testaccount)
-        users.drop(engine_testaccount)
+
+        try:
+            with conn.begin():
+                conn.execute(
+                    text(
+                        "PUT file://{file_name} @%users".format(
+                            file_name=os.path.join(THIS_DIR, "data", "users.txt")
+                        )
+                    )
+                )
+                conn.execute(text("COPY INTO users"))
+            results = conn.execute(text("SELECT * FROM USERS")).fetchall()
+            assert results is not None and len(results) > 0
+        finally:
+            addresses.drop(engine_testaccount)
+            users.drop(engine_testaccount)
 
 
 @pytest.mark.skip(
@@ -856,7 +881,7 @@ def test_get_schemas(engine_testaccount):
 
 
 def test_column_metadata(engine_testaccount):
-    from sqlalchemy.ext.declarative import declarative_base
+    from sqlalchemy.orm import declarative_base
 
     Base = declarative_base()
 
@@ -874,7 +899,7 @@ def test_column_metadata(engine_testaccount):
     t = Table("appointment", metadata)
 
     inspector = inspect(engine_testaccount)
-    inspector.reflecttable(t, None)
+    inspector.reflect_table(t, None)
     assert str(t.columns["id"].type) == "DECIMAL(38, 3)"
     assert str(t.columns["string_with_len"].type) == "VARCHAR(100)"
     assert str(t.columns["binary_data"].type) == "BINARY"
@@ -893,11 +918,6 @@ def _get_engine_with_columm_metadata_cache(
         db_parameters["password"] = password
     if account is not None:
         db_parameters["account"] = account
-
-    from sqlalchemy import create_engine
-    from sqlalchemy.pool import NullPool
-
-    from snowflake.sqlalchemy import URL
 
     engine = create_engine(
         URL(
@@ -1052,8 +1072,6 @@ def test_cache_time(engine_testaccount, db_parameters):
 
 @pytest.mark.timeout(15)
 def test_region():
-    from sqlalchemy import create_engine
-
     engine = create_engine(
         URL(
             user="testuser",
@@ -1064,7 +1082,8 @@ def test_region():
         )
     )
     try:
-        engine.execute("select current_version()").fetchone()
+
+        engine.connect()
         pytest.fail("should not run")
     except Exception as ex:
         assert ex.orig.errno == 250001
@@ -1074,8 +1093,6 @@ def test_region():
 
 @pytest.mark.timeout(15)
 def test_azure():
-    from sqlalchemy import create_engine
-
     engine = create_engine(
         URL(
             user="testuser",
@@ -1086,7 +1103,7 @@ def test_azure():
         )
     )
     try:
-        engine.execute("select current_version()").fetchone()
+        engine.connect()
         pytest.fail("should not run")
     except Exception as ex:
         assert ex.orig.errno == 250001
@@ -1134,33 +1151,34 @@ def test_upsert(
     meta.create_all(engine_testaccount)
     conn = engine_testaccount.connect()
     try:
-        conn.execute(
-            users.insert(),
-            [
-                {"id": 1, "name": "mark", "fullname": "Mark Keller"},
-                {"id": 4, "name": "luke", "fullname": "Luke Lorimer"},
-                {"id": 2, "name": "amanda", "fullname": "Amanda Harris"},
-            ],
-        )
-        conn.execute(
-            onboarding_users.insert(),
-            [
-                {
-                    "id": 2,
-                    "name": "amanda",
-                    "fullname": "Amanda Charlotte Harris",
-                    "delete": True,
-                },
-                {"id": 3, "name": "jim", "fullname": "Jim Wang", "delete": False},
-                {
-                    "id": 4,
-                    "name": "lukas",
-                    "fullname": "Lukas Lorimer",
-                    "delete": False,
-                },
-                {"id": 5, "name": "andras", "fullname": None, "delete": False},
-            ],
-        )
+        with conn.begin():
+            conn.execute(
+                users.insert(),
+                [
+                    {"id": 1, "name": "mark", "fullname": "Mark Keller"},
+                    {"id": 4, "name": "luke", "fullname": "Luke Lorimer"},
+                    {"id": 2, "name": "amanda", "fullname": "Amanda Harris"},
+                ],
+            )
+            conn.execute(
+                onboarding_users.insert(),
+                [
+                    {
+                        "id": 2,
+                        "name": "amanda",
+                        "fullname": "Amanda Charlotte Harris",
+                        "delete": True,
+                    },
+                    {"id": 3, "name": "jim", "fullname": "Jim Wang", "delete": False},
+                    {
+                        "id": 4,
+                        "name": "lukas",
+                        "fullname": "Lukas Lorimer",
+                        "delete": False,
+                    },
+                    {"id": 5, "name": "andras", "fullname": None, "delete": False},
+                ],
+            )
 
         merge = MergeInto(users, onboarding_users, users.c.id == onboarding_users.c.id)
         if update_flag:
@@ -1181,11 +1199,11 @@ def test_upsert(
             clause = merge.when_matched_then_delete()
             if conditional_flag:
                 clause.where(onboarding_users.c.delete == True)  # NOQA
-
-        conn.execute(merge)
-        users_tuples = {tuple(row) for row in conn.execute(select([users]))}
+        with conn.begin():
+            conn.execute(merge)
+        users_tuples = {tuple(row) for row in conn.execute(select(users))}
         onboarding_users_tuples = {
-            tuple(row) for row in conn.execute(select([onboarding_users]))
+            tuple(row) for row in conn.execute(select(onboarding_users))
         }
         expected_users = {
             (1, "mark", "Mark Keller"),
@@ -1261,19 +1279,24 @@ def test_deterministic_merge_into(sql_compiler):
 def test_comments(engine_testaccount):
     """Tests strictly reading column comment through SQLAlchemy"""
     table_name = "".join(random.choice(string.ascii_uppercase) for _ in range(5))
-    try:
-        engine_testaccount.execute(f'create table public.{table_name} ("col1" text);')
-        engine_testaccount.execute(
-            f"alter table public.{table_name} alter \"col1\" comment 'this is my comment'"
-        )
-        engine_testaccount.execute(
-            f"select comment from information_schema.columns where table_name='{table_name}'"
-        ).fetchall()
-        inspector = inspect(engine_testaccount)
-        columns = inspector.get_columns(table_name, schema="PUBLIC")
-        assert columns[0].get("comment") == "this is my comment"
-    finally:
-        engine_testaccount.execute(f"drop table public.{table_name}")
+    with engine_testaccount.connect() as conn:
+        try:
+            conn.execute(text(f'create table public.{table_name} ("col1" text);'))
+            conn.execute(
+                text(
+                    f"alter table public.{table_name} alter \"col1\" comment 'this is my comment'"
+                )
+            )
+            conn.execute(
+                text(
+                    f"select comment from information_schema.columns where table_name='{table_name}'"
+                )
+            ).fetchall()
+            inspector = inspect(engine_testaccount)
+            columns = inspector.get_columns(table_name, schema="PUBLIC")
+            assert columns[0].get("comment") == "this is my comment"
+        finally:
+            conn.execute(text(f"drop table public.{table_name}"))
 
 
 def test_comment_sqlalchemy(db_parameters, engine_testaccount, on_public_ci):
@@ -1289,7 +1312,7 @@ def test_comment_sqlalchemy(db_parameters, engine_testaccount, on_public_ci):
     con2 = None
     if not on_public_ci:
         con2 = engine2.connect()
-        con2.execute(f"CREATE SCHEMA IF NOT EXISTS {new_schema}")
+        con2.execute(text(f"CREATE SCHEMA IF NOT EXISTS {new_schema}"))
     inspector = inspect(engine_testaccount)
     metadata1 = MetaData()
     metadata2 = MetaData()
@@ -1329,7 +1352,7 @@ def test_comment_sqlalchemy(db_parameters, engine_testaccount, on_public_ci):
         mytable1.drop(engine_testaccount)
         if not on_public_ci:
             mytable2.drop(engine2)
-            con2.execute(f"DROP SCHEMA IF EXISTS {new_schema}")
+            con2.execute(text(f"DROP SCHEMA IF EXISTS {new_schema}"))
             con2.close()
         engine2.dispose()
 
@@ -1358,7 +1381,9 @@ def test_special_schema_character(db_parameters, on_public_ci):
     sa_conn = create_engine(URL(**options)).connect()
     sa_connection = [
         res
-        for res in sa_conn.execute("select current_database(), " "current_schema();")
+        for res in sa_conn.execute(
+            text("select current_database(), " "current_schema();")
+        )
     ]
     sa_conn.close()
     sf_conn.close()
@@ -1382,29 +1407,38 @@ def test_autoincrement(engine_testaccount):
         users.create(engine_testaccount)
 
         connection = engine_testaccount.connect()
-        connection.execute(users.insert(), [{"name": "sf1"}])
+        with connection.begin():
+            connection.execute(users.insert(), [{"name": "sf1"}])
 
-        assert connection.execute(select([users])).fetchall() == [(1, "sf1")]
+        with connection.begin():
+            assert connection.execute(select(users)).fetchall() == [(1, "sf1")]
 
-        connection.execute(users.insert(), {"name": "sf2"}, {"name": "sf3"})
-        assert connection.execute(select([users])).fetchall() == [
-            (1, "sf1"),
-            (2, "sf2"),
-            (3, "sf3"),
-        ]
+        with connection.begin():
+            connection.execute(users.insert(), [{"name": "sf2"}, {"name": "sf3"}])
 
-        connection.execute(users.insert(), {"name": "sf4"})
-        assert connection.execute(select([users])).fetchall() == [
-            (1, "sf1"),
-            (2, "sf2"),
-            (3, "sf3"),
-            (4, "sf4"),
-        ]
+        with connection.begin():
+            assert connection.execute(select(users)).fetchall() == [
+                (1, "sf1"),
+                (2, "sf2"),
+                (3, "sf3"),
+            ]
+
+        with connection.begin():
+            connection.execute(users.insert(), {"name": "sf4"})
+
+        with connection.begin():
+            assert connection.execute(select(users)).fetchall() == [
+                (1, "sf1"),
+                (2, "sf2"),
+                (3, "sf3"),
+                (4, "sf4"),
+            ]
 
         seq = Sequence("id_seq")
         nextid = connection.execute(seq)
-        connection.execute(users.insert(), [{"uid": nextid, "name": "sf5"}])
-        assert connection.execute(select([users])).fetchall() == [
+        with connection.begin():
+            connection.execute(users.insert(), [{"uid": nextid, "name": "sf5"}])
+        assert connection.execute(select(users)).fetchall() == [
             (1, "sf1"),
             (2, "sf2"),
             (3, "sf3"),
@@ -1553,16 +1587,19 @@ def test_too_many_columns_detection(engine_testaccount, db_parameters):
 def test_empty_comments(engine_testaccount):
     """Test that no comment returns None"""
     table_name = "".join(random.choice(string.ascii_uppercase) for _ in range(5))
-    try:
-        engine_testaccount.execute(f'create table public.{table_name} ("col1" text);')
-        engine_testaccount.execute(
-            f"select comment from information_schema.columns where table_name='{table_name}'"
-        ).fetchall()
-        inspector = inspect(engine_testaccount)
-        columns = inspector.get_columns(table_name, schema="PUBLIC")
-        assert inspector.get_table_comment(table_name, schema="PUBLIC") == {
-            "text": None
-        }
-        assert all([c["comment"] is None for c in columns])
-    finally:
-        engine_testaccount.execute(f"drop table public.{table_name}")
+    with engine_testaccount.connect() as conn:
+        try:
+            conn.execute(text(f'create table public.{table_name} ("col1" text);'))
+            conn.execute(
+                text(
+                    f"select comment from information_schema.columns where table_name='{table_name}'"
+                )
+            ).fetchall()
+            inspector = inspect(engine_testaccount)
+            columns = inspector.get_columns(table_name, schema="PUBLIC")
+            assert inspector.get_table_comment(table_name, schema="PUBLIC") == {
+                "text": None
+            }
+            assert all([c["comment"] is None for c in columns])
+        finally:
+            conn.execute(text(f"drop table public.{table_name}"))

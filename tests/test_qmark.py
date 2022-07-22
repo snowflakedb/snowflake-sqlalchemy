@@ -3,6 +3,14 @@
 #
 
 import os
+import sys
+
+import pytest
+from sqlalchemy import text
+
+from snowflake.sqlalchemy import URL
+
+from .conftest import create_engine_with_future_flag as create_engine
 
 THIS_DIR = os.path.dirname(os.path.realpath(__file__))
 
@@ -17,10 +25,6 @@ def _get_engine_with_qmark(db_parameters, user=None, password=None, account=None
         db_parameters["password"] = password
     if account is not None:
         db_parameters["account"] = account
-
-    from sqlalchemy import create_engine
-
-    from snowflake.sqlalchemy import URL
 
     engine = create_engine(
         URL(
@@ -37,10 +41,15 @@ def _get_engine_with_qmark(db_parameters, user=None, password=None, account=None
     return engine
 
 
-def test_qmark_bulk_insert(db_parameters):
+def test_qmark_bulk_insert(db_parameters, run_v20_sqlalchemy):
     """
     Bulk insert using qmark paramstyle
     """
+    if run_v20_sqlalchemy and sys.version_info < (3, 8):
+        pytest.skip(
+            "In Python 3.7, this test depends on pandas features of which the implementation is incompatible with sqlachemy 2.0, and pandas does not support Python 3.7 anymore."
+        )
+
     import snowflake.connector
 
     snowflake.connector.paramstyle = "qmark"
@@ -50,21 +59,26 @@ def test_qmark_bulk_insert(db_parameters):
     import pandas as pd
 
     try:
-        con.execute(
-            """
-            create or replace table src(c1 int, c2 string) as select seq8(),
-            randstr(100, random()) from table(generator(rowcount=>100000))
-            """
-        )
-        con.execute(
-            """
-            create or replace table dst like src
-            """
-        )
-        for data in pd.read_sql_query("select * from src", engine, chunksize=16000):
-            data.to_sql(
-                "dst", engine, if_exists="append", index=False, index_label=None
+        with con.begin():
+            con.exec_driver_sql(
+                """
+                create or replace table src(c1 int, c2 string) as select seq8(),
+                randstr(100, random()) from table(generator(rowcount=>100000))
+                """
             )
+            con.exec_driver_sql(
+                """
+                create or replace table dst like src
+                """
+            )
+
+        with con.begin():
+            for data in pd.read_sql_query(
+                text("select * from src"), con, chunksize=16000
+            ):
+                data.to_sql(
+                    "dst", con, if_exists="append", index=False, index_label=None
+                )
 
     finally:
         con.close()

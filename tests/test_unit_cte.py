@@ -21,8 +21,8 @@ def test_cte():
     product_id = 1
     day = date.today()
     count = 5
-    with_bar = select([literal(product_id), literal(day), literal(count)]).cte("bar")
-    sel = select([with_bar])
+    with_bar = select(literal(product_id), literal(day), literal(count)).cte("bar")
+    sel = select(with_bar)
     ins = visitors.insert().from_select(
         [visitors.c.product_id, visitors.c.date1, visitors.c.count], sel
     )

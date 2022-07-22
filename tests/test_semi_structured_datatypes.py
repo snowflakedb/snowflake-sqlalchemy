@@ -74,9 +74,10 @@ def test_inspect_semi_structured_datatypes(engine_testaccount):
         Column("ar", ARRAY),
     )
     metadata.create_all(engine_testaccount)
+    conn = engine_testaccount.connect()
     try:
-        engine_testaccount.execute(
-            """
+        with conn.begin():
+            sql = """
 INSERT INTO {0}(id, va, ar)
 SELECT 1,
        PARSE_JSON('{{"vk1":100, "vk2":200, "vk3":300}}'),
@@ -87,14 +88,13 @@ SELECT 1,
 )""".format(
                 table_name
             )
-        )
+            conn.exec_driver_sql(sql)
         inspecter = inspect(engine_testaccount)
         columns = inspecter.get_columns(table_name)
         assert isinstance(columns[1]["type"], VARIANT)
         assert isinstance(columns[2]["type"], ARRAY)
 
-        conn = engine_testaccount.connect()
-        s = select([test_variant])
+        s = select(test_variant)
         results = conn.execute(s)
         rows = results.fetchone()
         results.close()

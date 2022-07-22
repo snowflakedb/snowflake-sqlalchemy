@@ -6,11 +6,10 @@ import enum
 
 import pytest
 from sqlalchemy import Column, Enum, ForeignKey, Integer, Sequence, String, text
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import Session, relationship
+from sqlalchemy.orm import Session, declarative_base, relationship
 
 
-def test_basic_orm(engine_testaccount):
+def test_basic_orm(engine_testaccount, run_v20_sqlalchemy):
     """
     Tests declarative
     """
@@ -36,6 +35,7 @@ def test_basic_orm(engine_testaccount):
         ed_user = User(name="ed", fullname="Edward Jones")
 
         session = Session(bind=engine_testaccount)
+        session.future = run_v20_sqlalchemy
         session.add(ed_user)
 
         our_user = session.query(User).filter_by(name="ed").first()
@@ -45,7 +45,7 @@ def test_basic_orm(engine_testaccount):
         Base.metadata.drop_all(engine_testaccount)
 
 
-def test_orm_one_to_many_relationship(engine_testaccount):
+def test_orm_one_to_many_relationship(engine_testaccount, run_v20_sqlalchemy):
     """
     Tests One to Many relationship
     """
@@ -86,6 +86,7 @@ def test_orm_one_to_many_relationship(engine_testaccount):
         ]
 
         session = Session(bind=engine_testaccount)
+        session.future = run_v20_sqlalchemy
         session.add(jack)  # cascade each Address into the Session as well
         session.commit()
 
@@ -112,7 +113,7 @@ def test_orm_one_to_many_relationship(engine_testaccount):
         Base.metadata.drop_all(engine_testaccount)
 
 
-def test_delete_cascade(engine_testaccount):
+def test_delete_cascade(engine_testaccount, run_v20_sqlalchemy):
     """
     Test delete cascade
     """
@@ -157,6 +158,7 @@ def test_delete_cascade(engine_testaccount):
         ]
 
         session = Session(bind=engine_testaccount)
+        session.future = run_v20_sqlalchemy
         session.add(jack)  # cascade each Address into the Session as well
         session.commit()
 
@@ -176,7 +178,7 @@ def test_delete_cascade(engine_testaccount):
 WIP
 """,
 )
-def test_orm_query(engine_testaccount):
+def test_orm_query(engine_testaccount, run_v20_sqlalchemy):
     """
     Tests ORM query
     """
@@ -197,6 +199,7 @@ def test_orm_query(engine_testaccount):
     # TODO: insert rows
 
     session = Session(bind=engine_testaccount)
+    session.future = run_v20_sqlalchemy
 
     # TODO: query.all()
     for name, fullname in session.query(User.name, User.fullname):
@@ -206,7 +209,7 @@ def test_orm_query(engine_testaccount):
         # MultipleResultsFound if not one result
 
 
-def test_schema_including_db(engine_testaccount, db_parameters):
+def test_schema_including_db(engine_testaccount, db_parameters, run_v20_sqlalchemy):
     """
     Test schema parameter including database separated by a dot.
     """
@@ -229,6 +232,7 @@ def test_schema_including_db(engine_testaccount, db_parameters):
         ed_user = User(name="ed", fullname="Edward Jones")
 
         session = Session(bind=engine_testaccount)
+        session.future = run_v20_sqlalchemy
         session.add(ed_user)
 
         ret_user = session.query(User.id, User.name).first()
@@ -240,7 +244,7 @@ def test_schema_including_db(engine_testaccount, db_parameters):
         Base.metadata.drop_all(engine_testaccount)
 
 
-def test_schema_including_dot(engine_testaccount, db_parameters):
+def test_schema_including_dot(engine_testaccount, db_parameters, run_v20_sqlalchemy):
     """
     Tests pseudo schema name including dot.
     """
@@ -261,6 +265,7 @@ def test_schema_including_dot(engine_testaccount, db_parameters):
         fullname = Column(String)
 
     session = Session(bind=engine_testaccount)
+    session.future = run_v20_sqlalchemy
     query = session.query(User.id)
     assert str(query).startswith(
         'SELECT {db}."{schema}.{schema}".{db}.users.id'.format(
@@ -269,7 +274,9 @@ def test_schema_including_dot(engine_testaccount, db_parameters):
     )
 
 
-def test_schema_translate_map(engine_testaccount, db_parameters, sql_compiler):
+def test_schema_translate_map(
+    engine_testaccount, db_parameters, sql_compiler, run_v20_sqlalchemy
+):
     """
     Test schema translate map execution option works replaces schema correctly
     """
@@ -292,16 +299,19 @@ def test_schema_translate_map(engine_testaccount, db_parameters, sql_compiler):
         schema_translate_map={schema_map: db_parameters["schema"]}
     ) as con:
         session = Session(bind=con)
-        Base.metadata.create_all(con)
+        session.future = run_v20_sqlalchemy
+        with con.begin():
+            Base.metadata.create_all(con)
         try:
             query = session.query(User)
 
             # insert some data in a way that makes sure that we're working in the right testing schema
-            con.execute(
-                text(
-                    f"insert into {db_parameters['schema']}.{User.__tablename__} values (0, 'testuser', 'test_user')"
+            with con.begin():
+                con.execute(
+                    text(
+                        f"insert into {db_parameters['schema']}.{User.__tablename__} values (0, 'testuser', 'test_user')"
+                    )
                 )
-            )
 
             # assert the precompiled query contains the schema_map and not the actual schema
             assert str(query).startswith(f'SELECT "{schema_map}".{User.__tablename__}')

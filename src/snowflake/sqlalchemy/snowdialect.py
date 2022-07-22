@@ -329,15 +329,15 @@ class SnowflakeDialect(default.DefaultDialect):
         ans = {}
         key_sequence_order_map = defaultdict(list)
         for row in result:
-            table_name = self.normalize_name(row["table_name"])
-            key_sequence_order_map[table_name].append(row["key_sequence"])
+            table_name = self.normalize_name(row._mapping["table_name"])
+            key_sequence_order_map[table_name].append(row._mapping["key_sequence"])
             if table_name not in ans:
                 ans[table_name] = {
                     "constrained_columns": [],
-                    "name": self.normalize_name(row["constraint_name"]),
+                    "name": self.normalize_name(row._mapping["constraint_name"]),
                 }
             ans[table_name]["constrained_columns"].append(
-                self.normalize_name(row["column_name"])
+                self.normalize_name(row._mapping["column_name"])
             )
 
         for k, v in ans.items():
@@ -368,16 +368,16 @@ class SnowflakeDialect(default.DefaultDialect):
         )
         unique_constraints = {}
         for row in result:
-            name = self.normalize_name(row["constraint_name"])
+            name = self.normalize_name(row._mapping["constraint_name"])
             if name not in unique_constraints:
                 unique_constraints[name] = {
-                    "column_names": [self.normalize_name(row["column_name"])],
+                    "column_names": [self.normalize_name(row._mapping["column_name"])],
                     "name": name,
-                    "table_name": self.normalize_name(row["table_name"]),
+                    "table_name": self.normalize_name(row._mapping["table_name"]),
                 }
             else:
                 unique_constraints[name]["column_names"].append(
-                    self.normalize_name(row["column_name"])
+                    self.normalize_name(row._mapping["column_name"])
                 )
 
         ans = defaultdict(list)
@@ -409,12 +409,14 @@ class SnowflakeDialect(default.DefaultDialect):
         foreign_key_map = {}
         key_sequence_order_map = defaultdict(list)
         for row in result:
-            name = self.normalize_name(row["fk_name"])
-            key_sequence_order_map[name].append(row["key_sequence"])
+            name = self.normalize_name(row._mapping["fk_name"])
+            key_sequence_order_map[name].append(row._mapping["key_sequence"])
             if name not in foreign_key_map:
-                referred_schema = self.normalize_name(row["pk_schema_name"])
+                referred_schema = self.normalize_name(row._mapping["pk_schema_name"])
                 foreign_key_map[name] = {
-                    "constrained_columns": [self.normalize_name(row["fk_column_name"])],
+                    "constrained_columns": [
+                        self.normalize_name(row._mapping["fk_column_name"])
+                    ],
                     # referred schema should be None in context where it doesn't need to be specified
                     # https://docs.sqlalchemy.org/en/14/core/reflection.html#reflection-schema-qualified-interaction
                     "referred_schema": (
@@ -423,23 +425,31 @@ class SnowflakeDialect(default.DefaultDialect):
                         not in (self.default_schema_name, current_schema)
                         else None
                     ),
-                    "referred_table": self.normalize_name(row["pk_table_name"]),
-                    "referred_columns": [self.normalize_name(row["pk_column_name"])],
+                    "referred_table": self.normalize_name(
+                        row._mapping["pk_table_name"]
+                    ),
+                    "referred_columns": [
+                        self.normalize_name(row._mapping["pk_column_name"])
+                    ],
                     "name": name,
-                    "table_name": self.normalize_name(row["fk_table_name"]),
+                    "table_name": self.normalize_name(row._mapping["fk_table_name"]),
                 }
                 options = {}
-                if self.normalize_name(row["delete_rule"]) != "NO ACTION":
-                    options["ondelete"] = self.normalize_name(row["delete_rule"])
-                if self.normalize_name(row["update_rule"]) != "NO ACTION":
-                    options["onupdate"] = self.normalize_name(row["update_rule"])
+                if self.normalize_name(row._mapping["delete_rule"]) != "NO ACTION":
+                    options["ondelete"] = self.normalize_name(
+                        row._mapping["delete_rule"]
+                    )
+                if self.normalize_name(row._mapping["update_rule"]) != "NO ACTION":
+                    options["onupdate"] = self.normalize_name(
+                        row._mapping["update_rule"]
+                    )
                 foreign_key_map[name]["options"] = options
             else:
                 foreign_key_map[name]["constrained_columns"].append(
-                    self.normalize_name(row["fk_column_name"])
+                    self.normalize_name(row._mapping["fk_column_name"])
                 )
                 foreign_key_map[name]["referred_columns"].append(
-                    self.normalize_name(row["pk_column_name"])
+                    self.normalize_name(row._mapping["pk_column_name"])
                 )
 
         ans = {}
@@ -847,7 +857,11 @@ class SnowflakeDialect(default.DefaultDialect):
             # the "table" being reflected is actually a view
             result = self._get_view_comment(connection, table_name, schema)
 
-        return {"text": result["comment"] if result and result["comment"] else None}
+        return {
+            "text": result._mapping["comment"]
+            if result and result._mapping["comment"]
+            else None
+        }
 
 
 @sa_vnt.listens_for(Table, "before_create")
