@@ -32,6 +32,7 @@ from sqlalchemy import (
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.pool import NullPool
 from sqlalchemy.sql import and_, not_, or_, select
+from util import random_string
 
 from snowflake.connector import Error, ProgrammingError, connect
 from snowflake.sqlalchemy import URL, MergeInto, dialect
@@ -1361,8 +1362,8 @@ def test_comment_sqlalchemy(db_parameters, engine_testaccount, on_public_ci):
 def test_special_schema_character(db_parameters, on_public_ci):
     """Make sure we decode special characters correctly"""
     # Constants
-    database = "a/b/c"  # "'/'.join([choice(ascii_lowercase) for _ in range(3)])
-    schema = "d/e/f"  # '/'.join([choice(ascii_lowercase) for _ in range(3)])
+    database = f"{random_string(5)}a/b/c"  # "'/'.join([choice(ascii_lowercase) for _ in range(3)])
+    schema = f"{random_string(5)}d/e/f"  # '/'.join([choice(ascii_lowercase) for _ in range(3)])
     # Setup
     options = dict(**db_parameters)
     conn = connect(**options)
