@@ -32,7 +32,6 @@ from sqlalchemy import (
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.pool import NullPool
 from sqlalchemy.sql import and_, not_, or_, select
-from util import random_string
 
 from snowflake.connector import Error, ProgrammingError, connect
 from snowflake.sqlalchemy import URL, MergeInto, dialect
@@ -41,6 +40,7 @@ from snowflake.sqlalchemy.snowdialect import SnowflakeDialect
 from .conftest import create_engine_with_future_flag as create_engine
 from .conftest import get_engine
 from .parameters import CONNECTION_PARAMETERS
+from .util import random_string
 
 THIS_DIR = os.path.dirname(os.path.realpath(__file__))
 
