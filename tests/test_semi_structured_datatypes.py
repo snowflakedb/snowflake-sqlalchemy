@@ -77,17 +77,15 @@ def test_inspect_semi_structured_datatypes(engine_testaccount):
     conn = engine_testaccount.connect()
     try:
         with conn.begin():
-            sql = """
-INSERT INTO {0}(id, va, ar)
+            sql = f"""
+INSERT INTO {table_name}(id, va, ar)
 SELECT 1,
        PARSE_JSON('{{"vk1":100, "vk2":200, "vk3":300}}'),
        PARSE_JSON('[
 {{"k":1, "v":"str1"}},
 {{"k":2, "v":"str2"}},
 {{"k":3, "v":"str3"}}]'
-)""".format(
-                table_name
-            )
+)"""
             conn.exec_driver_sql(sql)
         inspecter = inspect(engine_testaccount)
         columns = inspecter.get_columns(table_name)

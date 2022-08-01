@@ -24,7 +24,7 @@ INTERNAL_SKIP_TAGS = {"external"}
 RUNNING_ON_GH = os.getenv("GITHUB_ACTIONS") == "true"
 
 if os.getenv("TRAVIS") == "true":
-    TEST_SCHEMA = "TRAVIS_JOB_{}".format(os.getenv("TRAVIS_JOB_ID"))
+    TEST_SCHEMA = f'TRAVIS_JOB_{os.getenv("TRAVIS_JOB_ID")}'
 else:
     TEST_SCHEMA = "sqlalchemy_tests_" + str(uuid.uuid4()).replace("-", "_")
 

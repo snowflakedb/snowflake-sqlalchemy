@@ -163,6 +163,11 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         )
 
     def visit_merge_into_clause(self, merge_into_clause, **kw):
+        case_predicate = (
+            f" AND {merge_into_clause.predicate._compiler_dispatch(self, **kw)}"
+            if merge_into_clause.predicate is not None
+            else ""
+        )
         if merge_into_clause.command == "INSERT":
             sets, sets_tos = zip(*merge_into_clause.set.items())
             sets, sets_tos = list(sets), list(sets_tos)
@@ -170,14 +175,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
                 sets, sets_tos = zip(
                     *sorted(merge_into_clause.set.items(), key=operator.itemgetter(0))
                 )
-            return "WHEN NOT MATCHED{} THEN {} ({}) VALUES ({})".format(
-                " AND %s" % merge_into_clause.predicate._compiler_dispatch(self, **kw)
-                if merge_into_clause.predicate is not None
-                else "",
-                merge_into_clause.command,
-                ", ".join(sets),
-                ", ".join(map(lambda e: e._compiler_dispatch(self, **kw), sets_tos)),
-            )
+            return f'WHEN NOT MATCHED{case_predicate} THEN {merge_into_clause.command} ({", ".join(sets)}) VALUES ({", ".join(map(lambda e: e._compiler_dispatch(self, **kw), sets_tos))})'
         else:
             set_list = list(merge_into_clause.set.items())
             if kw.get("deterministic", False):
@@ -192,13 +190,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
                 if merge_into_clause.set
                 else ""
             )
-            return "WHEN MATCHED{} THEN {}{}".format(
-                " AND %s" % merge_into_clause.predicate._compiler_dispatch(self, **kw)
-                if merge_into_clause.predicate is not None
-                else "",
-                merge_into_clause.command,
-                " SET %s" % sets if merge_into_clause.set else "",
-            )
+            return f'WHEN MATCHED{case_predicate} THEN {merge_into_clause.command}{f" SET {sets}" if merge_into_clause.set else ""}'
 
     def visit_copy_into(self, copy_into, **kw):
         if hasattr(copy_into, "formatter") and copy_into.formatter is not None:
@@ -231,17 +223,13 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         options_list = list(copy_into.copy_options.items())
         if kw.get("deterministic", False):
             options_list.sort(key=operator.itemgetter(0))
+
         options = (
             (
                 " "
                 + " ".join(
                     [
-                        "{} = {}".format(
-                            n,
-                            v._compiler_dispatch(self, **kw)
-                            if getattr(v, "compiler_dispatch", False)
-                            else str(v),
-                        )
+                        f'{n} = {v._compiler_dispatch(self, **kw) if getattr(v, "compiler_dispatch", False) else str(v)}'
                         for n, v in options_list
                     ]
                 )
@@ -261,43 +249,37 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             options_list.sort(key=operator.itemgetter(0))
         if "format_name" in formatter.options:
             return f"FILE_FORMAT=(format_name = {formatter.options['format_name']})"
-        return "FILE_FORMAT=(TYPE={}{})".format(
-            formatter.file_format,
+        formatter_name_value_pairs = (
             " "
             + " ".join(
                 [
-                    "{}={}".format(
-                        name,
-                        value._compiler_dispatch(self, **kw)
+                    f"""{name}={value._compiler_dispatch(self, **kw)
                         if hasattr(value, "_compiler_dispatch")
-                        else formatter.value_repr(name, value),
-                    )
+                        else formatter.value_repr(name, value)}"""
                     for name, value in options_list
                 ]
             )
             if formatter.options
-            else "",
+            else ""
         )
+
+        return f"FILE_FORMAT=(TYPE={formatter.file_format}{formatter_name_value_pairs})"
 
     def visit_aws_bucket(self, aws_bucket, **kw):
         credentials_list = list(aws_bucket.credentials_used.items())
         if kw.get("deterministic", False):
             credentials_list.sort(key=operator.itemgetter(0))
-        credentials = "CREDENTIALS=({})".format(
-            " ".join(f"{n}='{v}'" for n, v in credentials_list)
+        credentials = (
+            f"""CREDENTIALS=({" ".join(f"{n}='{v}'" for n, v in credentials_list)})"""
         )
         encryption_list = list(aws_bucket.encryption_used.items())
         if kw.get("deterministic", False):
             encryption_list.sort(key=operator.itemgetter(0))
-        encryption = "ENCRYPTION=({})".format(
-            " ".join(
-                ("{}='{}'" if isinstance(v, string_types) else "{}={}").format(n, v)
+        encryption = f"""ENCRYPTION=({" ".join(
+                (f"{n}='{v}'" if isinstance(v, string_types) else "{}={}")
                 for n, v in encryption_list
-            )
-        )
-        uri = "'s3://{}{}'".format(
-            aws_bucket.bucket, "/" + aws_bucket.path if aws_bucket.path else ""
-        )
+            )})"""
+        uri = f"""'s3://{aws_bucket.bucket}{"/" + aws_bucket.path if aws_bucket.path else ""}'"""
         return (
             uri,
             credentials if aws_bucket.credentials_used else "",
@@ -308,23 +290,16 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         credentials_list = list(azure_container.credentials_used.items())
         if kw.get("deterministic", False):
             credentials_list.sort(key=operator.itemgetter(0))
-        credentials = "CREDENTIALS=({})".format(
-            " ".join(f"{n}='{v}'" for n, v in credentials_list)
+        credentials = (
+            f"""CREDENTIALS=({" ".join(f"{n}='{v}'" for n, v in credentials_list)})"""
         )
         encryption_list = list(azure_container.encryption_used.items())
         if kw.get("deterministic", False):
             encryption_list.sort(key=operator.itemgetter(0))
-        encryption = "ENCRYPTION=({})".format(
-            " ".join(
-                ("{}='{}'" if isinstance(v, string_types) else "{}={}").format(n, v)
-                for n, v in encryption_list
-            )
-        )
-        uri = "'azure://{}.blob.core.windows.net/{}{}'".format(
-            azure_container.account,
-            azure_container.container,
-            "/" + azure_container.path if azure_container.path else "",
-        )
+        encryption = f"""ENCRYPTION=({" ".join(
+                (f"{n}='{v}'" if isinstance(v, string_types) else "{n}={v}") for n, v in encryption_list
+            )})"""
+        uri = f"""'azure://{azure_container.account}.blob.core.windows.net/{azure_container.container}{"/" + azure_container.path if azure_container.path else ""}'"""
         return (
             uri,
             credentials if azure_container.credentials_used else "",
@@ -333,15 +308,10 @@ class SnowflakeCompiler(compiler.SQLCompiler):
 
     def visit_external_stage(self, external_stage, **kw):
         if external_stage.file_format is None:
-            return "@{}{}{}".format(
-                external_stage.namespace, external_stage.name, external_stage.path
+            return (
+                f"@{external_stage.namespace}{external_stage.name}{external_stage.path}"
             )
-        return "@{}{}{} (file_format => {})".format(
-            external_stage.namespace,
-            external_stage.name,
-            external_stage.path,
-            external_stage.file_format,
-        )
+        return f"@{external_stage.namespace}{external_stage.name}{external_stage.path} (file_format => {external_stage.file_format})"
 
     def delete_extra_from_clause(
         self, delete_stmt, from_table, extra_froms, from_hints, **kw
@@ -378,18 +348,9 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         string, pattern, flags = self._get_regexp_args(binary, kw)
         replacement = self.process(binary.modifiers["replacement"], **kw)
         if flags is None:
-            return "REGEXP_REPLACE({}, {}, {})".format(
-                string,
-                pattern,
-                replacement,
-            )
+            return f"REGEXP_REPLACE({string}, {pattern}, {replacement})"
         else:
-            return "REGEXP_REPLACE({}, {}, {}, {})".format(
-                string,
-                pattern,
-                replacement,
-                flags,
-            )
+            return f"REGEXP_REPLACE({string}, {pattern}, {replacement}, {flags})"
 
     def visit_not_regexp_match_op_binary(self, binary, operator, **kw):
         return f"NOT {self.visit_regexp_match_op_binary(binary, operator, **kw)}"
@@ -545,38 +506,26 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
         info = table.dialect_options["snowflake"]
         cluster = info.get("clusterby")
         if cluster:
-            text += " CLUSTER BY ({})".format(
-                ", ".join(self.denormalize_column_name(key) for key in cluster)
-            )
+            text += f' CLUSTER BY ({", ".join(self.denormalize_column_name(key) for key in cluster)})'
         return text
 
     def visit_create_stage(self, create_stage, **kw):
         """
         This visitor will create the SQL representation for a CREATE STAGE command.
         """
-        return "CREATE {}STAGE {}{} URL={}".format(
-            "OR REPLACE " if create_stage.replace_if_exists else "",
-            create_stage.stage.namespace,
-            create_stage.stage.name,
-            repr(create_stage.container),
-        )
+        return f'CREATE {"OR REPLACE " if create_stage.replace_if_exists else ""}STAGE {create_stage.stage.namespace}{create_stage.stage.name} URL={repr(create_stage.container)}'
 
     def visit_create_file_format(self, file_format, **kw):
         """
         This visitor will create the SQL representation for a CREATE FILE FORMAT
         command.
         """
-        return "CREATE {}FILE FORMAT {} TYPE='{}' {}".format(
-            "OR REPLACE " if file_format.replace_if_exists else "",
-            file_format.format_name,
-            file_format.formatter.file_format,
-            " ".join(
+        return f"""CREATE {"OR REPLACE " if file_format.replace_if_exists else ""}FILE FORMAT {file_format.format_name} TYPE='{file_format.formatter.file_format}' {" ".join(
                 [
                     f"{name} = {file_format.formatter.value_repr(name, value)}"
                     for name, value in file_format.formatter.options.items()
                 ]
-            ),
-        )
+            )}"""
 
     def visit_drop_table_comment(self, drop, **kw):
         """Snowflake does not support setting table comments as NULL.
@@ -591,10 +540,7 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
 
         Instead we are forced to use the ALTER COLUMN ... UNSET COMMENT instead.
         """
-        return "ALTER TABLE {} ALTER COLUMN {} UNSET COMMENT".format(
-            self.preparer.format_table(drop.element.table),
-            self.preparer.format_column(drop.element),
-        )
+        return f"ALTER TABLE {self.preparer.format_table(drop.element.table)} ALTER COLUMN {self.preparer.format_column(drop.element)} UNSET COMMENT"
 
     def visit_identity_column(self, identity, **kw):
         text = " IDENTITY"

@@ -147,23 +147,18 @@ def test_numpy_datatypes(db_parameters):
         specific_date = np.datetime64("2016-03-04T12:03:05.123456789")
         with conn.begin():
             conn.exec_driver_sql(
-                "CREATE OR REPLACE TABLE {name}("
-                "c1 timestamp_ntz)".format(name=db_parameters["name"])
+                f'CREATE OR REPLACE TABLE {db_parameters["name"]}(c1 timestamp_ntz)'
             )
         with conn.begin():
             conn.exec_driver_sql(
-                "INSERT INTO {name}(c1) values(%s)".format(name=db_parameters["name"]),
+                f'INSERT INTO {db_parameters["name"]}(c1) values(%s)',
                 (specific_date,),
             )
         with conn.begin():
-            df = pd.read_sql_query(
-                text("SELECT * FROM {name}".format(name=db_parameters["name"])), conn
-            )
+            df = pd.read_sql_query(text(f'SELECT * FROM {db_parameters["name"]}'), conn)
             assert df.c1.values[0] == specific_date
     finally:
-        conn.exec_driver_sql(
-            "DROP TABLE IF EXISTS {name}".format(name=db_parameters["name"])
-        )
+        conn.exec_driver_sql(f'DROP TABLE IF EXISTS {db_parameters["name"]}')
         conn.close()
         engine.dispose()
 
@@ -173,13 +168,11 @@ def test_to_sql(db_parameters):
     conn = engine.connect()
     total_rows = 10000
     conn.exec_driver_sql(
-        """
+        f"""
 create or replace table src(c1 float)
  as select random(123) from table(generator(timelimit=>1))
- limit {}
-""".format(
-            total_rows
-        )
+ limit {total_rows}
+"""
     )
     conn.exec_driver_sql(
         """
@@ -246,32 +239,28 @@ def test_timezone(db_parameters):
 
     with conn.begin():
         conn.exec_driver_sql(
-            """
-        CREATE OR REPLACE TABLE {table}(
+            f"""
+        CREATE OR REPLACE TABLE {test_table_name}(
             tz_col timestamp_tz,
             ntz_col timestamp_ntz,
             decimal_col decimal(10,1),
             float_col float
-        );""".format(
-                table=test_table_name
-            )
+        );"""
         )
 
     try:
         with conn.begin():
             conn.exec_driver_sql(
-                """
-            INSERT INTO {table}
+                f"""
+            INSERT INTO {test_table_name}
                 SELECT
                     current_timestamp(),
                     current_timestamp()::timestamp_ntz,
                     to_decimal(.1, 10, 1),
-                    .10;""".format(
-                    table=test_table_name
-                )
+                    .10;"""
             )
 
-        qry = """
+        qry = f"""
         SELECT
             tz_col,
             ntz_col,
@@ -279,9 +268,7 @@ def test_timezone(db_parameters):
             CONVERT_TIMEZONE('America/Los_Angeles', ntz_col) AS ntz_col_converted,
             decimal_col,
             float_col
-        FROM {table};""".format(
-            table=test_table_name
-        )
+        FROM {test_table_name};"""
 
         result = pd.read_sql_query(text(qry), conn)
         result2 = pd.read_sql_query(qry, sa_engine2_raw_conn)

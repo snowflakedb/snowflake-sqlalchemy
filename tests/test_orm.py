@@ -71,7 +71,7 @@ def test_orm_one_to_many_relationship(engine_testaccount, run_v20_sqlalchemy):
         user = relationship("User", backref="addresses")
 
         def __repr__(self):
-            return "<Address(%r)>" % self.email_address
+            return f"<Address({repr(self.email_address)})>"
 
     Base.metadata.create_all(engine_testaccount)
 
@@ -143,7 +143,7 @@ def test_delete_cascade(engine_testaccount, run_v20_sqlalchemy):
         user = relationship("User", back_populates="addresses")
 
         def __repr__(self):
-            return "<Address(%r)>" % self.email_address
+            return f"<Address({repr(self.email_address)})>"
 
     Base.metadata.create_all(engine_testaccount)
 
@@ -215,7 +215,7 @@ def test_schema_including_db(engine_testaccount, db_parameters, run_v20_sqlalche
     """
     Base = declarative_base()
 
-    namespace = "{}.{}".format(db_parameters["database"], db_parameters["schema"])
+    namespace = f'{db_parameters["database"]}.{db_parameters["schema"]}'
 
     class User(Base):
         __tablename__ = "users"
@@ -250,9 +250,7 @@ def test_schema_including_dot(engine_testaccount, db_parameters, run_v20_sqlalch
     """
     Base = declarative_base()
 
-    namespace = '{db}."{schema}.{schema}".{db}'.format(
-        db=db_parameters["database"].lower(), schema=db_parameters["schema"].lower()
-    )
+    namespace = f'{db_parameters["database"].lower()}."{db_parameters["schema"].lower()}.{db_parameters["schema"].lower()}".{db_parameters["database"].lower()}'
 
     class User(Base):
         __tablename__ = "users"
@@ -268,9 +266,7 @@ def test_schema_including_dot(engine_testaccount, db_parameters, run_v20_sqlalch
     session.future = run_v20_sqlalchemy
     query = session.query(User.id)
     assert str(query).startswith(
-        'SELECT {db}."{schema}.{schema}".{db}.users.id'.format(
-            db=db_parameters["database"].lower(), schema=db_parameters["schema"].lower()
-        )
+        f'SELECT {db_parameters["database"].lower()}."{db_parameters["schema"].lower()}.{db_parameters["schema"].lower()}".{db_parameters["database"].lower()}.users.id'
     )
 
 

@@ -102,17 +102,8 @@ def test_connect_args():
     host:port
     """
     engine = create_engine(
-        "snowflake://{user}:{password}@{host}:{port}/{database}/{schema}"
-        "?account={account}&protocol={protocol}".format(
-            user=CONNECTION_PARAMETERS["user"],
-            account=CONNECTION_PARAMETERS["account"],
-            password=CONNECTION_PARAMETERS["password"],
-            host=CONNECTION_PARAMETERS["host"],
-            port=CONNECTION_PARAMETERS["port"],
-            database=CONNECTION_PARAMETERS["database"],
-            schema=CONNECTION_PARAMETERS["schema"],
-            protocol=CONNECTION_PARAMETERS["protocol"],
-        )
+        f"""snowflake://{CONNECTION_PARAMETERS["user"]}:{CONNECTION_PARAMETERS["password"]}@{CONNECTION_PARAMETERS["host"]}:{CONNECTION_PARAMETERS["port"]}/{CONNECTION_PARAMETERS["database"]}/{CONNECTION_PARAMETERS["schema"]}"
+        "?account={CONNECTION_PARAMETERS["account"]}&protocol={CONNECTION_PARAMETERS["protocol"]}"""
     )
     try:
         verify_engine_connection(engine)
@@ -656,21 +647,17 @@ def test_view_definition(engine_testaccount, db_parameters):
         with conn.begin():
             conn.execute(
                 text(
-                    """
-        CREATE OR REPLACE TABLE {} (
+                    f"""
+        CREATE OR REPLACE TABLE {test_table_name} (
             id INTEGER,
             name STRING
         )
-        """.format(
-                        test_table_name
-                    )
+        """
                 )
             )
-            sql = """
-        CREATE OR REPLACE VIEW {} AS
-        SELECT * FROM {} WHERE id > 10""".format(
-                test_view_name, test_table_name
-            )
+            sql = f"""
+        CREATE OR REPLACE VIEW {test_view_name} AS
+        SELECT * FROM {test_table_name} WHERE id > 10"""
         with conn.begin():
             conn.execute(text(sql).execution_options(autocommit=True))
         try:
@@ -696,21 +683,17 @@ def test_view_comment_reading(engine_testaccount, db_parameters):
         with conn.begin():
             conn.execute(
                 text(
-                    """
-        CREATE OR REPLACE TABLE {} (
+                    f"""
+        CREATE OR REPLACE TABLE {test_table_name} (
             id INTEGER,
             name STRING
         )
-        """.format(
-                        test_table_name
-                    )
+        """
                 )
             )
-            sql = """
-        CREATE OR REPLACE VIEW {} AS
-        SELECT * FROM {} WHERE id > 10""".format(
-                test_view_name, test_table_name
-            )
+            sql = f"""
+        CREATE OR REPLACE VIEW {test_view_name} AS
+        SELECT * FROM {test_table_name} WHERE id > 10"""
             conn.execute(text(sql).execution_options(autocommit=True))
             comment_text = "hello my viewing friends"
             sql = f"COMMENT ON VIEW {test_view_name} IS '{comment_text}';"
@@ -736,11 +719,9 @@ def test_get_temp_table_names(engine_testaccount):
     for idx in range(num_of_temp_tables):
         engine_testaccount.execute(
             text(
-                """
-CREATE TEMPORARY TABLE {} (col1 integer, col2 string)
-""".format(
-                    temp_table_name + str(idx)
-                )
+                f"""
+CREATE TEMPORARY TABLE {temp_table_name + str(idx)} (col1 integer, col2 string)
+"""
             ).execution_options(autocommit=True)
         )
     for row in engine_testaccount.execute("SHOW TABLES"):
@@ -795,9 +776,7 @@ def test_copy(engine_testaccount):
             with conn.begin():
                 conn.execute(
                     text(
-                        "PUT file://{file_name} @%users".format(
-                            file_name=os.path.join(THIS_DIR, "data", "users.txt")
-                        )
+                        f'PUT file://{os.path.join(THIS_DIR, "data", "users.txt")} @%users'
                     )
                 )
                 conn.execute(text("COPY INTO users"))
@@ -819,50 +798,40 @@ how to integrate with SQLAlchemy core API yet.
 def test_transaction(engine_testaccount, db_parameters):
     engine_testaccount.execute(
         text(
-            """
-CREATE TABLE {} (c1 number)""".format(
-                db_parameters["name"]
-            )
+            f"""
+CREATE TABLE {db_parameters["name"]} (c1 number)"""
         )
     )
     trans = engine_testaccount.connect().begin()
     try:
         engine_testaccount.execute(
             text(
-                """
-INSERT INTO {} VALUES(123)
-        """.format(
-                    db_parameters["name"]
-                )
+                f"""
+INSERT INTO {db_parameters["name"]} VALUES(123)
+        """
             )
         )
         trans.commit()
         engine_testaccount.execute(
             text(
-                """
-INSERT INTO {} VALUES(456)
-        """.format(
-                    db_parameters["name"]
-                )
+                f"""
+INSERT INTO {db_parameters["name"]} VALUES(456)
+        """
             )
         )
         trans.rollback()
         results = engine_testaccount.execute(
-            """
-SELECT * FROM {}
-""".format(
-                db_parameters["name"]
-            )
+            f"""
+SELECT * FROM {db_parameters["name"]}
+"""
         ).fetchall()
         assert results == [(123,)]
     finally:
         engine_testaccount.execute(
             text(
-                """
-DROP TABLE IF EXISTS {}
-""".format(
-                    db_parameters["name"]
-                )
+                f"""
+DROP TABLE IF EXISTS {db_parameters["name"]}
+"""
             )
         )
 
