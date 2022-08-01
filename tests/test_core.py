@@ -40,6 +40,7 @@ from snowflake.sqlalchemy.snowdialect import SnowflakeDialect
 from .conftest import create_engine_with_future_flag as create_engine
 from .conftest import get_engine
 from .parameters import CONNECTION_PARAMETERS
+from .util import random_string
 
 THIS_DIR = os.path.dirname(os.path.realpath(__file__))
 
@@ -1361,8 +1362,8 @@ def test_comment_sqlalchemy(db_parameters, engine_testaccount, on_public_ci):
 def test_special_schema_character(db_parameters, on_public_ci):
     """Make sure we decode special characters correctly"""
     # Constants
-    database = "a/b/c"  # "'/'.join([choice(ascii_lowercase) for _ in range(3)])
-    schema = "d/e/f"  # '/'.join([choice(ascii_lowercase) for _ in range(3)])
+    database = f"{random_string(5)}a/b/c"  # "'/'.join([choice(ascii_lowercase) for _ in range(3)])
+    schema = f"{random_string(5)}d/e/f"  # '/'.join([choice(ascii_lowercase) for _ in range(3)])
     # Setup
     options = dict(**db_parameters)
     conn = connect(**options)
