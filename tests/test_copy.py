@@ -38,7 +38,6 @@ def test_external_stage(sql_compiler):
 
 def test_copy_into_location(engine_testaccount, sql_compiler):
     meta = MetaData()
-    conn = engine_testaccount.connect()
     food_items = Table(
         "python_tests_foods",
         meta,
@@ -155,25 +154,25 @@ def test_copy_into_location(engine_testaccount, sql_compiler):
     # NOTE Other than expect known compiled text, submit it to RegressionTests environment and expect them to fail, but
     # because of the right reasons
     try:
-        acceptable_exc_reasons = {
-            "Failure using stage area",
-            "AWS_ROLE credentials are not allowed for this account.",
-            "AWS_ROLE credentials are invalid",
-        }
-        for stmnt in (copy_stmt_1, copy_stmt_2, copy_stmt_3, copy_stmt_4):
-            with pytest.raises(Exception) as exc:
-                conn.execute(stmnt)
-            if not any(
-                map(
-                    lambda reason: reason in str(exc) or reason in str(exc.value),
-                    acceptable_exc_reasons,
-                )
-            ):
-                raise Exception(
-                    f"Not acceptable exception: {str(exc)} {str(exc.value)}"
-                )
+        with engine_testaccount.connect() as conn:
+            acceptable_exc_reasons = {
+                "Failure using stage area",
+                "AWS_ROLE credentials are not allowed for this account.",
+                "AWS_ROLE credentials are invalid",
+            }
+            for stmnt in (copy_stmt_1, copy_stmt_2, copy_stmt_3, copy_stmt_4):
+                with pytest.raises(Exception) as exc:
+                    conn.execute(stmnt)
+                if not any(
+                    map(
+                        lambda reason: reason in str(exc) or reason in str(exc.value),
+                        acceptable_exc_reasons,
+                    )
+                ):
+                    raise Exception(
+                        f"Not acceptable exception: {str(exc)} {str(exc.value)}"
+                    )
     finally:
-        conn.close()
         food_items.drop(engine_testaccount)
 
 
