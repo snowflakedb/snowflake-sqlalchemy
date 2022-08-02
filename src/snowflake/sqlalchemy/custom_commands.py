@@ -42,7 +42,12 @@ class MergeInto(UpdateBase):
         def __repr__(self):
             if self.command == "INSERT":
                 sets, sets_tos = zip(*self.set.items())
-                return f"""WHEN NOT MATCHED{f' AND {str(self.predicate if self.predicate is not None else "")}'} THEN {self.command} ({", ".join(sets)}) VALUES ({", ".join(map(str, sets_tos))})"""
+                return f"""
+WHEN NOT MATCHED\
+{f" AND {str(self.predicate if self.predicate is not None else '')}"} \
+THEN {self.command} ({', '.join(sets)}) \
+VALUES ({', '.join(map(str, sets_tos))})
+"""
             else:
                 # WHEN MATCHED clause
                 sets = (
@@ -50,7 +55,12 @@ class MergeInto(UpdateBase):
                     if self.set
                     else ""
                 )
-                return f"""WHEN MATCHED{f' AND {str(self.predicate if self.predicate is not None else "")}'} THEN {self.command}{f' SET {str(sets if self.set else "")}'}"""
+                return f"""\
+WHEN MATCHED\
+{f" AND {str(self.predicate if self.predicate is not None else '')}"} \
+THEN {self.command}\
+{f"SET {str(sets if self.set else '')}"}
+"""
 
         def values(self, **kwargs):
             self.set = kwargs
@@ -507,7 +517,7 @@ class AWSBucket(ClauseElement):
         )
         encryption = f"ENCRYPTION=({encryption_value})"
         uri = f"""'s3://{self.bucket}{"/" + self.path if self.path else ""}'"""
-        return f'{uri}{" " + credentials if self.credentials_used else ""}{" " + encryption if self.encryption_used else ""}'
+        return f"{uri}{' ' + credentials if self.credentials_used else ''}{' ' + encryption if self.encryption_used else ''}"
 
     def credentials(
         self, aws_role=None, aws_key_id=None, aws_secret_key=None, aws_token=None
@@ -576,7 +586,7 @@ class AzureContainer(ClauseElement):
         )
         encryption = f"ENCRYPTION=({encryption_value})"
         uri = f"""'azure://{self.account}.blob.core.windows.net/{self.container}{"/" + self.path if self.path else ""}'"""
-        return f'{uri}{f" {credentials}" if self.credentials_used else ""}{f" {encryption}" if self.encryption_used else ""}'
+        return f"{uri}{f' {credentials}' if self.credentials_used else ''}{f' {encryption}' if self.encryption_used else ''}"
 
     def credentials(self, azure_sas_token):
         self.credentials_used = {"AZURE_SAS_TOKEN": azure_sas_token}

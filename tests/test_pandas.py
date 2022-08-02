@@ -149,20 +149,20 @@ def test_numpy_datatypes(db_parameters):
             specific_date = np.datetime64("2016-03-04T12:03:05.123456789")
             with conn.begin():
                 conn.exec_driver_sql(
-                    f'CREATE OR REPLACE TABLE {db_parameters["name"]}(c1 timestamp_ntz)'
+                    f"CREATE OR REPLACE TABLE {db_parameters['name']}(c1 timestamp_ntz)"
                 )
             with conn.begin():
                 conn.exec_driver_sql(
-                    f'INSERT INTO {db_parameters["name"]}(c1) values(%s)',
+                    f"INSERT INTO {db_parameters['name']}(c1) values(%s)",
                     (specific_date,),
                 )
             with conn.begin():
                 df = pd.read_sql_query(
-                    text(f'SELECT * FROM {db_parameters["name"]}'), conn
+                    text(f"SELECT * FROM {db_parameters['name']}"), conn
                 )
                 assert df.c1.values[0] == specific_date
         finally:
-            conn.exec_driver_sql(f'DROP TABLE IF EXISTS {db_parameters["name"]}')
+            conn.exec_driver_sql(f"DROP TABLE IF EXISTS {db_parameters['name']}")
             engine.dispose()
 
 

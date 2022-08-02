@@ -215,7 +215,7 @@ def test_schema_including_db(engine_testaccount, db_parameters, run_v20_sqlalche
     """
     Base = declarative_base()
 
-    namespace = f'{db_parameters["database"]}.{db_parameters["schema"]}'
+    namespace = f"{db_parameters['database']}.{db_parameters['schema']}"
 
     class User(Base):
         __tablename__ = "users"

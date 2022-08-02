@@ -744,7 +744,9 @@ def test_get_temp_table_names(engine_testaccount):
 def test_create_table_with_schema(engine_testaccount, db_parameters):
     metadata = MetaData()
     new_schema = (
-        db_parameters["schema"] + "_NEW_" + random_string(5, string.ascii_uppercase)
+        db_parameters["schema"]
+        + "_NEW_"
+        + random_string(5, choices=string.ascii_uppercase)
     )
     with engine_testaccount.connect() as conn:
         conn.execute(text(f'CREATE OR REPLACE SCHEMA "{new_schema}"'))
@@ -785,7 +787,7 @@ def test_copy(engine_testaccount):
             with conn.begin():
                 conn.execute(
                     text(
-                        f'PUT file://{os.path.join(THIS_DIR, "data", "users.txt")} @%users'
+                        f"PUT file://{os.path.join(THIS_DIR, 'data', 'users.txt')} @%users"
                     )
                 )
                 conn.execute(text("COPY INTO users"))
@@ -806,25 +808,25 @@ how to integrate with SQLAlchemy core API yet.
 )
 def test_transaction(engine_testaccount, db_parameters):
     engine_testaccount.execute(
-        text(f'CREATE TABLE {db_parameters["name"]} (c1 number)')
+        text(f"CREATE TABLE {db_parameters['name']} (c1 number)")
     )
     trans = engine_testaccount.connect().begin()
     try:
         engine_testaccount.execute(
-            text(f'INSERT INTO {db_parameters["name"]} VALUES(123)')
+            text(f"INSERT INTO {db_parameters['name']} VALUES(123)")
         )
         trans.commit()
         engine_testaccount.execute(
-            text(f'INSERT INTO {db_parameters["name"]} VALUES(456)')
+            text(f"INSERT INTO {db_parameters['name']} VALUES(456)")
         )
         trans.rollback()
         results = engine_testaccount.execute(
-            f'SELECT * FROM {db_parameters["name"]}'
+            f"SELECT * FROM {db_parameters['name']}"
         ).fetchall()
         assert results == [(123,)]
     finally:
         engine_testaccount.execute(
-            text(f'DROP TABLE IF EXISTS {db_parameters["name"]}')
+            text(f"DROP TABLE IF EXISTS {db_parameters['name']}")
         )
 
 
@@ -1269,11 +1271,11 @@ def test_comment_sqlalchemy(db_parameters, engine_testaccount, on_public_ci):
     """Testing adding/reading column and table comments through SQLAlchemy"""
     new_schema = db_parameters["schema"] + "2"
     # Use same table name in 2 different schemas to make sure comment retrieval works properly
-    table_name = random_string(5, string.ascii_uppercase)
-    table_comment1 = random_string(10, string.ascii_uppercase)
-    column_comment1 = random_string(10, string.ascii_uppercase)
-    table_comment2 = random_string(10, string.ascii_uppercase)
-    column_comment2 = random_string(10, string.ascii_uppercase)
+    table_name = random_string(5, choices=string.ascii_uppercase)
+    table_comment1 = random_string(10, choices=string.ascii_uppercase)
+    column_comment1 = random_string(10, choices=string.ascii_uppercase)
+    table_comment2 = random_string(10, choices=string.ascii_uppercase)
+    column_comment2 = random_string(10, choices=string.ascii_uppercase)
     engine2, _ = get_engine(schema=new_schema)
     con2 = None
     if not on_public_ci:
@@ -1550,7 +1552,7 @@ def test_too_many_columns_detection(engine_testaccount, db_parameters):
 
 def test_empty_comments(engine_testaccount):
     """Test that no comment returns None"""
-    table_name = random_string(5, string.ascii_uppercase)
+    table_name = random_string(5, choices=string.ascii_uppercase)
     with engine_testaccount.connect() as conn:
         try:
             conn.execute(text(f'create table public.{table_name} ("col1" text);'))

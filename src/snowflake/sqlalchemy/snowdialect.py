@@ -206,7 +206,7 @@ class SnowflakeDialect(default.DefaultDialect):
                 opts["schema"] = name_spaces[1]
             else:
                 raise sa_exc.ArgumentError(
-                    f'Invalid name space is specified: {opts["database"]}'
+                    f"Invalid name space is specified: {opts['database']}"
                 )
         if ".snowflakecomputing.com" not in opts["host"] and not opts.get("port"):
             opts["account"] = opts["host"]
@@ -791,7 +791,7 @@ class SnowflakeDialect(default.DefaultDialect):
 
     @reflection.cache
     def get_sequence_names(self, connection, schema=None, **kw):
-        sql_command = f'SHOW SEQUENCES {f"IN SCHEMA {self.normalize_name(schema)}" if schema else ""}'
+        sql_command = f"SHOW SEQUENCES {f'IN SCHEMA {self.normalize_name(schema)}' if schema else ''}"
         try:
             cursor = connection.execute(text(sql_command))
             return [self.normalize_name(row[0]) for row in cursor]
