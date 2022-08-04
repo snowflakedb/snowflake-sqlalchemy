@@ -40,7 +40,7 @@ from snowflake.sqlalchemy.snowdialect import SnowflakeDialect
 from .conftest import create_engine_with_future_flag as create_engine
 from .conftest import get_engine
 from .parameters import CONNECTION_PARAMETERS
-from .util import random_string
+from .util import ischema_names_baseline, random_string
 
 THIS_DIR = os.path.dirname(os.path.realpath(__file__))
 
@@ -1604,3 +1604,32 @@ def test_empty_comments(engine_testaccount):
             assert all([c["comment"] is None for c in columns])
         finally:
             conn.execute(text(f"drop table public.{table_name}"))
+
+
+def test_column_type_schema(engine_testaccount):
+    with engine_testaccount.connect() as conn:
+        try:
+            table_name = random_string(5)
+            conn.execute(
+                f"""\
+CREATE OR REPLACE TABLE {table_name} (
+    C1 BIGINT, C2 BINARY, C3 BOOLEAN, C4 CHAR, C5 CHARACTER, C6 DATE, C7 DATETIME, C8 DEC,
+    C9 DECIMAL, C10 DOUBLE,
+    -- C11 FIXED, # SQL compilation error: Unsupported data type 'FIXED'.
+    C12 FLOAT, C13 INT, C14 INTEGER, C15 NUMBER, C16 REAL, C17 BYTEINT, C18 SMALLINT,
+    C19 STRING, C20 TEXT, C21 TIME, C22 TIMESTAMP, C23 TIMESTAMP_TZ, C24 TIMESTAMP_LTZ,
+    C25 TIMESTAMP_NTZ, C26 TINYINT, C27 VARBINARY, C28 VARCHAR, C29 VARIANT,
+    C30 OBJECT, C31 ARRAY, C32 GEOGRAPHY
+)
+"""
+            )
+
+            table_reflected = Table(
+                table_name, MetaData(), autoload=True, autoload_with=engine_testaccount
+            )
+            columns = table_reflected.columns
+            assert (
+                len(columns) == len(ischema_names_baseline) - 1
+            )  # -1 because FIXED is not supported
+        finally:
+            conn.execute(f"drop table if exists {table_name}")
