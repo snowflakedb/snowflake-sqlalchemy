@@ -1610,7 +1610,7 @@ def test_column_type_schema(engine_testaccount):
     with engine_testaccount.connect() as conn:
         try:
             table_name = random_string(5)
-            conn.execute(
+            conn.exec_driver_sql(
                 f"""\
 CREATE OR REPLACE TABLE {table_name} (
     C1 BIGINT, C2 BINARY, C3 BOOLEAN, C4 CHAR, C5 CHARACTER, C6 DATE, C7 DATETIME, C8 DEC,
@@ -1632,4 +1632,4 @@ CREATE OR REPLACE TABLE {table_name} (
                 len(columns) == len(ischema_names_baseline) - 1
             )  # -1 because FIXED is not supported
         finally:
-            conn.execute(f"drop table if exists {table_name}")
+            conn.exec_driver_sql(f"drop table if exists {table_name}")
