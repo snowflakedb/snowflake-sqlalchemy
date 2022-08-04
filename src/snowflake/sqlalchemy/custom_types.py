@@ -2,7 +2,6 @@
 # Copyright (c) 2012-2022 Snowflake Computing Inc. All rights reserved.
 #
 import datetime
-import decimal
 import re
 
 import sqlalchemy.types as sqltypes
@@ -144,18 +143,3 @@ class _CUSTOM_DECIMAL(SnowflakeType, sqltypes.DECIMAL):
     @util.memoized_property
     def _type_affinity(self):
         return sqltypes.INTEGER if self.scale == 0 else sqltypes.DECIMAL
-
-
-class _CUSTOM_Numeric(SnowflakeType, sqltypes.Numeric):
-    def result_processor(self, dialect, coltype):
-        if self.asdecimal:
-
-            def process(value):
-                if value:
-                    return decimal.Decimal(value)
-                else:
-                    return None
-
-            return process
-        else:
-            return _process_float

@@ -274,3 +274,8 @@ class Requirements(SuiteRequirements):
     def implements_get_lastrowid(self):
         # TODO: need connector lastrowid support, check SNOW-11155
         return exclusions.closed()
+
+    @property
+    def implicit_decimal_binds(self):
+        # Supporting this would require behavior breaking change to cast data type to be Decimal when binding parameters
+        return exclusions.closed()

@@ -34,7 +34,6 @@ from sqlalchemy.types import (
     Date,
     DateTime,
     Float,
-    Numeric,
     Time,
 )
 
@@ -60,7 +59,6 @@ from .custom_types import (
     _CUSTOM_Date,
     _CUSTOM_DateTime,
     _CUSTOM_Float,
-    _CUSTOM_Numeric,
     _CUSTOM_Time,
 )
 from .util import _sort_columns_by_sequences
@@ -70,7 +68,6 @@ colspecs = {
     DateTime: _CUSTOM_DateTime,
     Time: _CUSTOM_Time,
     Float: _CUSTOM_Float,
-    Numeric: _CUSTOM_Numeric,
 }
 
 ischema_names = {
