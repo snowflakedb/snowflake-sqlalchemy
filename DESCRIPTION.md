@@ -11,6 +11,7 @@ Source code is also available at:
 
 - v1.4.1(Unreleased)
   - snowflake-sqlalchemy is now SQLAlchemy 2.0 compatible.
+  - Fixed a bug that `DATE` should not be removed from `SnowflakeDialect.ischema_names`.
 
 - v1.4.0(July 20, 2022)
 
