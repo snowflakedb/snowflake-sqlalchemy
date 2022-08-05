@@ -1684,10 +1684,10 @@ CREATE TEMP TABLE {table_name} (
             c9=DECIMAL_VALUE,  # DECIMAL(12,3)
             c10=FLOAT_VALUE,  # DOUBLE
             c11=FLOAT_VALUE,  # FLOAT
-            c12=MIN_INT_VALUE,
-            c13=MAX_INT_VALUE,
-            c14=MIN_INT_VALUE,
-            c15=FLOAT_VALUE,
+            c12=MIN_INT_VALUE,  # INT
+            c13=MAX_INT_VALUE,  # INTEGER
+            c14=MIN_INT_VALUE,  # NUMBER
+            c15=FLOAT_VALUE,  # REAL
             c16=MAX_INT_VALUE,  # BYTEINT
             c17=MIN_INT_VALUE,  # SMALLINT
             c18=STRING_VALUE,  # STRING
