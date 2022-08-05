@@ -1608,11 +1608,10 @@ def test_empty_comments(engine_testaccount):
 
 def test_column_type_schema(engine_testaccount):
     with engine_testaccount.connect() as conn:
-        try:
-            table_name = random_string(5)
-            conn.exec_driver_sql(
-                f"""\
-CREATE OR REPLACE TABLE {table_name} (
+        table_name = random_string(5)
+        conn.exec_driver_sql(
+            f"""\
+CREATE TEMP TABLE {table_name} (
     C1 BIGINT, C2 BINARY, C3 BOOLEAN, C4 CHAR, C5 CHARACTER, C6 DATE, C7 DATETIME, C8 DEC,
     C9 DECIMAL, C10 DOUBLE,
     -- C11 FIXED, # SQL compilation error: Unsupported data type 'FIXED'.
@@ -1622,14 +1621,12 @@ CREATE OR REPLACE TABLE {table_name} (
     C30 OBJECT, C31 ARRAY, C32 GEOGRAPHY
 )
 """
-            )
+        )
 
-            table_reflected = Table(
-                table_name, MetaData(), autoload=True, autoload_with=engine_testaccount
-            )
-            columns = table_reflected.columns
-            assert (
-                len(columns) == len(ischema_names_baseline) - 1
-            )  # -1 because FIXED is not supported
-        finally:
-            conn.exec_driver_sql(f"drop table if exists {table_name}")
+        table_reflected = Table(
+            table_name, MetaData(), autoload=True, autoload_with=conn
+        )
+        columns = table_reflected.columns
+        assert (
+            len(columns) == len(ischema_names_baseline) - 1
+        )  # -1 because FIXED is not supported
