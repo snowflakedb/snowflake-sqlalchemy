@@ -1705,8 +1705,7 @@ CREATE TEMP TABLE {table_name} (
             c30=None,  # ARRAY, currently snowflake-sqlalchemy/connector does not support binding variant
             c31=GEOGRAPHY_VALUE,  # GEOGRAPHY
         )
-        with conn.begin():
-            conn.execute(ins)
+        conn.execute(ins)
 
         results = conn.execute(select(table_reflected)).fetchall()
         assert len(results) == 1
@@ -1745,8 +1744,7 @@ CREATE TEMP TABLE {table_name} (
             and json.loads(result[30]) == json.loads(GEOGRAPHY_RESULT_VALUE)
         )
 
-        with conn.begin():
-            sql = f"""
+        sql = f"""
 INSERT INTO {table_name}(c28, c29, c30)
 SELECT PARSE_JSON('{{"vk1":100, "vk2":200, "vk3":300}}'),
        OBJECT_CONSTRUCT('vk1', 100, 'vk2', 200, 'vk3', 300),
@@ -1755,7 +1753,7 @@ SELECT PARSE_JSON('{{"vk1":100, "vk2":200, "vk3":300}}'),
 {{"k":2, "v":"str2"}},
 {{"k":3, "v":"str3"}}]'
 )"""
-            conn.exec_driver_sql(sql)
+        conn.exec_driver_sql(sql)
         results = conn.execute(select(table_reflected)).fetchall()
         assert len(results) == 2
         data = json.loads(results[-1][27])
