@@ -58,7 +58,6 @@ def test_inspect_geography_datatypes(engine_testaccount):
                 results = conn.execute(ins)
                 results.close()
 
-            # select
             s = select(test_geography)
             results = conn.execute(s)
             rows = results.fetchone()

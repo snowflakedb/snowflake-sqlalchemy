@@ -71,7 +71,6 @@ def test_inspect_timestamp_datatypes(engine_testaccount):
                 results = conn.execute(ins)
                 results.close()
 
-            # select
             s = select(test_timestamp)
             results = conn.execute(s)
             rows = results.fetchone()

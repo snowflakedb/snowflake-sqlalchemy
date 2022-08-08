@@ -306,7 +306,7 @@ THEN {merge_into_clause.command}\
         if kw.get("deterministic", False):
             encryption_list.sort(key=operator.itemgetter(0))
         encryption = f"""ENCRYPTION=({" ".join(
-                (f"{n}='{v}'" if isinstance(v, string_types) else "{n}={v}") for n, v in encryption_list
+                (f"{n}='{v}'" if isinstance(v, string_types) else f"{n}={v}") for n, v in encryption_list
             )})"""
         uri = f"""'azure://{azure_container.account}.blob.core.windows.net/{azure_container.container}{"/" + azure_container.path if azure_container.path else ""}'"""
         return (

@@ -20,7 +20,7 @@ def _url(**db_parameters):
         raise exc.ArgumentError("account parameter must be specified.")
 
     if "host" in db_parameters:
-        ret = f"snowflake://{db_parameters.get('user', '')}:{_rfc_1738_quote(db_parameters.get('password', ''))}@{db_parameters['host']}:{db_parameters['port'] if 'port' in db_parameters else 443}/"
+        ret = f"snowflake://{db_parameters.get('user', '')}:{_rfc_1738_quote(db_parameters.get('password', ''))}@{db_parameters['host']}:{db_parameters.get('port', 443)}/"
         specified_parameters += ["user", "password", "host", "port"]
     elif "region" not in db_parameters:
         ret = f"snowflake://{db_parameters.get('user', '')}:{_rfc_1738_quote(db_parameters.get('password', ''))}@{db_parameters['account']}/"

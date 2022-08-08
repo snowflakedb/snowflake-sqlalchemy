@@ -176,7 +176,7 @@ def test_to_sql(db_parameters):
             create or replace table src(c1 float)
             as select random(123) from table(generator(timelimit=>1))
             limit {total_rows}
-        """
+            """
             )
         )
         conn.exec_driver_sql("create or replace table dst(c1 float)")
@@ -247,7 +247,7 @@ def test_timezone(db_parameters):
                     decimal_col decimal(10,1),
                     float_col float
                 );
-            """
+                """
                 )
             )
 
@@ -262,7 +262,7 @@ def test_timezone(db_parameters):
                             current_timestamp()::timestamp_ntz,
                             to_decimal(.1, 10, 1),
                             .10;
-                """
+                    """
                     )
                 )
 

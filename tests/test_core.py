@@ -103,8 +103,8 @@ def test_connect_args():
     host:port
     """
     engine = create_engine(
-        f"""snowflake://{CONNECTION_PARAMETERS["user"]}:{CONNECTION_PARAMETERS["password"]}@{CONNECTION_PARAMETERS["host"]}:{CONNECTION_PARAMETERS["port"]}/{CONNECTION_PARAMETERS["database"]}/{CONNECTION_PARAMETERS["schema"]}"
-        "?account={CONNECTION_PARAMETERS["account"]}&protocol={CONNECTION_PARAMETERS["protocol"]}"""
+        f"""snowflake://{CONNECTION_PARAMETERS["user"]}:{CONNECTION_PARAMETERS["password"]}@{CONNECTION_PARAMETERS["host"]}:{CONNECTION_PARAMETERS["port"]}/{CONNECTION_PARAMETERS["database"]}/{CONNECTION_PARAMETERS["schema"]}\
+        ?account={CONNECTION_PARAMETERS["account"]}&protocol={CONNECTION_PARAMETERS["protocol"]}"""
     )
     try:
         verify_engine_connection(engine)
@@ -208,7 +208,7 @@ def test_insert_tables(engine_testaccount):
                 s = select(users)
                 results = conn.execute(s)
                 assert (
-                    len([row for row in results]) == 2
+                    len(results) == 2
                 ), "number of rows from users table"
                 results.close()
 
@@ -743,11 +743,7 @@ def test_get_temp_table_names(engine_testaccount):
 
 def test_create_table_with_schema(engine_testaccount, db_parameters):
     metadata = MetaData()
-    new_schema = (
-        db_parameters["schema"]
-        + "_NEW_"
-        + random_string(5, choices=string.ascii_uppercase)
-    )
+    new_schema = f"{db_parameters["schema"]}_NEW_{random_string(5, choices=string.ascii_uppercase)}"
     with engine_testaccount.connect() as conn:
         conn.execute(text(f'CREATE OR REPLACE SCHEMA "{new_schema}"'))
         Table(
