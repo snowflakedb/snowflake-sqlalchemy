@@ -10,8 +10,10 @@ Source code is also available at:
 # Release Notes
 
 - v1.4.1(Unreleased)
+
   - snowflake-sqlalchemy is now SQLAlchemy 2.0 compatible.
   - Fixed a bug that `DATE` should not be removed from `SnowflakeDialect.ischema_names`.
+  - Fixed a breaking change introduced in release 1.4.0 that changed the behavior of processing numeric values returned from service.
 
 - v1.4.0(July 20, 2022)
 
