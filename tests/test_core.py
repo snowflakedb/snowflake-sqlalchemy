@@ -617,7 +617,7 @@ def test_get_multile_column_primary_key(engine_testaccount):
         assert columns_in_mytable[1]["primary_key"], "primary key"
 
         primary_keys = inspector.get_pk_constraint("mytable")
-        assert primary_keys["constrained_columns"] == ["id", "gid"]
+        assert primary_keys["constrained_columns"] == ["gid", "id"]
 
     finally:
         mytable.drop(engine_testaccount)

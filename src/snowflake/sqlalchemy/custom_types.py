@@ -1,8 +1,6 @@
 #
 # Copyright (c) 2012-2022 Snowflake Computing Inc. All rights reserved.
 #
-import datetime
-import re
 
 import sqlalchemy.types as sqltypes
 import sqlalchemy.util as util
@@ -71,20 +69,6 @@ class _CUSTOM_Date(SnowflakeType, sqltypes.Date):
 
         return process
 
-    _reg = re.compile(r"(\d+)-(\d+)-(\d+)")
-
-    def result_processor(self, dialect, coltype):
-        def process(value):
-            if isinstance(value, str):
-                m = self._reg.match(value)
-                if not m:
-                    raise ValueError(f"could not parse {value!r} as a date value")
-                return datetime.date(*[int(x or 0) for x in m.groups()])
-            else:
-                return value
-
-        return process
-
 
 class _CUSTOM_DateTime(SnowflakeType, sqltypes.DateTime):
     def literal_processor(self, dialect):
@@ -95,20 +79,6 @@ class _CUSTOM_DateTime(SnowflakeType, sqltypes.DateTime):
 
         return process
 
-    _reg = re.compile(r"(\d+)-(\d+)-(\d+) (\d+):(\d+):(\d+)(?:\.(\d{0,6}))?")
-
-    def result_processor(self, dialect, coltype):
-        def process(value):
-            if isinstance(value, str):
-                m = self._reg.match(value)
-                if not m:
-                    raise ValueError(f"could not parse {value!r} as a datetime value")
-                return datetime.datetime(*[int(x or 0) for x in m.groups()])
-            else:
-                return value
-
-        return process
-
 
 class _CUSTOM_Time(SnowflakeType, sqltypes.Time):
     def literal_processor(self, dialect):
@@ -116,20 +86,6 @@ class _CUSTOM_Time(SnowflakeType, sqltypes.Time):
             if value is not None:
                 time_str = value.isoformat(timespec="microseconds")
                 return f"'{time_str}'"
-
-        return process
-
-    _reg = re.compile(r"(\d+):(\d+):(\d+)(?:\.(\d{0,6}))?")
-
-    def result_processor(self, dialect, coltype):
-        def process(value):
-            if isinstance(value, str):
-                m = self._reg.match(value)
-                if not m:
-                    raise ValueError(f"could not parse {value!r} as a time value")
-                return datetime.time(*[int(x or 0) for x in m.groups()])
-            else:
-                return value
 
         return process
 
