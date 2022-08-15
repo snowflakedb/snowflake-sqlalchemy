@@ -103,8 +103,17 @@ def test_connect_args():
     host:port
     """
     engine = create_engine(
-        f"""snowflake://{CONNECTION_PARAMETERS["user"]}:{CONNECTION_PARAMETERS["password"]}@{CONNECTION_PARAMETERS["host"]}:{CONNECTION_PARAMETERS["port"]}/{CONNECTION_PARAMETERS["database"]}/{CONNECTION_PARAMETERS["schema"]}\
-        ?account={CONNECTION_PARAMETERS["account"]}&protocol={CONNECTION_PARAMETERS["protocol"]}"""
+        "snowflake://{user}:{password}@{host}:{port}/{database}/{schema}"
+        "?account={account}&protocol={protocol}".format(
+            user=CONNECTION_PARAMETERS["user"],
+            account=CONNECTION_PARAMETERS["account"],
+            password=CONNECTION_PARAMETERS["password"],
+            host=CONNECTION_PARAMETERS["host"],
+            port=CONNECTION_PARAMETERS["port"],
+            database=CONNECTION_PARAMETERS["database"],
+            schema=CONNECTION_PARAMETERS["schema"],
+            protocol=CONNECTION_PARAMETERS["protocol"],
+        )
     )
     try:
         verify_engine_connection(engine)
@@ -187,9 +196,10 @@ def test_insert_tables(engine_testaccount):
     try:
         with engine_testaccount.connect() as conn:
             # inserts data with an implicitly generated id
-            ins = users.insert().values(name="jack", fullname="Jack Jones")
             with conn.begin():
-                results = conn.execute(ins)
+                results = conn.execute(
+                    users.insert().values(name="jack", fullname="Jack Jones")
+                )
             # Note: SQLAlchemy 1.4 changed what ``inserted_primary_key`` returns
             #  a cast is here to make sure the test works with both older and newer
             #  versions
@@ -197,19 +207,17 @@ def test_insert_tables(engine_testaccount):
             results.close()
 
             # inserts data with the given id
-            ins = users.insert()
             with conn.begin():
                 conn.execute(
-                    ins, {"id": 2, "name": "wendy", "fullname": "Wendy Williams"}
+                    users.insert(),
+                    {"id": 2, "name": "wendy", "fullname": "Wendy Williams"},
                 )
 
             # verify the results
             with conn.begin():
                 s = select(users)
                 results = conn.execute(s)
-                assert (
-                    len(results) == 2
-                ), "number of rows from users table"
+                assert len(results) == 2, "number of rows from users table"
                 results.close()
 
                 # fetchone
@@ -743,7 +751,7 @@ def test_get_temp_table_names(engine_testaccount):
 
 def test_create_table_with_schema(engine_testaccount, db_parameters):
     metadata = MetaData()
-    new_schema = f"{db_parameters["schema"]}_NEW_{random_string(5, choices=string.ascii_uppercase)}"
+    new_schema = f"{db_parameters['schema']}_NEW_{random_string(5, choices=string.ascii_uppercase)}"
     with engine_testaccount.connect() as conn:
         conn.execute(text(f'CREATE OR REPLACE SCHEMA "{new_schema}"'))
         Table(

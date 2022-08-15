@@ -42,9 +42,9 @@ class MergeInto(UpdateBase):
         def __repr__(self):
             if self.command == "INSERT":
                 sets, sets_tos = zip(*self.set.items())
-                return f"""
+                return f"""\
 WHEN NOT MATCHED\
-{f" AND {str(self.predicate if self.predicate is not None else '')}"} \
+{f" AND {str(self.predicate) if self.predicate is not None else ''}"} \
 THEN {self.command} ({', '.join(sets)}) \
 VALUES ({', '.join(map(str, sets_tos))})\
 """

@@ -164,7 +164,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
 
     def visit_merge_into_clause(self, merge_into_clause, **kw):
         case_predicate = (
-            f" AND {merge_into_clause.predicate._compiler_dispatch(self, **kw)}"
+            f" AND {str(merge_into_clause.predicate._compiler_dispatch(self, **kw))}"
             if merge_into_clause.predicate is not None
             else ""
         )
@@ -198,7 +198,7 @@ THEN {merge_into_clause.command} \
             return f"""\
 WHEN MATCHED{case_predicate} \
 THEN {merge_into_clause.command}\
-{f' SET {sets}' if merge_into_clause.set else ''}
+{f' SET {str(sets)}' if merge_into_clause.set else ''}
 """
 
     def visit_copy_into(self, copy_into, **kw):
@@ -269,7 +269,7 @@ THEN {merge_into_clause.command}\
                 ]
             )
             if formatter.options
-            else ""
+            else "",
         )
 
         return f"FILE_FORMAT=(TYPE={formatter.file_format}{formatter_name_value_pairs})"
@@ -285,7 +285,7 @@ THEN {merge_into_clause.command}\
         if kw.get("deterministic", False):
             encryption_list.sort(key=operator.itemgetter(0))
         encryption = f"""ENCRYPTION=({" ".join(
-                (f"{n}='{v}'" if isinstance(v, string_types) else "{}={}")
+                (f"{n}='{v}'" if isinstance(v, string_types) else f"{n}={v}")
                 for n, v in encryption_list
             )})"""
         uri = f"""'s3://{aws_bucket.bucket}{"/" + aws_bucket.path if aws_bucket.path else ""}'"""

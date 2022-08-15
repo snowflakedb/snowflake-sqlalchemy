@@ -250,7 +250,9 @@ def test_schema_including_dot(engine_testaccount, db_parameters, run_v20_sqlalch
     """
     Base = declarative_base()
 
-    namespace = f'{db_parameters["database"].lower()}."{db_parameters["schema"].lower()}.{db_parameters["schema"].lower()}".{db_parameters["database"].lower()}'
+    namespace = '{db}."{schema}.{schema}".{db}'.format(
+        db=db_parameters["database"].lower(), schema=db_parameters["schema"].lower()
+    )
 
     class User(Base):
         __tablename__ = "users"
@@ -266,7 +268,9 @@ def test_schema_including_dot(engine_testaccount, db_parameters, run_v20_sqlalch
     session.future = run_v20_sqlalchemy
     query = session.query(User.id)
     assert str(query).startswith(
-        f'SELECT {db_parameters["database"].lower()}."{db_parameters["schema"].lower()}.{db_parameters["schema"].lower()}".{db_parameters["database"].lower()}.users.id'
+        'SELECT {db}."{schema}.{schema}".{db}.users.id'.format(
+            db=db_parameters["database"].lower(), schema=db_parameters["schema"].lower()
+        )
     )
 
 

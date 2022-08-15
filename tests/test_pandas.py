@@ -2,6 +2,7 @@
 # Copyright (c) 2012-2022 Snowflake Computing Inc. All rights reserved.
 #
 
+import operator
 import random
 import string
 import sys
@@ -78,9 +79,10 @@ def test_a_simple_read_sql(engine_testaccount):
     try:
         with engine_testaccount.connect() as conn:
             # inserts data with an implicitly generated id
-            ins = users.insert().values(name="jack", fullname="Jack Jones")
             with conn.begin():
-                results = conn.execute(ins)
+                results = conn.execute(
+                    users.insert().values(name="jack", fullname="Jack Jones")
+                )
             # Note: SQLAlchemy 1.4 changed what ``inserted_primary_key`` returns
             #  a cast is here to make sure the test works with both older and newer
             #  versions
@@ -88,10 +90,10 @@ def test_a_simple_read_sql(engine_testaccount):
             results.close()
 
             # inserts data with the given id
-            ins = users.insert()
             with conn.begin():
                 conn.execute(
-                    ins, {"id": 2, "name": "wendy", "fullname": "Wendy Williams"}
+                    users.insert(),
+                    {"id": 2, "name": "wendy", "fullname": "Wendy Williams"},
                 )
 
             df = pd.read_sql(
@@ -357,7 +359,7 @@ def test_pandas_make_pd_writer(engine_testaccount, quote_identifiers):
                 write_to_db()
                 results = sorted(
                     conn.exec_driver_sql(f"SELECT * FROM {table_name}").fetchall(),
-                    key=lambda x: x[0],
+                    key=operator.itemgetter(0),
                 )
                 # Verify that all 10 entries were written to the DB
                 for i in range(10):
