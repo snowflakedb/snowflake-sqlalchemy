@@ -193,36 +193,34 @@ def test_insert_tables(engine_testaccount):
     metadata = MetaData()
     users, addresses = _create_users_addresses_tables(engine_testaccount, metadata)
 
-    try:
-        with engine_testaccount.connect() as conn:
-            # inserts data with an implicitly generated id
+    with engine_testaccount.connect() as conn:
+        try:
             with conn.begin():
+                # inserts data with an implicitly generated id
                 results = conn.execute(
                     users.insert().values(name="jack", fullname="Jack Jones")
                 )
-            # Note: SQLAlchemy 1.4 changed what ``inserted_primary_key`` returns
-            #  a cast is here to make sure the test works with both older and newer
-            #  versions
-            assert list(results.inserted_primary_key) == [1], "sequence value"
-            results.close()
+                # Note: SQLAlchemy 1.4 changed what ``inserted_primary_key`` returns
+                #  a cast is here to make sure the test works with both older and newer
+                #  versions
+                assert list(results.inserted_primary_key) == [1], "sequence value"
+                results.close()
 
-            # inserts data with the given id
-            with conn.begin():
+                # inserts data with the given id
                 conn.execute(
                     users.insert(),
                     {"id": 2, "name": "wendy", "fullname": "Wendy Williams"},
                 )
 
-            # verify the results
-            with conn.begin():
-                s = select(users)
-                results = conn.execute(s)
-                assert len(results) == 2, "number of rows from users table"
+                # verify the results
+                results = conn.execute(select(users))
+                assert (
+                    len([row for row in results]) == 2
+                ), "number of rows from users table"
                 results.close()
 
                 # fetchone
-                s = select(users).order_by("id")
-                results = conn.execute(s)
+                results = conn.execute(select(users).order_by("id"))
                 row = results.fetchone()
                 results.close()
                 assert row._mapping._data[2] == "Jack Jones", "user name"
@@ -231,7 +229,6 @@ def test_insert_tables(engine_testaccount):
                     row._mapping[users.c.fullname] == "Jack Jones"
                 ), "user name by Column object"
 
-            with conn.begin():
                 conn.execute(
                     addresses.insert(),
                     [
@@ -242,145 +239,150 @@ def test_insert_tables(engine_testaccount):
                     ],
                 )
 
-            # more records
-            s = select(addresses)
-            results = conn.execute(s)
-            assert (
-                len([row for row in results]) == 4
-            ), "number of rows from addresses table"
-            results.close()
+                # more records
+                results = conn.execute(select(addresses))
+                assert (
+                    len([row for row in results]) == 4
+                ), "number of rows from addresses table"
+                results.close()
 
-            # select specified column names
-            s = select(users.c.name, users.c.fullname).order_by("name")
-            results = conn.execute(s)
-            results.fetchone()
-            row = results.fetchone()
-            assert row._mapping["name"] == "wendy", "name"
-
-            # join
-            s = select(users, addresses).where(users.c.id == addresses.c.user_id)
-            results = conn.execute(s)
-            results.fetchone()
-            results.fetchone()
-            results.fetchone()
-            row = results.fetchone()
-            assert row._mapping["email_address"] == "wendy@aol.com", "email address"
-
-            # Operator
-            assert (
-                str(users.c.id == addresses.c.user_id) == "users.id = addresses.user_id"
-            ), "equal operator"
-            assert (
-                str(users.c.id == 7) == "users.id = :id_1"
-            ), "equal to a static number"
-            assert str(users.c.name == None)  # NOQA
-            assert (
-                str(users.c.id + addresses.c.id) == "users.id + addresses.id"
-            ), "number + number"
-            assert (
-                str(users.c.name + users.c.fullname) == "users.name || users.fullname"
-            ), "str + str"
-
-            # Conjunctions
-            # example 1
-            obj = and_(
-                users.c.name.like("j%"),
-                users.c.id == addresses.c.user_id,
-                or_(
-                    addresses.c.email_address == "wendy@aol.com",
-                    addresses.c.email_address == "jack@yahoo.com",
-                ),
-                not_(users.c.id > 5),
-            )
-            expected_sql = textwrap.dedent(
-                """\
-            users.name LIKE :name_1
-             AND users.id = addresses.user_id
-             AND (addresses.email_address = :email_address_1
-             OR addresses.email_address = :email_address_2)
-             AND users.id <= :id_1
-            """
-            )
-            assert str(obj) == "".join(expected_sql.split("\n")), "complex condition"
-
-            # example 2
-            obj = (
-                users.c.name.like("j%")
-                & (users.c.id == addresses.c.user_id)
-                & (
-                    (addresses.c.email_address == "wendy@aol.com")
-                    | (addresses.c.email_address == "jack@yahoo.com")
+                # select specified column names
+                results = conn.execute(
+                    select(users.c.name, users.c.fullname).order_by("name")
                 )
-                & ~(users.c.id > 5)
-            )
-            assert str(obj) == "".join(
-                expected_sql.split("\n")
-            ), "complex condition using python operators"
+                results.fetchone()
+                row = results.fetchone()
+                assert row._mapping["name"] == "wendy", "name"
 
-            # example 3
-            s = select(
-                (users.c.fullname + ", " + addresses.c.email_address).label("title")
-            ).where(
-                and_(
+                # join
+                results = conn.execute(
+                    select(users, addresses).where(users.c.id == addresses.c.user_id)
+                )
+                results.fetchone()
+                results.fetchone()
+                results.fetchone()
+                row = results.fetchone()
+                assert row._mapping["email_address"] == "wendy@aol.com", "email address"
+
+                # Operator
+                assert (
+                    str(users.c.id == addresses.c.user_id)
+                    == "users.id = addresses.user_id"
+                ), "equal operator"
+                assert (
+                    str(users.c.id == 7) == "users.id = :id_1"
+                ), "equal to a static number"
+                assert str(users.c.name == None)  # NOQA
+                assert (
+                    str(users.c.id + addresses.c.id) == "users.id + addresses.id"
+                ), "number + number"
+                assert (
+                    str(users.c.name + users.c.fullname)
+                    == "users.name || users.fullname"
+                ), "str + str"
+
+                # Conjunctions
+                # example 1
+                obj = and_(
+                    users.c.name.like("j%"),
                     users.c.id == addresses.c.user_id,
-                    users.c.name.between("m", "z"),
                     or_(
-                        addresses.c.email_address.like("%@aol.com"),
-                        addresses.c.email_address.like("%@msn.com"),
+                        addresses.c.email_address == "wendy@aol.com",
+                        addresses.c.email_address == "jack@yahoo.com",
                     ),
+                    not_(users.c.id > 5),
                 )
-            )
-            results = conn.execute(s).fetchall()
-            assert results[0][0] == "Wendy Williams, wendy@aol.com"
-
-            # Aliases
-            a1 = addresses.alias()
-            a2 = addresses.alias()
-            s = select(users).where(
-                and_(
-                    users.c.id == a1.c.user_id,
-                    users.c.id == a2.c.user_id,
-                    a1.c.email_address == "jack@msn.com",
-                    a2.c.email_address == "jack@yahoo.com",
+                expected_sql = textwrap.dedent(
+                    """\
+                users.name LIKE :name_1
+                 AND users.id = addresses.user_id
+                 AND (addresses.email_address = :email_address_1
+                 OR addresses.email_address = :email_address_2)
+                 AND users.id <= :id_1"""
                 )
-            )
-            results = conn.execute(s).fetchone()
-            assert results == (1, "jack", "Jack Jones")
+                assert str(obj) == "".join(
+                    expected_sql.split("\n")
+                ), "complex condition"
 
-            # Joins
-            assert (
-                str(users.join(addresses)) == "users JOIN addresses ON "
-                "users.id = addresses.user_id"
-            )
-            assert (
-                str(
+                # example 2
+                obj = (
+                    users.c.name.like("j%")
+                    & (users.c.id == addresses.c.user_id)
+                    & (
+                        (addresses.c.email_address == "wendy@aol.com")
+                        | (addresses.c.email_address == "jack@yahoo.com")
+                    )
+                    & ~(users.c.id > 5)
+                )
+                assert str(obj) == "".join(
+                    expected_sql.split("\n")
+                ), "complex condition using python operators"
+
+                # example 3
+                s = select(
+                    (users.c.fullname + ", " + addresses.c.email_address).label("title")
+                ).where(
+                    and_(
+                        users.c.id == addresses.c.user_id,
+                        users.c.name.between("m", "z"),
+                        or_(
+                            addresses.c.email_address.like("%@aol.com"),
+                            addresses.c.email_address.like("%@msn.com"),
+                        ),
+                    )
+                )
+                results = conn.execute(s).fetchall()
+                assert results[0][0] == "Wendy Williams, wendy@aol.com"
+
+                # Aliases
+                a1 = addresses.alias()
+                a2 = addresses.alias()
+                s = select(users).where(
+                    and_(
+                        users.c.id == a1.c.user_id,
+                        users.c.id == a2.c.user_id,
+                        a1.c.email_address == "jack@msn.com",
+                        a2.c.email_address == "jack@yahoo.com",
+                    )
+                )
+                results = conn.execute(s).fetchone()
+                assert results == (1, "jack", "Jack Jones")
+
+                # Joins
+                assert (
+                    str(users.join(addresses)) == "users JOIN addresses ON "
+                    "users.id = addresses.user_id"
+                )
+                assert (
+                    str(
+                        users.join(
+                            addresses,
+                            addresses.c.email_address.like(users.c.name + "%"),
+                        )
+                    )
+                    == "users JOIN addresses "
+                    "ON addresses.email_address LIKE users.name || :name_1"
+                )
+
+                s = select(users.c.fullname).select_from(
                     users.join(
                         addresses, addresses.c.email_address.like(users.c.name + "%")
                     )
                 )
-                == "users JOIN addresses "
-                "ON addresses.email_address LIKE users.name || :name_1"
-            )
+                results = conn.execute(s).fetchall()
+                assert results[1] == ("Jack Jones",)
 
-            s = select(users.c.fullname).select_from(
-                users.join(
-                    addresses, addresses.c.email_address.like(users.c.name + "%")
+                s = (
+                    select(users.c.fullname)
+                    .select_from(users.outerjoin(addresses))
+                    .order_by(users.c.fullname)
                 )
-            )
-            results = conn.execute(s).fetchall()
-            assert results[1] == ("Jack Jones",)
-
-            s = (
-                select(users.c.fullname)
-                .select_from(users.outerjoin(addresses))
-                .order_by(users.c.fullname)
-            )
-            results = conn.execute(s).fetchall()
-            assert results[-1] == ("Wendy Williams",)
-    finally:
-        # drop tables
-        addresses.drop(engine_testaccount)
-        users.drop(engine_testaccount)
+                results = conn.execute(s).fetchall()
+                assert results[-1] == ("Wendy Williams",)
+        finally:
+            # drop tables
+            addresses.drop(engine_testaccount)
+            users.drop(engine_testaccount)
 
 
 @pytest.mark.skip(
@@ -678,7 +680,6 @@ def test_view_definition(engine_testaccount, db_parameters):
                 )
             )
             sql = f"CREATE OR REPLACE VIEW {test_view_name} AS SELECT * FROM {test_table_name} WHERE id > 10"
-        with conn.begin():
             conn.execute(text(sql).execution_options(autocommit=True))
         try:
             inspector = inspect(engine_testaccount)
@@ -795,8 +796,8 @@ def test_copy(engine_testaccount):
                     )
                 )
                 conn.execute(text("COPY INTO users"))
-            results = conn.execute(text("SELECT * FROM USERS")).fetchall()
-            assert results is not None and len(results) > 0
+                results = conn.execute(text("SELECT * FROM USERS")).fetchall()
+                assert results is not None and len(results) > 0
         finally:
             addresses.drop(engine_testaccount)
             users.drop(engine_testaccount)
@@ -1151,60 +1152,60 @@ def test_upsert(
                     ],
                 )
 
-            merge = MergeInto(
-                users, onboarding_users, users.c.id == onboarding_users.c.id
-            )
-            if update_flag:
-                clause = merge.when_matched_then_update().values(
-                    name=onboarding_users.c.name, fullname=onboarding_users.c.fullname
+                merge = MergeInto(
+                    users, onboarding_users, users.c.id == onboarding_users.c.id
                 )
-                if conditional_flag:
-                    clause.where(onboarding_users.c.name != "amanda")
-            if insert_flag:
-                clause = merge.when_not_matched_then_insert().values(
-                    id=onboarding_users.c.id,
-                    name=onboarding_users.c.name,
-                    fullname=onboarding_users.c.fullname,
-                )
-                if conditional_flag:
-                    clause.where(onboarding_users.c.fullname != None)  # NOQA
-            if delete_flag:
-                clause = merge.when_matched_then_delete()
-                if conditional_flag:
-                    clause.where(onboarding_users.c.delete == True)  # NOQA
-            with conn.begin():
+                if update_flag:
+                    clause = merge.when_matched_then_update().values(
+                        name=onboarding_users.c.name,
+                        fullname=onboarding_users.c.fullname,
+                    )
+                    if conditional_flag:
+                        clause.where(onboarding_users.c.name != "amanda")
+                if insert_flag:
+                    clause = merge.when_not_matched_then_insert().values(
+                        id=onboarding_users.c.id,
+                        name=onboarding_users.c.name,
+                        fullname=onboarding_users.c.fullname,
+                    )
+                    if conditional_flag:
+                        clause.where(onboarding_users.c.fullname != None)  # NOQA
+                if delete_flag:
+                    clause = merge.when_matched_then_delete()
+                    if conditional_flag:
+                        clause.where(onboarding_users.c.delete == True)  # NOQA
                 conn.execute(merge)
-            users_tuples = {tuple(row) for row in conn.execute(select(users))}
-            onboarding_users_tuples = {
-                tuple(row) for row in conn.execute(select(onboarding_users))
-            }
-            expected_users = {
-                (1, "mark", "Mark Keller"),
-                (2, "amanda", "Amanda Harris"),
-                (4, "luke", "Luke Lorimer"),
-            }
-            if update_flag:
-                if not conditional_flag:
-                    expected_users.remove((2, "amanda", "Amanda Harris"))
-                    expected_users.add((2, "amanda", "Amanda Charlotte Harris"))
-                expected_users.remove((4, "luke", "Luke Lorimer"))
-                expected_users.add((4, "lukas", "Lukas Lorimer"))
-            elif delete_flag:
-                if not conditional_flag:
+                users_tuples = {tuple(row) for row in conn.execute(select(users))}
+                onboarding_users_tuples = {
+                    tuple(row) for row in conn.execute(select(onboarding_users))
+                }
+                expected_users = {
+                    (1, "mark", "Mark Keller"),
+                    (2, "amanda", "Amanda Harris"),
+                    (4, "luke", "Luke Lorimer"),
+                }
+                if update_flag:
+                    if not conditional_flag:
+                        expected_users.remove((2, "amanda", "Amanda Harris"))
+                        expected_users.add((2, "amanda", "Amanda Charlotte Harris"))
                     expected_users.remove((4, "luke", "Luke Lorimer"))
-                expected_users.remove((2, "amanda", "Amanda Harris"))
-            if insert_flag:
-                if not conditional_flag:
-                    expected_users.add((5, "andras", None))
-                expected_users.add((3, "jim", "Jim Wang"))
-            expected_onboarding_users = {
-                (2, "amanda", "Amanda Charlotte Harris", True),
-                (3, "jim", "Jim Wang", False),
-                (4, "lukas", "Lukas Lorimer", False),
-                (5, "andras", None, False),
-            }
-            assert users_tuples == expected_users
-            assert onboarding_users_tuples == expected_onboarding_users
+                    expected_users.add((4, "lukas", "Lukas Lorimer"))
+                elif delete_flag:
+                    if not conditional_flag:
+                        expected_users.remove((4, "luke", "Luke Lorimer"))
+                    expected_users.remove((2, "amanda", "Amanda Harris"))
+                if insert_flag:
+                    if not conditional_flag:
+                        expected_users.add((5, "andras", None))
+                    expected_users.add((3, "jim", "Jim Wang"))
+                expected_onboarding_users = {
+                    (2, "amanda", "Amanda Charlotte Harris", True),
+                    (3, "jim", "Jim Wang", False),
+                    (4, "lukas", "Lukas Lorimer", False),
+                    (5, "andras", None, False),
+                }
+                assert users_tuples == expected_users
+                assert onboarding_users_tuples == expected_onboarding_users
     finally:
         users.drop(engine_testaccount)
         onboarding_users.drop(engine_testaccount)
@@ -1379,24 +1380,14 @@ def test_autoincrement(engine_testaccount):
         with engine_testaccount.connect() as connection:
             with connection.begin():
                 connection.execute(users.insert(), [{"name": "sf1"}])
-
-            with connection.begin():
                 assert connection.execute(select(users)).fetchall() == [(1, "sf1")]
-
-            with connection.begin():
                 connection.execute(users.insert(), [{"name": "sf2"}, {"name": "sf3"}])
-
-            with connection.begin():
                 assert connection.execute(select(users)).fetchall() == [
                     (1, "sf1"),
                     (2, "sf2"),
                     (3, "sf3"),
                 ]
-
-            with connection.begin():
                 connection.execute(users.insert(), {"name": "sf4"})
-
-            with connection.begin():
                 assert connection.execute(select(users)).fetchall() == [
                     (1, "sf1"),
                     (2, "sf2"),
@@ -1404,17 +1395,16 @@ def test_autoincrement(engine_testaccount):
                     (4, "sf4"),
                 ]
 
-            seq = Sequence("id_seq")
-            nextid = connection.execute(seq)
-            with connection.begin():
+                seq = Sequence("id_seq")
+                nextid = connection.execute(seq)
                 connection.execute(users.insert(), [{"uid": nextid, "name": "sf5"}])
-            assert connection.execute(select(users)).fetchall() == [
-                (1, "sf1"),
-                (2, "sf2"),
-                (3, "sf3"),
-                (4, "sf4"),
-                (5, "sf5"),
-            ]
+                assert connection.execute(select(users)).fetchall() == [
+                    (1, "sf1"),
+                    (2, "sf2"),
+                    (3, "sf3"),
+                    (4, "sf4"),
+                    (5, "sf5"),
+                ]
     finally:
         users.drop(engine_testaccount)
 

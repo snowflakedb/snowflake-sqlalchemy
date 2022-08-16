@@ -83,30 +83,29 @@ def test_a_simple_read_sql(engine_testaccount):
                 results = conn.execute(
                     users.insert().values(name="jack", fullname="Jack Jones")
                 )
-            # Note: SQLAlchemy 1.4 changed what ``inserted_primary_key`` returns
-            #  a cast is here to make sure the test works with both older and newer
-            #  versions
-            assert list(results.inserted_primary_key) == [1], "sequence value"
-            results.close()
+                # Note: SQLAlchemy 1.4 changed what ``inserted_primary_key`` returns
+                #  a cast is here to make sure the test works with both older and newer
+                #  versions
+                assert list(results.inserted_primary_key) == [1], "sequence value"
+                results.close()
 
-            # inserts data with the given id
-            with conn.begin():
+                # inserts data with the given id
                 conn.execute(
                     users.insert(),
                     {"id": 2, "name": "wendy", "fullname": "Wendy Williams"},
                 )
 
-            df = pd.read_sql(
-                select(users).where(users.c.name == "jack"),
-                con=conn,
-            )
+                df = pd.read_sql(
+                    select(users).where(users.c.name == "jack"),
+                    con=conn,
+                )
 
-            assert len(df.values) == 1
-            assert df.values[0][0] == 1
-            assert df.values[0][1] == "jack"
-            assert hasattr(df, "id")
-            assert hasattr(df, "name")
-            assert hasattr(df, "fullname")
+                assert len(df.values) == 1
+                assert df.values[0][0] == 1
+                assert df.values[0][1] == "jack"
+                assert hasattr(df, "id")
+                assert hasattr(df, "name")
+                assert hasattr(df, "fullname")
     finally:
         # drop tables
         addresses.drop(engine_testaccount)
@@ -153,12 +152,10 @@ def test_numpy_datatypes(db_parameters):
                 conn.exec_driver_sql(
                     f"CREATE OR REPLACE TABLE {db_parameters['name']}(c1 timestamp_ntz)"
                 )
-            with conn.begin():
                 conn.exec_driver_sql(
                     f"INSERT INTO {db_parameters['name']}(c1) values(%s)",
                     (specific_date,),
                 )
-            with conn.begin():
                 df = pd.read_sql_query(
                     text(f"SELECT * FROM {db_parameters['name']}"), conn
                 )
@@ -253,21 +250,19 @@ def test_timezone(db_parameters):
                 )
             )
 
-        try:
-            with conn.begin():
-                conn.exec_driver_sql(
-                    textwrap.dedent(
-                        f"""\
-                    INSERT INTO {test_table_name}
-                        SELECT
-                            current_timestamp(),
-                            current_timestamp()::timestamp_ntz,
-                            to_decimal(.1, 10, 1),
-                            .10;
-                    """
-                    )
+            conn.exec_driver_sql(
+                textwrap.dedent(
+                    f"""\
+                INSERT INTO {test_table_name}
+                    SELECT
+                        current_timestamp(),
+                        current_timestamp()::timestamp_ntz,
+                        to_decimal(.1, 10, 1),
+                        .10;
+                """
                 )
-
+            )
+        try:
             qry = textwrap.dedent(
                 f"""\
             SELECT

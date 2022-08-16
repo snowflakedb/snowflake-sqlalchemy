@@ -68,7 +68,6 @@ def test_qmark_bulk_insert(db_parameters, run_v20_sqlalchemy):
                 )
                 con.exec_driver_sql("create or replace table dst like src")
 
-            with con.begin():
                 for data in pd.read_sql_query(
                     text("select * from src"), con, chunksize=16000
                 ):

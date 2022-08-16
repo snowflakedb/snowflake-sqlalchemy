@@ -302,26 +302,27 @@ def test_schema_translate_map(
         session.future = run_v20_sqlalchemy
         with con.begin():
             Base.metadata.create_all(con)
-        try:
-            query = session.query(User)
+            try:
+                query = session.query(User)
 
-            # insert some data in a way that makes sure that we're working in the right testing schema
-            with con.begin():
+                # insert some data in a way that makes sure that we're working in the right testing schema
                 con.execute(
                     text(
                         f"insert into {db_parameters['schema']}.{User.__tablename__} values (0, 'testuser', 'test_user')"
                     )
                 )
 
-            # assert the precompiled query contains the schema_map and not the actual schema
-            assert str(query).startswith(f'SELECT "{schema_map}".{User.__tablename__}')
+                # assert the precompiled query contains the schema_map and not the actual schema
+                assert str(query).startswith(
+                    f'SELECT "{schema_map}".{User.__tablename__}'
+                )
 
-            # run query and see that schema translation was done corectly
-            results = query.all()
-            assert len(results) == 1
-            user = results.pop()
-            assert user.id == 0
-            assert user.name == "testuser"
-            assert user.fullname == "test_user"
-        finally:
-            Base.metadata.drop_all(con)
+                # run query and see that schema translation was done corectly
+                results = query.all()
+                assert len(results) == 1
+                user = results.pop()
+                assert user.id == 0
+                assert user.name == "testuser"
+                assert user.fullname == "test_user"
+            finally:
+                Base.metadata.drop_all(con)

@@ -35,9 +35,9 @@ def test_insert_table(engine_testaccount):
             # using multivalue insert
             with conn.begin():
                 conn.execute(users.insert().values(data))
-            results = conn.execute(select(users).order_by("id"))
-            row = results.fetchone()
-            assert row._mapping["name"] == "testname1"
+                results = conn.execute(select(users).order_by("id"))
+                row = results.fetchone()
+                assert row._mapping["name"] == "testname1"
 
     finally:
         users.drop(engine_testaccount)

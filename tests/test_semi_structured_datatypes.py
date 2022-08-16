@@ -75,8 +75,8 @@ def test_inspect_semi_structured_datatypes(engine_testaccount):
         Column("ar", ARRAY),
     )
     metadata.create_all(engine_testaccount)
-    with engine_testaccount.connect() as conn:
-        try:
+    try:
+        with engine_testaccount.connect() as conn:
             with conn.begin():
                 sql = textwrap.dedent(
                     f"""
@@ -91,21 +91,21 @@ def test_inspect_semi_structured_datatypes(engine_testaccount):
                 """
                 )
                 conn.exec_driver_sql(sql)
-            inspecter = inspect(engine_testaccount)
-            columns = inspecter.get_columns(table_name)
-            assert isinstance(columns[1]["type"], VARIANT)
-            assert isinstance(columns[2]["type"], ARRAY)
+                inspecter = inspect(engine_testaccount)
+                columns = inspecter.get_columns(table_name)
+                assert isinstance(columns[1]["type"], VARIANT)
+                assert isinstance(columns[2]["type"], ARRAY)
 
-            s = select(test_variant)
-            results = conn.execute(s)
-            rows = results.fetchone()
-            results.close()
-            assert rows[0] == 1
-            data = json.loads(rows[1])
-            assert data["vk1"] == 100
-            assert data["vk3"] == 300
-            assert data is not None
-            data = json.loads(rows[2])
-            assert data[1]["k"] == 2
-        finally:
-            test_variant.drop(engine_testaccount)
+                s = select(test_variant)
+                results = conn.execute(s)
+                rows = results.fetchone()
+                results.close()
+                assert rows[0] == 1
+                data = json.loads(rows[1])
+                assert data["vk1"] == 100
+                assert data["vk3"] == 300
+                assert data is not None
+                data = json.loads(rows[2])
+                assert data[1]["k"] == 2
+    finally:
+        test_variant.drop(engine_testaccount)

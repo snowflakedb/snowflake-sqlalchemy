@@ -736,15 +736,15 @@ class SnowflakeDialect(default.DefaultDialect):
         if schema:
             cursor = connection.execute(
                 text(
-                    "SHOW /* sqlalchemy:get_view_definition */ VIEWS "
-                    f"LIKE '{self._denormalize_quote_join(view_name)}' IN {self._denormalize_quote_join(schema)}"
+                    f"SHOW /* sqlalchemy:get_view_definition */ VIEWS \
+                    LIKE '{self._denormalize_quote_join(view_name)}' IN {self._denormalize_quote_join(schema)}"
                 )
             )
         else:
             cursor = connection.execute(
                 text(
-                    "SHOW /* sqlalchemy:get_view_definition */ VIEWS "
-                    f"LIKE '{self._denormalize_quote_join(view_name)}'"
+                    f"SHOW /* sqlalchemy:get_view_definition */ VIEWS \
+                    LIKE '{self._denormalize_quote_join(view_name)}'"
                 )
             )
 
@@ -762,7 +762,8 @@ class SnowflakeDialect(default.DefaultDialect):
         if schema:
             cursor = connection.execute(
                 text(
-                    f"SHOW /* sqlalchemy:get_temp_table_names */ TABLES IN {self._denormalize_quote_join(schema)}"
+                    f"SHOW /* sqlalchemy:get_temp_table_names */ TABLES \
+                    IN {self._denormalize_quote_join(schema)}"
                 )
             )
         else:

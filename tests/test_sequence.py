@@ -21,40 +21,32 @@ def test_table_with_sequence(engine_testaccount, db_parameters):
         with engine_testaccount.connect() as conn:
             with conn.begin():
                 conn.execute(sequence_table.insert(), [{"data": "test_insert_1"}])
-
-            select_stmt = select(sequence_table).order_by("id")
-            result = conn.execute(select_stmt).fetchall()
-            assert result == [(1, "test_insert_1")]
-
-            autoload_sequence_table = Table(
-                test_table_name, MetaData(), autoload_with=engine_testaccount
-            )
-
-            with conn.begin():
+                select_stmt = select(sequence_table).order_by("id")
+                result = conn.execute(select_stmt).fetchall()
+                assert result == [(1, "test_insert_1")]
+                autoload_sequence_table = Table(
+                    test_table_name, MetaData(), autoload_with=engine_testaccount
+                )
                 conn.execute(
                     autoload_sequence_table.insert(),
                     [{"data": "multi_insert_1"}, {"data": "multi_insert_2"}],
                 )
-
-            with conn.begin():
                 conn.execute(
                     autoload_sequence_table.insert(), [{"data": "test_insert_2"}]
                 )
-
-            nextid = conn.execute(seq)
-            with conn.begin():
+                nextid = conn.execute(seq)
                 conn.execute(
                     autoload_sequence_table.insert(),
                     [{"id": nextid, "data": "test_insert_seq"}],
                 )
-            result = conn.execute(select_stmt).fetchall()
-            assert result == [
-                (1, "test_insert_1"),
-                (2, "multi_insert_1"),
-                (3, "multi_insert_2"),
-                (4, "test_insert_2"),
-                (5, "test_insert_seq"),
-            ]
+                result = conn.execute(select_stmt).fetchall()
+                assert result == [
+                    (1, "test_insert_1"),
+                    (2, "multi_insert_1"),
+                    (3, "multi_insert_2"),
+                    (4, "test_insert_2"),
+                    (5, "test_insert_seq"),
+                ]
     finally:
         sequence_table.drop(engine_testaccount)
         seq.drop(engine_testaccount)
@@ -74,34 +66,25 @@ def test_table_with_autoincrement(engine_testaccount, db_parameters):
         with engine_testaccount.connect() as conn:
             with conn.begin():
                 conn.execute(autoincrement_table.insert(), [{"data": "test_insert_1"}])
-
-            select_stmt = select(autoincrement_table).order_by("id")
-
-            with conn.begin():
+                select_stmt = select(autoincrement_table).order_by("id")
                 result = conn.execute(select_stmt).fetchall()
                 assert result == [(1, "test_insert_1")]
-
-            autoload_sequence_table = Table(
-                test_table_name, MetaData(), autoload_with=engine_testaccount
-            )
-
-            with conn.begin():
+                autoload_sequence_table = Table(
+                    test_table_name, MetaData(), autoload_with=engine_testaccount
+                )
                 conn.execute(
                     autoload_sequence_table.insert(),
                     [{"data": "multi_insert_1"}, {"data": "multi_insert_2"}],
                 )
-
-            with conn.begin():
                 conn.execute(
                     autoload_sequence_table.insert(), [{"data": "test_insert_2"}]
                 )
-
-            result = conn.execute(select_stmt).fetchall()
-            assert result == [
-                (1, "test_insert_1"),
-                (2, "multi_insert_1"),
-                (3, "multi_insert_2"),
-                (4, "test_insert_2"),
-            ]
+                result = conn.execute(select_stmt).fetchall()
+                assert result == [
+                    (1, "test_insert_1"),
+                    (2, "multi_insert_1"),
+                    (3, "multi_insert_2"),
+                    (4, "test_insert_2"),
+                ]
     finally:
         autoincrement_table.drop(engine_testaccount)

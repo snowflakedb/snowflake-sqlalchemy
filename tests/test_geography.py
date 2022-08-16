@@ -58,12 +58,12 @@ def test_inspect_geography_datatypes(engine_testaccount):
                 results = conn.execute(ins)
                 results.close()
 
-            s = select(test_geography)
-            results = conn.execute(s)
-            rows = results.fetchone()
-            results.close()
-            assert rows[0] == 1
-            assert rows[1] == rows[2]
-            assert loads(rows[2]) == loads(test_point1)
+                s = select(test_geography)
+                results = conn.execute(s)
+                rows = results.fetchone()
+                results.close()
+                assert rows[0] == 1
+                assert rows[1] == rows[2]
+                assert loads(rows[2]) == loads(test_point1)
     finally:
         test_geography.drop(engine_testaccount)
