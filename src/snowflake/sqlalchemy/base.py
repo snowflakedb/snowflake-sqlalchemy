@@ -175,12 +175,12 @@ class SnowflakeCompiler(compiler.SQLCompiler):
                 sets, sets_tos = zip(
                     *sorted(merge_into_clause.set.items(), key=operator.itemgetter(0))
                 )
-            return f"""\
-WHEN NOT MATCHED{case_predicate} \
-THEN {merge_into_clause.command} \
-({", ".join(sets)}) VALUES \
-({", ".join(map(lambda e: e._compiler_dispatch(self, **kw), sets_tos))})
-"""
+            return "WHEN NOT MATCHED{} THEN {} ({}) VALUES ({})".format(
+                case_predicate,
+                merge_into_clause.command,
+                ", ".join(sets),
+                ", ".join(map(lambda e: e._compiler_dispatch(self, **kw), sets_tos)),
+            )
         else:
             set_list = list(merge_into_clause.set.items())
             if kw.get("deterministic", False):
@@ -195,11 +195,11 @@ THEN {merge_into_clause.command} \
                 if merge_into_clause.set
                 else ""
             )
-            return f"""\
-WHEN MATCHED{case_predicate} \
-THEN {merge_into_clause.command}\
-{f' SET {str(sets)}' if merge_into_clause.set else ''}
-"""
+            return "WHEN MATCHED{} THEN {}{}".format(
+                case_predicate,
+                merge_into_clause.command,
+                " SET %s" % sets if merge_into_clause.set else "",
+            )
 
     def visit_copy_into(self, copy_into, **kw):
         if hasattr(copy_into, "formatter") and copy_into.formatter is not None:
@@ -232,13 +232,17 @@ THEN {merge_into_clause.command}\
         options_list = list(copy_into.copy_options.items())
         if kw.get("deterministic", False):
             options_list.sort(key=operator.itemgetter(0))
-
         options = (
             (
                 " "
                 + " ".join(
                     [
-                        f"{n} = {v._compiler_dispatch(self, **kw) if getattr(v, 'compiler_dispatch', False) else str(v)}"
+                        "{} = {}".format(
+                            n,
+                            v._compiler_dispatch(self, **kw)
+                            if getattr(v, "compiler_dispatch", False)
+                            else str(v),
+                        )
                         for n, v in options_list
                     ]
                 )
@@ -258,13 +262,17 @@ THEN {merge_into_clause.command}\
             options_list.sort(key=operator.itemgetter(0))
         if "format_name" in formatter.options:
             return f"FILE_FORMAT=(format_name = {formatter.options['format_name']})"
-        formatter_name_value_pairs = (
+        return "FILE_FORMAT=(TYPE={}{})".format(
+            formatter.file_format,
             " "
             + " ".join(
                 [
-                    f"""{name}={value._compiler_dispatch(self, **kw)
+                    "{}={}".format(
+                        name,
+                        value._compiler_dispatch(self, **kw)
                         if hasattr(value, "_compiler_dispatch")
-                        else formatter.value_repr(name, value)}"""
+                        else formatter.value_repr(name, value),
+                    )
                     for name, value in options_list
                 ]
             )
@@ -272,23 +280,25 @@ THEN {merge_into_clause.command}\
             else "",
         )
 
-        return f"FILE_FORMAT=(TYPE={formatter.file_format}{formatter_name_value_pairs})"
-
     def visit_aws_bucket(self, aws_bucket, **kw):
         credentials_list = list(aws_bucket.credentials_used.items())
         if kw.get("deterministic", False):
             credentials_list.sort(key=operator.itemgetter(0))
-        credentials = (
-            f"""CREDENTIALS=({" ".join(f"{n}='{v}'" for n, v in credentials_list)})"""
+        credentials = "CREDENTIALS=({})".format(
+            " ".join(f"{n}='{v}'" for n, v in credentials_list)
         )
         encryption_list = list(aws_bucket.encryption_used.items())
         if kw.get("deterministic", False):
             encryption_list.sort(key=operator.itemgetter(0))
-        encryption = f"""ENCRYPTION=({" ".join(
-                (f"{n}='{v}'" if isinstance(v, string_types) else f"{n}={v}")
+        encryption = "ENCRYPTION=({})".format(
+            " ".join(
+                ("{}='{}'" if isinstance(v, string_types) else "{}={}").format(n, v)
                 for n, v in encryption_list
-            )})"""
-        uri = f"""'s3://{aws_bucket.bucket}{"/" + aws_bucket.path if aws_bucket.path else ""}'"""
+            )
+        )
+        uri = "'s3://{}{}'".format(
+            aws_bucket.bucket, f"/{aws_bucket.path}" if aws_bucket.path else ""
+        )
         return (
             uri,
             credentials if aws_bucket.credentials_used else "",
@@ -299,16 +309,23 @@ THEN {merge_into_clause.command}\
         credentials_list = list(azure_container.credentials_used.items())
         if kw.get("deterministic", False):
             credentials_list.sort(key=operator.itemgetter(0))
-        credentials = (
-            f"""CREDENTIALS=({" ".join(f"{n}='{v}'" for n, v in credentials_list)})"""
+        credentials = "CREDENTIALS=({})".format(
+            " ".join(f"{n}='{v}'" for n, v in credentials_list)
         )
         encryption_list = list(azure_container.encryption_used.items())
         if kw.get("deterministic", False):
             encryption_list.sort(key=operator.itemgetter(0))
-        encryption = f"""ENCRYPTION=({" ".join(
-                (f"{n}='{v}'" if isinstance(v, string_types) else f"{n}={v}") for n, v in encryption_list
-            )})"""
-        uri = f"""'azure://{azure_container.account}.blob.core.windows.net/{azure_container.container}{"/" + azure_container.path if azure_container.path else ""}'"""
+        encryption = "ENCRYPTION=({})".format(
+            " ".join(
+                f"{n}='{v}'" if isinstance(v, string_types) else f"{n}={v}"
+                for n, v in encryption_list
+            )
+        )
+        uri = "'azure://{}.blob.core.windows.net/{}{}'".format(
+            azure_container.account,
+            azure_container.container,
+            f"/{azure_container.path}" if azure_container.path else "",
+        )
         return (
             uri,
             credentials if azure_container.credentials_used else "",
@@ -515,34 +532,38 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
         info = table.dialect_options["snowflake"]
         cluster = info.get("clusterby")
         if cluster:
-            text += f" CLUSTER BY ({', '.join(self.denormalize_column_name(key) for key in cluster)})"
+            text += " CLUSTER BY ({})".format(
+                ", ".join(self.denormalize_column_name(key) for key in cluster)
+            )
         return text
 
     def visit_create_stage(self, create_stage, **kw):
         """
         This visitor will create the SQL representation for a CREATE STAGE command.
         """
-        return f"""\
-CREATE {"OR REPLACE " if create_stage.replace_if_exists else ""}\
-STAGE {create_stage.stage.namespace}{create_stage.stage.name} \
-URL={repr(create_stage.container)}
-"""
+        return "CREATE {}STAGE {}{} URL={}".format(
+            "OR REPLACE " if create_stage.replace_if_exists else "",
+            create_stage.stage.namespace,
+            create_stage.stage.name,
+            repr(create_stage.container),
+        )
 
     def visit_create_file_format(self, file_format, **kw):
         """
         This visitor will create the SQL representation for a CREATE FILE FORMAT
         command.
         """
-        return f"""\
-CREATE {"OR REPLACE " if file_format.replace_if_exists else ""}FILE FORMAT {file_format.format_name} \
-TYPE='{file_format.formatter.file_format}' \
-{" ".join(
-        [
-            f"{name} = {file_format.formatter.value_repr(name, value)}"
-            for name, value in file_format.formatter.options.items()
-        ]
-)}
-"""
+        return "CREATE {}FILE FORMAT {} TYPE='{}' {}".format(
+            "OR REPLACE " if file_format.replace_if_exists else "",
+            file_format.format_name,
+            file_format.formatter.file_format,
+            " ".join(
+                [
+                    f"{name} = {file_format.formatter.value_repr(name, value)}"
+                    for name, value in file_format.formatter.options.items()
+                ]
+            ),
+        )
 
     def visit_drop_table_comment(self, drop, **kw):
         """Snowflake does not support setting table comments as NULL.
@@ -557,7 +578,10 @@ TYPE='{file_format.formatter.file_format}' \
 
         Instead we are forced to use the ALTER COLUMN ... UNSET COMMENT instead.
         """
-        return f"ALTER TABLE {self.preparer.format_table(drop.element.table)} ALTER COLUMN {self.preparer.format_column(drop.element)} UNSET COMMENT"
+        return "ALTER TABLE {} ALTER COLUMN {} UNSET COMMENT".format(
+            self.preparer.format_table(drop.element.table),
+            self.preparer.format_column(drop.element),
+        )
 
     def visit_identity_column(self, identity, **kw):
         text = " IDENTITY"

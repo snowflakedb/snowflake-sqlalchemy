@@ -40,14 +40,17 @@ class MergeInto(UpdateBase):
             self.command = command
 
         def __repr__(self):
+            case_predicate = (
+                f" AND {str(self.predicate)}" if self.predicate is not None else ""
+            )
             if self.command == "INSERT":
                 sets, sets_tos = zip(*self.set.items())
-                return f"""\
-WHEN NOT MATCHED\
-{f" AND {str(self.predicate) if self.predicate is not None else ''}"} \
-THEN {self.command} ({', '.join(sets)}) \
-VALUES ({', '.join(map(str, sets_tos))})\
-"""
+                return "WHEN NOT MATCHED{} THEN {} ({}) VALUES ({})".format(
+                    case_predicate,
+                    self.command,
+                    ", ".join(sets),
+                    ", ".join(map(str, sets_tos)),
+                )
             else:
                 # WHEN MATCHED clause
                 sets = (
@@ -55,12 +58,11 @@ VALUES ({', '.join(map(str, sets_tos))})\
                     if self.set
                     else ""
                 )
-                return f"""\
-WHEN MATCHED\
-{f" AND {str(self.predicate if self.predicate is not None else '')}"} \
-THEN {self.command}\
-{f"SET {str(sets if self.set else '')}"}\
-"""
+                return "WHEN MATCHED{} THEN {}{}".format(
+                    case_predicate,
+                    self.command,
+                    f" SET {str(sets)}" if self.set else "",
+                )
 
         def values(self, **kwargs):
             self.set = kwargs
@@ -73,7 +75,7 @@ THEN {self.command}\
     def __repr__(self):
         clauses = " ".join([repr(clause) for clause in self.clauses])
         return f"MERGE INTO {self.target} USING {self.source} ON {self.on}" + (
-            " " + clauses if clauses else ""
+            f" {clauses}" if clauses else ""
         )
 
     def when_matched_then_update(self):
@@ -451,7 +453,7 @@ class ExternalStage(ClauseElement, FromClauseRole):
         """
         return cls(
             parent_stage.name,
-            parent_stage.path + "/" + path,
+            f"{parent_stage.path}/{path}",
             parent_stage.namespace,
             file_format,
         )
@@ -510,14 +512,21 @@ class AWSBucket(ClauseElement):
         return cls(bucket, path)
 
     def __repr__(self):
-        credentials = f"""CREDENTIALS=({" ".join(f"{n}='{v}'" for n, v in self.credentials_used.items())})"""
-        encryption_value = " ".join(
-            (f"{n}='{v}'" if isinstance(v, string_types) else f"{n}={v}")
-            for n, v in self.encryption_used.items()
+        credentials = "CREDENTIALS=({})".format(
+            " ".join(f"{n}='{v}'" for n, v in self.credentials_used.items())
         )
-        encryption = f"ENCRYPTION=({encryption_value})"
-        uri = f"""'s3://{self.bucket}{"/" + self.path if self.path else ""}'"""
-        return f"{uri}{' ' + credentials if self.credentials_used else ''}{f' {encryption}' if self.encryption_used else ''}"
+        encryption = "ENCRYPTION=({})".format(
+            " ".join(
+                f"{n}='{v}'" if isinstance(v, string_types) else f"{n}={v}"
+                for n, v in self.encryption_used.items()
+            )
+        )
+        uri = "'s3://{}{}'".format(self.bucket, f"/{self.path}" if self.path else "")
+        return "{}{}{}".format(
+            uri,
+            f" {credentials}" if self.credentials_used else "",
+            f" {encryption}" if self.encryption_used else "",
+        )
 
     def credentials(
         self, aws_role=None, aws_key_id=None, aws_secret_key=None, aws_token=None
@@ -579,14 +588,23 @@ class AzureContainer(ClauseElement):
         return cls(account, container, path)
 
     def __repr__(self):
-        credentials = f"""CREDENTIALS=({" ".join(f"{n}='{v}'" for n, v in self.credentials_used.items())})"""
-        encryption_value = " ".join(
-            (f"{n}='{v}'" if isinstance(v, string_types) else f"{n}={v}")
-            for n, v in self.encryption_used.items()
+        credentials = "CREDENTIALS=({})".format(
+            " ".join(f"{n}='{v}'" for n, v in self.credentials_used.items())
         )
-        encryption = f"ENCRYPTION=({encryption_value})"
-        uri = f"""'azure://{self.account}.blob.core.windows.net/{self.container}{f"/{self.path}" if self.path else ""}'"""
-        return f"{uri}{f' {credentials}' if self.credentials_used else ''}{f' {encryption}' if self.encryption_used else ''}"
+        encryption = "ENCRYPTION=({})".format(
+            " ".join(
+                f"{n}='{v}'" if isinstance(v, string_types) else f"{n}={v}"
+                for n, v in self.encryption_used.items()
+            )
+        )
+        uri = "'azure://{}.blob.core.windows.net/{}{}'".format(
+            self.account, self.container, f"/{self.path}" if self.path else ""
+        )
+        return "{}{}{}".format(
+            uri,
+            f" {credentials}" if self.credentials_used else "",
+            f" {encryption}" if self.encryption_used else "",
+        )
 
     def credentials(self, azure_sas_token):
         self.credentials_used = {"AZURE_SAS_TOKEN": azure_sas_token}

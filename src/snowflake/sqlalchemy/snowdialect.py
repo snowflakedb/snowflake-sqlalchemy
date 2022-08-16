@@ -762,8 +762,7 @@ class SnowflakeDialect(default.DefaultDialect):
         if schema:
             cursor = connection.execute(
                 text(
-                    "SHOW /* sqlalchemy:get_temp_table_names */ TABLES "
-                    f"IN {self._denormalize_quote_join(schema)}"
+                    f"SHOW /* sqlalchemy:get_temp_table_names */ TABLES IN {self._denormalize_quote_join(schema)}"
                 )
             )
         else:
@@ -791,7 +790,9 @@ class SnowflakeDialect(default.DefaultDialect):
 
     @reflection.cache
     def get_sequence_names(self, connection, schema=None, **kw):
-        sql_command = f"SHOW SEQUENCES {f'IN SCHEMA {self.normalize_name(schema)}' if schema else ''}"
+        sql_command = "SHOW SEQUENCES {}".format(
+            f"IN SCHEMA {self.normalize_name(schema)}" if schema else ""
+        )
         try:
             cursor = connection.execute(text(sql_command))
             return [self.normalize_name(row[0]) for row in cursor]
@@ -806,7 +807,10 @@ class SnowflakeDialect(default.DefaultDialect):
         """
         sql_command = (
             "SHOW /* sqlalchemy:_get_table_comment */ "
-            f"""TABLES LIKE '{table_name}'{(f" IN SCHEMA {self.normalize_name(schema)}") if schema else ""}"""
+            "TABLES LIKE '{}'{}".format(
+                table_name,
+                f" IN SCHEMA {self.normalize_name(schema)}" if schema else "",
+            )
         )
         cursor = connection.execute(text(sql_command))
         return cursor.fetchone()
@@ -817,7 +821,10 @@ class SnowflakeDialect(default.DefaultDialect):
         """
         sql_command = (
             "SHOW /* sqlalchemy:_get_view_comment */ "
-            f"""VIEWS LIKE '{table_name}'{(f" IN SCHEMA {self.normalize_name(schema)}") if schema else ""}"""
+            "VIEWS LIKE '{}'{}".format(
+                table_name,
+                f" IN SCHEMA {self.normalize_name(schema)}" if schema else "",
+            )
         )
         cursor = connection.execute(text(sql_command))
         return cursor.fetchone()
