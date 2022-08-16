@@ -1,15 +1,18 @@
 #
 # Copyright (c) 2012-2022 Snowflake Computing Inc. All rights reserved.
 #
-
+import decimal
+import json
 import os
 import re
 import string
 import textwrap
 import time
+from datetime import date, datetime
 from unittest.mock import patch
 
 import pytest
+import pytz
 from sqlalchemy import (
     REAL,
     Boolean,
@@ -40,9 +43,12 @@ from snowflake.sqlalchemy.snowdialect import SnowflakeDialect
 from .conftest import create_engine_with_future_flag as create_engine
 from .conftest import get_engine
 from .parameters import CONNECTION_PARAMETERS
-from .util import random_string
+from .util import ischema_names_baseline, random_string
 
 THIS_DIR = os.path.dirname(os.path.realpath(__file__))
+
+PST_TZ = "America/Los_Angeles"
+JST_TZ = "Asia/Tokyo"
 
 
 def _create_users_addresses_tables(
@@ -623,7 +629,7 @@ def test_get_multile_column_primary_key(engine_testaccount):
         assert columns_in_mytable[1]["primary_key"], "primary key"
 
         primary_keys = inspector.get_pk_constraint("mytable")
-        assert primary_keys["constrained_columns"] == ["id", "gid"]
+        assert primary_keys["constrained_columns"] == ["gid", "id"]
 
     finally:
         mytable.drop(engine_testaccount)
@@ -1334,8 +1340,8 @@ def test_comment_sqlalchemy(db_parameters, engine_testaccount, on_public_ci):
 def test_special_schema_character(db_parameters, on_public_ci):
     """Make sure we decode special characters correctly"""
     # Constants
-    database = "a/b/c"  # "'/'.join([choice(ascii_lowercase) for _ in range(3)])
-    schema = "d/e/f"  # '/'.join([choice(ascii_lowercase) for _ in range(3)])
+    database = f"{random_string(5)}a/b/c"  # "'/'.join([choice(ascii_lowercase) for _ in range(3)])
+    schema = f"{random_string(5)}d/e/f"  # '/'.join([choice(ascii_lowercase) for _ in range(3)])
     # Setup
     options = dict(**db_parameters)
     with connect(**options) as conn:
@@ -1563,3 +1569,156 @@ def test_empty_comments(engine_testaccount):
             assert all([c["comment"] is None for c in columns])
         finally:
             conn.execute(text(f"drop table public.{table_name}"))
+
+
+def test_column_type_schema(engine_testaccount):
+    with engine_testaccount.connect() as conn:
+        table_name = random_string(5)
+        # column type FIXED not supported, triggers SQL compilation error: Unsupported data type 'FIXED'.
+        conn.exec_driver_sql(
+            f"""\
+CREATE TEMP TABLE {table_name} (
+    C1 BIGINT, C2 BINARY, C3 BOOLEAN, C4 CHAR, C5 CHARACTER, C6 DATE, C7 DATETIME, C8 DEC,
+    C9 DECIMAL, C10 DOUBLE, C11 FLOAT, C12 INT, C13 INTEGER, C14 NUMBER, C15 REAL, C16 BYTEINT,
+    C17 SMALLINT, C18 STRING, C19 TEXT, C20 TIME, C21 TIMESTAMP, C22 TIMESTAMP_TZ, C23 TIMESTAMP_LTZ,
+    C24 TIMESTAMP_NTZ, C25 TINYINT, C26 VARBINARY, C27 VARCHAR, C28 VARIANT, C29 OBJECT, C30 ARRAY, C31 GEOGRAPHY
+)
+"""
+        )
+
+        table_reflected = Table(
+            table_name, MetaData(), autoload=True, autoload_with=conn
+        )
+        columns = table_reflected.columns
+        assert (
+            len(columns) == len(ischema_names_baseline) - 1
+        )  # -1 because FIXED is not supported
+
+
+def test_result_type_and_value(engine_testaccount):
+    with engine_testaccount.connect() as conn:
+        table_name = random_string(5)
+        conn.exec_driver_sql(
+            f"""\
+CREATE TEMP TABLE {table_name} (
+    C1 BIGINT, C2 BINARY, C3 BOOLEAN, C4 CHAR, C5 CHARACTER, C6 DATE, C7 DATETIME, C8 DEC(12,3),
+    C9 DECIMAL(12,3), C10 DOUBLE, C11 FLOAT, C12 INT, C13 INTEGER, C14 NUMBER, C15 REAL, C16 BYTEINT,
+    C17 SMALLINT, C18 STRING, C19 TEXT, C20 TIME, C21 TIMESTAMP, C22 TIMESTAMP_TZ, C23 TIMESTAMP_LTZ,
+    C24 TIMESTAMP_NTZ, C25 TINYINT, C26 VARBINARY, C27 VARCHAR, C28 VARIANT, C29 OBJECT, C30 ARRAY, C31 GEOGRAPHY
+)
+"""
+        )
+        table_reflected = Table(
+            table_name, MetaData(), autoload=True, autoload_with=conn
+        )
+        current_date = date.today()
+        current_utctime = datetime.utcnow()
+        current_localtime = pytz.utc.localize(current_utctime, is_dst=False).astimezone(
+            pytz.timezone(PST_TZ)
+        )
+        current_localtime_without_tz = datetime.now()
+        current_localtime_with_other_tz = pytz.utc.localize(
+            current_localtime_without_tz, is_dst=False
+        ).astimezone(pytz.timezone(JST_TZ))
+        TIME_VALUE = current_utctime.time()
+        DECIMAL_VALUE = decimal.Decimal("123456789.123")
+        MAX_INT_VALUE = 99999999999999999999999999999999999999
+        MIN_INT_VALUE = -99999999999999999999999999999999999999
+        FLOAT_VALUE = 123456789.123
+        STRING_VALUE = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        BINARY_VALUE = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        CHAR_VALUE = "A"
+        GEOGRAPHY_VALUE = "POINT(-122.35 37.55)"
+        GEOGRAPHY_RESULT_VALUE = '{"coordinates": [-122.35,37.55],"type": "Point"}'
+
+        ins = table_reflected.insert().values(
+            c1=MAX_INT_VALUE,  # BIGINT
+            c2=BINARY_VALUE,  # BINARY
+            c3=True,  # BOOLEAN
+            c4=CHAR_VALUE,  # CHAR
+            c5=CHAR_VALUE,  # CHARACTER
+            c6=current_date,  # DATE
+            c7=current_localtime_without_tz,  # DATETIME
+            c8=DECIMAL_VALUE,  # DEC(12,3)
+            c9=DECIMAL_VALUE,  # DECIMAL(12,3)
+            c10=FLOAT_VALUE,  # DOUBLE
+            c11=FLOAT_VALUE,  # FLOAT
+            c12=MIN_INT_VALUE,  # INT
+            c13=MAX_INT_VALUE,  # INTEGER
+            c14=MIN_INT_VALUE,  # NUMBER
+            c15=FLOAT_VALUE,  # REAL
+            c16=MAX_INT_VALUE,  # BYTEINT
+            c17=MIN_INT_VALUE,  # SMALLINT
+            c18=STRING_VALUE,  # STRING
+            c19=STRING_VALUE,  # TEXT
+            c20=TIME_VALUE,  # TIME
+            c21=current_utctime,  # TIMESTAMP
+            c22=current_localtime_with_other_tz,  # TIMESTAMP_TZ
+            c23=current_localtime,  # TIMESTAMP_LTZ
+            c24=current_utctime,  # TIMESTAMP_NTZ
+            c25=MAX_INT_VALUE,  # TINYINT
+            c26=BINARY_VALUE,  # VARBINARY
+            c27=STRING_VALUE,  # VARCHAR
+            c28=None,  # VARIANT, currently snowflake-sqlalchemy/connector does not support binding variant
+            c29=None,  # OBJECT, currently snowflake-sqlalchemy/connector does not support binding variant
+            c30=None,  # ARRAY, currently snowflake-sqlalchemy/connector does not support binding variant
+            c31=GEOGRAPHY_VALUE,  # GEOGRAPHY
+        )
+        conn.execute(ins)
+
+        results = conn.execute(select(table_reflected)).fetchall()
+        assert len(results) == 1
+        result = results[0]
+        assert (
+            result[0] == MAX_INT_VALUE
+            and result[1] == BINARY_VALUE
+            and result[2] is True
+            and result[3] == CHAR_VALUE
+            and result[4] == CHAR_VALUE
+            and result[5] == current_date
+            and result[6] == current_localtime_without_tz
+            and result[7] == DECIMAL_VALUE
+            and result[8] == DECIMAL_VALUE
+            and result[9] == FLOAT_VALUE
+            and result[10] == FLOAT_VALUE
+            and result[11] == MIN_INT_VALUE
+            and result[12] == MAX_INT_VALUE
+            and result[13] == MIN_INT_VALUE
+            and result[14] == FLOAT_VALUE
+            and result[15] == MAX_INT_VALUE
+            and result[16] == MIN_INT_VALUE
+            and result[17] == STRING_VALUE
+            and result[18] == STRING_VALUE
+            and result[19] == TIME_VALUE
+            and result[20] == current_utctime
+            and result[21] == current_localtime_with_other_tz
+            and result[22] == current_localtime
+            and result[23] == current_utctime
+            and result[24] == MAX_INT_VALUE
+            and result[25] == BINARY_VALUE
+            and result[26] == STRING_VALUE
+            and result[27] is None
+            and result[28] is None
+            and result[29] is None
+            and json.loads(result[30]) == json.loads(GEOGRAPHY_RESULT_VALUE)
+        )
+
+        sql = f"""
+INSERT INTO {table_name}(c28, c29, c30)
+SELECT PARSE_JSON('{{"vk1":100, "vk2":200, "vk3":300}}'),
+       OBJECT_CONSTRUCT('vk1', 100, 'vk2', 200, 'vk3', 300),
+       PARSE_JSON('[
+{{"k":1, "v":"str1"}},
+{{"k":2, "v":"str2"}},
+{{"k":3, "v":"str3"}}]'
+)"""
+        conn.exec_driver_sql(sql)
+        results = conn.execute(select(table_reflected)).fetchall()
+        assert len(results) == 2
+        data = json.loads(results[-1][27])
+        assert json.loads(results[-1][28]) == data
+        assert data["vk1"] == 100
+        assert data["vk3"] == 300
+        assert data is not None
+        data = json.loads(results[-1][29])
+        assert data[1]["k"] == 2

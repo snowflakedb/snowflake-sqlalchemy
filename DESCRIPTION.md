@@ -10,7 +10,12 @@ Source code is also available at:
 # Release Notes
 
 - v1.4.1(Unreleased)
+
   - snowflake-sqlalchemy is now SQLAlchemy 2.0 compatible.
+  - Fixed a bug that `DATE` should not be removed from `SnowflakeDialect.ischema_names`.
+  - Fixed breaking changes introduced in release 1.4.0 that:
+    - changed the behavior of processing numeric, datetime and timestamp values returned from service.
+    - changed the sequence order of primary/foreign keys in list returned by `inspect.get_foreign_keys` and `inspect.get_pk_constraint`.
 
 - v1.4.0(July 20, 2022)
 

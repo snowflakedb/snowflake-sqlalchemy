@@ -274,3 +274,24 @@ class Requirements(SuiteRequirements):
     def implements_get_lastrowid(self):
         # TODO: need connector lastrowid support, check SNOW-11155
         return exclusions.closed()
+
+    @property
+    def implicit_decimal_binds(self):
+        # Supporting this would require behavior breaking change to implicitly convert str to Decimal when binding
+        # parameters in string forms of decimal values.
+        # Check https://snowflakecomputing.atlassian.net/browse/SNOW-640134 for details on breaking changes discussion.
+        return exclusions.closed()
+
+    @property
+    def datetime_implicit_bound(self):
+        # Supporting this would require behavior breaking change to implicitly convert str to datetime when binding
+        # parameters in string forms of datetime values.
+        # Check https://snowflakecomputing.atlassian.net/browse/SNOW-640134 for details on breaking changes discussion.
+        return exclusions.closed()
+
+    @property
+    def timestamp_microseconds_implicit_bound(self):
+        # Supporting this would require behavior breaking change to implicitly convert str to timestamp when binding
+        # parameters in string forms of timestamp values.
+        # Check https://snowflakecomputing.atlassian.net/browse/SNOW-640134 for details on breaking changes discussion.
+        return exclusions.closed()

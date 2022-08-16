@@ -8,6 +8,70 @@ import random
 import string
 from typing import Sequence
 
+from sqlalchemy.types import (
+    BIGINT,
+    BINARY,
+    BOOLEAN,
+    CHAR,
+    DATE,
+    DATETIME,
+    DECIMAL,
+    FLOAT,
+    INTEGER,
+    REAL,
+    SMALLINT,
+    TIME,
+    TIMESTAMP,
+    VARCHAR,
+)
+
+from snowflake.sqlalchemy.custom_types import (
+    ARRAY,
+    GEOGRAPHY,
+    OBJECT,
+    TIMESTAMP_LTZ,
+    TIMESTAMP_NTZ,
+    TIMESTAMP_TZ,
+    VARIANT,
+)
+
+ischema_names_baseline = {
+    "BIGINT": BIGINT,
+    "BINARY": BINARY,
+    # 'BIT': BIT,
+    "BOOLEAN": BOOLEAN,
+    "CHAR": CHAR,
+    "CHARACTER": CHAR,
+    "DATE": DATE,
+    "DATETIME": DATETIME,
+    "DEC": DECIMAL,
+    "DECIMAL": DECIMAL,
+    "DOUBLE": FLOAT,
+    "FIXED": DECIMAL,
+    "FLOAT": FLOAT,
+    "INT": INTEGER,
+    "INTEGER": INTEGER,
+    "NUMBER": DECIMAL,
+    # 'OBJECT': ?
+    "REAL": REAL,
+    "BYTEINT": SMALLINT,
+    "SMALLINT": SMALLINT,
+    "STRING": VARCHAR,
+    "TEXT": VARCHAR,
+    "TIME": TIME,
+    "TIMESTAMP": TIMESTAMP,
+    "TIMESTAMP_TZ": TIMESTAMP_TZ,
+    "TIMESTAMP_LTZ": TIMESTAMP_LTZ,
+    "TIMESTAMP_NTZ": TIMESTAMP_NTZ,
+    "TINYINT": SMALLINT,
+    "VARBINARY": BINARY,
+    "VARCHAR": VARCHAR,
+    "VARIANT": VARIANT,
+    "OBJECT": OBJECT,
+    "ARRAY": ARRAY,
+    "GEOGRAPHY": GEOGRAPHY,
+}
+
 
 def random_string(
     length: int,

@@ -21,6 +21,7 @@ from sqlalchemy.types import (
     BINARY,
     BOOLEAN,
     CHAR,
+    DATE,
     DATETIME,
     DECIMAL,
     FLOAT,
@@ -33,7 +34,6 @@ from sqlalchemy.types import (
     Date,
     DateTime,
     Float,
-    Numeric,
     Time,
 )
 
@@ -59,17 +59,14 @@ from .custom_types import (
     _CUSTOM_Date,
     _CUSTOM_DateTime,
     _CUSTOM_Float,
-    _CUSTOM_Numeric,
     _CUSTOM_Time,
 )
-from .util import _sort_columns_by_sequences
 
 colspecs = {
     Date: _CUSTOM_Date,
     DateTime: _CUSTOM_DateTime,
     Time: _CUSTOM_Time,
     Float: _CUSTOM_Float,
-    Numeric: _CUSTOM_Numeric,
 }
 
 ischema_names = {
@@ -79,6 +76,7 @@ ischema_names = {
     "BOOLEAN": BOOLEAN,
     "CHAR": CHAR,
     "CHARACTER": CHAR,
+    "DATE": DATE,
     "DATETIME": DATETIME,
     "DEC": DECIMAL,
     "DECIMAL": DECIMAL,
@@ -323,10 +321,8 @@ class SnowflakeDialect(default.DefaultDialect):
             )
         )
         ans = {}
-        key_sequence_order_map = defaultdict(list)
         for row in result:
             table_name = self.normalize_name(row._mapping["table_name"])
-            key_sequence_order_map[table_name].append(row._mapping["key_sequence"])
             if table_name not in ans:
                 ans[table_name] = {
                     "constrained_columns": [],
@@ -335,12 +331,6 @@ class SnowflakeDialect(default.DefaultDialect):
             ans[table_name]["constrained_columns"].append(
                 self.normalize_name(row._mapping["column_name"])
             )
-
-        for k, v in ans.items():
-            v["constrained_columns"] = _sort_columns_by_sequences(
-                key_sequence_order_map[k], v["constrained_columns"]
-            )
-
         return ans
 
     def get_pk_constraint(self, connection, table_name, schema=None, **kw):
@@ -403,10 +393,8 @@ class SnowflakeDialect(default.DefaultDialect):
             )
         )
         foreign_key_map = {}
-        key_sequence_order_map = defaultdict(list)
         for row in result:
             name = self.normalize_name(row._mapping["fk_name"])
-            key_sequence_order_map[name].append(row._mapping["key_sequence"])
             if name not in foreign_key_map:
                 referred_schema = self.normalize_name(row._mapping["pk_schema_name"])
                 foreign_key_map[name] = {
@@ -450,13 +438,7 @@ class SnowflakeDialect(default.DefaultDialect):
 
         ans = {}
 
-        for k, v in foreign_key_map.items():
-            v["constrained_columns"] = _sort_columns_by_sequences(
-                key_sequence_order_map[k], v["constrained_columns"]
-            )
-            v["referred_columns"] = _sort_columns_by_sequences(
-                key_sequence_order_map[k], v["referred_columns"]
-            )
+        for _, v in foreign_key_map.items():
             if v["table_name"] not in ans:
                 ans[v["table_name"]] = []
             ans[v["table_name"]].append(
