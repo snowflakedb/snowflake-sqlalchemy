@@ -14,6 +14,11 @@ def _url(**db_parameters):
     """
     Composes a SQLAlchemy connect string from the given database connection
     parameters.
+
+    Password containing special characters (e.g., '@', '%') need to be encoded to be parsed correctly.
+    Unescaped password containing special characters might lead to authentication failure.
+    Please follow the instructions to encode the password:
+    https://github.com/snowflakedb/snowflake-sqlalchemy#escaping-special-characters-such-as---signs-in-passwords
     """
     specified_parameters = []
     if "account" not in db_parameters:
