@@ -97,7 +97,8 @@ You can optionally specify the initial database and schema for the Snowflake ses
 #### Escaping Special Characters such as `%, @` signs in Passwords
 
 As pointed out in [SQLAlchemy](https://docs.sqlalchemy.org/en/14/core/engines.html#escaping-special-characters-such-as-signs-in-passwords), URLs
-containing special characters need to be URL encoded to be parsed correctly. This includes the `%, @` signs.
+containing special characters need to be URL encoded to be parsed correctly. This includes the `%, @` signs. Unescaped password containing special
+characters could lead to authentication failure.
 
 The encoding for the password can be generated using `urllib.parse`:
 ```python
