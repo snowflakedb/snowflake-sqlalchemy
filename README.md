@@ -94,6 +94,45 @@ You can optionally specify the initial database and schema for the Snowflake ses
 'snowflake://<user_login_name>:<password>@<account_name>/<database_name>/<schema_name>?warehouse=<warehouse_name>&role=<role_name>'
 ```
 
+#### Escaping Special Characters such as `%, @` signs in Passwords
+
+As pointed out in [SQLAlchemy](https://docs.sqlalchemy.org/en/14/core/engines.html#escaping-special-characters-such-as-signs-in-passwords), URLs
+containing special characters need to be URL encoded to be parsed correctly. This includes the `%, @` signs.
+
+The encoding for the password can be generated using `urllib.parse`:
+```python
+import urllib.parse
+urllib.parse.quote("kx@% jj5/g")
+'kx%40%25%20jj5/g'
+```
+
+**Note**: `urllib.parse.quote_plus` may also be used if there is no space in the string, as `urllib.parse.quote_plus` will replace space with `+`.
+
+To create an engine with the proper encodings, either manually constructing the url string by formatting
+or taking advantage of the `snowflake.sqlalchemy.URL` helper method:
+```python
+import urllib.parse
+from snowflake.sqlalchemy import URL
+from sqlalchemy import create_engine
+
+quoted_password = urllib.parse.quote("kx@% jj5/g")
+
+# 1. manually constructing an url string
+url = f'snowflake://testuser1:{quoted_password}@abc123/testdb/public?warehouse=testwh&role=myrole'
+engine = create_engine(url)
+
+# 2. using the snowflake.sqlalchemy.URL helper method
+engine = create_engine(URL(
+    account = 'abc123',
+    user = 'testuser1',
+    password = quoted_password,
+    database = 'testdb',
+    schema = 'public',
+    warehouse = 'testwh',
+    role='myrole',
+))
+```
+
 **Note**:
 After login, the initial database, schema, warehouse and role specified in the connection string can always be changed for the session.
 

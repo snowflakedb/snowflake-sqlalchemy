@@ -1,6 +1,7 @@
 #
 # Copyright (c) 2012-2022 Snowflake Computing Inc. All rights reserved.
 #
+import urllib.parse
 
 from snowflake.sqlalchemy import URL
 
@@ -23,6 +24,16 @@ def test_url():
             password="1-pass 2-pass 3-: 4-@ 5-/ 6-pass",
         )
         == "snowflake://admin:1-pass 2-pass 3-%3A 4-%40 5-%2F 6-pass@testaccount/"
+    )
+
+    quoted_password = urllib.parse.quote("kx@% jj5/g")
+    assert (
+        URL(
+            account="testaccount",
+            user="admin",
+            password=quoted_password,
+        )
+        == "snowflake://admin:kx%40%25%20jj5%2Fg@testaccount/"
     )
 
     assert (
