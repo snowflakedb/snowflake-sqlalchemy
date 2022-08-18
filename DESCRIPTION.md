@@ -9,7 +9,7 @@ Source code is also available at:
 
 # Release Notes
 
-- v1.4.1(Unreleased)
+- v1.4.1(Aug 18, 2022)
 
   - snowflake-sqlalchemy is now SQLAlchemy 2.0 compatible.
   - Fixed a bug that `DATE` should not be removed from `SnowflakeDialect.ischema_names`.
