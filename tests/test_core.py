@@ -221,7 +221,7 @@ def test_insert_tables(engine_testaccount):
                 # verify the results
                 results = conn.execute(select(users))
                 assert (
-                    len([row for row in results]) == 2
+                    len(results) == 2
                 ), "number of rows from users table"
                 results.close()
 
