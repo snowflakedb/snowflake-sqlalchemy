@@ -88,7 +88,7 @@ def test_inspect_semi_structured_datatypes(engine_testaccount):
                     {{"k":2, "v":"str2"}},
                     {{"k":3, "v":"str3"}}]'
                     )
-                """
+                    """
                 )
                 conn.exec_driver_sql(sql)
                 inspecter = inspect(engine_testaccount)

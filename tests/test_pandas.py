@@ -172,10 +172,10 @@ def test_to_sql(db_parameters):
         conn.exec_driver_sql(
             textwrap.dedent(
                 f"""\
-            create or replace table src(c1 float)
-            as select random(123) from table(generator(timelimit=>1))
-            limit {total_rows}
-            """
+                create or replace table src(c1 float)
+                as select random(123) from table(generator(timelimit=>1))
+                limit {total_rows}
+                """
             )
         )
         conn.exec_driver_sql("create or replace table dst(c1 float)")

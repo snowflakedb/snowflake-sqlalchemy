@@ -220,7 +220,9 @@ def test_insert_tables(engine_testaccount):
 
                 # verify the results
                 results = conn.execute(select(users))
-                assert len(results) == 2, "number of rows from users table"
+                assert (
+                    len([row for row in results]) == 2
+                ), "number of rows from users table"
                 results.close()
 
                 # fetchone
@@ -298,11 +300,11 @@ def test_insert_tables(engine_testaccount):
                 )
                 expected_sql = textwrap.dedent(
                     """\
-                users.name LIKE :name_1
-                 AND users.id = addresses.user_id
-                 AND (addresses.email_address = :email_address_1
-                 OR addresses.email_address = :email_address_2)
-                 AND users.id <= :id_1"""
+                    users.name LIKE :name_1
+                     AND users.id = addresses.user_id
+                     AND (addresses.email_address = :email_address_1
+                     OR addresses.email_address = :email_address_2)
+                     AND users.id <= :id_1"""
                 )
                 assert str(obj) == "".join(
                     expected_sql.split("\n")
@@ -1349,19 +1351,15 @@ def test_special_schema_character(db_parameters, on_public_ci):
     # Test
     options.update({"database": '"' + database + '"', "schema": '"' + schema + '"'})
     with connect(**options) as sf_conn:
-        sf_connection = [
-            res
-            for res in sf_conn.cursor().execute(
-                "select current_database(), " "current_schema();"
-            )
-        ]
+        sf_connection = (
+            sf_conn.cursor()
+            .execute("select current_database(), " "current_schema();")
+            .fetchall()
+        )
     with create_engine(URL(**options)).connect() as sa_conn:
-        sa_connection = [
-            res
-            for res in sa_conn.execute(
-                text("select current_database(), " "current_schema();")
-            )
-        ]
+        sa_connection = sa_conn.execute(
+            text("select current_database(), " "current_schema();")
+        ).fetchall()
     # Teardown
     with connect(**options) as conn:
         conn.cursor().execute(f'DROP DATABASE IF EXISTS "{database}"')
