@@ -66,19 +66,18 @@ def test_inspect_timestamp_datatypes(engine_testaccount):
             tsltz=current_localtime,
             tstz=current_localtime_with_other_tz,
         )
-        conn = engine_testaccount.connect()
-        with conn.begin():
-            results = conn.execute(ins)
-            results.close()
+        with engine_testaccount.connect() as conn:
+            with conn.begin():
+                results = conn.execute(ins)
+                results.close()
 
-        # select
-        s = select(test_timestamp)
-        results = conn.execute(s)
-        rows = results.fetchone()
-        results.close()
-        assert rows[0] == 1
-        assert rows[1] == current_utctime
-        assert rows[2] == current_localtime
-        assert rows[3] == current_localtime_with_other_tz
+                s = select(test_timestamp)
+                results = conn.execute(s)
+                rows = results.fetchone()
+                results.close()
+                assert rows[0] == 1
+                assert rows[1] == current_utctime
+                assert rows[2] == current_localtime
+                assert rows[3] == current_localtime_with_other_tz
     finally:
         test_timestamp.drop(engine_testaccount)

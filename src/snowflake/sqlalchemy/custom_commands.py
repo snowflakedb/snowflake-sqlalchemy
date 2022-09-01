@@ -40,10 +40,13 @@ class MergeInto(UpdateBase):
             self.command = command
 
         def __repr__(self):
+            case_predicate = (
+                f" AND {str(self.predicate)}" if self.predicate is not None else ""
+            )
             if self.command == "INSERT":
                 sets, sets_tos = zip(*self.set.items())
                 return "WHEN NOT MATCHED{} THEN {} ({}) VALUES ({})".format(
-                    " AND %s" % self.predicate if self.predicate is not None else "",
+                    case_predicate,
                     self.command,
                     ", ".join(sets),
                     ", ".join(map(str, sets_tos)),
@@ -56,9 +59,9 @@ class MergeInto(UpdateBase):
                     else ""
                 )
                 return "WHEN MATCHED{} THEN {}{}".format(
-                    " AND %s" % self.predicate if self.predicate is not None else "",
+                    case_predicate,
                     self.command,
-                    " SET %s" % sets if self.set else "",
+                    f" SET {str(sets)}" if self.set else "",
                 )
 
         def values(self, **kwargs):
@@ -72,7 +75,7 @@ class MergeInto(UpdateBase):
     def __repr__(self):
         clauses = " ".join([repr(clause) for clause in self.clauses])
         return f"MERGE INTO {self.target} USING {self.source} ON {self.on}" + (
-            " " + clauses if clauses else ""
+            f" {clauses}" if clauses else ""
         )
 
     def when_matched_then_update(self):
@@ -450,7 +453,7 @@ class ExternalStage(ClauseElement, FromClauseRole):
         """
         return cls(
             parent_stage.name,
-            parent_stage.path + "/" + path,
+            f"{parent_stage.path}/{path}",
             parent_stage.namespace,
             file_format,
         )
@@ -514,15 +517,15 @@ class AWSBucket(ClauseElement):
         )
         encryption = "ENCRYPTION=({})".format(
             " ".join(
-                ("{}='{}'" if isinstance(v, string_types) else "{}={}").format(n, v)
+                f"{n}='{v}'" if isinstance(v, string_types) else f"{n}={v}"
                 for n, v in self.encryption_used.items()
             )
         )
-        uri = "'s3://{}{}'".format(self.bucket, "/" + self.path if self.path else "")
+        uri = "'s3://{}{}'".format(self.bucket, f"/{self.path}" if self.path else "")
         return "{}{}{}".format(
             uri,
-            " " + credentials if self.credentials_used else "",
-            " " + encryption if self.encryption_used else "",
+            f" {credentials}" if self.credentials_used else "",
+            f" {encryption}" if self.encryption_used else "",
         )
 
     def credentials(
@@ -590,12 +593,12 @@ class AzureContainer(ClauseElement):
         )
         encryption = "ENCRYPTION=({})".format(
             " ".join(
-                ("{}='{}'" if isinstance(v, string_types) else "{}={}").format(n, v)
+                f"{n}='{v}'" if isinstance(v, string_types) else f"{n}={v}"
                 for n, v in self.encryption_used.items()
             )
         )
         uri = "'azure://{}.blob.core.windows.net/{}{}'".format(
-            self.account, self.container, "/" + self.path if self.path else ""
+            self.account, self.container, f"/{self.path}" if self.path else ""
         )
         return "{}{}{}".format(
             uri,

@@ -2,9 +2,11 @@
 # Copyright (c) 2012-2022 Snowflake Computing Inc. All rights reserved.
 #
 
+import operator
 import random
 import string
 import sys
+import textwrap
 import uuid
 
 import numpy as np
@@ -74,36 +76,37 @@ def test_a_simple_read_sql(engine_testaccount):
     metadata = MetaData()
     users, addresses = _create_users_addresses_tables(engine_testaccount, metadata)
 
-    conn = engine_testaccount.connect()
     try:
-        # inserts data with an implicitly generated id
-        ins = users.insert().values(name="jack", fullname="Jack Jones")
-        with conn.begin():
-            results = conn.execute(ins)
-        # Note: SQLAlchemy 1.4 changed what ``inserted_primary_key`` returns
-        #  a cast is here to make sure the test works with both older and newer
-        #  versions
-        assert list(results.inserted_primary_key) == [1], "sequence value"
-        results.close()
+        with engine_testaccount.connect() as conn:
+            # inserts data with an implicitly generated id
+            with conn.begin():
+                results = conn.execute(
+                    users.insert().values(name="jack", fullname="Jack Jones")
+                )
+                # Note: SQLAlchemy 1.4 changed what ``inserted_primary_key`` returns
+                #  a cast is here to make sure the test works with both older and newer
+                #  versions
+                assert list(results.inserted_primary_key) == [1], "sequence value"
+                results.close()
 
-        # inserts data with the given id
-        ins = users.insert()
-        with conn.begin():
-            conn.execute(ins, {"id": 2, "name": "wendy", "fullname": "Wendy Williams"})
+                # inserts data with the given id
+                conn.execute(
+                    users.insert(),
+                    {"id": 2, "name": "wendy", "fullname": "Wendy Williams"},
+                )
 
-        df = pd.read_sql(
-            select(users).where(users.c.name == "jack"),
-            con=conn,
-        )
+                df = pd.read_sql(
+                    select(users).where(users.c.name == "jack"),
+                    con=conn,
+                )
 
-        assert len(df.values) == 1
-        assert df.values[0][0] == 1
-        assert df.values[0][1] == "jack"
-        assert hasattr(df, "id")
-        assert hasattr(df, "name")
-        assert hasattr(df, "fullname")
+                assert len(df.values) == 1
+                assert df.values[0][0] == 1
+                assert df.values[0][1] == "jack"
+                assert hasattr(df, "id")
+                assert hasattr(df, "name")
+                assert hasattr(df, "fullname")
     finally:
-        conn.close()
         # drop tables
         addresses.drop(engine_testaccount)
         users.drop(engine_testaccount)
@@ -142,71 +145,60 @@ def get_engine_with_numpy(db_parameters, user=None, password=None, account=None)
 
 def test_numpy_datatypes(db_parameters):
     engine = get_engine_with_numpy(db_parameters)
-    conn = engine.connect()
-    try:
-        specific_date = np.datetime64("2016-03-04T12:03:05.123456789")
-        with conn.begin():
-            conn.exec_driver_sql(
-                "CREATE OR REPLACE TABLE {name}("
-                "c1 timestamp_ntz)".format(name=db_parameters["name"])
-            )
-        with conn.begin():
-            conn.exec_driver_sql(
-                "INSERT INTO {name}(c1) values(%s)".format(name=db_parameters["name"]),
-                (specific_date,),
-            )
-        with conn.begin():
-            df = pd.read_sql_query(
-                text("SELECT * FROM {name}".format(name=db_parameters["name"])), conn
-            )
-            assert df.c1.values[0] == specific_date
-    finally:
-        conn.exec_driver_sql(
-            "DROP TABLE IF EXISTS {name}".format(name=db_parameters["name"])
-        )
-        conn.close()
-        engine.dispose()
+    with engine.connect() as conn:
+        try:
+            specific_date = np.datetime64("2016-03-04T12:03:05.123456789")
+            with conn.begin():
+                conn.exec_driver_sql(
+                    f"CREATE OR REPLACE TABLE {db_parameters['name']}(c1 timestamp_ntz)"
+                )
+                conn.exec_driver_sql(
+                    f"INSERT INTO {db_parameters['name']}(c1) values(%s)",
+                    (specific_date,),
+                )
+                df = pd.read_sql_query(
+                    text(f"SELECT * FROM {db_parameters['name']}"), conn
+                )
+                assert df.c1.values[0] == specific_date
+        finally:
+            conn.exec_driver_sql(f"DROP TABLE IF EXISTS {db_parameters['name']}")
+            engine.dispose()
 
 
 def test_to_sql(db_parameters):
     engine = get_engine_with_numpy(db_parameters)
-    conn = engine.connect()
-    total_rows = 10000
-    conn.exec_driver_sql(
-        """
-create or replace table src(c1 float)
- as select random(123) from table(generator(timelimit=>1))
- limit {}
-""".format(
-            total_rows
+    with engine.connect() as conn:
+        total_rows = 10000
+        conn.exec_driver_sql(
+            textwrap.dedent(
+                f"""\
+                create or replace table src(c1 float)
+                as select random(123) from table(generator(timelimit=>1))
+                limit {total_rows}
+                """
+            )
         )
-    )
-    conn.exec_driver_sql(
-        """
-create or replace table dst(c1 float)
-"""
-    )
-    tbl = pd.read_sql_query(text("select * from src"), conn)
+        conn.exec_driver_sql("create or replace table dst(c1 float)")
+        tbl = pd.read_sql_query(text("select * from src"), conn)
 
-    tbl.to_sql("dst", engine, if_exists="append", chunksize=1000, index=False)
-    df = pd.read_sql_query(text("select count(*) as cnt from dst"), conn)
-    assert df.cnt.values[0] == total_rows
-    conn.close()
+        tbl.to_sql("dst", engine, if_exists="append", chunksize=1000, index=False)
+        df = pd.read_sql_query(text("select count(*) as cnt from dst"), conn)
+        assert df.cnt.values[0] == total_rows
 
 
 def test_no_indexes(engine_testaccount, db_parameters):
-    conn = engine_testaccount.connect()
-    data = pd.DataFrame([("1.0.0",), ("1.0.1",)])
-    with pytest.raises(NotImplementedError) as exc:
-        data.to_sql(
-            "versions",
-            schema=db_parameters["schema"],
-            index=True,
-            index_label="col1",
-            con=conn,
-            if_exists="replace",
-        )
-    assert str(exc.value) == "Snowflake does not support indexes"
+    with engine_testaccount.connect() as conn:
+        data = pd.DataFrame([("1.0.0",), ("1.0.1",)])
+        with pytest.raises(NotImplementedError) as exc:
+            data.to_sql(
+                "versions",
+                schema=db_parameters["schema"],
+                index=True,
+                index_label="col1",
+                con=conn,
+                if_exists="replace",
+            )
+        assert str(exc.value) == "Snowflake does not support indexes"
 
 
 def test_timezone(db_parameters):
@@ -242,65 +234,66 @@ def test_timezone(db_parameters):
         )
     ).raw_connection()
 
-    conn = sa_engine.connect()
+    with sa_engine.connect() as conn:
 
-    with conn.begin():
-        conn.exec_driver_sql(
-            """
-        CREATE OR REPLACE TABLE {table}(
-            tz_col timestamp_tz,
-            ntz_col timestamp_ntz,
-            decimal_col decimal(10,1),
-            float_col float
-        );""".format(
-                table=test_table_name
-            )
-        )
-
-    try:
         with conn.begin():
             conn.exec_driver_sql(
+                textwrap.dedent(
+                    f"""\
+                CREATE OR REPLACE TABLE {test_table_name}(
+                    tz_col timestamp_tz,
+                    ntz_col timestamp_ntz,
+                    decimal_col decimal(10,1),
+                    float_col float
+                );
                 """
-            INSERT INTO {table}
-                SELECT
-                    current_timestamp(),
-                    current_timestamp()::timestamp_ntz,
-                    to_decimal(.1, 10, 1),
-                    .10;""".format(
-                    table=test_table_name
                 )
             )
 
-        qry = """
-        SELECT
-            tz_col,
-            ntz_col,
-            CONVERT_TIMEZONE('America/Los_Angeles', tz_col) AS tz_col_converted,
-            CONVERT_TIMEZONE('America/Los_Angeles', ntz_col) AS ntz_col_converted,
-            decimal_col,
-            float_col
-        FROM {table};""".format(
-            table=test_table_name
-        )
+            conn.exec_driver_sql(
+                textwrap.dedent(
+                    f"""\
+                INSERT INTO {test_table_name}
+                    SELECT
+                        current_timestamp(),
+                        current_timestamp()::timestamp_ntz,
+                        to_decimal(.1, 10, 1),
+                        .10;
+                """
+                )
+            )
+        try:
+            qry = textwrap.dedent(
+                f"""\
+            SELECT
+                tz_col,
+                ntz_col,
+                CONVERT_TIMEZONE('America/Los_Angeles', tz_col) AS tz_col_converted,
+                CONVERT_TIMEZONE('America/Los_Angeles', ntz_col) AS ntz_col_converted,
+                decimal_col,
+                float_col
+            FROM {test_table_name};
+            """
+            )
 
-        result = pd.read_sql_query(text(qry), conn)
-        result2 = pd.read_sql_query(qry, sa_engine2_raw_conn)
-        # Check sqlalchemy engine result
-        assert pd.api.types.is_datetime64tz_dtype(result.tz_col)
-        assert not pd.api.types.is_datetime64tz_dtype(result.ntz_col)
-        assert pd.api.types.is_datetime64tz_dtype(result.tz_col_converted)
-        assert pd.api.types.is_datetime64tz_dtype(result.ntz_col_converted)
-        assert np.issubdtype(result.decimal_col, np.float64)
-        assert np.issubdtype(result.float_col, np.float64)
-        # Check sqlalchemy raw connection result
-        assert pd.api.types.is_datetime64tz_dtype(result2.TZ_COL)
-        assert not pd.api.types.is_datetime64tz_dtype(result2.NTZ_COL)
-        assert pd.api.types.is_datetime64tz_dtype(result2.TZ_COL_CONVERTED)
-        assert pd.api.types.is_datetime64tz_dtype(result2.NTZ_COL_CONVERTED)
-        assert np.issubdtype(result2.DECIMAL_COL, np.float64)
-        assert np.issubdtype(result2.FLOAT_COL, np.float64)
-    finally:
-        conn.exec_driver_sql(f"DROP TABLE {test_table_name};")
+            result = pd.read_sql_query(text(qry), conn)
+            result2 = pd.read_sql_query(qry, sa_engine2_raw_conn)
+            # Check sqlalchemy engine result
+            assert pd.api.types.is_datetime64tz_dtype(result.tz_col)
+            assert not pd.api.types.is_datetime64tz_dtype(result.ntz_col)
+            assert pd.api.types.is_datetime64tz_dtype(result.tz_col_converted)
+            assert pd.api.types.is_datetime64tz_dtype(result.ntz_col_converted)
+            assert np.issubdtype(result.decimal_col, np.float64)
+            assert np.issubdtype(result.float_col, np.float64)
+            # Check sqlalchemy raw connection result
+            assert pd.api.types.is_datetime64tz_dtype(result2.TZ_COL)
+            assert not pd.api.types.is_datetime64tz_dtype(result2.NTZ_COL)
+            assert pd.api.types.is_datetime64tz_dtype(result2.TZ_COL_CONVERTED)
+            assert pd.api.types.is_datetime64tz_dtype(result2.NTZ_COL_CONVERTED)
+            assert np.issubdtype(result2.DECIMAL_COL, np.float64)
+            assert np.issubdtype(result2.FLOAT_COL, np.float64)
+        finally:
+            conn.exec_driver_sql(f"DROP TABLE {test_table_name};")
 
 
 def test_pandas_writeback(engine_testaccount, run_v20_sqlalchemy):
@@ -309,8 +302,7 @@ def test_pandas_writeback(engine_testaccount, run_v20_sqlalchemy):
             "In Python 3.7, this test depends on pandas features of which the implementation is incompatible with sqlachemy 2.0, and pandas does not support Python 3.7 anymore."
         )
 
-    conn = engine_testaccount.connect()
-    try:
+    with engine_testaccount.connect() as conn:
         sf_connector_version_data = [
             ("snowflake-connector-python", "1.2.23"),
             ("snowflake-sqlalchemy", "1.1.1"),
@@ -335,15 +327,12 @@ def test_pandas_writeback(engine_testaccount, run_v20_sqlalchemy):
             .all()
             .all()
         )
-    finally:
-        conn.close()
 
 
 @pytest.mark.parametrize("quote_identifiers", [False, True])
 def test_pandas_make_pd_writer(engine_testaccount, quote_identifiers):
     table_name = f"test_table_{uuid.uuid4().hex}".upper()
     test_df = pd.DataFrame({"a": range(10), "b": range(10, 20)})
-    conn = engine_testaccount.connect()
 
     def write_to_db():
         test_df.to_sql(
@@ -353,22 +342,23 @@ def test_pandas_make_pd_writer(engine_testaccount, quote_identifiers):
             method=make_pd_writer(quote_identifiers=quote_identifiers),
         )
 
-    try:
-        if quote_identifiers:
-            with pytest.raises(
-                ProgrammingError,
-                match=r".*SQL compilation error.*\ninvalid identifier '\"a\"'.*",
-            ):
+    with engine_testaccount.connect() as conn:
+        try:
+            if quote_identifiers:
+                with pytest.raises(
+                    ProgrammingError,
+                    match=r".*SQL compilation error.*\ninvalid identifier '\"a\"'.*",
+                ):
+                    write_to_db()
+            else:
                 write_to_db()
-        else:
-            write_to_db()
-            results = sorted(
-                conn.exec_driver_sql(f"SELECT * FROM {table_name}").fetchall(),
-                key=lambda x: x[0],
-            )
-            # Verify that all 10 entries were written to the DB
-            for i in range(10):
-                assert results[i] == (i, i + 10)
-            assert len(results) == 10
-    finally:
-        conn.exec_driver_sql(f"DROP TABLE IF EXISTS {table_name}")
+                results = sorted(
+                    conn.exec_driver_sql(f"SELECT * FROM {table_name}").fetchall(),
+                    key=operator.itemgetter(0),
+                )
+                # Verify that all 10 entries were written to the DB
+                for i in range(10):
+                    assert results[i] == (i, i + 10)
+                assert len(results) == 10
+        finally:
+            conn.exec_driver_sql(f"DROP TABLE IF EXISTS {table_name}")

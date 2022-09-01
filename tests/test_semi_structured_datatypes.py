@@ -3,6 +3,7 @@
 #
 
 import json
+import textwrap
 
 import pytest
 from sqlalchemy import Column, Integer, MetaData, Table, inspect
@@ -74,36 +75,37 @@ def test_inspect_semi_structured_datatypes(engine_testaccount):
         Column("ar", ARRAY),
     )
     metadata.create_all(engine_testaccount)
-    conn = engine_testaccount.connect()
     try:
-        with conn.begin():
-            sql = """
-INSERT INTO {0}(id, va, ar)
-SELECT 1,
-       PARSE_JSON('{{"vk1":100, "vk2":200, "vk3":300}}'),
-       PARSE_JSON('[
-{{"k":1, "v":"str1"}},
-{{"k":2, "v":"str2"}},
-{{"k":3, "v":"str3"}}]'
-)""".format(
-                table_name
-            )
-            conn.exec_driver_sql(sql)
-        inspecter = inspect(engine_testaccount)
-        columns = inspecter.get_columns(table_name)
-        assert isinstance(columns[1]["type"], VARIANT)
-        assert isinstance(columns[2]["type"], ARRAY)
+        with engine_testaccount.connect() as conn:
+            with conn.begin():
+                sql = textwrap.dedent(
+                    f"""
+                    INSERT INTO {table_name}(id, va, ar)
+                    SELECT 1,
+                           PARSE_JSON('{{"vk1":100, "vk2":200, "vk3":300}}'),
+                           PARSE_JSON('[
+                    {{"k":1, "v":"str1"}},
+                    {{"k":2, "v":"str2"}},
+                    {{"k":3, "v":"str3"}}]'
+                    )
+                    """
+                )
+                conn.exec_driver_sql(sql)
+                inspecter = inspect(engine_testaccount)
+                columns = inspecter.get_columns(table_name)
+                assert isinstance(columns[1]["type"], VARIANT)
+                assert isinstance(columns[2]["type"], ARRAY)
 
-        s = select(test_variant)
-        results = conn.execute(s)
-        rows = results.fetchone()
-        results.close()
-        assert rows[0] == 1
-        data = json.loads(rows[1])
-        assert data["vk1"] == 100
-        assert data["vk3"] == 300
-        assert data is not None
-        data = json.loads(rows[2])
-        assert data[1]["k"] == 2
+                s = select(test_variant)
+                results = conn.execute(s)
+                rows = results.fetchone()
+                results.close()
+                assert rows[0] == 1
+                data = json.loads(rows[1])
+                assert data["vk1"] == 100
+                assert data["vk3"] == 300
+                assert data is not None
+                data = json.loads(rows[2])
+                assert data[1]["k"] == 2
     finally:
         test_variant.drop(engine_testaccount)

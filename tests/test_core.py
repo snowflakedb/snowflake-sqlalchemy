@@ -4,9 +4,9 @@
 import decimal
 import json
 import os
-import random
 import re
 import string
+import textwrap
 import time
 from datetime import date, datetime
 from unittest.mock import patch
@@ -199,182 +199,196 @@ def test_insert_tables(engine_testaccount):
     metadata = MetaData()
     users, addresses = _create_users_addresses_tables(engine_testaccount, metadata)
 
-    conn = engine_testaccount.connect()
-    try:
-        # inserts data with an implicitly generated id
-        ins = users.insert().values(name="jack", fullname="Jack Jones")
-        with conn.begin():
-            results = conn.execute(ins)
-        # Note: SQLAlchemy 1.4 changed what ``inserted_primary_key`` returns
-        #  a cast is here to make sure the test works with both older and newer
-        #  versions
-        assert list(results.inserted_primary_key) == [1], "sequence value"
-        results.close()
-
-        # inserts data with the given id
-        ins = users.insert()
-        with conn.begin():
-            conn.execute(ins, {"id": 2, "name": "wendy", "fullname": "Wendy Williams"})
-
-        # verify the results
-        with conn.begin():
-            s = select(users)
-            results = conn.execute(s)
-            assert len([row for row in results]) == 2, "number of rows from users table"
-            results.close()
-
-            # fetchone
-            s = select(users).order_by("id")
-            results = conn.execute(s)
-            row = results.fetchone()
-            results.close()
-            assert row._mapping._data[2] == "Jack Jones", "user name"
-            assert row._mapping["fullname"] == "Jack Jones", "user name by dict"
-            assert (
-                row._mapping[users.c.fullname] == "Jack Jones"
-            ), "user name by Column object"
-
-        with conn.begin():
-            conn.execute(
-                addresses.insert(),
-                [
-                    {"user_id": 1, "email_address": "jack@yahoo.com"},
-                    {"user_id": 1, "email_address": "jack@msn.com"},
-                    {"user_id": 2, "email_address": "www@www.org"},
-                    {"user_id": 2, "email_address": "wendy@aol.com"},
-                ],
-            )
-
-        # more records
-        s = select(addresses)
-        results = conn.execute(s)
-        assert len([row for row in results]) == 4, "number of rows from addresses table"
-        results.close()
-
-        # select specified column names
-        s = select(users.c.name, users.c.fullname).order_by("name")
-        results = conn.execute(s)
-        results.fetchone()
-        row = results.fetchone()
-        assert row._mapping["name"] == "wendy", "name"
-
-        # join
-        s = select(users, addresses).where(users.c.id == addresses.c.user_id)
-        results = conn.execute(s)
-        results.fetchone()
-        results.fetchone()
-        results.fetchone()
-        row = results.fetchone()
-        assert row._mapping["email_address"] == "wendy@aol.com", "email address"
-
-        # Operator
-        assert (
-            str(users.c.id == addresses.c.user_id) == "users.id = addresses.user_id"
-        ), "equal operator"
-        assert str(users.c.id == 7) == "users.id = :id_1", "equal to a static number"
-        assert str(users.c.name == None)  # NOQA
-        assert (
-            str(users.c.id + addresses.c.id) == "users.id + addresses.id"
-        ), "number + number"
-        assert (
-            str(users.c.name + users.c.fullname) == "users.name || users.fullname"
-        ), "str + str"
-
-        # Conjunctions
-        # example 1
-        obj = and_(
-            users.c.name.like("j%"),
-            users.c.id == addresses.c.user_id,
-            or_(
-                addresses.c.email_address == "wendy@aol.com",
-                addresses.c.email_address == "jack@yahoo.com",
-            ),
-            not_(users.c.id > 5),
-        )
-        expected_sql = """users.name LIKE :name_1
- AND users.id = addresses.user_id
- AND (addresses.email_address = :email_address_1
- OR addresses.email_address = :email_address_2)
- AND users.id <= :id_1"""
-        assert str(obj) == "".join(expected_sql.split("\n")), "complex condition"
-
-        # example 2
-        obj = (
-            users.c.name.like("j%")
-            & (users.c.id == addresses.c.user_id)
-            & (
-                (addresses.c.email_address == "wendy@aol.com")
-                | (addresses.c.email_address == "jack@yahoo.com")
-            )
-            & ~(users.c.id > 5)
-        )
-        assert str(obj) == "".join(
-            expected_sql.split("\n")
-        ), "complex condition using python operators"
-
-        # example 3
-        s = select(
-            (users.c.fullname + ", " + addresses.c.email_address).label("title")
-        ).where(
-            and_(
-                users.c.id == addresses.c.user_id,
-                users.c.name.between("m", "z"),
-                or_(
-                    addresses.c.email_address.like("%@aol.com"),
-                    addresses.c.email_address.like("%@msn.com"),
-                ),
-            )
-        )
-        results = conn.execute(s).fetchall()
-        assert results[0][0] == "Wendy Williams, wendy@aol.com"
-
-        # Aliases
-        a1 = addresses.alias()
-        a2 = addresses.alias()
-        s = select(users).where(
-            and_(
-                users.c.id == a1.c.user_id,
-                users.c.id == a2.c.user_id,
-                a1.c.email_address == "jack@msn.com",
-                a2.c.email_address == "jack@yahoo.com",
-            )
-        )
-        results = conn.execute(s).fetchone()
-        assert results == (1, "jack", "Jack Jones")
-
-        # Joins
-        assert (
-            str(users.join(addresses)) == "users JOIN addresses ON "
-            "users.id = addresses.user_id"
-        )
-        assert (
-            str(
-                users.join(
-                    addresses, addresses.c.email_address.like(users.c.name + "%")
+    with engine_testaccount.connect() as conn:
+        try:
+            with conn.begin():
+                # inserts data with an implicitly generated id
+                results = conn.execute(
+                    users.insert().values(name="jack", fullname="Jack Jones")
                 )
-            )
-            == "users JOIN addresses "
-            "ON addresses.email_address LIKE users.name || :name_1"
-        )
+                # Note: SQLAlchemy 1.4 changed what ``inserted_primary_key`` returns
+                #  a cast is here to make sure the test works with both older and newer
+                #  versions
+                assert list(results.inserted_primary_key) == [1], "sequence value"
+                results.close()
 
-        s = select(users.c.fullname).select_from(
-            users.join(addresses, addresses.c.email_address.like(users.c.name + "%"))
-        )
-        results = conn.execute(s).fetchall()
-        assert results[1] == ("Jack Jones",)
+                # inserts data with the given id
+                conn.execute(
+                    users.insert(),
+                    {"id": 2, "name": "wendy", "fullname": "Wendy Williams"},
+                )
 
-        s = (
-            select(users.c.fullname)
-            .select_from(users.outerjoin(addresses))
-            .order_by(users.c.fullname)
-        )
-        results = conn.execute(s).fetchall()
-        assert results[-1] == ("Wendy Williams",)
-    finally:
-        conn.close()
-        # drop tables
-        addresses.drop(engine_testaccount)
-        users.drop(engine_testaccount)
+                # verify the results
+                results = conn.execute(select(users))
+                assert (
+                    len([row for row in results]) == 2
+                ), "number of rows from users table"
+                results.close()
+
+                # fetchone
+                results = conn.execute(select(users).order_by("id"))
+                row = results.fetchone()
+                results.close()
+                assert row._mapping._data[2] == "Jack Jones", "user name"
+                assert row._mapping["fullname"] == "Jack Jones", "user name by dict"
+                assert (
+                    row._mapping[users.c.fullname] == "Jack Jones"
+                ), "user name by Column object"
+
+                conn.execute(
+                    addresses.insert(),
+                    [
+                        {"user_id": 1, "email_address": "jack@yahoo.com"},
+                        {"user_id": 1, "email_address": "jack@msn.com"},
+                        {"user_id": 2, "email_address": "www@www.org"},
+                        {"user_id": 2, "email_address": "wendy@aol.com"},
+                    ],
+                )
+
+                # more records
+                results = conn.execute(select(addresses))
+                assert (
+                    len([row for row in results]) == 4
+                ), "number of rows from addresses table"
+                results.close()
+
+                # select specified column names
+                results = conn.execute(
+                    select(users.c.name, users.c.fullname).order_by("name")
+                )
+                results.fetchone()
+                row = results.fetchone()
+                assert row._mapping["name"] == "wendy", "name"
+
+                # join
+                results = conn.execute(
+                    select(users, addresses).where(users.c.id == addresses.c.user_id)
+                )
+                results.fetchone()
+                results.fetchone()
+                results.fetchone()
+                row = results.fetchone()
+                assert row._mapping["email_address"] == "wendy@aol.com", "email address"
+
+                # Operator
+                assert (
+                    str(users.c.id == addresses.c.user_id)
+                    == "users.id = addresses.user_id"
+                ), "equal operator"
+                assert (
+                    str(users.c.id == 7) == "users.id = :id_1"
+                ), "equal to a static number"
+                assert str(users.c.name == None)  # NOQA
+                assert (
+                    str(users.c.id + addresses.c.id) == "users.id + addresses.id"
+                ), "number + number"
+                assert (
+                    str(users.c.name + users.c.fullname)
+                    == "users.name || users.fullname"
+                ), "str + str"
+
+                # Conjunctions
+                # example 1
+                obj = and_(
+                    users.c.name.like("j%"),
+                    users.c.id == addresses.c.user_id,
+                    or_(
+                        addresses.c.email_address == "wendy@aol.com",
+                        addresses.c.email_address == "jack@yahoo.com",
+                    ),
+                    not_(users.c.id > 5),
+                )
+                expected_sql = textwrap.dedent(
+                    """\
+                    users.name LIKE :name_1
+                     AND users.id = addresses.user_id
+                     AND (addresses.email_address = :email_address_1
+                     OR addresses.email_address = :email_address_2)
+                     AND users.id <= :id_1"""
+                )
+                assert str(obj) == "".join(
+                    expected_sql.split("\n")
+                ), "complex condition"
+
+                # example 2
+                obj = (
+                    users.c.name.like("j%")
+                    & (users.c.id == addresses.c.user_id)
+                    & (
+                        (addresses.c.email_address == "wendy@aol.com")
+                        | (addresses.c.email_address == "jack@yahoo.com")
+                    )
+                    & ~(users.c.id > 5)
+                )
+                assert str(obj) == "".join(
+                    expected_sql.split("\n")
+                ), "complex condition using python operators"
+
+                # example 3
+                s = select(
+                    (users.c.fullname + ", " + addresses.c.email_address).label("title")
+                ).where(
+                    and_(
+                        users.c.id == addresses.c.user_id,
+                        users.c.name.between("m", "z"),
+                        or_(
+                            addresses.c.email_address.like("%@aol.com"),
+                            addresses.c.email_address.like("%@msn.com"),
+                        ),
+                    )
+                )
+                results = conn.execute(s).fetchall()
+                assert results[0][0] == "Wendy Williams, wendy@aol.com"
+
+                # Aliases
+                a1 = addresses.alias()
+                a2 = addresses.alias()
+                s = select(users).where(
+                    and_(
+                        users.c.id == a1.c.user_id,
+                        users.c.id == a2.c.user_id,
+                        a1.c.email_address == "jack@msn.com",
+                        a2.c.email_address == "jack@yahoo.com",
+                    )
+                )
+                results = conn.execute(s).fetchone()
+                assert results == (1, "jack", "Jack Jones")
+
+                # Joins
+                assert (
+                    str(users.join(addresses)) == "users JOIN addresses ON "
+                    "users.id = addresses.user_id"
+                )
+                assert (
+                    str(
+                        users.join(
+                            addresses,
+                            addresses.c.email_address.like(users.c.name + "%"),
+                        )
+                    )
+                    == "users JOIN addresses "
+                    "ON addresses.email_address LIKE users.name || :name_1"
+                )
+
+                s = select(users.c.fullname).select_from(
+                    users.join(
+                        addresses, addresses.c.email_address.like(users.c.name + "%")
+                    )
+                )
+                results = conn.execute(s).fetchall()
+                assert results[1] == ("Jack Jones",)
+
+                s = (
+                    select(users.c.fullname)
+                    .select_from(users.outerjoin(addresses))
+                    .order_by(users.c.fullname)
+                )
+                results = conn.execute(s).fetchall()
+                assert results[-1] == ("Wendy Williams",)
+        finally:
+            # drop tables
+            addresses.drop(engine_testaccount)
+            users.drop(engine_testaccount)
 
 
 @pytest.mark.skip(
@@ -388,13 +402,15 @@ def test_reflextion(engine_testaccount):
     """
     with engine_testaccount.connect() as conn:
         engine_testaccount.execute(
+            textwrap.dedent(
+                """\
+            CREATE OR REPLACE TABLE user (
+                id       Integer primary key,
+                name     String,
+                fullname String
+            )
             """
-    CREATE OR REPLACE TABLE user (
-        id       Integer primary key,
-        name     String,
-        fullname String
-    )
-    """
+            )
         )
         try:
             meta = MetaData()
@@ -403,11 +419,7 @@ def test_reflextion(engine_testaccount):
             )
             assert user_reflected.c == ["user.id", "user.name", "user.fullname"]
         finally:
-            conn.execute(
-                """
-    DROP TABLE IF EXISTS user
-    """
-            )
+            conn.execute("DROP TABLE IF EXISTS user")
 
 
 def test_inspect_column(engine_testaccount):
@@ -663,22 +675,17 @@ def test_view_definition(engine_testaccount, db_parameters):
         with conn.begin():
             conn.execute(
                 text(
+                    textwrap.dedent(
+                        f"""\
+                    CREATE OR REPLACE TABLE {test_table_name} (
+                        id INTEGER,
+                        name STRING
+                    )
                     """
-        CREATE OR REPLACE TABLE {} (
-            id INTEGER,
-            name STRING
-        )
-        """.format(
-                        test_table_name
                     )
                 )
             )
-            sql = """
-        CREATE OR REPLACE VIEW {} AS
-        SELECT * FROM {} WHERE id > 10""".format(
-                test_view_name, test_table_name
-            )
-        with conn.begin():
+            sql = f"CREATE OR REPLACE VIEW {test_view_name} AS SELECT * FROM {test_table_name} WHERE id > 10"
             conn.execute(text(sql).execution_options(autocommit=True))
         try:
             inspector = inspect(engine_testaccount)
@@ -703,21 +710,17 @@ def test_view_comment_reading(engine_testaccount, db_parameters):
         with conn.begin():
             conn.execute(
                 text(
+                    textwrap.dedent(
+                        f"""\
+                    CREATE OR REPLACE TABLE {test_table_name} (
+                        id INTEGER,
+                        name STRING
+                    )
                     """
-        CREATE OR REPLACE TABLE {} (
-            id INTEGER,
-            name STRING
-        )
-        """.format(
-                        test_table_name
                     )
                 )
             )
-            sql = """
-        CREATE OR REPLACE VIEW {} AS
-        SELECT * FROM {} WHERE id > 10""".format(
-                test_view_name, test_table_name
-            )
+            sql = f"CREATE OR REPLACE VIEW {test_view_name} AS SELECT * FROM {test_table_name} WHERE id > 10"
             conn.execute(text(sql).execution_options(autocommit=True))
             comment_text = "hello my viewing friends"
             sql = f"COMMENT ON VIEW {test_view_name} IS '{comment_text}';"
@@ -743,26 +746,19 @@ def test_get_temp_table_names(engine_testaccount):
     for idx in range(num_of_temp_tables):
         engine_testaccount.execute(
             text(
-                """
-CREATE TEMPORARY TABLE {} (col1 integer, col2 string)
-""".format(
-                    temp_table_name + str(idx)
-                )
+                f"CREATE TEMPORARY TABLE {temp_table_name + str(idx)} (col1 integer, col2 string)"
             ).execution_options(autocommit=True)
         )
     for row in engine_testaccount.execute("SHOW TABLES"):
         print(row)
-    try:
-        inspector = inspect(engine_testaccount)
-        temp_table_names = inspector.get_temp_table_names()
-        assert len(temp_table_names) == num_of_temp_tables
-    finally:
-        pass
+    inspector = inspect(engine_testaccount)
+    temp_table_names = inspector.get_temp_table_names()
+    assert len(temp_table_names) == num_of_temp_tables
 
 
 def test_create_table_with_schema(engine_testaccount, db_parameters):
     metadata = MetaData()
-    new_schema = db_parameters["schema"] + "_NEW"
+    new_schema = f"{db_parameters['schema']}_NEW_{random_string(5, choices=string.ascii_uppercase)}"
     with engine_testaccount.connect() as conn:
         conn.execute(text(f'CREATE OR REPLACE SCHEMA "{new_schema}"'))
         Table(
@@ -802,14 +798,12 @@ def test_copy(engine_testaccount):
             with conn.begin():
                 conn.execute(
                     text(
-                        "PUT file://{file_name} @%users".format(
-                            file_name=os.path.join(THIS_DIR, "data", "users.txt")
-                        )
+                        f"PUT file://{os.path.join(THIS_DIR, 'data', 'users.txt')} @%users"
                     )
                 )
                 conn.execute(text("COPY INTO users"))
-            results = conn.execute(text("SELECT * FROM USERS")).fetchall()
-            assert results is not None and len(results) > 0
+                results = conn.execute(text("SELECT * FROM USERS")).fetchall()
+                assert results is not None and len(results) > 0
         finally:
             addresses.drop(engine_testaccount)
             users.drop(engine_testaccount)
@@ -825,52 +819,25 @@ how to integrate with SQLAlchemy core API yet.
 )
 def test_transaction(engine_testaccount, db_parameters):
     engine_testaccount.execute(
-        text(
-            """
-CREATE TABLE {} (c1 number)""".format(
-                db_parameters["name"]
-            )
-        )
+        text(f"CREATE TABLE {db_parameters['name']} (c1 number)")
     )
     trans = engine_testaccount.connect().begin()
     try:
         engine_testaccount.execute(
-            text(
-                """
-INSERT INTO {} VALUES(123)
-        """.format(
-                    db_parameters["name"]
-                )
-            )
+            text(f"INSERT INTO {db_parameters['name']} VALUES(123)")
         )
         trans.commit()
         engine_testaccount.execute(
-            text(
-                """
-INSERT INTO {} VALUES(456)
-        """.format(
-                    db_parameters["name"]
-                )
-            )
+            text(f"INSERT INTO {db_parameters['name']} VALUES(456)")
         )
         trans.rollback()
         results = engine_testaccount.execute(
-            """
-SELECT * FROM {}
-""".format(
-                db_parameters["name"]
-            )
+            f"SELECT * FROM {db_parameters['name']}"
         ).fetchall()
         assert results == [(123,)]
     finally:
         engine_testaccount.execute(
-            text(
-                """
-DROP TABLE IF EXISTS {}
-""".format(
-                    db_parameters["name"]
-                )
-            )
+            text(f"DROP TABLE IF EXISTS {db_parameters['name']}")
         )
 
 
@@ -1089,7 +1056,6 @@ def test_region():
         )
     )
     try:
-
         engine.connect()
         pytest.fail("should not run")
     except Exception as ex:
@@ -1156,91 +1122,97 @@ def test_upsert(
         Column("delete", Boolean),
     )
     meta.create_all(engine_testaccount)
-    conn = engine_testaccount.connect()
     try:
-        with conn.begin():
-            conn.execute(
-                users.insert(),
-                [
-                    {"id": 1, "name": "mark", "fullname": "Mark Keller"},
-                    {"id": 4, "name": "luke", "fullname": "Luke Lorimer"},
-                    {"id": 2, "name": "amanda", "fullname": "Amanda Harris"},
-                ],
-            )
-            conn.execute(
-                onboarding_users.insert(),
-                [
-                    {
-                        "id": 2,
-                        "name": "amanda",
-                        "fullname": "Amanda Charlotte Harris",
-                        "delete": True,
-                    },
-                    {"id": 3, "name": "jim", "fullname": "Jim Wang", "delete": False},
-                    {
-                        "id": 4,
-                        "name": "lukas",
-                        "fullname": "Lukas Lorimer",
-                        "delete": False,
-                    },
-                    {"id": 5, "name": "andras", "fullname": None, "delete": False},
-                ],
-            )
+        with engine_testaccount.connect() as conn:
+            with conn.begin():
+                conn.execute(
+                    users.insert(),
+                    [
+                        {"id": 1, "name": "mark", "fullname": "Mark Keller"},
+                        {"id": 4, "name": "luke", "fullname": "Luke Lorimer"},
+                        {"id": 2, "name": "amanda", "fullname": "Amanda Harris"},
+                    ],
+                )
+                conn.execute(
+                    onboarding_users.insert(),
+                    [
+                        {
+                            "id": 2,
+                            "name": "amanda",
+                            "fullname": "Amanda Charlotte Harris",
+                            "delete": True,
+                        },
+                        {
+                            "id": 3,
+                            "name": "jim",
+                            "fullname": "Jim Wang",
+                            "delete": False,
+                        },
+                        {
+                            "id": 4,
+                            "name": "lukas",
+                            "fullname": "Lukas Lorimer",
+                            "delete": False,
+                        },
+                        {"id": 5, "name": "andras", "fullname": None, "delete": False},
+                    ],
+                )
 
-        merge = MergeInto(users, onboarding_users, users.c.id == onboarding_users.c.id)
-        if update_flag:
-            clause = merge.when_matched_then_update().values(
-                name=onboarding_users.c.name, fullname=onboarding_users.c.fullname
-            )
-            if conditional_flag:
-                clause.where(onboarding_users.c.name != "amanda")
-        if insert_flag:
-            clause = merge.when_not_matched_then_insert().values(
-                id=onboarding_users.c.id,
-                name=onboarding_users.c.name,
-                fullname=onboarding_users.c.fullname,
-            )
-            if conditional_flag:
-                clause.where(onboarding_users.c.fullname != None)  # NOQA
-        if delete_flag:
-            clause = merge.when_matched_then_delete()
-            if conditional_flag:
-                clause.where(onboarding_users.c.delete == True)  # NOQA
-        with conn.begin():
-            conn.execute(merge)
-        users_tuples = {tuple(row) for row in conn.execute(select(users))}
-        onboarding_users_tuples = {
-            tuple(row) for row in conn.execute(select(onboarding_users))
-        }
-        expected_users = {
-            (1, "mark", "Mark Keller"),
-            (2, "amanda", "Amanda Harris"),
-            (4, "luke", "Luke Lorimer"),
-        }
-        if update_flag:
-            if not conditional_flag:
-                expected_users.remove((2, "amanda", "Amanda Harris"))
-                expected_users.add((2, "amanda", "Amanda Charlotte Harris"))
-            expected_users.remove((4, "luke", "Luke Lorimer"))
-            expected_users.add((4, "lukas", "Lukas Lorimer"))
-        elif delete_flag:
-            if not conditional_flag:
-                expected_users.remove((4, "luke", "Luke Lorimer"))
-            expected_users.remove((2, "amanda", "Amanda Harris"))
-        if insert_flag:
-            if not conditional_flag:
-                expected_users.add((5, "andras", None))
-            expected_users.add((3, "jim", "Jim Wang"))
-        expected_onboarding_users = {
-            (2, "amanda", "Amanda Charlotte Harris", True),
-            (3, "jim", "Jim Wang", False),
-            (4, "lukas", "Lukas Lorimer", False),
-            (5, "andras", None, False),
-        }
-        assert users_tuples == expected_users
-        assert onboarding_users_tuples == expected_onboarding_users
+                merge = MergeInto(
+                    users, onboarding_users, users.c.id == onboarding_users.c.id
+                )
+                if update_flag:
+                    clause = merge.when_matched_then_update().values(
+                        name=onboarding_users.c.name,
+                        fullname=onboarding_users.c.fullname,
+                    )
+                    if conditional_flag:
+                        clause.where(onboarding_users.c.name != "amanda")
+                if insert_flag:
+                    clause = merge.when_not_matched_then_insert().values(
+                        id=onboarding_users.c.id,
+                        name=onboarding_users.c.name,
+                        fullname=onboarding_users.c.fullname,
+                    )
+                    if conditional_flag:
+                        clause.where(onboarding_users.c.fullname != None)  # NOQA
+                if delete_flag:
+                    clause = merge.when_matched_then_delete()
+                    if conditional_flag:
+                        clause.where(onboarding_users.c.delete == True)  # NOQA
+                conn.execute(merge)
+                users_tuples = {tuple(row) for row in conn.execute(select(users))}
+                onboarding_users_tuples = {
+                    tuple(row) for row in conn.execute(select(onboarding_users))
+                }
+                expected_users = {
+                    (1, "mark", "Mark Keller"),
+                    (2, "amanda", "Amanda Harris"),
+                    (4, "luke", "Luke Lorimer"),
+                }
+                if update_flag:
+                    if not conditional_flag:
+                        expected_users.remove((2, "amanda", "Amanda Harris"))
+                        expected_users.add((2, "amanda", "Amanda Charlotte Harris"))
+                    expected_users.remove((4, "luke", "Luke Lorimer"))
+                    expected_users.add((4, "lukas", "Lukas Lorimer"))
+                elif delete_flag:
+                    if not conditional_flag:
+                        expected_users.remove((4, "luke", "Luke Lorimer"))
+                    expected_users.remove((2, "amanda", "Amanda Harris"))
+                if insert_flag:
+                    if not conditional_flag:
+                        expected_users.add((5, "andras", None))
+                    expected_users.add((3, "jim", "Jim Wang"))
+                expected_onboarding_users = {
+                    (2, "amanda", "Amanda Charlotte Harris", True),
+                    (3, "jim", "Jim Wang", False),
+                    (4, "lukas", "Lukas Lorimer", False),
+                    (5, "andras", None, False),
+                }
+                assert users_tuples == expected_users
+                assert onboarding_users_tuples == expected_onboarding_users
     finally:
-        conn.close()
         users.drop(engine_testaccount)
         onboarding_users.drop(engine_testaccount)
 
@@ -1285,7 +1257,7 @@ def test_deterministic_merge_into(sql_compiler):
 
 def test_comments(engine_testaccount):
     """Tests strictly reading column comment through SQLAlchemy"""
-    table_name = "".join(random.choice(string.ascii_uppercase) for _ in range(5))
+    table_name = random_string(5, choices=string.ascii_uppercase)
     with engine_testaccount.connect() as conn:
         try:
             conn.execute(text(f'create table public.{table_name} ("col1" text);'))
@@ -1310,11 +1282,11 @@ def test_comment_sqlalchemy(db_parameters, engine_testaccount, on_public_ci):
     """Testing adding/reading column and table comments through SQLAlchemy"""
     new_schema = db_parameters["schema"] + "2"
     # Use same table name in 2 different schemas to make sure comment retrieval works properly
-    table_name = "".join(random.choice(string.ascii_uppercase) for _ in range(5))
-    table_comment1 = "".join(random.choice(string.ascii_uppercase) for _ in range(10))
-    column_comment1 = "".join(random.choice(string.ascii_uppercase) for _ in range(10))
-    table_comment2 = "".join(random.choice(string.ascii_uppercase) for _ in range(10))
-    column_comment2 = "".join(random.choice(string.ascii_uppercase) for _ in range(10))
+    table_name = random_string(5, choices=string.ascii_uppercase)
+    table_comment1 = random_string(10, choices=string.ascii_uppercase)
+    column_comment1 = random_string(10, choices=string.ascii_uppercase)
+    table_comment2 = random_string(10, choices=string.ascii_uppercase)
+    column_comment2 = random_string(10, choices=string.ascii_uppercase)
     engine2, _ = get_engine(schema=new_schema)
     con2 = None
     if not on_public_ci:
@@ -1372,32 +1344,26 @@ def test_special_schema_character(db_parameters, on_public_ci):
     schema = f"{random_string(5)}d/e/f"  # '/'.join([choice(ascii_lowercase) for _ in range(3)])
     # Setup
     options = dict(**db_parameters)
-    conn = connect(**options)
-    conn.cursor().execute(f'CREATE OR REPLACE DATABASE "{database}"')
-    conn.cursor().execute(f'CREATE OR REPLACE SCHEMA "{schema}"')
-    conn.close()
+    with connect(**options) as conn:
+        conn.cursor().execute(f'CREATE OR REPLACE DATABASE "{database}"')
+        conn.cursor().execute(f'CREATE OR REPLACE SCHEMA "{schema}"')
+
     # Test
     options.update({"database": '"' + database + '"', "schema": '"' + schema + '"'})
-    sf_conn = connect(**options)
-    sf_connection = [
-        res
-        for res in sf_conn.cursor().execute(
-            "select current_database(), " "current_schema();"
+    with connect(**options) as sf_conn:
+        sf_connection = (
+            sf_conn.cursor()
+            .execute("select current_database(), " "current_schema();")
+            .fetchall()
         )
-    ]
-    sa_conn = create_engine(URL(**options)).connect()
-    sa_connection = [
-        res
-        for res in sa_conn.execute(
+    with create_engine(URL(**options)).connect() as sa_conn:
+        sa_connection = sa_conn.execute(
             text("select current_database(), " "current_schema();")
-        )
-    ]
-    sa_conn.close()
-    sf_conn.close()
+        ).fetchall()
     # Teardown
-    conn = connect(**options)
-    conn.cursor().execute(f'DROP DATABASE IF EXISTS "{database}"')
-    conn.close()
+    with connect(**options) as conn:
+        conn.cursor().execute(f'DROP DATABASE IF EXISTS "{database}"')
+
     assert [(database, schema)] == sf_connection == sa_connection
 
 
@@ -1413,45 +1379,34 @@ def test_autoincrement(engine_testaccount):
     try:
         users.create(engine_testaccount)
 
-        connection = engine_testaccount.connect()
-        with connection.begin():
-            connection.execute(users.insert(), [{"name": "sf1"}])
+        with engine_testaccount.connect() as connection:
+            with connection.begin():
+                connection.execute(users.insert(), [{"name": "sf1"}])
+                assert connection.execute(select(users)).fetchall() == [(1, "sf1")]
+                connection.execute(users.insert(), [{"name": "sf2"}, {"name": "sf3"}])
+                assert connection.execute(select(users)).fetchall() == [
+                    (1, "sf1"),
+                    (2, "sf2"),
+                    (3, "sf3"),
+                ]
+                connection.execute(users.insert(), {"name": "sf4"})
+                assert connection.execute(select(users)).fetchall() == [
+                    (1, "sf1"),
+                    (2, "sf2"),
+                    (3, "sf3"),
+                    (4, "sf4"),
+                ]
 
-        with connection.begin():
-            assert connection.execute(select(users)).fetchall() == [(1, "sf1")]
-
-        with connection.begin():
-            connection.execute(users.insert(), [{"name": "sf2"}, {"name": "sf3"}])
-
-        with connection.begin():
-            assert connection.execute(select(users)).fetchall() == [
-                (1, "sf1"),
-                (2, "sf2"),
-                (3, "sf3"),
-            ]
-
-        with connection.begin():
-            connection.execute(users.insert(), {"name": "sf4"})
-
-        with connection.begin():
-            assert connection.execute(select(users)).fetchall() == [
-                (1, "sf1"),
-                (2, "sf2"),
-                (3, "sf3"),
-                (4, "sf4"),
-            ]
-
-        seq = Sequence("id_seq")
-        nextid = connection.execute(seq)
-        with connection.begin():
-            connection.execute(users.insert(), [{"uid": nextid, "name": "sf5"}])
-        assert connection.execute(select(users)).fetchall() == [
-            (1, "sf1"),
-            (2, "sf2"),
-            (3, "sf3"),
-            (4, "sf4"),
-            (5, "sf5"),
-        ]
+                seq = Sequence("id_seq")
+                nextid = connection.execute(seq)
+                connection.execute(users.insert(), [{"uid": nextid, "name": "sf5"}])
+                assert connection.execute(select(users)).fetchall() == [
+                    (1, "sf1"),
+                    (2, "sf2"),
+                    (3, "sf3"),
+                    (4, "sf4"),
+                    (5, "sf5"),
+                ]
     finally:
         users.drop(engine_testaccount)
 
@@ -1593,7 +1548,7 @@ def test_too_many_columns_detection(engine_testaccount, db_parameters):
 
 def test_empty_comments(engine_testaccount):
     """Test that no comment returns None"""
-    table_name = "".join(random.choice(string.ascii_uppercase) for _ in range(5))
+    table_name = random_string(5, choices=string.ascii_uppercase)
     with engine_testaccount.connect() as conn:
         try:
             conn.execute(text(f'create table public.{table_name} ("col1" text);'))

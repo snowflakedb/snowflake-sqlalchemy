@@ -163,6 +163,11 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         )
 
     def visit_merge_into_clause(self, merge_into_clause, **kw):
+        case_predicate = (
+            f" AND {str(merge_into_clause.predicate._compiler_dispatch(self, **kw))}"
+            if merge_into_clause.predicate is not None
+            else ""
+        )
         if merge_into_clause.command == "INSERT":
             sets, sets_tos = zip(*merge_into_clause.set.items())
             sets, sets_tos = list(sets), list(sets_tos)
@@ -171,9 +176,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
                     *sorted(merge_into_clause.set.items(), key=operator.itemgetter(0))
                 )
             return "WHEN NOT MATCHED{} THEN {} ({}) VALUES ({})".format(
-                " AND %s" % merge_into_clause.predicate._compiler_dispatch(self, **kw)
-                if merge_into_clause.predicate is not None
-                else "",
+                case_predicate,
                 merge_into_clause.command,
                 ", ".join(sets),
                 ", ".join(map(lambda e: e._compiler_dispatch(self, **kw), sets_tos)),
@@ -193,9 +196,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
                 else ""
             )
             return "WHEN MATCHED{} THEN {}{}".format(
-                " AND %s" % merge_into_clause.predicate._compiler_dispatch(self, **kw)
-                if merge_into_clause.predicate is not None
-                else "",
+                case_predicate,
                 merge_into_clause.command,
                 " SET %s" % sets if merge_into_clause.set else "",
             )
@@ -296,7 +297,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             )
         )
         uri = "'s3://{}{}'".format(
-            aws_bucket.bucket, "/" + aws_bucket.path if aws_bucket.path else ""
+            aws_bucket.bucket, f"/{aws_bucket.path}" if aws_bucket.path else ""
         )
         return (
             uri,
@@ -316,14 +317,14 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             encryption_list.sort(key=operator.itemgetter(0))
         encryption = "ENCRYPTION=({})".format(
             " ".join(
-                ("{}='{}'" if isinstance(v, string_types) else "{}={}").format(n, v)
+                f"{n}='{v}'" if isinstance(v, string_types) else f"{n}={v}"
                 for n, v in encryption_list
             )
         )
         uri = "'azure://{}.blob.core.windows.net/{}{}'".format(
             azure_container.account,
             azure_container.container,
-            "/" + azure_container.path if azure_container.path else "",
+            f"/{azure_container.path}" if azure_container.path else "",
         )
         return (
             uri,
@@ -333,15 +334,10 @@ class SnowflakeCompiler(compiler.SQLCompiler):
 
     def visit_external_stage(self, external_stage, **kw):
         if external_stage.file_format is None:
-            return "@{}{}{}".format(
-                external_stage.namespace, external_stage.name, external_stage.path
+            return (
+                f"@{external_stage.namespace}{external_stage.name}{external_stage.path}"
             )
-        return "@{}{}{} (file_format => {})".format(
-            external_stage.namespace,
-            external_stage.name,
-            external_stage.path,
-            external_stage.file_format,
-        )
+        return f"@{external_stage.namespace}{external_stage.name}{external_stage.path} (file_format => {external_stage.file_format})"
 
     def delete_extra_from_clause(
         self, delete_stmt, from_table, extra_froms, from_hints, **kw
@@ -378,18 +374,9 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         string, pattern, flags = self._get_regexp_args(binary, kw)
         replacement = self.process(binary.modifiers["replacement"], **kw)
         if flags is None:
-            return "REGEXP_REPLACE({}, {}, {})".format(
-                string,
-                pattern,
-                replacement,
-            )
+            return f"REGEXP_REPLACE({string}, {pattern}, {replacement})"
         else:
-            return "REGEXP_REPLACE({}, {}, {}, {})".format(
-                string,
-                pattern,
-                replacement,
-                flags,
-            )
+            return f"REGEXP_REPLACE({string}, {pattern}, {replacement}, {flags})"
 
     def visit_not_regexp_match_op_binary(self, binary, operator, **kw):
         return f"NOT {self.visit_regexp_match_op_binary(binary, operator, **kw)}"

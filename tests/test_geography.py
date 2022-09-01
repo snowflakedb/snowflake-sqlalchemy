@@ -44,26 +44,26 @@ def test_inspect_geography_datatypes(engine_testaccount):
         Column("geo2", GEOGRAPHY),
     )
     metadata.create_all(engine_testaccount)
-    conn = engine_testaccount.connect()
 
     try:
-        test_point = "POINT(-122.35 37.55)"
-        test_point1 = '{"coordinates": [-122.35,37.55],"type": "Point"}'
+        with engine_testaccount.connect() as conn:
+            test_point = "POINT(-122.35 37.55)"
+            test_point1 = '{"coordinates": [-122.35,37.55],"type": "Point"}'
 
-        ins = test_geography.insert().values(id=1, geo1=test_point, geo2=test_point1)
+            ins = test_geography.insert().values(
+                id=1, geo1=test_point, geo2=test_point1
+            )
 
-        with conn.begin():
-            results = conn.execute(ins)
-            results.close()
+            with conn.begin():
+                results = conn.execute(ins)
+                results.close()
 
-        # select
-        s = select(test_geography)
-        results = conn.execute(s)
-        rows = results.fetchone()
-        results.close()
-        assert rows[0] == 1
-        assert rows[1] == rows[2]
-        assert loads(rows[2]) == loads(test_point1)
+                s = select(test_geography)
+                results = conn.execute(s)
+                rows = results.fetchone()
+                results.close()
+                assert rows[0] == 1
+                assert rows[1] == rows[2]
+                assert loads(rows[2]) == loads(test_point1)
     finally:
-        conn.close()
         test_geography.drop(engine_testaccount)

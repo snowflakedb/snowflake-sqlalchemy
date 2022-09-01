@@ -23,10 +23,7 @@ EXTERNAL_SKIP_TAGS = {"internal"}
 INTERNAL_SKIP_TAGS = {"external"}
 RUNNING_ON_GH = os.getenv("GITHUB_ACTIONS") == "true"
 
-if os.getenv("TRAVIS") == "true":
-    TEST_SCHEMA = "TRAVIS_JOB_{}".format(os.getenv("TRAVIS_JOB_ID"))
-else:
-    TEST_SCHEMA = "sqlalchemy_tests_" + str(uuid.uuid4()).replace("-", "_")
+TEST_SCHEMA = f"sqlalchemy_tests_{str(uuid.uuid4()).replace('-', '_')}"
 
 create_engine_with_future_flag = create_engine
 

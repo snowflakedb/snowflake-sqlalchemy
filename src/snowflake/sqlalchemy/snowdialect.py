@@ -204,7 +204,7 @@ class SnowflakeDialect(default.DefaultDialect):
                 opts["schema"] = name_spaces[1]
             else:
                 raise sa_exc.ArgumentError(
-                    "Invalid name space is specified: {}".format(opts["database"])
+                    f"Invalid name space is specified: {opts['database']}"
                 )
         if ".snowflakecomputing.com" not in opts["host"] and not opts.get("port"):
             opts["account"] = opts["host"]
@@ -239,11 +239,7 @@ class SnowflakeDialect(default.DefaultDialect):
         full_name = self._denormalize_quote_join(schema, object_name)
         try:
             results = connection.execute(
-                text(
-                    "DESC {} /* sqlalchemy:_has_object */ {}".format(
-                        object_type, full_name
-                    )
-                )
+                text(f"DESC {object_type} /* sqlalchemy:_has_object */ {full_name}")
             )
             row = results.fetchone()
             have = row is not None
@@ -529,9 +525,7 @@ class SnowflakeDialect(default.DefaultDialect):
             col_type_kw = {}
             if col_type is None:
                 sa_util.warn(
-                    "Did not recognize type '{}' of column '{}'".format(
-                        coltype, column_name
-                    )
+                    f"Did not recognize type '{coltype}' of column '{column_name}'"
                 )
                 col_type = sqltypes.NULLTYPE
             else:
@@ -624,9 +618,7 @@ class SnowflakeDialect(default.DefaultDialect):
             col_type_kw = {}
             if col_type is None:
                 sa_util.warn(
-                    "Did not recognize type '{}' of column '{}'".format(
-                        coltype, column_name
-                    )
+                    f"Did not recognize type '{coltype}' of column '{column_name}'"
                 )
                 col_type = sqltypes.NULLTYPE
             else:
@@ -685,9 +677,7 @@ class SnowflakeDialect(default.DefaultDialect):
         if schema:
             cursor = connection.execute(
                 text(
-                    "SHOW /* sqlalchemy:get_table_names */ TABLES IN {}".format(
-                        self._denormalize_quote_join(schema)
-                    )
+                    f"SHOW /* sqlalchemy:get_table_names */ TABLES IN {self._denormalize_quote_join(schema)}"
                 )
             )
         else:
@@ -709,9 +699,7 @@ class SnowflakeDialect(default.DefaultDialect):
         if schema:
             cursor = connection.execute(
                 text(
-                    "SHOW /* sqlalchemy:get_view_names */ VIEWS IN {}".format(
-                        self._denormalize_quote_join(schema)
-                    )
+                    f"SHOW /* sqlalchemy:get_view_names */ VIEWS IN {self._denormalize_quote_join(schema)}"
                 )
             )
         else:
@@ -730,18 +718,15 @@ class SnowflakeDialect(default.DefaultDialect):
         if schema:
             cursor = connection.execute(
                 text(
-                    "SHOW /* sqlalchemy:get_view_definition */ VIEWS "
-                    "LIKE '{}' IN {}".format(
-                        self._denormalize_quote_join(view_name),
-                        self._denormalize_quote_join(schema),
-                    )
+                    f"SHOW /* sqlalchemy:get_view_definition */ VIEWS \
+                    LIKE '{self._denormalize_quote_join(view_name)}' IN {self._denormalize_quote_join(schema)}"
                 )
             )
         else:
             cursor = connection.execute(
                 text(
-                    "SHOW /* sqlalchemy:get_view_definition */ VIEWS "
-                    "LIKE '{}'".format(self._denormalize_quote_join(view_name))
+                    f"SHOW /* sqlalchemy:get_view_definition */ VIEWS \
+                    LIKE '{self._denormalize_quote_join(view_name)}'"
                 )
             )
 
@@ -759,8 +744,8 @@ class SnowflakeDialect(default.DefaultDialect):
         if schema:
             cursor = connection.execute(
                 text(
-                    "SHOW /* sqlalchemy:get_temp_table_names */ TABLES "
-                    "IN {}".format(self._denormalize_quote_join(schema))
+                    f"SHOW /* sqlalchemy:get_temp_table_names */ TABLES \
+                    IN {self._denormalize_quote_join(schema)}"
                 )
             )
         else:
@@ -807,7 +792,7 @@ class SnowflakeDialect(default.DefaultDialect):
             "SHOW /* sqlalchemy:_get_table_comment */ "
             "TABLES LIKE '{}'{}".format(
                 table_name,
-                (f" IN SCHEMA {self.normalize_name(schema)}") if schema else "",
+                f" IN SCHEMA {self.normalize_name(schema)}" if schema else "",
             )
         )
         cursor = connection.execute(text(sql_command))
@@ -821,7 +806,7 @@ class SnowflakeDialect(default.DefaultDialect):
             "SHOW /* sqlalchemy:_get_view_comment */ "
             "VIEWS LIKE '{}'{}".format(
                 table_name,
-                (f" IN SCHEMA {self.normalize_name(schema)}") if schema else "",
+                f" IN SCHEMA {self.normalize_name(schema)}" if schema else "",
             )
         )
         cursor = connection.execute(text(sql_command))

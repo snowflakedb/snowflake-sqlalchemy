@@ -71,7 +71,7 @@ def test_orm_one_to_many_relationship(engine_testaccount, run_v20_sqlalchemy):
         user = relationship("User", backref="addresses")
 
         def __repr__(self):
-            return "<Address(%r)>" % self.email_address
+            return f"<Address({repr(self.email_address)})>"
 
     Base.metadata.create_all(engine_testaccount)
 
@@ -143,7 +143,7 @@ def test_delete_cascade(engine_testaccount, run_v20_sqlalchemy):
         user = relationship("User", back_populates="addresses")
 
         def __repr__(self):
-            return "<Address(%r)>" % self.email_address
+            return f"<Address({repr(self.email_address)})>"
 
     Base.metadata.create_all(engine_testaccount)
 
@@ -215,7 +215,7 @@ def test_schema_including_db(engine_testaccount, db_parameters, run_v20_sqlalche
     """
     Base = declarative_base()
 
-    namespace = "{}.{}".format(db_parameters["database"], db_parameters["schema"])
+    namespace = f"{db_parameters['database']}.{db_parameters['schema']}"
 
     class User(Base):
         __tablename__ = "users"
@@ -302,26 +302,27 @@ def test_schema_translate_map(
         session.future = run_v20_sqlalchemy
         with con.begin():
             Base.metadata.create_all(con)
-        try:
-            query = session.query(User)
+            try:
+                query = session.query(User)
 
-            # insert some data in a way that makes sure that we're working in the right testing schema
-            with con.begin():
+                # insert some data in a way that makes sure that we're working in the right testing schema
                 con.execute(
                     text(
                         f"insert into {db_parameters['schema']}.{User.__tablename__} values (0, 'testuser', 'test_user')"
                     )
                 )
 
-            # assert the precompiled query contains the schema_map and not the actual schema
-            assert str(query).startswith(f'SELECT "{schema_map}".{User.__tablename__}')
+                # assert the precompiled query contains the schema_map and not the actual schema
+                assert str(query).startswith(
+                    f'SELECT "{schema_map}".{User.__tablename__}'
+                )
 
-            # run query and see that schema translation was done corectly
-            results = query.all()
-            assert len(results) == 1
-            user = results.pop()
-            assert user.id == 0
-            assert user.name == "testuser"
-            assert user.fullname == "test_user"
-        finally:
-            Base.metadata.drop_all(con)
+                # run query and see that schema translation was done corectly
+                results = query.all()
+                assert len(results) == 1
+                user = results.pop()
+                assert user.id == 0
+                assert user.name == "testuser"
+                assert user.fullname == "test_user"
+            finally:
+                Base.metadata.drop_all(con)

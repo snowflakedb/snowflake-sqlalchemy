@@ -30,15 +30,14 @@ def test_insert_table(engine_testaccount):
             "fullname": "fulltestname2",
         },
     ]
-    conn = engine_testaccount.connect()
     try:
-        # using multivalue insert
-        with conn.begin():
-            conn.execute(users.insert().values(data))
-        results = conn.execute(select(users).order_by("id"))
-        row = results.fetchone()
-        assert row._mapping["name"] == "testname1"
+        with engine_testaccount.connect() as conn:
+            # using multivalue insert
+            with conn.begin():
+                conn.execute(users.insert().values(data))
+                results = conn.execute(select(users).order_by("id"))
+                row = results.fetchone()
+                assert row._mapping["name"] == "testname1"
 
     finally:
-        conn.close()
         users.drop(engine_testaccount)
