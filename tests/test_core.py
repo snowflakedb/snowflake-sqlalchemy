@@ -1718,3 +1718,45 @@ SELECT PARSE_JSON('{{"vk1":100, "vk2":200, "vk3":300}}'),
         assert data is not None
         data = json.loads(results[-1][29])
         assert data[1]["k"] == 2
+
+
+def test_normalize_and_denormalize_empty_string_column_name(engine_testaccount):
+    with engine_testaccount.connect() as conn:
+        table_name = random_string(5)
+        conn.exec_driver_sql(
+            f"""
+create or replace temp table {table_name}
+(empid int, dept text, jan int, feb int);
+"""
+        )
+        conn.exec_driver_sql(
+            f"""
+insert into {table_name} values
+    (1, 'electronics', 100, 200),
+    (2, 'clothes', 100, 300)
+"""
+        )
+        results = conn.exec_driver_sql(
+            f"""
+select * from {table_name} unpivot(sales for "" in (jan, feb))  order by empid;"""
+        ).fetchall()  # normalize_name will be called
+        assert results == [
+            (1, "electronics", "JAN", 100),
+            (1, "electronics", "FEB", 200),
+            (2, "clothes", "JAN", 100),
+            (2, "clothes", "FEB", 300),
+        ]
+
+        conn.exec_driver_sql(
+            f"""
+create or replace temp table {table_name}
+(col int, "" int);
+"""
+        )
+        inspector = inspect(conn)
+        columns = inspector.get_columns(table_name)  # denormalize_name will be called
+        assert (
+            len(columns) == 2
+            and columns[0]["name"] == "col"
+            and columns[1]["name"] == ""
+        )
