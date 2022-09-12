@@ -1725,20 +1725,20 @@ def test_normalize_and_denormalize_empty_string_column_name(engine_testaccount):
         table_name = random_string(5)
         conn.exec_driver_sql(
             f"""
-create or replace temp table {table_name}
-(empid int, dept text, jan int, feb int);
+CREATE OR REPLACE TEMP TABLE {table_name}
+(EMPID INT, DEPT TEXT, JAN INT, FEB INT)
 """
         )
         conn.exec_driver_sql(
             f"""
-insert into {table_name} values
-    (1, 'electronics', 100, 200),
-    (2, 'clothes', 100, 300)
+INSERT INTO {table_name} VALUES
+    (1, 'ELECTRONICS', 100, 200),
+    (2, 'CLOTHES', 100, 300)
 """
         )
         results = conn.exec_driver_sql(
             f"""
-select * from {table_name} unpivot(sales for "" in (jan, feb))  order by empid;"""
+SELECT * FROM {table_name} UNPIVOT(SALES FOR "" IN (JAN, FEB))  ORDER BY EMPID;"""
         ).fetchall()  # normalize_name will be called
         assert results == [
             (1, "electronics", "JAN", 100),
@@ -1749,8 +1749,8 @@ select * from {table_name} unpivot(sales for "" in (jan, feb))  order by empid;"
 
         conn.exec_driver_sql(
             f"""
-create or replace temp table {table_name}
-(col int, "" int);
+CREATE OR REPLACE TEMP TABLE {table_name}
+(COL INT, "" INT)
 """
         )
         inspector = inspect(conn)
