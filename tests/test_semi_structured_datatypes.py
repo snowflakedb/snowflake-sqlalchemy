@@ -6,10 +6,12 @@ import json
 import textwrap
 
 import pytest
-from sqlalchemy import Column, Integer, MetaData, Table, inspect
+from sqlalchemy import Column, Integer, MetaData, String, Table, inspect
 from sqlalchemy.sql import select
 
 from snowflake.sqlalchemy import ARRAY, OBJECT, VARIANT
+
+from .util import random_string
 
 
 def test_create_table_semi_structured_datatypes(engine_testaccount):
@@ -31,6 +33,38 @@ def test_create_table_semi_structured_datatypes(engine_testaccount):
         assert test_variant is not None
     finally:
         test_variant.drop(engine_testaccount)
+
+
+def test_insert_array_datatypes(engine_testaccount):
+    metadata = MetaData()
+    table_name_1, table_name_2 = random_string(5), random_string(5)
+    test_array_1 = Table(table_name_1, metadata, Column("array", ARRAY))
+    test_array_2 = Table(
+        table_name_2,
+        metadata,
+        Column("id", Integer),
+        Column("array", ARRAY),
+        Column("name", String),
+    )
+
+    metadata.create_all(engine_testaccount)
+    try:
+        ins = test_array_1.insert().values(array=[123, "abc", True])
+        engine_testaccount.execute(ins)
+        results = engine_testaccount.execute(test_array_1.select()).fetchall()
+        assert len(results) == 1 and json.loads(results[0][0]) == [123, "abc", True]
+        ins = test_array_2.insert().values(id=1, array=[123, "abc", True], name="test")
+        engine_testaccount.execute(ins)
+        results = engine_testaccount.execute(test_array_2.select()).fetchall()
+        assert (
+            len(results) == 1
+            and results[0][0] == 1
+            and json.loads(results[0][1]) == [123, "abc", True]
+            and results[0][2] == "test"
+        )
+    finally:
+        test_array_1.drop(engine_testaccount)
+        test_array_2.drop(engine_testaccount)
 
 
 @pytest.mark.skip(

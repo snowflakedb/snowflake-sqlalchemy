@@ -5,14 +5,16 @@
 import operator
 import re
 
+from sqlalchemy import exc
 from sqlalchemy import util as sa_util
 from sqlalchemy.engine import default
 from sqlalchemy.schema import Sequence, Table
-from sqlalchemy.sql import compiler, expression
+from sqlalchemy.sql import compiler, crud, expression
 from sqlalchemy.sql.elements import quoted_name
 from sqlalchemy.util.compat import string_types
 
 from .custom_commands import AWSBucket, AzureContainer, ExternalStage
+from .custom_types import ARRAY
 
 RESERVED_WORDS = frozenset(
     [
@@ -150,6 +152,163 @@ class SnowflakeIdentifierPreparer(compiler.IdentifierPreparer):
 
 
 class SnowflakeCompiler(compiler.SQLCompiler):
+    def visit_insert(self, insert_stmt, **kw):
+
+        compile_state = insert_stmt._compile_state_factory(insert_stmt, self, **kw)
+        insert_stmt = compile_state.statement
+
+        toplevel = not self.stack
+
+        if toplevel:
+            self.isinsert = True
+            if not self.dml_compile_state:
+                self.dml_compile_state = compile_state
+            if not self.compile_state:
+                self.compile_state = compile_state
+
+        self.stack.append(
+            {
+                "correlate_froms": set(),
+                "asfrom_froms": set(),
+                "selectable": insert_stmt,
+            }
+        )
+
+        crud_params = crud._get_crud_params(self, insert_stmt, compile_state, **kw)
+
+        if (
+            not crud_params
+            and not self.dialect.supports_default_values
+            and not self.dialect.supports_default_metavalue
+            and not self.dialect.supports_empty_insert
+        ):
+            raise exc.CompileError(
+                "The '%s' dialect with current database "
+                "version settings does not support empty "
+                "inserts." % self.dialect.name
+            )
+
+        if compile_state._has_multi_parameters:
+            if not self.dialect.supports_multivalues_insert:
+                raise exc.CompileError(
+                    "The '%s' dialect with current database "
+                    "version settings does not support "
+                    "in-place multirow inserts." % self.dialect.name
+                )
+            crud_params_single = crud_params[0]
+        else:
+            crud_params_single = crud_params
+
+        preparer = self.preparer
+        supports_default_values = self.dialect.supports_default_values
+
+        text = "INSERT "
+
+        if insert_stmt._prefixes:
+            text += self._generate_prefixes(insert_stmt, insert_stmt._prefixes, **kw)
+
+        text += "INTO "
+        table_text = preparer.format_table(insert_stmt.table)
+
+        if insert_stmt._hints:
+            _, table_text = self._setup_crud_hints(insert_stmt, table_text)
+
+        if insert_stmt._independent_ctes:
+            for cte in insert_stmt._independent_ctes:
+                cte._compiler_dispatch(self, **kw)
+
+        text += table_text
+
+        if crud_params_single or not supports_default_values:
+            text += " (%s)" % ", ".join([expr for c, expr, value in crud_params_single])
+
+        if self.returning or insert_stmt._returning:
+            returning_clause = self.returning_clause(
+                insert_stmt, self.returning or insert_stmt._returning
+            )
+
+            if self.returning_precedes_values:
+                text += " " + returning_clause
+        else:
+            returning_clause = None
+
+        if insert_stmt.select is not None:
+            # placed here by crud.py
+            select_text = self.process(
+                self.stack[-1]["insert_from_select"], insert_into=True, **kw
+            )
+
+            if self.ctes and self.dialect.cte_follows_insert:
+                nesting_level = len(self.stack) if not toplevel else None
+                text += " {}{}".format(
+                    self._render_cte_clause(
+                        nesting_level=nesting_level,
+                        include_following_stack=True,
+                    ),
+                    select_text,
+                )
+            else:
+                text += " %s" % select_text
+        elif not crud_params and supports_default_values:
+            text += " DEFAULT VALUES"
+        elif compile_state._has_multi_parameters:
+            text += " VALUES %s" % (
+                ", ".join(
+                    "(%s)" % (", ".join(value for c, expr, value in crud_param_set))
+                    for crud_param_set in crud_params
+                )
+            )
+        else:
+            crud_params_contain_array_type = any(
+                [
+                    crud_column
+                    for crud_column in crud_params
+                    if isinstance(crud_column[0].type, ARRAY)
+                ]
+            )
+            if crud_params_contain_array_type:
+                # for ARRAY type, use select style insert
+                # insert_single_values_expr only applies to VALUES expression according to sqlalchemy definition
+                # thus setting it to None
+                insert_single_values_expr = None
+                select_expression = ", ".join(
+                    [
+                        ("ARRAY_CONSTRUCT(%s)" % value)
+                        if isinstance(c.type, ARRAY)
+                        else ("%s" % value)
+                        for c, expr, value in crud_params
+                    ]
+                )
+                text += " SELECT %s" % select_expression
+            else:
+                insert_single_values_expr = ", ".join(
+                    [value for c, expr, value in crud_params]
+                )
+                text += " VALUES (%s)" % insert_single_values_expr
+            if toplevel:
+                self.insert_single_values_expr = insert_single_values_expr
+
+        if insert_stmt._post_values_clause is not None:
+            post_values_clause = self.process(insert_stmt._post_values_clause, **kw)
+            if post_values_clause:
+                text += " " + post_values_clause
+
+        if returning_clause and not self.returning_precedes_values:
+            text += " " + returning_clause
+
+        if self.ctes and not self.dialect.cte_follows_insert:
+            nesting_level = len(self.stack) if not toplevel else None
+            text = (
+                self._render_cte_clause(
+                    nesting_level=nesting_level, include_following_stack=True
+                )
+                + text
+            )
+
+        self.stack.pop(-1)
+
+        return text
+
     def visit_sequence(self, sequence, **kw):
         return self.dialect.identifier_preparer.format_sequence(sequence) + ".nextval"
 

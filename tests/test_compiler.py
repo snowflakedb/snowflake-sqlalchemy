@@ -7,6 +7,8 @@ from sqlalchemy.schema import DropColumnComment, DropTableComment
 from sqlalchemy.sql import column, quoted_name, table
 from sqlalchemy.testing import AssertsCompiledSQL
 
+from snowflake.sqlalchemy.custom_types import ARRAY
+
 table1 = table(
     "table1", column("id", Integer), column("name", String), column("value", Integer)
 )
@@ -72,6 +74,28 @@ class TestSnowflakeCompiler(AssertsCompiledSQL):
         self.assert_compile(
             DropColumnComment(table2.c.id),
             "ALTER TABLE test.table2 ALTER COLUMN id UNSET COMMENT",
+        )
+
+    def test_array_column(self):
+        temp_table = table("temp_table", column("array", ARRAY))
+        statement = temp_table.insert().values(array=[123, "abc", True])
+        self.assert_compile(
+            statement,
+            "INSERT INTO temp_table (array) SELECT ARRAY_CONSTRUCT(%(array)s)",
+        )
+
+        temp_table = table(
+            "temp_table",
+            column("id", Integer),
+            column("array", ARRAY),
+            column("name", String),
+        )
+        statement = temp_table.insert().values(
+            id=1, array=[123, "abc", True], name="test"
+        )
+        self.assert_compile(
+            statement,
+            "INSERT INTO temp_table (id, array, name) SELECT %(id)s, ARRAY_CONSTRUCT(%(array)s), %(name)s",
         )
 
 

@@ -9,6 +9,10 @@ Source code is also available at:
 
 # Release Notes
 
+- v1.4.2(Unreleased)
+
+  - Added support for data insertion of column type `ARRAY`.
+
 - v1.4.1(Aug 18, 2022)
 
   - snowflake-sqlalchemy is now SQLAlchemy 2.0 compatible.
