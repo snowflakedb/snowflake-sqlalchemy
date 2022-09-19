@@ -9,6 +9,11 @@ Source code is also available at:
 
 # Release Notes
 
+- v1.4.2(Sep 19, 2022)
+
+  - Switch all source code to use f-strings and with statements
+  - SQLAlchemy jobs are not uploading test results to Tests table in snowhouse
+
 - v1.4.1(Aug 18, 2022)
 
   - snowflake-sqlalchemy is now SQLAlchemy 2.0 compatible.
