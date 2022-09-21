@@ -329,8 +329,24 @@ def test_pandas_writeback(engine_testaccount, run_v20_sqlalchemy):
         )
 
 
-@pytest.mark.parametrize("quote_identifiers", [False, True])
-def test_pandas_make_pd_writer(engine_testaccount, quote_identifiers):
+@pytest.mark.parametrize("chunk_size", [5, 1])
+@pytest.mark.parametrize(
+    "compression",
+    [
+        "gzip",
+    ],
+)
+@pytest.mark.parametrize("parallel", [1, 4])
+@pytest.mark.parametrize("quote_identifiers", [True, False])
+@pytest.mark.parametrize("auto_create_table", [True, False])
+def test_pandas_make_pd_writer(
+    engine_testaccount,
+    chunk_size: int,
+    compression: str,
+    parallel: int,
+    quote_identifiers: bool,
+    auto_create_table: bool,
+):
     table_name = f"test_table_{uuid.uuid4().hex}".upper()
     test_df = pd.DataFrame({"a": range(10), "b": range(10, 20)})
 
@@ -339,7 +355,13 @@ def test_pandas_make_pd_writer(engine_testaccount, quote_identifiers):
             table_name,
             engine_testaccount,
             index=False,
-            method=make_pd_writer(quote_identifiers=quote_identifiers),
+            method=make_pd_writer(
+                chunk_size=chunk_size,
+                compression=compression,
+                parallel=parallel,
+                quote_identifiers=quote_identifiers,
+                auto_create_table=auto_create_table,
+            ),
         )
 
     with engine_testaccount.connect() as conn:
@@ -362,3 +384,30 @@ def test_pandas_make_pd_writer(engine_testaccount, quote_identifiers):
                 assert len(results) == 10
         finally:
             conn.exec_driver_sql(f"DROP TABLE IF EXISTS {table_name}")
+
+
+def test_pandas_invalid_make_pd_writer(engine_testaccount):
+    table_name = f"test_table_{uuid.uuid4().hex}".upper()
+    test_df = pd.DataFrame({"a": range(10), "b": range(10, 20)})
+
+    with pytest.raises(
+        ProgrammingError,
+        match="Arguments 'table', 'conn', 'keys', and 'data_iter' are not supported parameters for make_pd_writer.",
+    ):
+        test_df.to_sql(
+            table_name,
+            engine_testaccount,
+            index=False,
+            method=make_pd_writer(conn=engine_testaccount),
+        )
+
+    with pytest.raises(
+        ProgrammingError,
+        match="Arguments 'conn', 'df', 'table_name', and 'schema' are not supported parameters for pd_writer.",
+    ):
+        test_df.to_sql(
+            table_name,
+            engine_testaccount,
+            index=False,
+            method=make_pd_writer(df=test_df),
+        )

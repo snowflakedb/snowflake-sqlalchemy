@@ -97,6 +97,7 @@ ENV/
 .tox/
 generated_version.py
 *coverage.xml
+.DS_Store
 
 # Editor specific
 .idea/
