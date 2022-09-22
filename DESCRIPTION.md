@@ -11,8 +11,8 @@ Source code is also available at:
 
 - v1.4.2(Sep 19, 2022)
 
-  - Switch all source code to use f-strings and with statements
-  - SQLAlchemy jobs are not uploading test results to Tests table in snowhouse
+  - Improved performance by standardizing string interpolations to f-strings.
+  - Improved reliability by always using context managers.
 
 - v1.4.1(Aug 18, 2022)
 
