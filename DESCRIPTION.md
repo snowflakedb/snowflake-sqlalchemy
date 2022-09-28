@@ -9,6 +9,11 @@ Source code is also available at:
 
 # Release Notes
 
+- v1.4.2(Sep 19, 2022)
+
+  - Improved performance by standardizing string interpolations to f-strings.
+  - Improved reliability by always using context managers.
+
 - v1.4.1(Aug 18, 2022)
 
   - snowflake-sqlalchemy is now SQLAlchemy 2.0 compatible.
