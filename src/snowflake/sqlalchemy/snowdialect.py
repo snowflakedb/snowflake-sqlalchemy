@@ -252,6 +252,8 @@ class SnowflakeDialect(default.DefaultDialect):
     def normalize_name(self, name):
         if name is None:
             return None
+        if name == "":
+            return ""
         if name.upper() == name and not self.identifier_preparer._requires_quotes(
             name.lower()
         ):
@@ -264,6 +266,8 @@ class SnowflakeDialect(default.DefaultDialect):
     def denormalize_name(self, name):
         if name is None:
             return None
+        if name == "":
+            return ""
         elif name.lower() == name and not self.identifier_preparer._requires_quotes(
             name.lower()
         ):
