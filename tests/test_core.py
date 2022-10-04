@@ -1741,10 +1741,10 @@ INSERT INTO {table_name} VALUES
 SELECT * FROM {table_name} UNPIVOT(SALES FOR "" IN (JAN, FEB))  ORDER BY EMPID;"""
         ).fetchall()  # normalize_name will be called
         assert results == [
-            (1, "electronics", "JAN", 100),
-            (1, "electronics", "FEB", 200),
-            (2, "clothes", "JAN", 100),
-            (2, "clothes", "FEB", 300),
+            (1, "ELECTRONICS", "JAN", 100),
+            (1, "ELECTRONICS", "FEB", 200),
+            (2, "CLOTHES", "JAN", 100),
+            (2, "CLOTHES", "FEB", 300),
         ]
 
         conn.exec_driver_sql(
