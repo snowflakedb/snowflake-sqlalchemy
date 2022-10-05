@@ -1737,8 +1737,7 @@ INSERT INTO {table_name} VALUES
 """
         )
         results = conn.exec_driver_sql(
-            f"""
-SELECT * FROM {table_name} UNPIVOT(SALES FOR "" IN (JAN, FEB))  ORDER BY EMPID;"""
+            f"SELECT * FROM {table_name} UNPIVOT(SALES FOR "" IN (JAN, FEB)) ORDER BY EMPID;"
         ).fetchall()  # normalize_name will be called
         assert results == [
             (1, "ELECTRONICS", "JAN", 100),
