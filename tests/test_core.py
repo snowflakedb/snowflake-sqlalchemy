@@ -1718,3 +1718,44 @@ SELECT PARSE_JSON('{{"vk1":100, "vk2":200, "vk3":300}}'),
         assert data is not None
         data = json.loads(results[-1][29])
         assert data[1]["k"] == 2
+
+
+def test_normalize_and_denormalize_empty_string_column_name(engine_testaccount):
+    with engine_testaccount.connect() as conn:
+        table_name = random_string(5)
+        conn.exec_driver_sql(
+            f"""
+CREATE OR REPLACE TEMP TABLE {table_name}
+(EMPID INT, DEPT TEXT, JAN INT, FEB INT)
+"""
+        )
+        conn.exec_driver_sql(
+            f"""
+INSERT INTO {table_name} VALUES
+    (1, 'ELECTRONICS', 100, 200),
+    (2, 'CLOTHES', 100, 300)
+"""
+        )
+        results = conn.exec_driver_sql(
+            f'SELECT * FROM {table_name} UNPIVOT(SALES FOR "" IN (JAN, FEB)) ORDER BY EMPID;'
+        ).fetchall()  # normalize_name will be called
+        assert results == [
+            (1, "ELECTRONICS", "JAN", 100),
+            (1, "ELECTRONICS", "FEB", 200),
+            (2, "CLOTHES", "JAN", 100),
+            (2, "CLOTHES", "FEB", 300),
+        ]
+
+        conn.exec_driver_sql(
+            f"""
+CREATE OR REPLACE TEMP TABLE {table_name}
+(COL INT, "" INT)
+"""
+        )
+        inspector = inspect(conn)
+        columns = inspector.get_columns(table_name)  # denormalize_name will be called
+        assert (
+            len(columns) == 2
+            and columns[0]["name"] == "col"
+            and columns[1]["name"] == ""
+        )

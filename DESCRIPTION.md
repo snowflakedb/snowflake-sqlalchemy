@@ -9,6 +9,9 @@ Source code is also available at:
 
 # Release Notes
 
+- v1.4.3(Unreleased)
+  - Fixed a bug that `SnowflakeDialect.normalize_name` and `SnowflakeDialect.denormalize_name` could not handle empty string.
+
 - v1.4.2(Sep 19, 2022)
 
   - Improved performance by standardizing string interpolations to f-strings.
