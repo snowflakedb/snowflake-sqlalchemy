@@ -2,9 +2,9 @@
 # Copyright (c) 2012-2022 Snowflake Computing Inc. All rights reserved.
 #
 
+import re
 from urllib.parse import quote_plus
 
-import re
 from sqlalchemy import exc
 
 from snowflake.connector.compat import IS_STR

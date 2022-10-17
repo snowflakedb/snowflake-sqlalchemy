@@ -11,6 +11,7 @@ Source code is also available at:
 
 - v1.4.3(Unreleased)
   - Fixed a bug that `SnowflakeDialect.normalize_name` and `SnowflakeDialect.denormalize_name` could not handle empty string.
+  - Fixed a compatibility issue to vendor function `sqlalchemy.engine.url._rfc_1738_quote` as it is removed from SQLAlchemy v1.4.42.
 
 - v1.4.2(Sep 19, 2022)
 
