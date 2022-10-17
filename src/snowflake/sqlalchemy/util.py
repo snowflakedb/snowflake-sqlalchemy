@@ -4,8 +4,8 @@
 
 from urllib.parse import quote_plus
 
+import re
 from sqlalchemy import exc
-from sqlalchemy.engine.url import _rfc_1738_quote
 
 from snowflake.connector.compat import IS_STR
 
@@ -21,6 +21,10 @@ def _url(**db_parameters):
     https://github.com/snowflakedb/snowflake-sqlalchemy#escaping-special-characters-such-as---signs-in-passwords
     """
     specified_parameters = []
+
+    def _rfc_1738_quote(text):
+        return re.sub(r"[:@/]", lambda m: "%%%X" % ord(m.group(0)), text)
+
     if "account" not in db_parameters:
         raise exc.ArgumentError("account parameter must be specified.")
 
