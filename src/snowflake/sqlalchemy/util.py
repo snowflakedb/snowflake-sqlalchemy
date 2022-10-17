@@ -25,7 +25,6 @@ def _url(**db_parameters):
     https://github.com/snowflakedb/snowflake-sqlalchemy#escaping-special-characters-such-as---signs-in-passwords
     """
     specified_parameters = []
-
     if "account" not in db_parameters:
         raise exc.ArgumentError("account parameter must be specified.")
 
