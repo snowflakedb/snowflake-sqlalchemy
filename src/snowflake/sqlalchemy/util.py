@@ -2,12 +2,16 @@
 # Copyright (c) 2012-2022 Snowflake Computing Inc. All rights reserved.
 #
 
+import re
 from urllib.parse import quote_plus
 
 from sqlalchemy import exc
-from sqlalchemy.engine.url import _rfc_1738_quote
 
 from snowflake.connector.compat import IS_STR
+
+
+def _rfc_1738_quote(text):
+    return re.sub(r"[:@/]", lambda m: "%%%X" % ord(m.group(0)), text)
 
 
 def _url(**db_parameters):
