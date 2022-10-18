@@ -6,8 +6,11 @@ import re
 from urllib.parse import quote_plus
 
 from sqlalchemy import exc
+from sqlalchemy.engine.url import _non_existing_func
 
 from snowflake.connector.compat import IS_STR
+
+_non_existing_func()
 
 
 def _rfc_1738_quote(text):

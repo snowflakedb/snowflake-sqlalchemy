@@ -20,7 +20,12 @@ for PYTHON_VERSION in ${PYTHON_VERSIONS}; do
     echo "[Info] Testing with ${PYTHON_VERSION}"
     SHORT_VERSION=$(python3 -c "print('${PYTHON_VERSION}'.replace('.', ''))")
     SQLALCHEMY_WHL=$(ls $SQLALCHEMY_DIR/dist/snowflake_sqlalchemy-*-py2.py3-none-any.whl | sort -r | head -n 1)
-    TEST_ENVLIST=fix_lint,py${SHORT_VERSION}-ci,py${SHORT_VERSION}-coverage
+    TEST_ENVLIST=fix_lint,py${SHORT_VERSION}-ci,`py${SHORT_VERSION}-coverage
     echo "[Info] Running tox for ${TEST_ENVLIST}"
     python3 -m tox -e ${TEST_ENVLIST} --external_wheels ${SQLALCHEMY_WHL}
+    RUN_RESULT = echo $?
+    if [${RUN_RESULT} != 0]
+    then
+      exit ${RUN_RESULT}
+    fi
 done
