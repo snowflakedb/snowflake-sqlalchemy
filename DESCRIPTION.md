@@ -9,6 +9,10 @@ Source code is also available at:
 
 # Release Notes
 
+- v1.4.4(Unreleased)
+
+  - Fixed a bug that identifiers having percents in a non-compiled statement was interpolated.
+
 - v1.4.3(Oct 17, 2022)
 
   - Fixed a bug that `SnowflakeDialect.normalize_name` and `SnowflakeDialect.denormalize_name` could not handle empty string.
