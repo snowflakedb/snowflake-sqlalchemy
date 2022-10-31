@@ -11,7 +11,7 @@ Source code is also available at:
 
 - v1.4.4(Unreleased)
 
-  - Fixed a bug that identifiers having percents in a non-compiled statement was interpolated.
+  - Fixed a bug that percent signs in a non-compiled statement should not be interpolated with emtpy sequence when executed.
 
 - v1.4.3(Oct 17, 2022)
 

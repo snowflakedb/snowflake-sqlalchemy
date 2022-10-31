@@ -411,3 +411,34 @@ def test_pandas_invalid_make_pd_writer(engine_testaccount):
             index=False,
             method=make_pd_writer(df=test_df),
         )
+
+
+def test_percent_signs(engine_testaccount):
+    table_name = f"test_table_{uuid.uuid4().hex}".upper()
+    with engine_testaccount.connect() as conn:
+        with conn.begin():
+            conn.exec_driver_sql(
+                f"CREATE OR REPLACE TEMP TABLE {table_name}(c1 int, c2 string)"
+            )
+            conn.exec_driver_sql(
+                f"""
+                INSERT INTO {table_name}(c1, c2) values
+                (1, 'abc'),
+                (2, 'def'),
+                (3, 'ghi')
+                """
+            )
+
+            df = pd.read_sql(
+                f"select * from {table_name} where c2 not like '%b%'", conn
+            )
+            assert (
+                df["c1"][0] == 2
+                and df["c1"][1] == 3
+                and df["c2"][0] == "def"
+                and df["c2"][1] == "ghi"
+                and len(df) == 2
+            )
+
+            df = pd.read_sql(f"select * from {table_name} where c2 like '%b%'", conn)
+            assert df["c1"][0] == 1 and df["c2"][0] == "abc" and len(df) == 1
