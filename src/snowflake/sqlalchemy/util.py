@@ -8,6 +8,7 @@ from urllib.parse import quote_plus
 from sqlalchemy import exc
 
 from snowflake.connector.compat import IS_STR
+from snowflake.connector.connection import SnowflakeConnection
 
 
 def _rfc_1738_quote(text):
@@ -74,7 +75,9 @@ def _url(**db_parameters):
     return ret
 
 
-def _set_connection_interpolate_empty_sequences(dbapi_connection, flag):
+def _set_connection_interpolate_empty_sequences(
+    dbapi_connection: SnowflakeConnection, flag: bool
+):
     """set the _interpolate_empty_sequences config of the underlying connection"""
     if hasattr(dbapi_connection, "driver_connection"):
         # _dbapi_connection is a _ConnectionFairy which proxies raw SnowflakeConnection
