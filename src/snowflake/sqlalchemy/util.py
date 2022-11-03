@@ -77,7 +77,7 @@ def _url(**db_parameters):
 
 def _set_connection_interpolate_empty_sequences(
     dbapi_connection: SnowflakeConnection, flag: bool
-):
+) -> None:
     """set the _interpolate_empty_sequences config of the underlying connection"""
     if hasattr(dbapi_connection, "driver_connection"):
         # _dbapi_connection is a _ConnectionFairy which proxies raw SnowflakeConnection
