@@ -13,6 +13,7 @@ from sqlalchemy.sql.elements import quoted_name
 from sqlalchemy.util.compat import string_types
 
 from .custom_commands import AWSBucket, AzureContainer, ExternalStage
+from .util import _set_connection_interpolate_empty_sequences
 
 RESERVED_WORDS = frozenset(
     [
@@ -416,14 +417,7 @@ class SnowflakeExecutionContext(default.DefaultExecutionContext):
     def pre_exec(self):
         if self.compiled and self.identifier_preparer._double_percents:
             # for compiled statements, percent is doubled for escape, we turn on _interpolate_empty_sequences
-            if hasattr(self._dbapi_connection, "driver_connection"):
-                # _dbapi_connection is a _ConnectionFairy which proxies raw SnowflakeConnection
-                self._dbapi_connection.driver_connection._interpolate_empty_sequences = (
-                    True
-                )
-            else:
-                # _dbapi_connection is a raw SnowflakeConnection
-                self._dbapi_connection._interpolate_empty_sequences = True
+            _set_connection_interpolate_empty_sequences(self._dbapi_connection, True)
 
             # if the statement is executemany insert, setting _interpolate_empty_sequences to True is not enough,
             # because executemany pre-processes the param binding and then pass None params to execute so
@@ -431,19 +425,15 @@ class SnowflakeExecutionContext(default.DefaultExecutionContext):
             # Therefore, we manually revert the escape percent in the command here
             if self.executemany and self.INSERT_SQL_RE.match(self.statement):
                 self.statement = self.statement.replace("%%", "%")
+        else:
+            # for other cases, do no interpolate empty sequences as "%" is not double escaped
+            _set_connection_interpolate_empty_sequences(self._dbapi_connection, False)
 
     def post_exec(self):
         if self.compiled and self.identifier_preparer._double_percents:
             # for compiled statements, percent is doubled for escapeafter execution
             # we reset _interpolate_empty_sequences to false which is turned on in pre_exec
-            if hasattr(self._dbapi_connection, "driver_connection"):
-                # _dbapi_connection is a _ConnectionFairy which proxies raw SnowflakeConnection
-                self._dbapi_connection.driver_connection._interpolate_empty_sequences = (
-                    False
-                )
-            else:
-                # _dbapi_connection is a raw SnowflakeConnection
-                self._dbapi_connection._interpolate_empty_sequences = False
+            _set_connection_interpolate_empty_sequences(self._dbapi_connection, False)
 
     @property
     def rowcount(self):

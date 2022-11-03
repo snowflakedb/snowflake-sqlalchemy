@@ -411,3 +411,38 @@ def test_pandas_invalid_make_pd_writer(engine_testaccount):
             index=False,
             method=make_pd_writer(df=test_df),
         )
+
+
+def test_percent_signs(engine_testaccount, run_v20_sqlalchemy):
+    if run_v20_sqlalchemy and sys.version_info < (3, 8):
+        pytest.skip(
+            "In Python 3.7, this test depends on pandas features of which the implementation is incompatible with sqlachemy 2.0, and pandas does not support Python 3.7 anymore."
+        )
+
+    table_name = f"test_table_{uuid.uuid4().hex}".upper()
+    with engine_testaccount.connect() as conn:
+        with conn.begin():
+            conn.exec_driver_sql(
+                f"CREATE OR REPLACE TEMP TABLE {table_name}(c1 int, c2 string)"
+            )
+            conn.exec_driver_sql(
+                f"""
+                INSERT INTO {table_name}(c1, c2) values
+                (1, 'abc'),
+                (2, 'def'),
+                (3, 'ghi')
+                """
+            )
+
+            df = pd.read_sql(
+                f"select * from {table_name} where c2 not like '%b%'", conn
+            )
+            assert list(df.itertuples(index=False, name=None)) == [
+                (2, "def"),
+                (3, "ghi"),
+            ]
+
+            df = pd.read_sql(f"select * from {table_name} where c2 like '%b%'", conn)
+            assert list(df.itertuples(index=False, name=None)) == [
+                (1, "abc"),
+            ]
