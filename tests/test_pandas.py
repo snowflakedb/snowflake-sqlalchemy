@@ -12,6 +12,7 @@ import uuid
 import numpy as np
 import pandas as pd
 import pytest
+import sqlalchemy
 from sqlalchemy import (
     Column,
     ForeignKey,
@@ -434,15 +435,26 @@ def test_percent_signs(engine_testaccount, run_v20_sqlalchemy):
                 """
             )
 
-            df = pd.read_sql(
-                f"select * from {table_name} where c2 not like '%b%'", conn
-            )
+            not_like_sql = f"select * from {table_name} where c2 not like '%b%'"
+            like_sql = f"select * from {table_name} where c2 like '%b%'"
+            calculate_sql = "SELECT 1600 % 400 AS a, 1599 % 400 as b"
+            if run_v20_sqlalchemy:
+                not_like_sql = sqlalchemy.text(not_like_sql)
+                like_sql = sqlalchemy.text(like_sql)
+                calculate_sql = sqlalchemy.text(calculate_sql)
+
+            df = pd.read_sql(not_like_sql, conn)
             assert list(df.itertuples(index=False, name=None)) == [
                 (2, "def"),
                 (3, "ghi"),
             ]
 
-            df = pd.read_sql(f"select * from {table_name} where c2 like '%b%'", conn)
+            df = pd.read_sql(like_sql, conn)
             assert list(df.itertuples(index=False, name=None)) == [
                 (1, "abc"),
+            ]
+
+            df = pd.read_sql(calculate_sql, conn)
+            assert list(df.itertuples(index=False, name=None)) == [
+                (0, 399),
             ]
