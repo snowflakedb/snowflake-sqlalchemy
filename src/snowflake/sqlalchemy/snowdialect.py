@@ -318,6 +318,26 @@ class SnowflakeDialect(default.DefaultDialect):
         return []
 
     @reflection.cache
+    def _get_table_primary_keys(self, connection, schema, table_name, **kw):
+        result = connection.execute(
+            text(
+                f"SHOW /* sqlalchemy:_get_table_primary_keys */PRIMARY KEYS IN TABLE {schema}.{table_name}"
+            )
+        )
+        ans = {}
+        for row in result:
+            table_name = self.normalize_name(row._mapping["table_name"])
+            if table_name not in ans:
+                ans[table_name] = {
+                    "constrained_columns": [],
+                    "name": self.normalize_name(row._mapping["constraint_name"]),
+                }
+            ans[table_name]["constrained_columns"].append(
+                self.normalize_name(row._mapping["column_name"])
+            )
+        return ans
+
+    @reflection.cache
     def _get_schema_primary_keys(self, connection, schema, **kw):
         result = connection.execute(
             text(
@@ -345,9 +365,42 @@ class SnowflakeDialect(default.DefaultDialect):
         full_schema_name = self._denormalize_quote_join(
             current_database, schema if schema else current_schema
         )
-        return self._get_schema_primary_keys(
-            connection, self.denormalize_name(full_schema_name), **kw
-        ).get(table_name, {"constrained_columns": [], "name": None})
+        if table_name is not None:
+            return self._get_table_primary_keys(
+                connection, self.denormalize_name(full_schema_name),
+                table_name, **kw
+            ).get(table_name, {"constrained_columns": [], "name": None})
+        else:
+            return self._get_schema_primary_keys(
+                connection, self.denormalize_name(full_schema_name), **kw
+            ).get(table_name, {"constrained_columns": [], "name": None})
+
+    @reflection.cache
+    def _get_table_unique_constraints(self, connection, schema, table_name, **kw):
+        result = connection.execute(
+            text(
+                f"SHOW /* sqlalchemy:_get_table_unique_constraints */ UNIQUE KEYS IN TABLE {schema}.{table_name}"
+            )
+        )
+        unique_constraints = {}
+        for row in result:
+            name = self.normalize_name(row._mapping["constraint_name"])
+            if name not in unique_constraints:
+                unique_constraints[name] = {
+                    "column_names": [self.normalize_name(row._mapping["column_name"])],
+                    "name": name,
+                    "table_name": self.normalize_name(row._mapping["table_name"]),
+                }
+            else:
+                unique_constraints[name]["column_names"].append(
+                    self.normalize_name(row._mapping["column_name"])
+                )
+
+        ans = defaultdict(list)
+        for constraint in unique_constraints.values():
+            table_name = constraint.pop("table_name")
+            ans[table_name].append(constraint)
+        return ans
 
     @reflection.cache
     def _get_schema_unique_constraints(self, connection, schema, **kw):
@@ -384,9 +437,77 @@ class SnowflakeDialect(default.DefaultDialect):
         full_schema_name = self._denormalize_quote_join(
             current_database, schema if schema else current_schema
         )
-        return self._get_schema_unique_constraints(
-            connection, self.denormalize_name(full_schema_name), **kw
-        ).get(table_name, [])
+        if table_name is not None:
+            return self._get_table_unique_constraints(
+                connection, self.denormalize_name(full_schema_name),
+                table_name, **kw
+            ).get(table_name, [])
+        else:
+            return self._get_schema_unique_constraints(
+                connection, self.denormalize_name(full_schema_name), **kw
+            ).get(table_name, [])
+
+    @reflection.cache
+    def _get_table_foreign_keys(self, connection, schema, table_name, **kw):
+        _, current_schema = self._current_database_schema(connection, **kw)
+        result = connection.execute(
+            text(
+                f"SHOW /* sqlalchemy:_get_table_foreign_keys */ IMPORTED KEYS IN TABLE {schema}.{table_name}"
+            )
+        )
+        foreign_key_map = {}
+        for row in result:
+            name = self.normalize_name(row._mapping["fk_name"])
+            if name not in foreign_key_map:
+                referred_schema = self.normalize_name(row._mapping["pk_schema_name"])
+                foreign_key_map[name] = {
+                    "constrained_columns": [
+                        self.normalize_name(row._mapping["fk_column_name"])
+                    ],
+                    # referred schema should be None in context where it doesn't need to be specified
+                    # https://docs.sqlalchemy.org/en/14/core/reflection.html#reflection-schema-qualified-interaction
+                    "referred_schema": (
+                        referred_schema
+                        if referred_schema
+                           not in (self.default_schema_name, current_schema)
+                        else None
+                    ),
+                    "referred_table": self.normalize_name(
+                        row._mapping["pk_table_name"]
+                    ),
+                    "referred_columns": [
+                        self.normalize_name(row._mapping["pk_column_name"])
+                    ],
+                    "name": name,
+                    "table_name": self.normalize_name(row._mapping["fk_table_name"]),
+                }
+                options = {}
+                if self.normalize_name(row._mapping["delete_rule"]) != "NO ACTION":
+                    options["ondelete"] = self.normalize_name(
+                        row._mapping["delete_rule"]
+                    )
+                if self.normalize_name(row._mapping["update_rule"]) != "NO ACTION":
+                    options["onupdate"] = self.normalize_name(
+                        row._mapping["update_rule"]
+                    )
+                foreign_key_map[name]["options"] = options
+            else:
+                foreign_key_map[name]["constrained_columns"].append(
+                    self.normalize_name(row._mapping["fk_column_name"])
+                )
+                foreign_key_map[name]["referred_columns"].append(
+                    self.normalize_name(row._mapping["pk_column_name"])
+                )
+
+        ans = {}
+
+        for _, v in foreign_key_map.items():
+            if v["table_name"] not in ans:
+                ans[v["table_name"]] = []
+            ans[v["table_name"]].append(
+                {k2: v2 for k2, v2 in v.items() if k2 != "table_name"}
+            )
+        return ans
 
     @reflection.cache
     def _get_schema_foreign_keys(self, connection, schema, **kw):
@@ -462,9 +583,15 @@ class SnowflakeDialect(default.DefaultDialect):
             current_database, schema if schema else current_schema
         )
 
-        foreign_key_map = self._get_schema_foreign_keys(
-            connection, self.denormalize_name(full_schema_name), **kw
-        )
+        if table_name is not None:
+            foreign_key_map = self._get_table_foreign_keys(
+                connection, self.denormalize_name(full_schema_name),
+                table_name, **kw
+            )
+        else:
+            foreign_key_map = self._get_schema_foreign_keys(
+                connection, self.denormalize_name(full_schema_name), **kw
+            )
         return foreign_key_map.get(table_name, [])
 
     @reflection.cache
@@ -575,8 +702,8 @@ class SnowflakeDialect(default.DefaultDialect):
         ans = []
         current_database, _ = self._current_database_schema(connection, **kw)
         full_schema_name = self._denormalize_quote_join(current_database, schema)
-        schema_primary_keys = self._get_schema_primary_keys(
-            connection, full_schema_name, **kw
+        schema_primary_keys = self._get_table_primary_keys(
+            connection, full_schema_name, table_name, **kw
         )
         result = connection.execute(
             text(
@@ -665,7 +792,10 @@ class SnowflakeDialect(default.DefaultDialect):
         if not schema:
             _, schema = self._current_database_schema(connection, **kw)
 
-        schema_columns = self._get_schema_columns(connection, schema, **kw)
+        if table_name is not None:
+            return self._get_table_columns(connection, table_name, schema, **kw)
+        else:
+            schema_columns = self._get_schema_columns(connection, schema, **kw)
         if schema_columns is None:
             # Too many results, fall back to only query about single table
             return self._get_table_columns(connection, table_name, schema, **kw)
