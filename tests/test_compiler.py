@@ -2,7 +2,8 @@
 # Copyright (c) 2012-2022 Snowflake Computing Inc. All rights reserved.
 #
 
-from sqlalchemy import Integer, String, and_, select
+import pytest
+from sqlalchemy import Integer, String, and_, select, Table, Column
 from sqlalchemy.schema import DropColumnComment, DropTableComment
 from sqlalchemy.sql import column, quoted_name, table
 from sqlalchemy.testing import AssertsCompiledSQL
@@ -99,3 +100,23 @@ def test_quoted_name_label(engine_testaccount):
         sel_from_tbl = select(col).group_by(col).select_from(table("abc"))
         compiled_result = sel_from_tbl.compile()
         assert str(compiled_result) == t["output"]
+
+@pytest.mark.parameterize("collation_specification", [
+    "en",
+    ])
+def test_string_collation(engine_testaccount, collation_specification):
+    # create a table with a string column with a certain collation
+    table = Table("collation_test_table",
+            Column("chars_col", String(collcation=collation_specification))
+    )
+    table.create(engine_testaccount)
+    insert_stmt = table.insert([
+        {"chars_col": "a"},
+        {"chars_col": "A"},
+        {"chars_col": "b"},
+        ])
+    engine_testaccount.execute(insert_stmt)
+    # retrieve values and check if collation was used properly
+    results = engine_testaccount.execute(f"SELECT chars_col FROM {table.schema}.{table.name} ORDER BY chars_col").fetchall()
+    assert results == [('a',), ('A',), ('b',)]
+
