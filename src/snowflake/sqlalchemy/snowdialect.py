@@ -630,9 +630,13 @@ class SnowflakeDialect(default.DefaultDialect):
                    ic.identity_increment
               FROM information_schema.columns ic
              WHERE ic.table_schema=:table_schema
+             AND   ic.table_name=:table_name
              ORDER BY ic.ordinal_position"""
                 ),
-                {"table_schema": self.denormalize_name(schema)},
+                {
+                    "table_schema": self.denormalize_name(schema),
+                    "table_name": self.denormalize_name(table_name),
+                },
             )
         except sa_exc.ProgrammingError as pe:
             if pe.orig.errno == 90030:
