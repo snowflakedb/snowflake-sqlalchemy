@@ -589,7 +589,8 @@ class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
         if type_.length:
             text += f"({type_.length})" 
         if type_.collation:
-            text += f"COLLATE '{type_.collation}'" 
+            # note: whitespace before the statement is important here
+            text += f" COLLATE '{type_.collation}'" 
         return text
     
     def visit_BYTEINT(self, type_, **kw):

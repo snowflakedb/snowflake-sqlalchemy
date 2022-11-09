@@ -3,10 +3,11 @@
 #
 
 import pytest
-from sqlalchemy import Integer, String, and_, select, Table, Column
+from sqlalchemy import Integer, MetaData, String, and_, select, Table, Column
 from sqlalchemy.schema import DropColumnComment, DropTableComment
 from sqlalchemy.sql import column, quoted_name, table
 from sqlalchemy.testing import AssertsCompiledSQL
+from .conftest import CONNECTION_PARAMETERS
 
 table1 = table(
     "table1", column("id", Integer), column("name", String), column("value", Integer)
@@ -101,22 +102,23 @@ def test_quoted_name_label(engine_testaccount):
         compiled_result = sel_from_tbl.compile()
         assert str(compiled_result) == t["output"]
 
-@pytest.mark.parameterize("collation_specification", [
-    "en",
-    ])
-def test_string_collation(engine_testaccount, collation_specification):
+@pytest.mark.parametrize("collation", ["en", "latin1"])
+def test_string_collation(engine_testaccount, collation):
     # create a table with a string column with a certain collation
-    table = Table("collation_test_table",
-            Column("chars_col", String(collcation=collation_specification))
+    metadata = MetaData(bind=engine_testaccount)
+    table = Table(f"collation_test_table_{collation}", 
+            metadata,
+            Column("chars_col", String(collation=collation)),
+            schema=CONNECTION_PARAMETERS["schema"]
     )
     table.create(engine_testaccount)
     insert_stmt = table.insert([
         {"chars_col": "a"},
         {"chars_col": "A"},
         {"chars_col": "b"},
-        ])
+    ])
     engine_testaccount.execute(insert_stmt)
     # retrieve values and check if collation was used properly
-    results = engine_testaccount.execute(f"SELECT chars_col FROM {table.schema}.{table.name} ORDER BY chars_col").fetchall()
-    assert results == [('a',), ('A',), ('b',)]
+    column_type = engine_testaccount.execute(f"DESCRIBE TABLE {table.schema}.{table.name}").fetchone()["type"]
+    assert f"COLLATE '{collation}'" in column_type
 
