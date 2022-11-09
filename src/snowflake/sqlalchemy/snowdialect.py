@@ -370,7 +370,7 @@ class SnowflakeDialect(default.DefaultDialect):
             return self._get_table_primary_keys(
                 connection,
                 self.denormalize_name(full_schema_name),
-                self.denormalize_name(table_name),
+                self.normalize_name(table_name),
                 **kw,
             ).get(table_name, {"constrained_columns": [], "name": None})
         else:
@@ -444,7 +444,7 @@ class SnowflakeDialect(default.DefaultDialect):
             return self._get_table_unique_constraints(
                 connection,
                 self.denormalize_name(full_schema_name),
-                self.denormalize_name(table_name),
+                self.normalize_name(table_name),
                 **kw,
             ).get(table_name, [])
         else:
@@ -592,7 +592,7 @@ class SnowflakeDialect(default.DefaultDialect):
             foreign_key_map = self._get_table_foreign_keys(
                 connection,
                 self.denormalize_name(full_schema_name),
-                self.denormalize_name(table_name),
+                self.normalize_name(table_name),
                 **kw,
             )
         else:
@@ -800,7 +800,9 @@ class SnowflakeDialect(default.DefaultDialect):
             _, schema = self._current_database_schema(connection, **kw)
 
         if table_name is not None:
-            return self._get_table_columns(connection, table_name, schema, **kw)
+            return self._get_table_columns(
+                connection, self.normalize_name(table_name), schema, **kw
+            )
         else:
             schema_columns = self._get_schema_columns(connection, schema, **kw)
         if schema_columns is None:
