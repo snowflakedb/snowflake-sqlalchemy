@@ -365,9 +365,13 @@ class SnowflakeDialect(default.DefaultDialect):
         full_schema_name = self._denormalize_quote_join(
             current_database, schema if schema else current_schema
         )
+
         if table_name is not None:
             return self._get_table_primary_keys(
-                connection, self.denormalize_name(full_schema_name), table_name, **kw
+                connection,
+                self.denormalize_name(full_schema_name),
+                self.denormalize_name(table_name),
+                **kw,
             ).get(table_name, {"constrained_columns": [], "name": None})
         else:
             return self._get_schema_primary_keys(
@@ -438,7 +442,10 @@ class SnowflakeDialect(default.DefaultDialect):
         )
         if table_name is not None:
             return self._get_table_unique_constraints(
-                connection, self.denormalize_name(full_schema_name), table_name, **kw
+                connection,
+                self.denormalize_name(full_schema_name),
+                self.denormalize_name(table_name),
+                **kw,
             ).get(table_name, [])
         else:
             return self._get_schema_unique_constraints(
@@ -583,7 +590,10 @@ class SnowflakeDialect(default.DefaultDialect):
 
         if table_name is not None:
             foreign_key_map = self._get_table_foreign_keys(
-                connection, self.denormalize_name(full_schema_name), table_name, **kw
+                connection,
+                self.denormalize_name(full_schema_name),
+                self.denormalize_name(table_name),
+                **kw,
             )
         else:
             foreign_key_map = self._get_schema_foreign_keys(
