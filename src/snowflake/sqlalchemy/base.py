@@ -583,6 +583,15 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
 
 
 class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
+    def _render_string_type(self, type_, name):
+
+        text = name
+        if type_.length:
+            text += f"({type_.length})" 
+        if type_.collation:
+            text += f"COLLATE '{type_.collation}'" 
+        return text
+    
     def visit_BYTEINT(self, type_, **kw):
         return "BYTEINT"
 
