@@ -319,9 +319,10 @@ class SnowflakeDialect(default.DefaultDialect):
 
     @reflection.cache
     def _get_table_primary_keys(self, connection, schema, table_name, **kw):
+        fully_qualified_path = self._denormalize_quote_join(schema, table_name)
         result = connection.execute(
             text(
-                f"SHOW /* sqlalchemy:_get_table_primary_keys */PRIMARY KEYS IN TABLE {schema}.{table_name}"
+                f"SHOW /* sqlalchemy:_get_table_primary_keys */PRIMARY KEYS IN TABLE {fully_qualified_path}"
             )
         )
         ans = {}
@@ -370,7 +371,7 @@ class SnowflakeDialect(default.DefaultDialect):
             return self._get_table_primary_keys(
                 connection,
                 self.denormalize_name(full_schema_name),
-                self.normalize_name(table_name),
+                self.denormalize_name(table_name),
                 **kw,
             ).get(table_name, {"constrained_columns": [], "name": None})
         else:
@@ -629,13 +630,15 @@ class SnowflakeDialect(default.DefaultDialect):
                    ic.identity_start,
                    ic.identity_increment
               FROM information_schema.columns ic
-             WHERE ic.table_schema=:table_schema
+             WHERE ic.table_catalog=:table_catalog
+             AND   ic.table_schema=:table_schema
              AND   ic.table_name=:table_name
              ORDER BY ic.ordinal_position"""
                 ),
                 {
+                    "table_catalog": self.denormalize_name(current_database),
                     "table_schema": self.denormalize_name(schema),
-                    "table_name": self.denormalize_name(table_name),
+                    "table_name": self.normalize_name(table_name),
                 },
             )
         except sa_exc.ProgrammingError as pe:
@@ -816,7 +819,7 @@ class SnowflakeDialect(default.DefaultDialect):
         current_database, _ = self._current_database_schema(connection, **kw)
         full_schema_name = self._denormalize_quote_join(current_database, schema)
         schema_primary_keys = self._get_table_primary_keys(
-            connection, full_schema_name, self.normalize_name(table_name), **kw
+            connection, full_schema_name, table_name, **kw
         )
         result = connection.execute(
             text(
