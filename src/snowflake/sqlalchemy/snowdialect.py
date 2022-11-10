@@ -603,114 +603,6 @@ class SnowflakeDialect(default.DefaultDialect):
         return foreign_key_map.get(table_name, [])
 
     @reflection.cache
-    def _get_schema_columns_v2(self, connection, schema, table_name, **kw):
-        """Get all columns in the schema, if we hit 'Information schema query returned too much data' problem return
-        None, as it is cacheable and is an unexpected return type for this function"""
-        ans = {}
-        current_database, _ = self._current_database_schema(connection, **kw)
-        full_schema_name = self._denormalize_quote_join(current_database, schema)
-        try:
-            schema_primary_keys = self._get_table_primary_keys(
-                connection, full_schema_name, table_name, **kw
-            )
-            result = connection.execute(
-                text(
-                    """
-            SELECT /* sqlalchemy:_get_schema_columns_v2 */
-                   ic.table_name,
-                   ic.column_name,
-                   ic.data_type,
-                   ic.character_maximum_length,
-                   ic.numeric_precision,
-                   ic.numeric_scale,
-                   ic.is_nullable,
-                   ic.column_default,
-                   ic.is_identity,
-                   ic.comment,
-                   ic.identity_start,
-                   ic.identity_increment
-              FROM information_schema.columns ic
-             WHERE ic.table_catalog=:table_catalog
-             AND   ic.table_schema=:table_schema
-             AND   ic.table_name=:table_name
-             ORDER BY ic.ordinal_position"""
-                ),
-                {
-                    "table_catalog": self.denormalize_name(current_database),
-                    "table_schema": self.denormalize_name(schema),
-                    "table_name": self.normalize_name(table_name),
-                },
-            )
-        except sa_exc.ProgrammingError as pe:
-            if pe.orig.errno == 90030:
-                # This means that there are too many tables in the schema, we need to go more granular
-                return None  # None triggers _get_table_columns while staying cacheable
-            raise
-        for (
-            table_name,
-            column_name,
-            coltype,
-            character_maximum_length,
-            numeric_precision,
-            numeric_scale,
-            is_nullable,
-            column_default,
-            is_identity,
-            comment,
-            identity_start,
-            identity_increment,
-        ) in result:
-            table_name = self.normalize_name(table_name)
-            column_name = self.normalize_name(column_name)
-            if table_name not in ans:
-                ans[table_name] = list()
-            if column_name.startswith("sys_clustering_column"):
-                continue  # ignoring clustering column
-            col_type = self.ischema_names.get(coltype, None)
-            col_type_kw = {}
-            if col_type is None:
-                sa_util.warn(
-                    f"Did not recognize type '{coltype}' of column '{column_name}'"
-                )
-                col_type = sqltypes.NULLTYPE
-            else:
-                if issubclass(col_type, FLOAT):
-                    col_type_kw["precision"] = numeric_precision
-                    col_type_kw["decimal_return_scale"] = numeric_scale
-                elif issubclass(col_type, sqltypes.Numeric):
-                    col_type_kw["precision"] = numeric_precision
-                    col_type_kw["scale"] = numeric_scale
-                elif issubclass(col_type, (sqltypes.String, sqltypes.BINARY)):
-                    col_type_kw["length"] = character_maximum_length
-
-            type_instance = col_type(**col_type_kw)
-
-            current_table_pks = schema_primary_keys.get(table_name)
-
-            ans[table_name].append(
-                {
-                    "name": column_name,
-                    "type": type_instance,
-                    "nullable": is_nullable == "YES",
-                    "default": column_default,
-                    "autoincrement": is_identity == "YES",
-                    "comment": comment,
-                    "primary_key": (
-                        column_name
-                        in schema_primary_keys[table_name]["constrained_columns"]
-                    )
-                    if current_table_pks
-                    else False,
-                }
-            )
-            if is_identity == "YES":
-                ans[table_name][-1]["identity"] = {
-                    "start": identity_start,
-                    "increment": identity_increment,
-                }
-        return ans
-
-    @reflection.cache
     def _get_schema_columns(self, connection, schema, **kw):
         """Get all columns in the schema, if we hit 'Information schema query returned too much data' problem return
         None, as it is cacheable and is an unexpected return type for this function"""
@@ -836,13 +728,15 @@ class SnowflakeDialect(default.DefaultDialect):
                ic.is_identity,
                ic.comment
           FROM information_schema.columns ic
-         WHERE ic.table_schema=:table_schema
+         WHERE ic.table_catalog=:table_catalog
+           AND ic.table_schema=:table_schema
            AND ic.table_name=:table_name
          ORDER BY ic.ordinal_position"""
             ),
             {
+                "table_catalog": self.denormalize_name(current_database),
                 "table_schema": self.denormalize_name(schema),
-                "table_name": self.denormalize_name(table_name),
+                "table_name": self._denormalize_quote_join(table_name),
             },
         )
         for (
@@ -909,8 +803,8 @@ class SnowflakeDialect(default.DefaultDialect):
             _, schema = self._current_database_schema(connection, **kw)
 
         if table_name is not None:
-            schema_columns = self._get_schema_columns_v2(
-                connection, schema, table_name, **kw
+            schema_columns = self._get_table_columns(
+                connection, table_name, schema, **kw
             )
         else:
             schema_columns = self._get_schema_columns(connection, schema, **kw)
