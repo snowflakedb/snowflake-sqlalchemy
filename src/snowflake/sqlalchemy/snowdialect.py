@@ -319,10 +319,10 @@ class SnowflakeDialect(default.DefaultDialect):
 
     @reflection.cache
     def _get_table_primary_keys(self, connection, schema, table_name, **kw):
-        # fully_qualified_path = self._denormalize_quote_join(schema, table_name)
+        fully_qualified_path = self._denormalize_quote_join(schema, table_name)
         result = connection.execute(
             text(
-                f"SHOW /* sqlalchemy:_get_table_primary_keys */PRIMARY KEYS IN TABLE {schema}.{table_name}"
+                f"SHOW /* sqlalchemy:_get_table_primary_keys */PRIMARY KEYS IN TABLE {fully_qualified_path}"
             )
         )
         ans = {}
