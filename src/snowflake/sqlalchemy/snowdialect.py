@@ -319,10 +319,10 @@ class SnowflakeDialect(default.DefaultDialect):
 
     @reflection.cache
     def _get_table_primary_keys(self, connection, schema, table_name, **kw):
-        fully_qualified_path = self._denormalize_quote_join(schema, table_name)
+        #fully_qualified_path = self._denormalize_quote_join(schema, table_name)
         result = connection.execute(
             text(
-                f"SHOW /* sqlalchemy:_get_table_primary_keys */PRIMARY KEYS IN TABLE {fully_qualified_path}"
+                f"SHOW /* sqlalchemy:_get_table_primary_keys */PRIMARY KEYS IN TABLE {schema}.{table_name}"
             )
         )
         ans = {}
@@ -710,7 +710,7 @@ class SnowflakeDialect(default.DefaultDialect):
         ans = []
         current_database, _ = self._current_database_schema(connection, **kw)
         full_schema_name = self._denormalize_quote_join(current_database, schema)
-        schema_primary_keys = self._get_table_primary_keys(
+        table_primary_keys = self._get_table_primary_keys(
             connection, full_schema_name, table_name, **kw
         )
         result = connection.execute(
@@ -728,15 +728,13 @@ class SnowflakeDialect(default.DefaultDialect):
                ic.is_identity,
                ic.comment
           FROM information_schema.columns ic
-         WHERE ic.table_catalog=:table_catalog
-           AND ic.table_schema=:table_schema
+         WHERE ic.table_schema=:table_schema
            AND ic.table_name=:table_name
          ORDER BY ic.ordinal_position"""
             ),
             {
-                "table_catalog": self.denormalize_name(current_database),
                 "table_schema": self.denormalize_name(schema),
-                "table_name": self._denormalize_quote_join(table_name),
+                "table_name": self.denormalize_name(table_name),
             },
         )
         for (
@@ -774,7 +772,7 @@ class SnowflakeDialect(default.DefaultDialect):
 
             type_instance = col_type(**col_type_kw)
 
-            current_table_pks = schema_primary_keys.get(table_name)
+            current_table_pks = table_primary_keys.get(table_name)
 
             ans.append(
                 {
@@ -786,7 +784,7 @@ class SnowflakeDialect(default.DefaultDialect):
                     "comment": comment if comment != "" else None,
                     "primary_key": (
                         column_name
-                        in schema_primary_keys[table_name]["constrained_columns"]
+                        in table_primary_keys[table_name]["constrained_columns"]
                     )
                     if current_table_pks
                     else False,
@@ -803,9 +801,7 @@ class SnowflakeDialect(default.DefaultDialect):
             _, schema = self._current_database_schema(connection, **kw)
 
         if table_name is not None:
-            schema_columns = self._get_table_columns(
-                connection, table_name, schema, **kw
-            )
+            return self._get_table_columns(connection, table_name, schema, **kw)
         else:
             schema_columns = self._get_schema_columns(connection, schema, **kw)
         if schema_columns is None:
