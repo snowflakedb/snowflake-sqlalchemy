@@ -46,7 +46,6 @@ from .base import (
     SnowflakeExecutionContext,
     SnowflakeIdentifierPreparer,
     SnowflakeTypeCompiler,
-    RESERVED_WORDS,
 )
 from .custom_types import (
     _CUSTOM_DECIMAL,
@@ -320,7 +319,7 @@ class SnowflakeDialect(default.DefaultDialect):
 
     @reflection.cache
     def _get_table_primary_keys(self, connection, schema, table_name, **kw):
-        if table_name.upper() in RESERVED_WORDS:
+        if table_name in SnowflakeIdentifierPreparer.reserved_words:
             fully_qualified_path = self._denormalize_quote_join(schema, table_name)
             result = connection.execute(
                 text(
@@ -389,7 +388,7 @@ class SnowflakeDialect(default.DefaultDialect):
 
     @reflection.cache
     def _get_table_unique_constraints(self, connection, schema, table_name, **kw):
-        if table_name.upper() in RESERVED_WORDS:
+        if table_name in SnowflakeIdentifierPreparer.reserved_words:
             fully_qualified_path = self._denormalize_quote_join(schema, table_name)
             result = connection.execute(
                 text(
@@ -472,7 +471,7 @@ class SnowflakeDialect(default.DefaultDialect):
     @reflection.cache
     def _get_table_foreign_keys(self, connection, schema, table_name, **kw):
         _, current_schema = self._current_database_schema(connection, **kw)
-        if table_name.upper() in RESERVED_WORDS:
+        if table_name in SnowflakeIdentifierPreparer.reserved_words:
             fully_qualified_path = self._denormalize_quote_join(schema, table_name)
             result = connection.execute(
                 text(
