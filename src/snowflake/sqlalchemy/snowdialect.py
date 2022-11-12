@@ -46,7 +46,7 @@ from .base import (
     SnowflakeExecutionContext,
     SnowflakeIdentifierPreparer,
     SnowflakeTypeCompiler,
-    RESERVED_WORDS
+    RESERVED_WORDS,
 )
 from .custom_types import (
     _CUSTOM_DECIMAL,
