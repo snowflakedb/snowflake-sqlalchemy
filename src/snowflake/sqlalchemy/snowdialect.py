@@ -46,6 +46,7 @@ from .base import (
     SnowflakeExecutionContext,
     SnowflakeIdentifierPreparer,
     SnowflakeTypeCompiler,
+    RESERVED_WORDS
 )
 from .custom_types import (
     _CUSTOM_DECIMAL,
@@ -320,11 +321,18 @@ class SnowflakeDialect(default.DefaultDialect):
     @reflection.cache
     def _get_table_primary_keys(self, connection, schema, table_name, **kw):
         fully_qualified_path = self._denormalize_quote_join(schema, table_name)
-        result = connection.execute(
-            text(
-                f"SHOW /* sqlalchemy:_get_table_primary_keys */PRIMARY KEYS IN TABLE {fully_qualified_path}"
+        if table_name.upper() in RESERVED_WORDS:
+            result = connection.execute(
+                text(
+                    f"SHOW /* sqlalchemy:_get_table_primary_keys */PRIMARY KEYS IN TABLE {fully_qualified_path}"
+                )
             )
-        )
+        else:
+            result = connection.execute(
+                text(
+                    f"SHOW /* sqlalchemy:_get_table_primary_keys */PRIMARY KEYS IN TABLE {schema}.{table_name}"
+                )
+            )
         ans = {}
         for row in result:
             table_name = self.normalize_name(row._mapping["table_name"])
@@ -381,11 +389,19 @@ class SnowflakeDialect(default.DefaultDialect):
 
     @reflection.cache
     def _get_table_unique_constraints(self, connection, schema, table_name, **kw):
-        result = connection.execute(
-            text(
-                f"SHOW /* sqlalchemy:_get_table_unique_constraints */ UNIQUE KEYS IN TABLE {schema}.{table_name}"
+        fully_qualified_path = self._denormalize_quote_join(schema, table_name)
+        if table_name.upper() in RESERVED_WORDS:
+            result = connection.execute(
+                text(
+                    f"SHOW /* sqlalchemy:_get_table_unique_constraints */ UNIQUE KEYS IN TABLE {fully_qualified_path}"
+                )
             )
-        )
+        else:
+            result = connection.execute(
+                text(
+                    f"SHOW /* sqlalchemy:_get_table_unique_constraints */ UNIQUE KEYS IN TABLE {schema}.{table_name}"
+                )
+            )
         unique_constraints = {}
         for row in result:
             name = self.normalize_name(row._mapping["constraint_name"])
@@ -455,12 +471,20 @@ class SnowflakeDialect(default.DefaultDialect):
 
     @reflection.cache
     def _get_table_foreign_keys(self, connection, schema, table_name, **kw):
+        fully_qualified_path = self._denormalize_quote_join(schema, table_name)
         _, current_schema = self._current_database_schema(connection, **kw)
-        result = connection.execute(
-            text(
-                f"SHOW /* sqlalchemy:_get_table_foreign_keys */ IMPORTED KEYS IN TABLE {schema}.{table_name}"
+        if table_name.upper() in RESERVED_WORDS:
+            result = connection.execute(
+                text(
+                    f"SHOW /* sqlalchemy:_get_table_foreign_keys */ IMPORTED KEYS IN TABLE {fully_qualified_path}"
+                )
             )
-        )
+        else:
+            result = connection.execute(
+                text(
+                    f"SHOW /* sqlalchemy:_get_table_foreign_keys */ IMPORTED KEYS IN TABLE {schema}.{table_name}"
+                )
+            )
         foreign_key_map = {}
         for row in result:
             name = self.normalize_name(row._mapping["fk_name"])
