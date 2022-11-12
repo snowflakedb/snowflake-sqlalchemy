@@ -320,8 +320,8 @@ class SnowflakeDialect(default.DefaultDialect):
 
     @reflection.cache
     def _get_table_primary_keys(self, connection, schema, table_name, **kw):
-        fully_qualified_path = self._denormalize_quote_join(schema, table_name)
         if table_name.upper() in RESERVED_WORDS:
+            fully_qualified_path = self._denormalize_quote_join(schema, table_name)
             result = connection.execute(
                 text(
                     f"SHOW /* sqlalchemy:_get_table_primary_keys */PRIMARY KEYS IN TABLE {fully_qualified_path}"
@@ -389,8 +389,8 @@ class SnowflakeDialect(default.DefaultDialect):
 
     @reflection.cache
     def _get_table_unique_constraints(self, connection, schema, table_name, **kw):
-        fully_qualified_path = self._denormalize_quote_join(schema, table_name)
         if table_name.upper() in RESERVED_WORDS:
+            fully_qualified_path = self._denormalize_quote_join(schema, table_name)
             result = connection.execute(
                 text(
                     f"SHOW /* sqlalchemy:_get_table_unique_constraints */ UNIQUE KEYS IN TABLE {fully_qualified_path}"
@@ -471,9 +471,9 @@ class SnowflakeDialect(default.DefaultDialect):
 
     @reflection.cache
     def _get_table_foreign_keys(self, connection, schema, table_name, **kw):
-        fully_qualified_path = self._denormalize_quote_join(schema, table_name)
         _, current_schema = self._current_database_schema(connection, **kw)
         if table_name.upper() in RESERVED_WORDS:
+            fully_qualified_path = self._denormalize_quote_join(schema, table_name)
             result = connection.execute(
                 text(
                     f"SHOW /* sqlalchemy:_get_table_foreign_keys */ IMPORTED KEYS IN TABLE {fully_qualified_path}"
