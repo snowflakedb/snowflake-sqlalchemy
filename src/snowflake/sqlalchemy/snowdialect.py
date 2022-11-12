@@ -319,7 +319,9 @@ class SnowflakeDialect(default.DefaultDialect):
 
     @reflection.cache
     def _get_table_primary_keys(self, connection, schema, table_name, **kw):
-        fully_qualified_path = self._denormalize_quote_join(schema, self.denormalize_name(table_name))
+        fully_qualified_path = self._denormalize_quote_join(
+            schema, self.denormalize_name(table_name)
+        )
         result = connection.execute(
             text(
                 f"SHOW /* sqlalchemy:_get_table_primary_keys */ PRIMARY KEYS IN TABLE {fully_qualified_path}"
@@ -457,7 +459,9 @@ class SnowflakeDialect(default.DefaultDialect):
     @reflection.cache
     def _get_table_foreign_keys(self, connection, schema, table_name, **kw):
         _, current_schema = self._current_database_schema(connection, **kw)
-        fully_qualified_path = self._denormalize_quote_join(schema, self.denormalize_name(table_name))
+        fully_qualified_path = self._denormalize_quote_join(
+            schema, self.denormalize_name(table_name)
+        )
         result = connection.execute(
             text(
                 f"SHOW /* sqlalchemy:_get_table_foreign_keys */ IMPORTED KEYS IN TABLE {fully_qualified_path}"
