@@ -323,13 +323,13 @@ class SnowflakeDialect(default.DefaultDialect):
             fully_qualified_path = self._denormalize_quote_join(schema, table_name)
             result = connection.execute(
                 text(
-                    f"SHOW /* sqlalchemy:_get_table_primary_keys */PRIMARY KEYS IN TABLE {fully_qualified_path}"
+                    f"SHOW /* sqlalchemy:_get_table_primary_keys */ PRIMARY KEYS IN TABLE {fully_qualified_path}"
                 )
             )
         else:
             result = connection.execute(
                 text(
-                    f"SHOW /* sqlalchemy:_get_table_primary_keys */PRIMARY KEYS IN TABLE {schema}.{table_name}"
+                    f"SHOW /* sqlalchemy:_get_table_primary_keys */ PRIMARY KEYS IN TABLE {schema}.{table_name}"
                 )
             )
         ans = {}
@@ -460,7 +460,7 @@ class SnowflakeDialect(default.DefaultDialect):
             return self._get_table_unique_constraints(
                 connection,
                 self.denormalize_name(full_schema_name),
-                self.normalize_name(table_name),
+                self.denormalize_name(table_name),
                 **kw,
             ).get(table_name, [])
         else:
@@ -616,7 +616,7 @@ class SnowflakeDialect(default.DefaultDialect):
             foreign_key_map = self._get_table_foreign_keys(
                 connection,
                 self.denormalize_name(full_schema_name),
-                self.normalize_name(table_name),
+                self.denormalize_name(table_name),
                 **kw,
             )
         else:
