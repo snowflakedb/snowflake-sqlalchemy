@@ -9,7 +9,7 @@ Source code is also available at:
 
 # Release Notes
 
-- v1.4.4(Unreleased)
+- v1.4.4(Nov 16, 2022)
 
   - Fixed a bug that percent signs in a non-compiled statement should not be interpolated with emtpy sequence when executed.
 
