@@ -39,7 +39,7 @@ repos:
             - --license-filepath
             - license_header.txt
 -   repo: https://github.com/pycqa/flake8
-    rev: 4.0.1
+    rev: 3.9.2
     hooks:
       - id: flake8
         additional_dependencies:
