@@ -9,6 +9,10 @@ Source code is also available at:
 
 # Release Notes
 
+- v1.4.5(Unreleased)
+
+  - Improved performance of looking up columns in tables.
+
 - v1.4.4(Nov 16, 2022)
 
   - Fixed a bug that percent signs in a non-compiled statement should not be interpolated with emtpy sequence when executed.
