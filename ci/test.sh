@@ -21,7 +21,7 @@ PARAMS_FILE="${PARAMETERS_DIR}/parameters_aws.py.gpg"
 gpg --quiet --batch --yes --decrypt --passphrase="${PARAMETERS_SECRET}" ${PARAMS_FILE} > tests/parameters.py
 
 # Download artifacts made by build
-aws s3 cp --recursive --only-show-errors s3://sfc-jenkins/repository/sqlalchemy/linux/${client_git_branch}/${client_git_commit}/ dist
+aws s3 cp --recursive --only-show-errors s3://sfc-eng-jenkins/repository/sqlalchemy/linux/${client_git_branch}/${client_git_commit}/ dist
 
 echo "[Info] Going to run regular tests for Python ${python_env}"
 ${THIS_DIR}/test_docker.sh ${python_env}
