@@ -78,7 +78,9 @@ jobs:
     - name: Upgrade setuptools, pip and wheel
       run: python -m pip install -U setuptools pip wheel
     - name: Install tox
-      run: python -m pip install --pre tox
+      run: python -m pip install tox==4.0.0rc2
+    - name: List installed packages
+      run: python -m pip freeze
     - name: Run tests
       run: python -m tox -e "py${PYTHON_VERSION/\./}" --skip-missing-interpreters false
       env:
