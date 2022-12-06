@@ -9,6 +9,10 @@ Source code is also available at:
 
 # Release Notes
 
+- v1.4.5(Dec 7, 2022)
+
+  - Added telemetry for sqlalchemy usage information.
+
 - v1.4.4(Nov 16, 2022)
 
   - Fixed a bug that percent signs in a non-compiled statement should not be interpolated with emtpy sequence when executed.

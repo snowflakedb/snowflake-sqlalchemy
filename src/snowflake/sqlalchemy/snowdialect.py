@@ -61,6 +61,7 @@ from .custom_types import (
     _CUSTOM_Float,
     _CUSTOM_Time,
 )
+from .util import _update_connection_application_name
 
 colspecs = {
     Date: _CUSTOM_Date,
@@ -833,6 +834,12 @@ class SnowflakeDialect(default.DefaultDialect):
             if result and result._mapping["comment"]
             else None
         }
+
+    def connect(self, *cargs, **cparams):
+        snowflake_conn = super().connect(
+            *cargs, **_update_connection_application_name(**cparams)
+        )
+        return snowflake_conn
 
 
 @sa_vnt.listens_for(Table, "before_create")
