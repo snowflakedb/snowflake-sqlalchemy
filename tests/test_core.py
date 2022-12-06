@@ -38,6 +38,10 @@ from sqlalchemy.sql import and_, not_, or_, select
 
 from snowflake.connector import Error, ProgrammingError, connect
 from snowflake.sqlalchemy import URL, MergeInto, dialect
+from snowflake.sqlalchemy._constants import (
+    APPLICATION_NAME,
+    SNOWFLAKE_SQLALCHEMY_VERSION,
+)
 from snowflake.sqlalchemy.snowdialect import SnowflakeDialect
 
 from .conftest import create_engine_with_future_flag as create_engine
@@ -98,6 +102,15 @@ def _create_users_addresses_tables_without_sequence(engine_testaccount, metadata
 def verify_engine_connection(engine):
     with engine.connect() as conn:
         results = conn.execute(text("select current_version()")).fetchone()
+        assert conn.connection.driver_connection.application == APPLICATION_NAME
+        assert (
+            conn.connection.driver_connection._internal_application_name
+            == APPLICATION_NAME
+        )
+        assert (
+            conn.connection.driver_connection._internal_application_version
+            == SNOWFLAKE_SQLALCHEMY_VERSION
+        )
         assert results is not None
 
 
