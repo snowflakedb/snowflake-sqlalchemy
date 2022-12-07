@@ -3,7 +3,7 @@
 #
 
 import re
-from typing import Any, Dict
+from typing import Any
 from urllib.parse import quote_plus
 
 from sqlalchemy import exc
@@ -96,9 +96,7 @@ def _set_connection_interpolate_empty_sequences(
         dbapi_connection._interpolate_empty_sequences = flag
 
 
-def _update_connection_application_name(
-    **conn_kwargs: Dict[str, Any]
-) -> Dict[str, Any]:
+def _update_connection_application_name(**conn_kwargs: Any) -> Any:
     if PARAM_APPLICATION not in conn_kwargs:
         conn_kwargs[PARAM_APPLICATION] = APPLICATION_NAME
     if PARAM_INTERNAL_APPLICATION_NAME not in conn_kwargs:

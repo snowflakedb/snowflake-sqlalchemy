@@ -11,7 +11,7 @@ Source code is also available at:
 
 - v1.4.5(Dec 7, 2022)
 
-  - Added telemetry for sqlalchemy usage information.
+  - Updated the application name of driver connection `SnowflakeConnection` to `SnowflakeSQLAlchemy`.
 
 - v1.4.4(Nov 16, 2022)
 
