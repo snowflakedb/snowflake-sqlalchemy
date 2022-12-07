@@ -3,12 +3,21 @@
 #
 
 import re
+from typing import Any
 from urllib.parse import quote_plus
 
 from sqlalchemy import exc
 
 from snowflake.connector.compat import IS_STR
 from snowflake.connector.connection import SnowflakeConnection
+
+from ._constants import (
+    APPLICATION_NAME,
+    PARAM_APPLICATION,
+    PARAM_INTERNAL_APPLICATION_NAME,
+    PARAM_INTERNAL_APPLICATION_VERSION,
+    SNOWFLAKE_SQLALCHEMY_VERSION,
+)
 
 
 def _rfc_1738_quote(text):
@@ -85,3 +94,13 @@ def _set_connection_interpolate_empty_sequences(
     else:
         # _dbapi_connection is a raw SnowflakeConnection
         dbapi_connection._interpolate_empty_sequences = flag
+
+
+def _update_connection_application_name(**conn_kwargs: Any) -> Any:
+    if PARAM_APPLICATION not in conn_kwargs:
+        conn_kwargs[PARAM_APPLICATION] = APPLICATION_NAME
+    if PARAM_INTERNAL_APPLICATION_NAME not in conn_kwargs:
+        conn_kwargs[PARAM_INTERNAL_APPLICATION_NAME] = APPLICATION_NAME
+    if PARAM_INTERNAL_APPLICATION_VERSION not in conn_kwargs:
+        conn_kwargs[PARAM_INTERNAL_APPLICATION_VERSION] = SNOWFLAKE_SQLALCHEMY_VERSION
+    return conn_kwargs
