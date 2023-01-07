@@ -141,7 +141,7 @@ jobs:
   combine-coverage:
     if: ${{ success() || failure() }}
     name: Combine coverage
-    needs: test
+    needs: [test, test_connector_regression]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
