@@ -134,7 +134,6 @@ def test_connect_args(verify_app_name):
     Snowflake connect string supports account name as a replacement of
     host:port
     """
-
     engine = create_engine(
         "snowflake://{user}:{password}@{host}:{port}/{database}/{schema}"
         "?account={account}&protocol={protocol}".format(
