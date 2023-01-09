@@ -97,7 +97,6 @@ jobs:
           .tox/.coverage
           .tox/coverage.xml
 
-
   test_connector_regression:
    name: Connector Regression Test ${{ matrix.os.download_name }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
    needs: lint
@@ -110,33 +109,33 @@ jobs:
          download_name: manylinux_x86_64
       python-version: ["3.7"]
       cloud-provider: [aws]
-    steps:
-      - uses: actions/checkout@v2
-      - name: Set up Python
-        uses: actions/setup-python@v2
-        with:
-          python-version: ${{ matrix.python-version }}
-      - name: Display Python version
-        run: python -c "import sys; print(sys.version)"
-      - name: Setup parameters file
-        shell: bash
-        env:
-          PARAMETERS_SECRET: ${{ secrets.PARAMETERS_SECRET }}
-        run: |
-          gpg --quiet --batch --yes --decrypt --passphrase="$PARAMETERS_SECRET" \
-          .github/workflows/parameters/parameters_${{ matrix.cloud-provider }}.py.gpg > tests/parameters.py
-      - name: Upgrade setuptools, pip and wheel
-        run: python -m pip install -U setuptools pip wheel
-      - name: Install tox
-        run: python -m pip install tox
-      - name: List installed packages
-        run: python -m pip freeze
-      - name: Run tests
-        run: python -m tox -e connector_regression --skip-missing-interpreters false
-        env:
-          PYTHON_VERSION: ${{ matrix.python-version }}
-          PYTEST_ADDOPTS: -vvv --color=yes --tb=short
-          TOX_PARALLEL_NO_SPINNER: 1
+   steps:
+    - uses: actions/checkout@v2
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Display Python version
+      run: python -c "import sys; print(sys.version)"
+    - name: Setup parameters file
+      shell: bash
+      env:
+        PARAMETERS_SECRET: ${{ secrets.PARAMETERS_SECRET }}
+      run: |
+        gpg --quiet --batch --yes --decrypt --passphrase="$PARAMETERS_SECRET" \
+        .github/workflows/parameters/parameters_${{ matrix.cloud-provider }}.py.gpg > tests/parameters.py
+    - name: Upgrade setuptools, pip and wheel
+      run: python -m pip install -U setuptools pip wheel
+    - name: Install tox
+      run: python -m pip install tox
+    - name: List installed packages
+      run: python -m pip freeze
+    - name: Run tests
+      run: python -m tox -e connector_regression --skip-missing-interpreters false
+      env:
+        PYTHON_VERSION: ${{ matrix.python-version }}
+        PYTEST_ADDOPTS: -vvv --color=yes --tb=short
+        TOX_PARALLEL_NO_SPINNER: 1
 
   combine-coverage:
     if: ${{ success() || failure() }}
