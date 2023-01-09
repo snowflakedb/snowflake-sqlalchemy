@@ -13,8 +13,16 @@ import pytest
 from sqlalchemy import create_engine
 
 import snowflake.connector
+import snowflake.connector.connection
 from snowflake.connector.compat import IS_WINDOWS
 from snowflake.sqlalchemy import URL, dialect
+from snowflake.sqlalchemy._constants import (
+    APPLICATION_NAME,
+    PARAM_APPLICATION,
+    PARAM_INTERNAL_APPLICATION_NAME,
+    PARAM_INTERNAL_APPLICATION_VERSION,
+    SNOWFLAKE_SQLALCHEMY_VERSION,
+)
 
 from .parameters import CONNECTION_PARAMETERS
 
@@ -22,6 +30,16 @@ CLOUD_PROVIDERS = {"aws", "azure", "gcp"}
 EXTERNAL_SKIP_TAGS = {"internal"}
 INTERNAL_SKIP_TAGS = {"external"}
 RUNNING_ON_GH = os.getenv("GITHUB_ACTIONS") == "true"
+
+snowflake.connector.connection.DEFAULT_CONFIGURATION[
+    PARAM_APPLICATION
+] = APPLICATION_NAME
+snowflake.connector.connection.DEFAULT_CONFIGURATION[
+    PARAM_INTERNAL_APPLICATION_NAME
+] = APPLICATION_NAME
+snowflake.connector.connection.DEFAULT_CONFIGURATION[
+    PARAM_INTERNAL_APPLICATION_VERSION
+] = SNOWFLAKE_SQLALCHEMY_VERSION
 
 TEST_SCHEMA = f"sqlalchemy_tests_{str(uuid.uuid4()).replace('-', '_')}"
 
