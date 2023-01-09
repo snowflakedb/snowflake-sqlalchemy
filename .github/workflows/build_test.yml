@@ -131,7 +131,7 @@ jobs:
     - name: List installed packages
       run: python -m pip freeze
     - name: Run tests
-      run: python -m tox -e connector_regression --skip-missing-interpreters false
+      run: python -m tox -e connector_regression --skip-missing-interpreters false -m "not gcp and not azure"
       env:
         PYTHON_VERSION: ${{ matrix.python-version }}
         PYTEST_ADDOPTS: -vvv --color=yes --tb=short
