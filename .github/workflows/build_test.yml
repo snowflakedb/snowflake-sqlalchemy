@@ -111,6 +111,8 @@ jobs:
       cloud-provider: [aws]
    steps:
     - uses: actions/checkout@v2
+      with:
+        submodules: true
     - name: Set up Python
       uses: actions/setup-python@v2
       with:
