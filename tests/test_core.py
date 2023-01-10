@@ -99,22 +99,35 @@ def _create_users_addresses_tables_without_sequence(engine_testaccount, metadata
     return users, addresses
 
 
-def verify_engine_connection(engine):
+def verify_engine_connection(engine, verify_app_name):
     with engine.connect() as conn:
         results = conn.execute(text("select current_version()")).fetchone()
-        assert conn.connection.driver_connection.application == APPLICATION_NAME
-        assert (
-            conn.connection.driver_connection._internal_application_name
-            == APPLICATION_NAME
-        )
-        assert (
-            conn.connection.driver_connection._internal_application_version
-            == SNOWFLAKE_SQLALCHEMY_VERSION
-        )
+        if verify_app_name:
+            assert conn.connection.driver_connection.application == APPLICATION_NAME
+            assert (
+                conn.connection.driver_connection._internal_application_name
+                == APPLICATION_NAME
+            )
+            assert (
+                conn.connection.driver_connection._internal_application_version
+                == SNOWFLAKE_SQLALCHEMY_VERSION
+            )
         assert results is not None
 
 
-def test_connect_args():
+@pytest.mark.parametrize(
+    "verify_app_name",
+    [
+        False,
+        pytest.param(
+            True,
+            marks=pytest.mark.xfail(
+                reason="Pending backend service to recognize SnowflakeSQLAlchemy as a valid client app id"
+            ),
+        ),
+    ],
+)
+def test_connect_args(verify_app_name):
     """
     Tests connect string
 
@@ -135,7 +148,7 @@ def test_connect_args():
         )
     )
     try:
-        verify_engine_connection(engine)
+        verify_engine_connection(engine, verify_app_name)
     finally:
         engine.dispose()
 
@@ -150,7 +163,7 @@ def test_connect_args():
         )
     )
     try:
-        verify_engine_connection(engine)
+        verify_engine_connection(engine, verify_app_name)
     finally:
         engine.dispose()
 
@@ -166,7 +179,7 @@ def test_connect_args():
         )
     )
     try:
-        verify_engine_connection(engine)
+        verify_engine_connection(engine, verify_app_name)
     finally:
         engine.dispose()
 
