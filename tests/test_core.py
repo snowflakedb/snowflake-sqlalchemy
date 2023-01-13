@@ -36,6 +36,7 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.pool import NullPool
 from sqlalchemy.sql import and_, not_, or_, select
 
+import snowflake.connector.errors
 from snowflake.connector import Error, ProgrammingError, connect
 from snowflake.sqlalchemy import URL, MergeInto, dialect
 from snowflake.sqlalchemy._constants import (
@@ -1785,3 +1786,16 @@ CREATE OR REPLACE TEMP TABLE {table_name}
             and columns[0]["name"] == "col"
             and columns[1]["name"] == ""
         )
+
+
+def test_snowflake_sqlalchemy_as_valid_client_type(engine_testaccount):
+    with engine_testaccount.connect() as conn:
+        conn.exec_driver_sql(
+            "alter session set ENABLE_SNOWFLAKE_SQLALCHEMY_AS_VALID_CLIENT_TYPE = False"
+        )
+        with pytest.raises(snowflake.connector.errors.NotSupportedError):
+            conn.exec_driver_sql("select 1").cursor.fetch_pandas_all()
+        conn.exec_driver_sql(
+            "alter session set ENABLE_SNOWFLAKE_SQLALCHEMY_AS_VALID_CLIENT_TYPE = True"
+        )
+        conn.exec_driver_sql("select 1").cursor.fetch_pandas_all()
