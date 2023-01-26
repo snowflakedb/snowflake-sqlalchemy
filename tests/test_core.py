@@ -32,7 +32,7 @@ from sqlalchemy import (
     inspect,
     text,
 )
-from sqlalchemy.exc import DBAPIError
+from sqlalchemy.exc import DBAPIError, NoSuchTableError
 from sqlalchemy.pool import NullPool
 from sqlalchemy.sql import and_, not_, or_, select
 
@@ -415,6 +415,18 @@ def test_insert_tables(engine_testaccount):
             # drop tables
             addresses.drop(engine_testaccount)
             users.drop(engine_testaccount)
+
+
+def test_table_does_not_exist(engine_testaccount):
+    """
+    Tests Correct Exception Thrown When Table Does Not Exist
+    """
+    with engine_testaccount.connect() as conn:
+        meta = MetaData()
+        with pytest.raises(NoSuchTableError):
+            Table(
+                "does_not_exist", meta, autoload=True, autoload_with=engine_testaccount
+            )
 
 
 @pytest.mark.skip(

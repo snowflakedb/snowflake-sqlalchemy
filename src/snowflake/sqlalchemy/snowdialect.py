@@ -637,6 +637,9 @@ class SnowflakeDialect(default.DefaultDialect):
 
             type_instance = col_type(**col_type_kw)
 
+            if table_name not in schema_primary_keys:
+                raise sa_exc.NoSuchTableError()
+
             current_table_pks = schema_primary_keys.get(table_name)
 
             ans.append(
@@ -669,7 +672,10 @@ class SnowflakeDialect(default.DefaultDialect):
         if schema_columns is None:
             # Too many results, fall back to only query about single table
             return self._get_table_columns(connection, table_name, schema, **kw)
-        return schema_columns[self.normalize_name(table_name)]
+        normalized_table_name = self.normalize_name(table_name)
+        if normalized_table_name not in schema_columns:
+            raise sa_exc.NoSuchTableError()
+        return schema_columns[normalized_table_name]
 
     @reflection.cache
     def get_table_names(self, connection, schema=None, **kw):
