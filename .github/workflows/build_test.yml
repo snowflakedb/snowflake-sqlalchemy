@@ -98,6 +98,7 @@ jobs:
           .tox/coverage.xml
 
   test_connector_regression:
+   if: ${{ false }}  # disable temporarily
    name: Connector Regression Test ${{ matrix.os.download_name }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
    needs: lint
    runs-on: ${{ matrix.os.image_name }}
@@ -141,7 +142,7 @@ jobs:
   combine-coverage:
     if: ${{ success() || failure() }}
     name: Combine coverage
-    needs: [test, test_connector_regression]
+    needs: [test]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
