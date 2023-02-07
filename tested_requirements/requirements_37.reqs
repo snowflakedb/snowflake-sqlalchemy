@@ -14,7 +14,7 @@ PyJWT==2.4.0
 pyOpenSSL==22.0.0
 pytz==2022.1
 requests==2.28.1
-snowflake-connector-python==2.7.9
+snowflake-connector-python==2.9.0
 SQLAlchemy==1.4.39
 typing_extensions==4.2.0
 urllib3==1.26.9
