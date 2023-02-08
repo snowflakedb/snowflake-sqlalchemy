@@ -12,6 +12,7 @@ Source code is also available at:
 - v1.4.6(Feb 3, 2023)
 
 - Bumped snowflake-connector-python dependency to newest version which supports Python 3.11.
+- Reverted the change of application name introduced in v1.4.5 until support gets added.
 
 - v1.4.5(Dec 7, 2022)
 
