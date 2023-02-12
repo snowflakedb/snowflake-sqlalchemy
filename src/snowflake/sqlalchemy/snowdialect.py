@@ -206,7 +206,7 @@ class SnowflakeDialect(default.DefaultDialect):
                 raise sa_exc.ArgumentError(
                     f"Invalid name space is specified: {opts['database']}"
                 )
-        if ".snowflakecomputing.com" not in opts["host"] and not opts.get("port"):
+        if "host" in opts and ".snowflakecomputing.com" not in opts["host"] and not opts.get("port"):
             opts["account"] = opts["host"]
             if "." in opts["account"]:
                 # remove region subdomain
