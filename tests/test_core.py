@@ -37,6 +37,7 @@ from sqlalchemy.pool import NullPool
 from sqlalchemy.sql import and_, not_, or_, select
 
 import snowflake.connector.errors
+import snowflake.sqlalchemy.snowdialect
 from snowflake.connector import Error, ProgrammingError, connect
 from snowflake.sqlalchemy import URL, MergeInto, dialect
 from snowflake.sqlalchemy._constants import (
@@ -1788,14 +1789,62 @@ CREATE OR REPLACE TEMP TABLE {table_name}
         )
 
 
-def test_snowflake_sqlalchemy_as_valid_client_type(engine_testaccount):
-    with engine_testaccount.connect() as conn:
-        conn.exec_driver_sql(
-            "alter session set ENABLE_SNOWFLAKE_SQLALCHEMY_AS_VALID_CLIENT_TYPE = False"
-        )
+def test_snowflake_sqlalchemy_as_valid_client_type():
+    engine = create_engine(
+        URL(
+            user=CONNECTION_PARAMETERS["user"],
+            password=CONNECTION_PARAMETERS["password"],
+            account=CONNECTION_PARAMETERS["account"],
+            host=CONNECTION_PARAMETERS["host"],
+            port=CONNECTION_PARAMETERS["port"],
+            protocol=CONNECTION_PARAMETERS["protocol"],
+        ),
+        connect_args={"internal_application_name": "UnknownClient"},
+    )
+    with engine.connect() as conn:
         with pytest.raises(snowflake.connector.errors.NotSupportedError):
             conn.exec_driver_sql("select 1").cursor.fetch_pandas_all()
-        conn.exec_driver_sql(
-            "alter session set ENABLE_SNOWFLAKE_SQLALCHEMY_AS_VALID_CLIENT_TYPE = True"
+
+    engine = create_engine(
+        URL(
+            user=CONNECTION_PARAMETERS["user"],
+            password=CONNECTION_PARAMETERS["password"],
+            account=CONNECTION_PARAMETERS["account"],
+            host=CONNECTION_PARAMETERS["host"],
+            port=CONNECTION_PARAMETERS["port"],
+            protocol=CONNECTION_PARAMETERS["protocol"],
         )
+    )
+    with engine.connect() as conn:
         conn.exec_driver_sql("select 1").cursor.fetch_pandas_all()
+
+    snowflake.sqlalchemy.snowdialect._ENABLE_SQLALCHEMY_AS_APPLICATION_NAME = False
+    snowflake.connector.connection.DEFAULT_CONFIGURATION["application"] = (
+        None,
+        (type(None), str),
+    )
+    snowflake.connector.connection.DEFAULT_CONFIGURATION[
+        "internal_application_name"
+    ] = ("PythonConnector", (type(None), str))
+    snowflake.connector.connection.DEFAULT_CONFIGURATION[
+        "internal_application_version"
+    ] = ("3.0.0", (type(None), str))
+    engine = create_engine(
+        URL(
+            user=CONNECTION_PARAMETERS["user"],
+            password=CONNECTION_PARAMETERS["password"],
+            account=CONNECTION_PARAMETERS["account"],
+            host=CONNECTION_PARAMETERS["host"],
+            port=CONNECTION_PARAMETERS["port"],
+            protocol=CONNECTION_PARAMETERS["protocol"],
+        )
+    )
+    with engine.connect() as conn:
+        conn.exec_driver_sql("select 1").cursor.fetch_pandas_all()
+        assert (
+            conn.connection.driver_connection._internal_application_name
+            == "PythonConnector"
+        )
+        assert (
+            conn.connection.driver_connection._internal_application_version == "3.0.0"
+        )

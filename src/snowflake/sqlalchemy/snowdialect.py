@@ -108,6 +108,9 @@ ischema_names = {
 }
 
 
+_ENABLE_SQLALCHEMY_AS_APPLICATION_NAME = True
+
+
 class SnowflakeDialect(default.DefaultDialect):
     name = "snowflake"
     driver = "snowflake"
@@ -836,10 +839,16 @@ class SnowflakeDialect(default.DefaultDialect):
         }
 
     def connect(self, *cargs, **cparams):
-        snowflake_conn = super().connect(
-            *cargs, **_update_connection_application_name(**cparams)
+        return (
+            super().connect(
+                *cargs,
+                **_update_connection_application_name(**cparams)
+                if _ENABLE_SQLALCHEMY_AS_APPLICATION_NAME
+                else cparams,
+            )
+            if _ENABLE_SQLALCHEMY_AS_APPLICATION_NAME
+            else super().connect(*cargs, **cparams)
         )
-        return snowflake_conn
 
 
 @sa_vnt.listens_for(Table, "before_create")
