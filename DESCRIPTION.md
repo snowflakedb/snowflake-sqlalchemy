@@ -9,10 +9,14 @@ Source code is also available at:
 
 # Release Notes
 
+- v1.4.7(Unreleased)
+
+  - Re-applied the application name of driver connection `SnowflakeConnection` to `SnowflakeSQLAlchemy`.
+
 - v1.4.6(Feb 8, 2023)
 
-- Bumped snowflake-connector-python dependency to newest version which supports Python 3.11.
-- Reverted the change of application name introduced in v1.4.5 until support gets added.
+  - Bumped snowflake-connector-python dependency to newest version which supports Python 3.11.
+  - Reverted the change of application name introduced in v1.4.5 until support gets added.
 
 - v1.4.5(Dec 7, 2022)
 
