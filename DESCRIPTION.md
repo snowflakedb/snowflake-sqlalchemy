@@ -9,14 +9,15 @@ Source code is also available at:
 
 # Release Notes
 
-- v1.4.7(Feb 16, 2023)
+- v1.4.7(Unreleased)
 
-- `SnowflakeDialect.get_columns` now throws a `NoSuchTableError` exception when the specified table doesn't exist, instead of the more vague `KeyError`.
+  - Re-applied the application name of driver connection `SnowflakeConnection` to `SnowflakeSQLAlchemy`.
+  - `SnowflakeDialect.get_columns` now throws a `NoSuchTableError` exception when the specified table doesn't exist, instead of the more vague `KeyError`.
 
 - v1.4.6(Feb 8, 2023)
 
-- Bumped snowflake-connector-python dependency to newest version which supports Python 3.11.
-- Reverted the change of application name introduced in v1.4.5 until support gets added.
+  - Bumped snowflake-connector-python dependency to newest version which supports Python 3.11.
+  - Reverted the change of application name introduced in v1.4.5 until support gets added.
 
 - v1.4.5(Dec 7, 2022)
 
