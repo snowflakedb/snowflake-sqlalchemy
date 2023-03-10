@@ -637,9 +637,6 @@ class SnowflakeDialect(default.DefaultDialect):
 
             type_instance = col_type(**col_type_kw)
 
-            if table_name not in schema_primary_keys:
-                raise sa_exc.NoSuchTableError()
-
             current_table_pks = schema_primary_keys.get(table_name)
 
             ans.append(
@@ -658,6 +655,10 @@ class SnowflakeDialect(default.DefaultDialect):
                     else False,
                 }
             )
+
+        # If we didn't find any columns for the table, the table doesn't exist.
+        if len(ans) == 0:
+            raise sa_exc.NoSuchTableError()
         return ans
 
     def get_columns(self, connection, table_name, schema=None, **kw):
