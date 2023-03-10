@@ -61,6 +61,7 @@ from .custom_types import (
     _CUSTOM_Float,
     _CUSTOM_Time,
 )
+from .util import _update_connection_application_name
 
 colspecs = {
     Date: _CUSTOM_Date,
@@ -105,6 +106,9 @@ ischema_names = {
     "ARRAY": ARRAY,
     "GEOGRAPHY": GEOGRAPHY,
 }
+
+
+_ENABLE_SQLALCHEMY_AS_APPLICATION_NAME = True
 
 
 class SnowflakeDialect(default.DefaultDialect):
@@ -840,6 +844,18 @@ class SnowflakeDialect(default.DefaultDialect):
             if result and result._mapping["comment"]
             else None
         }
+
+    def connect(self, *cargs, **cparams):
+        return (
+            super().connect(
+                *cargs,
+                **_update_connection_application_name(**cparams)
+                if _ENABLE_SQLALCHEMY_AS_APPLICATION_NAME
+                else cparams,
+            )
+            if _ENABLE_SQLALCHEMY_AS_APPLICATION_NAME
+            else super().connect(*cargs, **cparams)
+        )
 
 
 @sa_vnt.listens_for(Table, "before_create")

@@ -36,6 +36,8 @@ from sqlalchemy.exc import DBAPIError, NoSuchTableError
 from sqlalchemy.pool import NullPool
 from sqlalchemy.sql import and_, not_, or_, select
 
+import snowflake.connector.errors
+import snowflake.sqlalchemy.snowdialect
 from snowflake.connector import Error, ProgrammingError, connect
 from snowflake.sqlalchemy import URL, MergeInto, dialect
 from snowflake.sqlalchemy._constants import (
@@ -99,35 +101,22 @@ def _create_users_addresses_tables_without_sequence(engine_testaccount, metadata
     return users, addresses
 
 
-def verify_engine_connection(engine, verify_app_name):
+def verify_engine_connection(engine):
     with engine.connect() as conn:
         results = conn.execute(text("select current_version()")).fetchone()
-        if verify_app_name:
-            assert conn.connection.driver_connection.application == APPLICATION_NAME
-            assert (
-                conn.connection.driver_connection._internal_application_name
-                == APPLICATION_NAME
-            )
-            assert (
-                conn.connection.driver_connection._internal_application_version
-                == SNOWFLAKE_SQLALCHEMY_VERSION
-            )
+        assert conn.connection.driver_connection.application == APPLICATION_NAME
+        assert (
+            conn.connection.driver_connection._internal_application_name
+            == APPLICATION_NAME
+        )
+        assert (
+            conn.connection.driver_connection._internal_application_version
+            == SNOWFLAKE_SQLALCHEMY_VERSION
+        )
         assert results is not None
 
 
-@pytest.mark.parametrize(
-    "verify_app_name",
-    [
-        False,
-        pytest.param(
-            True,
-            marks=pytest.mark.xfail(
-                reason="Pending backend service to recognize SnowflakeSQLAlchemy as a valid client app id"
-            ),
-        ),
-    ],
-)
-def test_connect_args(verify_app_name):
+def test_connect_args():
     """
     Tests connect string
 
@@ -148,7 +137,7 @@ def test_connect_args(verify_app_name):
         )
     )
     try:
-        verify_engine_connection(engine, verify_app_name)
+        verify_engine_connection(engine)
     finally:
         engine.dispose()
 
@@ -163,7 +152,7 @@ def test_connect_args(verify_app_name):
         )
     )
     try:
-        verify_engine_connection(engine, verify_app_name)
+        verify_engine_connection(engine)
     finally:
         engine.dispose()
 
@@ -179,7 +168,7 @@ def test_connect_args(verify_app_name):
         )
     )
     try:
-        verify_engine_connection(engine, verify_app_name)
+        verify_engine_connection(engine)
     finally:
         engine.dispose()
 
@@ -1797,3 +1786,84 @@ CREATE OR REPLACE TEMP TABLE {table_name}
             and columns[0]["name"] == "col"
             and columns[1]["name"] == ""
         )
+
+
+def test_snowflake_sqlalchemy_as_valid_client_type():
+    engine = create_engine(
+        URL(
+            user=CONNECTION_PARAMETERS["user"],
+            password=CONNECTION_PARAMETERS["password"],
+            account=CONNECTION_PARAMETERS["account"],
+            host=CONNECTION_PARAMETERS["host"],
+            port=CONNECTION_PARAMETERS["port"],
+            protocol=CONNECTION_PARAMETERS["protocol"],
+        ),
+        connect_args={"internal_application_name": "UnknownClient"},
+    )
+    with engine.connect() as conn:
+        with pytest.raises(snowflake.connector.errors.NotSupportedError):
+            conn.exec_driver_sql("select 1").cursor.fetch_pandas_all()
+
+    engine = create_engine(
+        URL(
+            user=CONNECTION_PARAMETERS["user"],
+            password=CONNECTION_PARAMETERS["password"],
+            account=CONNECTION_PARAMETERS["account"],
+            host=CONNECTION_PARAMETERS["host"],
+            port=CONNECTION_PARAMETERS["port"],
+            protocol=CONNECTION_PARAMETERS["protocol"],
+        )
+    )
+    with engine.connect() as conn:
+        conn.exec_driver_sql("select 1").cursor.fetch_pandas_all()
+
+    try:
+        snowflake.sqlalchemy.snowdialect._ENABLE_SQLALCHEMY_AS_APPLICATION_NAME = False
+        origin_app = snowflake.connector.connection.DEFAULT_CONFIGURATION["application"]
+        origin_internal_app_name = snowflake.connector.connection.DEFAULT_CONFIGURATION[
+            "internal_application_name"
+        ]
+        origin_internal_app_version = (
+            snowflake.connector.connection.DEFAULT_CONFIGURATION[
+                "internal_application_version"
+            ]
+        )
+        snowflake.connector.connection.DEFAULT_CONFIGURATION["application"] = (
+            None,
+            (type(None), str),
+        )
+        snowflake.connector.connection.DEFAULT_CONFIGURATION[
+            "internal_application_name"
+        ] = ("PythonConnector", (type(None), str))
+        snowflake.connector.connection.DEFAULT_CONFIGURATION[
+            "internal_application_version"
+        ] = ("3.0.0", (type(None), str))
+        engine = create_engine(
+            URL(
+                user=CONNECTION_PARAMETERS["user"],
+                password=CONNECTION_PARAMETERS["password"],
+                account=CONNECTION_PARAMETERS["account"],
+                host=CONNECTION_PARAMETERS["host"],
+                port=CONNECTION_PARAMETERS["port"],
+                protocol=CONNECTION_PARAMETERS["protocol"],
+            )
+        )
+        with engine.connect() as conn:
+            conn.exec_driver_sql("select 1").cursor.fetch_pandas_all()
+            assert (
+                conn.connection.driver_connection._internal_application_name
+                == "PythonConnector"
+            )
+            assert (
+                conn.connection.driver_connection._internal_application_version
+                == "3.0.0"
+            )
+    finally:
+        snowflake.sqlalchemy.snowdialect._ENABLE_SQLALCHEMY_AS_APPLICATION_NAME = True
+        snowflake.connector.connection.DEFAULT_CONFIGURATION["application"] = origin_app
+        snowflake.connector.connection.DEFAULT_CONFIGURATION[
+            "internal_application_name"
+        ] = origin_internal_app_name
+        snowflake.connector.connection.DEFAULT_CONFIGURATION[
+            "internal_application_version"
+        ] = origin_internal_app_version
