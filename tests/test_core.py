@@ -410,12 +410,9 @@ def test_table_does_not_exist(engine_testaccount):
     """
     Tests Correct Exception Thrown When Table Does Not Exist
     """
-    with engine_testaccount.connect() as conn:
-        meta = MetaData()
-        with pytest.raises(NoSuchTableError):
-            Table(
-                "does_not_exist", meta, autoload=True, autoload_with=engine_testaccount
-            )
+    meta = MetaData()
+    with pytest.raises(NoSuchTableError):
+        Table("does_not_exist", meta, autoload=True, autoload_with=engine_testaccount)
 
 
 @pytest.mark.skip(
