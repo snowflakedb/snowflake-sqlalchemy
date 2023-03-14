@@ -659,6 +659,10 @@ class SnowflakeDialect(default.DefaultDialect):
                     else False,
                 }
             )
+
+        # If we didn't find any columns for the table, the table doesn't exist.
+        if len(ans) == 0:
+            raise sa_exc.NoSuchTableError()
         return ans
 
     def get_columns(self, connection, table_name, schema=None, **kw):
@@ -673,7 +677,10 @@ class SnowflakeDialect(default.DefaultDialect):
         if schema_columns is None:
             # Too many results, fall back to only query about single table
             return self._get_table_columns(connection, table_name, schema, **kw)
-        return schema_columns[self.normalize_name(table_name)]
+        normalized_table_name = self.normalize_name(table_name)
+        if normalized_table_name not in schema_columns:
+            raise sa_exc.NoSuchTableError()
+        return schema_columns[normalized_table_name]
 
     @reflection.cache
     def get_table_names(self, connection, schema=None, **kw):

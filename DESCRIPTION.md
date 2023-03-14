@@ -12,6 +12,7 @@ Source code is also available at:
 - v1.4.7(Unreleased)
 
   - Re-applied the application name of driver connection `SnowflakeConnection` to `SnowflakeSQLAlchemy`.
+  - `SnowflakeDialect.get_columns` now throws a `NoSuchTableError` exception when the specified table doesn't exist, instead of the more vague `KeyError`.
 
 - v1.4.6(Feb 8, 2023)
 
