@@ -154,6 +154,9 @@ class SnowflakeCompiler(compiler.SQLCompiler):
     def visit_sequence(self, sequence, **kw):
         return self.dialect.identifier_preparer.format_sequence(sequence) + ".nextval"
 
+    def visit_now_func(self, now, **kw):
+        return "CURRENT_TIMESTAMP"
+
     def visit_merge_into(self, merge_into, **kw):
         clauses = " ".join(
             clause._compiler_dispatch(self, **kw) for clause in merge_into.clauses
