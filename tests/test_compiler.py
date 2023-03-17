@@ -2,7 +2,7 @@
 # Copyright (c) 2012-2022 Snowflake Computing Inc. All rights reserved.
 #
 
-from sqlalchemy import Integer, String, and_, select
+from sqlalchemy import Integer, String, and_, func, select
 from sqlalchemy.schema import DropColumnComment, DropTableComment
 from sqlalchemy.sql import column, quoted_name, table
 from sqlalchemy.testing import AssertsCompiledSQL
@@ -22,6 +22,14 @@ table2 = table(
 
 class TestSnowflakeCompiler(AssertsCompiledSQL):
     __dialect__ = "snowflake"
+
+    def test_now_func(self):
+        statement = select(func.now())
+        self.assert_compile(
+            statement,
+            "SELECT CURRENT_TIMESTAMP AS now_1",
+            dialect="snowflake",
+        )
 
     def test_multi_table_delete(self):
         statement = table1.delete().where(table1.c.id == table2.c.id)
