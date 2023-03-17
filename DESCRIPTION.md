@@ -9,10 +9,12 @@ Source code is also available at:
 
 # Release Notes
 
-- v1.4.7(Unreleased)
+- v1.4.7(Mar 22, 2023)
 
   - Re-applied the application name of driver connection `SnowflakeConnection` to `SnowflakeSQLAlchemy`.
   - `SnowflakeDialect.get_columns` now throws a `NoSuchTableError` exception when the specified table doesn't exist, instead of the more vague `KeyError`.
+  - Fixed a bug that dialect can not be created with empty host name.
+  - Fixed a bug that `sqlalchemy.func.now` is not rendered correctly.
 
 - v1.4.6(Feb 8, 2023)
 
