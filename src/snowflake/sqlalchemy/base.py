@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2012-2022 Snowflake Computing Inc. All rights reserved.
+# Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
 
 import operator
@@ -153,6 +153,9 @@ class SnowflakeIdentifierPreparer(compiler.IdentifierPreparer):
 class SnowflakeCompiler(compiler.SQLCompiler):
     def visit_sequence(self, sequence, **kw):
         return self.dialect.identifier_preparer.format_sequence(sequence) + ".nextval"
+
+    def visit_now_func(self, now, **kw):
+        return "CURRENT_TIMESTAMP"
 
     def visit_merge_into(self, merge_into, **kw):
         clauses = " ".join(
