@@ -29,6 +29,7 @@ from sqlalchemy import (
     Table,
     UniqueConstraint,
     dialects,
+    func,
     inspect,
     text,
 )
@@ -39,7 +40,7 @@ from sqlalchemy.sql import and_, not_, or_, select
 import snowflake.connector.errors
 import snowflake.sqlalchemy.snowdialect
 from snowflake.connector import Error, ProgrammingError, connect
-from snowflake.sqlalchemy import URL, MergeInto, dialect
+from snowflake.sqlalchemy import URL, InsertMulti, MergeInto, dialect
 from snowflake.sqlalchemy._constants import (
     APPLICATION_NAME,
     SNOWFLAKE_SQLALCHEMY_VERSION,
@@ -1287,6 +1288,144 @@ def test_deterministic_merge_into(sql_compiler):
         "name = onboarding_users.name WHEN NOT MATCHED AND onboarding_users.fullname "
         "IS NOT NULL THEN INSERT (fullname, id, name) VALUES (onboarding_users.fullname, "
         "onboarding_users.id, onboarding_users.name)"
+    )
+
+
+def test_unconditional_insert_all(sql_compiler):
+    meta = MetaData()
+    users1 = Table(
+        "users1",
+        meta,
+        Column("id", Integer, Sequence("user_id_seq"), primary_key=True),
+        Column("name", String),
+        Column("fullname", String),
+        Column("created_at", DateTime),
+    )
+    users2 = Table(
+        "users2",
+        meta,
+        Column("id", Integer, Sequence("user_id_seq2"), primary_key=True),
+        Column("name", String),
+        Column("full/name", String),
+    )
+    onboarding_users = Table(
+        "onboarding_users",
+        meta,
+        Column("id", Integer, Sequence("new_user_id_seq"), primary_key=True),
+        Column("name", String),
+        Column("fullname", String),
+        Column("delete", Boolean),
+    )
+    insert_all = (
+        InsertMulti(
+            select(
+                onboarding_users.c.id,
+                onboarding_users.c.name,
+                onboarding_users.c.fullname,
+            )
+        )
+        .into(users1)
+        .into(users2)
+    )
+    assert (
+        sql_compiler(insert_all) == "INSERT ALL INTO users1 INTO users2 "
+        "SELECT onboarding_users.id, onboarding_users.name, onboarding_users.fullname "
+        "FROM onboarding_users"
+    )
+
+    stmt = select(
+        onboarding_users.c.id,
+        onboarding_users.c.name.label("name_label"),
+        onboarding_users.c.fullname,
+        onboarding_users.c.delete,
+    )
+    insert_all = (
+        InsertMulti(stmt)
+        .into(
+            users1,
+            ["id", "name", users1.c.fullname, users1.c.created_at],
+            [
+                "id",
+                "name_label",
+                stmt.selected_columns.fullname,
+                func.now(),
+            ],
+        )
+        .into(
+            users2,
+            [users2.c.name, users2.c["full/name"]],
+            [stmt.selected_columns.fullname, stmt.selected_columns.name_label],
+        )
+    )
+    assert (
+        sql_compiler(insert_all) == "INSERT ALL "
+        "INTO users1 (id, name, fullname, created_at) VALUES (id, name_label, fullname, CURRENT_TIMESTAMP) "
+        'INTO users2 (name, "full/name") VALUES (fullname, name_label) '
+        "SELECT onboarding_users.id, onboarding_users.name AS name_label, onboarding_users.fullname, "
+        'onboarding_users."delete" FROM onboarding_users'
+    )
+
+
+def test_conditional_insert_multi(sql_compiler):
+    meta = MetaData()
+    users1 = Table(
+        "users1",
+        meta,
+        Column("id", Integer, Sequence("user_id_seq"), primary_key=True),
+        Column("name", String),
+        Column("fullname", String),
+    )
+    users2 = Table(
+        "users2",
+        meta,
+        Column("id", Integer, Sequence("user_id_seq2"), primary_key=True),
+        Column("name", String),
+        Column("full/name", String),
+    )
+    onboarding_users = Table(
+        "onboarding_users",
+        meta,
+        Column("id", Integer, Sequence("new_user_id_seq"), primary_key=True),
+        Column("name", String),
+        Column("fullname", String),
+        Column("delete", Boolean),
+    )
+    stmt = select(
+        onboarding_users.c.id,
+        onboarding_users.c.name,
+        onboarding_users.c.fullname,
+        onboarding_users.c.delete,
+    )
+    insert_all = (
+        InsertMulti(stmt)
+        .when(
+            stmt.selected_columns.delete,
+            users1,
+            values=[
+                stmt.selected_columns.id,
+                stmt.selected_columns.name,
+                stmt.selected_columns.fullname,
+            ],
+        )
+        .when(
+            ~stmt.selected_columns.delete,
+            users2,
+            [users2.c.id, users2.c.name, users2.c["full/name"]],
+            [
+                stmt.selected_columns.id,
+                stmt.selected_columns.name,
+                stmt.selected_columns.fullname,
+            ],
+        )
+        .else_(users1)
+    )
+    assert (
+        sql_compiler(insert_all) == "INSERT ALL "
+        'WHEN "delete" THEN INTO users1 VALUES (id, name, fullname) '
+        'WHEN NOT "delete" THEN INTO users2 (id, name, "full/name") VALUES (id, name, fullname) '
+        "ELSE users1 "
+        "SELECT onboarding_users.id, onboarding_users.name, onboarding_users.fullname, "
+        'onboarding_users."delete" FROM onboarding_users'
     )
 
 

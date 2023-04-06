@@ -37,6 +37,7 @@ from .custom_commands import (
     CreateStage,
     CSVFormatter,
     ExternalStage,
+    InsertMulti,
     JSONFormatter,
     MergeInto,
     PARQUETFormatter,
