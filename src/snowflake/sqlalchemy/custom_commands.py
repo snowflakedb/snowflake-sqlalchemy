@@ -10,7 +10,6 @@ from sqlalchemy.sql.ddl import DDLElement
 from sqlalchemy.sql.dml import UpdateBase
 from sqlalchemy.sql.elements import ClauseElement
 from sqlalchemy.sql.roles import FromClauseRole
-from sqlalchemy.util.compat import string_types
 
 NoneType = type(None)
 
@@ -204,7 +203,7 @@ class CSVFormatter(CopyFormatter):
 
     def compression(self, comp_type):
         """String (constant) that specifies to compresses the unloaded data files using the specified compression algorithm."""
-        if isinstance(comp_type, string_types):
+        if isinstance(comp_type, str):
             comp_type = comp_type.lower()
         _available_options = [
             "auto",
@@ -229,7 +228,7 @@ class CSVFormatter(CopyFormatter):
         """
         if isinstance(delimiter, NoneType):
             return
-        if isinstance(delimiter, string_types):
+        if isinstance(delimiter, str):
             delimiter_processed = delimiter.encode().decode("unicode_escape")
             if len(delimiter_processed) == 1:
                 return
@@ -260,28 +259,28 @@ class CSVFormatter(CopyFormatter):
     def file_extension(self, ext):
         """String that specifies the extension for files unloaded to a stage. Accepts any extension. The user is
         responsible for specifying a valid file extension that can be read by the desired software or service."""
-        if not isinstance(ext, (NoneType, string_types)):
+        if not isinstance(ext, (NoneType, str)):
             raise TypeError("File extension should be a string")
         self.options["FILE_EXTENSION"] = ext
         return self
 
     def date_format(self, dt_frmt):
         """String that defines the format of date values in the unloaded data files."""
-        if not isinstance(dt_frmt, string_types):
+        if not isinstance(dt_frmt, str):
             raise TypeError("Date format should be a string")
         self.options["DATE_FORMAT"] = dt_frmt
         return self
 
     def time_format(self, tm_frmt):
         """String that defines the format of time values in the unloaded data files."""
-        if not isinstance(tm_frmt, string_types):
+        if not isinstance(tm_frmt, str):
             raise TypeError("Time format should be a string")
         self.options["TIME_FORMAT"] = tm_frmt
         return self
 
     def timestamp_format(self, tmstmp_frmt):
         """String that defines the format of timestamp values in the unloaded data files."""
-        if not isinstance(tmstmp_frmt, string_types):
+        if not isinstance(tmstmp_frmt, str):
             raise TypeError("Timestamp format should be a string")
         self.options["TIMESTAMP_FORMAT"] = tmstmp_frmt
         return self
@@ -289,7 +288,7 @@ class CSVFormatter(CopyFormatter):
     def binary_format(self, bin_fmt):
         """Character used as the escape character for any field values. The option can be used when unloading data
         from binary columns in a table."""
-        if isinstance(bin_fmt, string_types):
+        if isinstance(bin_fmt, str):
             bin_fmt = bin_fmt.lower()
         _available_options = ["hex", "base64", "utf8"]
         if bin_fmt not in _available_options:
@@ -367,7 +366,7 @@ class JSONFormatter(CopyFormatter):
 
     def compression(self, comp_type):
         """String (constant) that specifies to compresses the unloaded data files using the specified compression algorithm."""
-        if isinstance(comp_type, string_types):
+        if isinstance(comp_type, str):
             comp_type = comp_type.lower()
         _available_options = [
             "auto",
@@ -387,7 +386,7 @@ class JSONFormatter(CopyFormatter):
     def file_extension(self, ext):
         """String that specifies the extension for files unloaded to a stage. Accepts any extension. The user is
         responsible for specifying a valid file extension that can be read by the desired software or service."""
-        if not isinstance(ext, (NoneType, string_types)):
+        if not isinstance(ext, (NoneType, str)):
             raise TypeError("File extension should be a string")
         self.options["FILE_EXTENSION"] = ext
         return self
@@ -518,7 +517,7 @@ class AWSBucket(ClauseElement):
         )
         encryption = "ENCRYPTION=({})".format(
             " ".join(
-                f"{n}='{v}'" if isinstance(v, string_types) else f"{n}={v}"
+                f"{n}='{v}'" if isinstance(v, str) else f"{n}={v}"
                 for n, v in self.encryption_used.items()
             )
         )
@@ -594,7 +593,7 @@ class AzureContainer(ClauseElement):
         )
         encryption = "ENCRYPTION=({})".format(
             " ".join(
-                f"{n}='{v}'" if isinstance(v, string_types) else f"{n}={v}"
+                f"{n}='{v}'" if isinstance(v, str) else f"{n}={v}"
                 for n, v in self.encryption_used.items()
             )
         )

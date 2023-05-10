@@ -134,7 +134,11 @@ class SnowflakeDialect(default.DefaultDialect):
     #  unicode strings
     supports_unicode_statements = True
     supports_unicode_binds = True
-    returns_unicode_strings = String.RETURNS_UNICODE
+    # no longer used for SQLAlchemy 2.0, so any value works
+    # String.RETURNS_UNICODE for backwards compatibility with 1.4
+    returns_unicode_strings = (
+        String.RETURNS_UNICODE if hasattr(String, "RETURNS_UNICODE") else None
+    )
     description_encoding = None
 
     # No lastrowid support. See SNOW-11155
@@ -193,8 +197,13 @@ class SnowflakeDialect(default.DefaultDialect):
 
     supports_identity_columns = True
 
+    # Remove once support for sqlalchemy 1.4 is dropped
     @classmethod
     def dbapi(cls):
+        return cls.import_dbapi()
+
+    @classmethod
+    def import_dbapi(cls):
         from snowflake import connector
 
         return connector
@@ -232,20 +241,19 @@ class SnowflakeDialect(default.DefaultDialect):
         )
         return ([], opts)
 
-    def has_table(self, connection, table_name, schema=None):
+    def has_table(self, connection, table_name, schema=None, **kw):
         """
         Checks if the table exists
         """
         return self._has_object(connection, "TABLE", table_name, schema)
 
-    def has_sequence(self, connection, sequence_name, schema=None):
+    def has_sequence(self, connection, sequence_name, schema=None, **kw):
         """
         Checks if the sequence exists
         """
         return self._has_object(connection, "SEQUENCE", sequence_name, schema)
 
     def _has_object(self, connection, object_type, object_name, schema=None):
-
         full_name = self._denormalize_quote_join(schema, object_name)
         try:
             results = connection.execute(
