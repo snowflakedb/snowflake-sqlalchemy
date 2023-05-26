@@ -21,7 +21,7 @@ from ._constants import (
 
 
 def _rfc_1738_quote(text):
-    return re.sub(r"[:@/]", lambda m: "%%%X" % ord(m.group(0)), text)
+    return re.sub(r"[\[\]:@/]", lambda m: "%%%X" % ord(m.group(0)), text)
 
 
 def _url(**db_parameters):
