@@ -482,9 +482,10 @@ class CreateStage(DDLElement):
 
     __visit_name__ = "create_stage"
 
-    def __init__(self, container, stage, replace_if_exists=False):
+    def __init__(self, container, stage, replace_if_exists=False, *, temporary=False):
         super().__init__()
         self.container = container
+        self.temporary = temporary
         self.stage = stage
         self.replace_if_exists = replace_if_exists
 
