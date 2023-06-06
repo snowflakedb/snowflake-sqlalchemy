@@ -9,6 +9,10 @@ Source code is also available at:
 
 # Release Notes
 
+- v1.4.8(TBD)
+
+  - Added opiton to create a temporary stage command.
+
 - v1.4.7(Mar 22, 2023)
 
   - Re-applied the application name of driver connection `SnowflakeConnection` to `SnowflakeSQLAlchemy`.

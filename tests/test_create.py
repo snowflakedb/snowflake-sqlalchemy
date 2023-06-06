@@ -54,6 +54,16 @@ def test_create_stage(sql_compiler):
     )
     assert actual == expected
 
+    create_stage = CreateStage(stage=stage, container=container, temporary=True)
+    # validate that the resulting SQL is as expected
+    actual = sql_compiler(create_stage)
+    expected = (
+        "CREATE TEMPORARY STAGE MY_DB.MY_SCHEMA.AZURE_STAGE "
+        "URL='azure://myaccount.blob.core.windows.net/my-container' "
+        "CREDENTIALS=(AZURE_SAS_TOKEN='saas_token')"
+    )
+    assert actual == expected
+
 
 def test_create_csv_format(sql_compiler):
     """
