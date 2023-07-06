@@ -376,11 +376,15 @@ class SnowflakeCompiler(compiler.SQLCompiler):
 
     def visit_regexp_replace_op_binary(self, binary, operator, **kw):
         string, pattern, flags = self._get_regexp_args(binary, kw)
-        replacement = self.process(binary.modifiers["replacement"], **kw)
-        if flags is None:
-            return f"REGEXP_REPLACE({string}, {pattern}, {replacement})"
-        else:
-            return f"REGEXP_REPLACE({string}, {pattern}, {replacement}, {flags})"
+        try:
+            replacement = self.process(binary.modifiers["replacement"], **kw)
+        except KeyError:
+            # in sqlalchemy 1.4.49, the internal structure of the expression is changed
+            # that binary.modifiers doesn't have "replacement":
+            # https://docs.sqlalchemy.org/en/20/changelog/changelog_14.html#change-1.4.49
+            return f"REGEXP_REPLACE({string}, {pattern}{'' if flags is None else f', {flags}'})"
+
+        return f"REGEXP_REPLACE({string}, {pattern}, {replacement}{'' if flags is None else f', {flags}'})"
 
     def visit_not_regexp_match_op_binary(self, binary, operator, **kw):
         return f"NOT {self.visit_regexp_match_op_binary(binary, operator, **kw)}"
