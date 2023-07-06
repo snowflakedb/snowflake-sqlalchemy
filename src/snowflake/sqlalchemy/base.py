@@ -384,7 +384,10 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             # https://docs.sqlalchemy.org/en/20/changelog/changelog_14.html#change-1.4.49
             return f"REGEXP_REPLACE({string}, {pattern}{'' if flags is None else f', {flags}'})"
 
-        return f"REGEXP_REPLACE({string}, {pattern}, {replacement}{'' if flags is None else f', {flags}'})"
+        if flags is None:
+            return f"REGEXP_REPLACE({string}, {pattern}, {replacement})"
+        else:
+            return f"REGEXP_REPLACE({string}, {pattern}, {replacement}, {flags})"
 
     def visit_not_regexp_match_op_binary(self, binary, operator, **kw):
         return f"NOT {self.visit_regexp_match_op_binary(binary, operator, **kw)}"
