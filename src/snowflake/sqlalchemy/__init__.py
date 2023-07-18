@@ -49,6 +49,7 @@ from .custom_types import (
     DOUBLE,
     FIXED,
     GEOGRAPHY,
+    GEOMETRY,
     NUMBER,
     OBJECT,
     STRING,

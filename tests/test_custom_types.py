@@ -15,6 +15,7 @@ def test_string_conversions():
         "TIMESTAMP_LTZ",
         "TIMESTAMP_NTZ",
         "GEOGRAPHY",
+        "GEOMETRY",
     ]
     sf_types = [
         "TEXT",

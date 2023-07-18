@@ -61,6 +61,10 @@ class GEOGRAPHY(SnowflakeType):
     __visit_name__ = "GEOGRAPHY"
 
 
+class GEOMETRY(SnowflakeType):
+    __visit_name__ = "GEOMETRY"
+
+
 class _CUSTOM_Date(SnowflakeType, sqltypes.Date):
     def literal_processor(self, dialect):
         def process(value):
