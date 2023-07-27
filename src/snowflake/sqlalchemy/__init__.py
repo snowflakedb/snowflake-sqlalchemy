@@ -91,6 +91,7 @@ __all__ = (
     "DOUBLE",
     "FIXED",
     "GEOGRAPHY",
+    "GEOMETRY",
     "OBJECT",
     "NUMBER",
     "STRING",
