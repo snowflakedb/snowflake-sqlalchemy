@@ -1,10 +1,12 @@
+#
+# Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
+#
 from json import loads
 
 from sqlalchemy import Column, Integer, MetaData, Table
 from sqlalchemy.sql import select
 
-from snowflake.sqlalchemy import GEOMETRY, URL as SNOWURL
-
+from snowflake.sqlalchemy import GEOMETRY
 
 
 def test_create_table_geometry_datatypes(engine_testaccount):
