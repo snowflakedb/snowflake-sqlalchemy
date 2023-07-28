@@ -51,6 +51,7 @@ from .custom_types import (
     _CUSTOM_DECIMAL,
     ARRAY,
     GEOGRAPHY,
+    GEOMETRY,
     OBJECT,
     TIMESTAMP_LTZ,
     TIMESTAMP_NTZ,
@@ -105,6 +106,7 @@ ischema_names = {
     "OBJECT": OBJECT,
     "ARRAY": ARRAY,
     "GEOGRAPHY": GEOGRAPHY,
+    "GEOMETRY": GEOMETRY,
 }
 
 

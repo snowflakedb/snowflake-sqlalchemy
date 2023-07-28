@@ -1612,7 +1612,8 @@ CREATE TEMP TABLE {table_name} (
     C1 BIGINT, C2 BINARY, C3 BOOLEAN, C4 CHAR, C5 CHARACTER, C6 DATE, C7 DATETIME, C8 DEC,
     C9 DECIMAL, C10 DOUBLE, C11 FLOAT, C12 INT, C13 INTEGER, C14 NUMBER, C15 REAL, C16 BYTEINT,
     C17 SMALLINT, C18 STRING, C19 TEXT, C20 TIME, C21 TIMESTAMP, C22 TIMESTAMP_TZ, C23 TIMESTAMP_LTZ,
-    C24 TIMESTAMP_NTZ, C25 TINYINT, C26 VARBINARY, C27 VARCHAR, C28 VARIANT, C29 OBJECT, C30 ARRAY, C31 GEOGRAPHY
+    C24 TIMESTAMP_NTZ, C25 TINYINT, C26 VARBINARY, C27 VARCHAR, C28 VARIANT, C29 OBJECT, C30 ARRAY, C31 GEOGRAPHY,
+    C32 GEOMETRY
 )
 """
         )
@@ -1635,7 +1636,8 @@ CREATE TEMP TABLE {table_name} (
     C1 BIGINT, C2 BINARY, C3 BOOLEAN, C4 CHAR, C5 CHARACTER, C6 DATE, C7 DATETIME, C8 DEC(12,3),
     C9 DECIMAL(12,3), C10 DOUBLE, C11 FLOAT, C12 INT, C13 INTEGER, C14 NUMBER, C15 REAL, C16 BYTEINT,
     C17 SMALLINT, C18 STRING, C19 TEXT, C20 TIME, C21 TIMESTAMP, C22 TIMESTAMP_TZ, C23 TIMESTAMP_LTZ,
-    C24 TIMESTAMP_NTZ, C25 TINYINT, C26 VARBINARY, C27 VARCHAR, C28 VARIANT, C29 OBJECT, C30 ARRAY, C31 GEOGRAPHY
+    C24 TIMESTAMP_NTZ, C25 TINYINT, C26 VARBINARY, C27 VARCHAR, C28 VARIANT, C29 OBJECT, C30 ARRAY, C31 GEOGRAPHY,
+    C32 GEOMETRY
 )
 """
         )
@@ -1661,6 +1663,8 @@ CREATE TEMP TABLE {table_name} (
         CHAR_VALUE = "A"
         GEOGRAPHY_VALUE = "POINT(-122.35 37.55)"
         GEOGRAPHY_RESULT_VALUE = '{"coordinates": [-122.35,37.55],"type": "Point"}'
+        GEOMETRY_VALUE = "POINT(-94.58473 39.08985)"
+        GEOMETRY_RESULT_VALUE = '{"coordinates": [-94.58473,39.08985],"type": "Point"}'
 
         ins = table_reflected.insert().values(
             c1=MAX_INT_VALUE,  # BIGINT
@@ -1694,6 +1698,7 @@ CREATE TEMP TABLE {table_name} (
             c29=None,  # OBJECT, currently snowflake-sqlalchemy/connector does not support binding variant
             c30=None,  # ARRAY, currently snowflake-sqlalchemy/connector does not support binding variant
             c31=GEOGRAPHY_VALUE,  # GEOGRAPHY
+            c32=GEOMETRY_VALUE,  # GEOMETRY
         )
         conn.execute(ins)
 
@@ -1732,6 +1737,7 @@ CREATE TEMP TABLE {table_name} (
             and result[28] is None
             and result[29] is None
             and json.loads(result[30]) == json.loads(GEOGRAPHY_RESULT_VALUE)
+            and json.loads(result[31]) == json.loads(GEOMETRY_RESULT_VALUE)
         )
 
         sql = f"""
