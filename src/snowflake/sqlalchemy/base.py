@@ -563,7 +563,6 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             if isinstance(copy_into.into, Table)
             else copy_into.into._compiler_dispatch(self, **kw)
         )
-        from_ = None
         if isinstance(copy_into.from_, Table):
             from_ = copy_into.from_
         # this is intended to catch AWSBucket and AzureContainer
@@ -576,6 +575,11 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         # everything else (selects, etc.)
         else:
             from_ = f"({copy_into.from_._compiler_dispatch(self, **kw)})"
+
+        partition_by = ""
+        if copy_into.partition_by is not None:
+            partition_by = f"PARTITION BY {copy_into.partition_by}"
+
         credentials, encryption = "", ""
         if isinstance(into, tuple):
             into, credentials, encryption = into
@@ -586,8 +590,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             options_list.sort(key=operator.itemgetter(0))
         options = (
             (
-                " "
-                + " ".join(
+                " ".join(
                     [
                         "{} = {}".format(
                             n,
@@ -608,7 +611,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             options += f" {credentials}"
         if encryption:
             options += f" {encryption}"
-        return f"COPY INTO {into} FROM {from_} {formatter}{options}"
+        return f"COPY INTO {into} FROM {' '.join([from_, partition_by, formatter, options])}"
 
     def visit_copy_formatter(self, formatter, **kw):
         options_list = list(formatter.options.items())
