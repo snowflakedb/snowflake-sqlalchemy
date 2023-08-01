@@ -5,7 +5,7 @@
 import enum
 
 import pytest
-from sqlalchemy import Column, Enum, ForeignKey, Integer, Sequence, String, text
+from sqlalchemy import Column, Enum, ForeignKey, Integer, Sequence, String, select, text
 from sqlalchemy.orm import Session, declarative_base, relationship
 
 
@@ -326,3 +326,35 @@ def test_schema_translate_map(
                 assert user.fullname == "test_user"
             finally:
                 Base.metadata.drop_all(con)
+
+
+def test_outer_lateral_join(engine_testaccount):
+    pytest.skip("test case needs to be fixed")
+    Base = declarative_base()
+
+    class Employee(Base):
+        __tablename__ = "employees"
+
+        employee_id = Column(Integer, primary_key=True)
+        last_name = Column(String)
+        department_id = Column(Integer, ForeignKey("departments.department_id"))
+
+    class Department(Base):
+        __tablename__ = "departments"
+
+        department_id = Column(Integer, primary_key=True)
+        name = Column(String)
+
+    Base.metadata.create_all(engine_testaccount)
+    session = Session(bind=engine_testaccount)
+    e1 = Employee(employee_id=101, last_name="Richards", department_id=1)
+    e2 = Employee(employee_id=102, last_name="Paulson", department_id=1)
+    e3 = Employee(employee_id=103, last_name="Johnson", department_id=2)
+    d1 = Department(department_id=1, name="Engineering")
+    d2 = Department(department_id=2, name="Support")
+    session.add_all([e1, e2, e3, d1, d2])
+    session.commit()
+
+    sub = select(Department).lateral()
+    query = select(Employee.employee_id).select_from(Employee).outerjoin(sub)
+    session.execute(query)
