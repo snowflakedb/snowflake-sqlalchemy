@@ -3,10 +3,14 @@
 #
 
 import re
+from itertools import chain
 from typing import Any
 from urllib.parse import quote_plus
 
 from sqlalchemy import exc
+from sqlalchemy.sql.base import _expand_cloned, _from_objects
+from sqlalchemy.sql.elements import _find_columns
+from sqlalchemy.sql.selectable import Join, Lateral
 
 from snowflake.connector.compat import IS_STR
 from snowflake.connector.connection import SnowflakeConnection
@@ -104,3 +108,58 @@ def _update_connection_application_name(**conn_kwargs: Any) -> Any:
     if PARAM_INTERNAL_APPLICATION_VERSION not in conn_kwargs:
         conn_kwargs[PARAM_INTERNAL_APPLICATION_VERSION] = SNOWFLAKE_SQLALCHEMY_VERSION
     return conn_kwargs
+
+
+def _find_left_clause_to_join_from(clauses, join_to, onclause):
+    """Given a list of FROM clauses, a selectable,
+    and optional ON clause, return a list of integer indexes from the
+    clauses list indicating the clauses that can be joined from.
+
+    The presence of an "onclause" indicates that at least one clause can
+    definitely be joined from; if the list of clauses is of length one
+    and the onclause is given, returns that index.   If the list of clauses
+    is more than length one, and the onclause is given, attempts to locate
+    which clauses contain the same columns.
+
+    """
+    idx = []
+    selectables = set(_from_objects(join_to))
+
+    # if we are given more than one target clause to join
+    # from, use the onclause to provide a more specific answer.
+    # otherwise, don't try to limit, after all, "ON TRUE" is a valid
+    # on clause
+    if len(clauses) > 1 and onclause is not None:
+        resolve_ambiguity = True
+        cols_in_onclause = _find_columns(onclause)
+    else:
+        resolve_ambiguity = False
+        cols_in_onclause = None
+
+    for i, f in enumerate(clauses):
+        for s in selectables.difference([f]):
+            if resolve_ambiguity:
+                if set(f.c).union(s.c).issuperset(cols_in_onclause):
+                    idx.append(i)
+                    break
+            elif onclause is not None or Join._can_join(f, s):
+                idx.append(i)
+                break
+            elif onclause is None and isinstance(s, Lateral):
+                # onclause is not accepted for lateral due to BCR change:
+                # https://docs.snowflake.com/en/release-notes/bcr-bundles/2023_04/bcr-1057
+                idx.append(i)
+                break
+
+    if len(idx) > 1:
+        # this is the same "hide froms" logic from
+        # Selectable._get_display_froms
+        toremove = set(chain(*[_expand_cloned(f._hide_froms) for f in clauses]))
+        idx = [i for i in idx if clauses[i] not in toremove]
+
+    # onclause was given and none of them resolved, so assume
+    # all indexes can match
+    if not idx and onclause is not None:
+        return range(len(clauses))
+    else:
+        return idx
