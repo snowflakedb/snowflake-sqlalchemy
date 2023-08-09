@@ -5,7 +5,7 @@
 from datetime import datetime
 
 import pytz
-from sqlalchemy import Column, Integer, MetaData, Table
+from sqlalchemy import Column, Integer, MetaData, Table, DateTime
 from sqlalchemy.sql import select
 
 from snowflake.sqlalchemy import TIMESTAMP_LTZ, TIMESTAMP_NTZ, TIMESTAMP_TZ
@@ -27,6 +27,8 @@ def test_create_table_timestamp_datatypes(engine_testaccount):
         Column("tsntz", TIMESTAMP_NTZ),
         Column("tsltz", TIMESTAMP_LTZ),
         Column("tstz", TIMESTAMP_TZ),
+        Column("dttz", DateTime(timezone=True)),
+        Column("dtntz", DateTime(timezone=False)),
     )
     metadata.create_all(engine_testaccount)
     try:
@@ -48,6 +50,8 @@ def test_inspect_timestamp_datatypes(engine_testaccount):
         Column("tsntz", TIMESTAMP_NTZ),
         Column("tsltz", TIMESTAMP_LTZ),
         Column("tstz", TIMESTAMP_TZ),
+        Column("dttz", DateTime(timezone=True)),
+        Column("dtntz", DateTime(timezone=False)),
     )
     metadata.create_all(engine_testaccount)
     try:
@@ -79,5 +83,7 @@ def test_inspect_timestamp_datatypes(engine_testaccount):
                 assert rows[1] == current_utctime
                 assert rows[2] == current_localtime
                 assert rows[3] == current_localtime_with_other_tz
+                assert rows[4] == current_localtime_with_other_tz
+                assert rows[5] == current_utctime
     finally:
         test_timestamp.drop(engine_testaccount)

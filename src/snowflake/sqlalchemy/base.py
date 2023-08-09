@@ -634,10 +634,10 @@ class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
         return "BINARY"
 
     def visit_datetime(self, type_, **kw):
-        return "datetime"
+        return self.visit_TIMESTAMP(type_, **kw)
 
     def visit_DATETIME(self, type_, **kw):
-        return "DATETIME"
+        return self.visit_TIMESTAMP(type_, **kw)
 
     def visit_TIMESTAMP_NTZ(self, type_, **kw):
         return "TIMESTAMP_NTZ"
@@ -649,7 +649,14 @@ class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
         return "TIMESTAMP_LTZ"
 
     def visit_TIMESTAMP(self, type_, **kw):
-        return "TIMESTAMP"
+        is_local = kw.get('is_local', False)
+        timezone = kw.get('timezone', type_.timezone)
+        return "TIMESTAMP %s%s" % (
+            (timezone and "WITH" or "WITHOUT") + (
+                    is_local and " LOCAL" or "") + " TIME ZONE",
+            "(%d)" % type_.precision if getattr(type_, 'precision',
+                                               None) is not None else ""
+        )
 
     def visit_GEOGRAPHY(self, type_, **kw):
         return "GEOGRAPHY"
