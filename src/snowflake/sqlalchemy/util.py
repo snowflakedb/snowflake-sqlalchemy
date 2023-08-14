@@ -104,3 +104,12 @@ def _update_connection_application_name(**conn_kwargs: Any) -> Any:
     if PARAM_INTERNAL_APPLICATION_VERSION not in conn_kwargs:
         conn_kwargs[PARAM_INTERNAL_APPLICATION_VERSION] = SNOWFLAKE_SQLALCHEMY_VERSION
     return conn_kwargs
+
+
+def parse_url_boolean(value: str) -> bool:
+    if value == "True":
+        return True
+    elif value == "False":
+        return False
+    else:
+        raise ValueError(f"Invalid boolean value detected: '{value}'")
