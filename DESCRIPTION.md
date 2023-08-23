@@ -9,7 +9,7 @@ Source code is also available at:
 
 # Release Notes
 
-- v1.4.8(TBD)
+- v1.4.8(Aug 23, 2023)
 
   - Added option to create a temporary stage command.
   - Add support for geometry type.
