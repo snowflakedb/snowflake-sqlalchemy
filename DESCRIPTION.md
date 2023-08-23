@@ -9,10 +9,10 @@ Source code is also available at:
 
 # Release Notes
 
-- v1.4.8(TBD)
+- v1.5.0(Aug 23, 2023)
 
   - Added option to create a temporary stage command.
-  - Add support for geometry type.
+  - Added support for geometry type.
   - Fixed a compatibility issue of regex expression with SQLAlchemy 1.4.49.
 
 - v1.4.7(Mar 22, 2023)
