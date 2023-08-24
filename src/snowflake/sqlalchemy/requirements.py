@@ -35,6 +35,8 @@ class Requirements(SuiteRequirements):
     - fetch_ties: not supported in snowflake
     - supports_distinct_on: not supported in snowflake
     - time_timezone: not supported in snowflake
+    - array_type: not supported in snowflake
+    - uuid_data_type: not supported in snowflake
     - identity_columns_standard: not supported in snowflake, snowflake does not support setting identity with min max
     - computed_columns: TODO: not supported in snowflake yet, check SNOW-169530 for virtual column
     - computed_columns_default_persisted: TODO: not supported in snowflake yet, check SNOW-169530 for virtual column
@@ -294,4 +296,14 @@ class Requirements(SuiteRequirements):
         # Supporting this would require behavior breaking change to implicitly convert str to timestamp when binding
         # parameters in string forms of timestamp values.
         # Check https://snowflakecomputing.atlassian.net/browse/SNOW-640134 for details on breaking changes discussion.
+        return exclusions.closed()
+
+    @property
+    def array_type(self):
+        # The default SQLAlchemy ARRAY type is not linked to snowflake-sqlalchemy's ARRAY type and neither support element typing.
+        return exclusions.closed()
+
+    @property
+    def uuid_data_type(self):
+        # Snowflake doesn't support UUID column type.
         return exclusions.closed()

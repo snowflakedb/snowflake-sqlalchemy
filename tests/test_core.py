@@ -32,19 +32,18 @@ from sqlalchemy import (
     inspect,
     text,
 )
-from sqlalchemy.exc import DBAPIError, NoSuchTableError
+from sqlalchemy.exc import NoSuchTableError
 from sqlalchemy.pool import NullPool
 from sqlalchemy.sql import and_, not_, or_, select
 
 import snowflake.connector.errors
 import snowflake.sqlalchemy.snowdialect
-from snowflake.connector import Error, ProgrammingError, connect
+from snowflake.connector import connect
 from snowflake.sqlalchemy import URL, MergeInto, dialect
 from snowflake.sqlalchemy._constants import (
     APPLICATION_NAME,
     SNOWFLAKE_SQLALCHEMY_VERSION,
 )
-from snowflake.sqlalchemy.snowdialect import SnowflakeDialect
 
 from .conftest import create_engine_with_future_flag as create_engine
 from .conftest import get_engine
@@ -423,7 +422,7 @@ def test_table_does_not_exist(engine_testaccount):
     """
     meta = MetaData()
     with pytest.raises(NoSuchTableError):
-        Table("does_not_exist", meta, autoload=True, autoload_with=engine_testaccount)
+        Table("does_not_exist", meta, autoload_with=engine_testaccount)
 
 
 @pytest.mark.skip(
@@ -449,9 +448,7 @@ def test_reflextion(engine_testaccount):
         )
         try:
             meta = MetaData()
-            user_reflected = Table(
-                "user", meta, autoload=True, autoload_with=engine_testaccount
-            )
+            user_reflected = Table("user", meta, autoload_with=engine_testaccount)
             assert user_reflected.c == ["user.id", "user.name", "user.fullname"]
         finally:
             conn.execute("DROP TABLE IF EXISTS user")
@@ -1538,44 +1535,7 @@ def test_too_many_columns_detection(engine_testaccount, db_parameters):
     metadata.create_all(engine_testaccount)
     inspector = inspect(engine_testaccount)
     # Do test
-    original_execute = inspector.bind.execute
-
-    def mock_helper(command, *args, **kwargs):
-        if "_get_schema_columns" in command:
-            # Creating exception exactly how SQLAlchemy does
-            raise DBAPIError.instance(
-                """
-            SELECT /* sqlalchemy:_get_schema_columns */
-                   ic.table_name,
-                   ic.column_name,
-                   ic.data_type,
-                   ic.character_maximum_length,
-                   ic.numeric_precision,
-                   ic.numeric_scale,
-                   ic.is_nullable,
-                   ic.column_default,
-                   ic.is_identity,
-                   ic.comment
-              FROM information_schema.columns ic
-             WHERE ic.table_schema='schema_name'
-             ORDER BY ic.ordinal_position""",
-                {"table_schema": "TESTSCHEMA"},
-                ProgrammingError(
-                    "Information schema query returned too much data. Please repeat query with more "
-                    "selective predicates.",
-                    90030,
-                ),
-                Error,
-                hide_parameters=False,
-                connection_invalidated=False,
-                dialect=SnowflakeDialect(),
-                ismulti=None,
-            )
-        else:
-            return original_execute(command, *args, **kwargs)
-
-    with patch.object(inspector.bind, "execute", side_effect=mock_helper):
-        column_metadata = inspector.get_columns("users", db_parameters["schema"])
+    column_metadata = inspector.get_columns("users", db_parameters["schema"])
     assert len(column_metadata) == 4
     # Clean up
     metadata.drop_all(engine_testaccount)
@@ -1618,9 +1578,7 @@ CREATE TEMP TABLE {table_name} (
 """
         )
 
-        table_reflected = Table(
-            table_name, MetaData(), autoload=True, autoload_with=conn
-        )
+        table_reflected = Table(table_name, MetaData(), autoload_with=conn)
         columns = table_reflected.columns
         assert (
             len(columns) == len(ischema_names_baseline) - 1
@@ -1628,7 +1586,7 @@ CREATE TEMP TABLE {table_name} (
 
 
 def test_result_type_and_value(engine_testaccount):
-    with engine_testaccount.connect() as conn:
+    with engine_testaccount.begin() as conn:
         table_name = random_string(5)
         conn.exec_driver_sql(
             f"""\
@@ -1641,9 +1599,7 @@ CREATE TEMP TABLE {table_name} (
 )
 """
         )
-        table_reflected = Table(
-            table_name, MetaData(), autoload=True, autoload_with=conn
-        )
+        table_reflected = Table(table_name, MetaData(), autoload_with=conn)
         current_date = date.today()
         current_utctime = datetime.utcnow()
         current_localtime = pytz.utc.localize(current_utctime, is_dst=False).astimezone(
@@ -1762,7 +1718,7 @@ SELECT PARSE_JSON('{{"vk1":100, "vk2":200, "vk3":300}}'),
 
 
 def test_normalize_and_denormalize_empty_string_column_name(engine_testaccount):
-    with engine_testaccount.connect() as conn:
+    with engine_testaccount.begin() as conn:
         table_name = random_string(5)
         conn.exec_driver_sql(
             f"""
