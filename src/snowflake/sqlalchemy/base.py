@@ -2,6 +2,7 @@
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
 
+import itertools
 import operator
 import re
 
@@ -10,15 +11,18 @@ from sqlalchemy import inspect, sql
 from sqlalchemy import util as sa_util
 from sqlalchemy.engine import default
 from sqlalchemy.orm import context
+from sqlalchemy.orm.context import _MapperEntity
 from sqlalchemy.schema import Sequence, Table
 from sqlalchemy.sql import compiler, expression
 from sqlalchemy.sql.elements import quoted_name
+from sqlalchemy.sql.selectable import Lateral
 from sqlalchemy.util.compat import string_types
 
 from .custom_commands import AWSBucket, AzureContainer, ExternalStage
 from .util import (
     _find_left_clause_to_join_from,
     _set_connection_interpolate_empty_sequences,
+    _Snowflake_ORMJoin,
 )
 
 RESERVED_WORDS = frozenset(
@@ -92,6 +96,14 @@ RESERVED_WORDS = frozenset(
 AUTOCOMMIT_REGEXP = re.compile(
     r"\s*(?:UPDATE|INSERT|DELETE|MERGE|COPY)", re.I | re.UNICODE
 )
+
+
+"""
+Overwrite methods to handle Snowflake BCR change:
+https://docs.snowflake.com/en/release-notes/bcr-bundles/2023_04/bcr-1057
+- _join_determine_implicit_left_side
+- _join_left_to_right
+"""
 
 
 @sql.base.CompileState.plugin_for("orm", "select")
@@ -201,6 +213,105 @@ class SnowflakeORMSelectCompileState(context.ORMSelectCompileState):
             )
 
         return left, replace_from_obj_index, use_entity_index
+
+    def _join_left_to_right(
+        self,
+        entities_collection,
+        left,
+        right,
+        onclause,
+        prop,
+        create_aliases,
+        aliased_generation,
+        outerjoin,
+        full,
+    ):
+        """given raw "left", "right", "onclause" parameters consumed from
+        a particular key within _join(), add a real ORMJoin object to
+        our _from_obj list (or augment an existing one)
+
+        """
+
+        if left is None:
+            # left not given (e.g. no relationship object/name specified)
+            # figure out the best "left" side based on our existing froms /
+            # entities
+            assert prop is None
+            (
+                left,
+                replace_from_obj_index,
+                use_entity_index,
+            ) = self._join_determine_implicit_left_side(
+                entities_collection, left, right, onclause
+            )
+        else:
+            # left is given via a relationship/name, or as explicit left side.
+            # Determine where in our
+            # "froms" list it should be spliced/appended as well as what
+            # existing entity it corresponds to.
+            (
+                replace_from_obj_index,
+                use_entity_index,
+            ) = self._join_place_explicit_left_side(entities_collection, left)
+
+        if left is right and not create_aliases:
+            raise sa_exc.InvalidRequestError(
+                "Can't construct a join from %s to %s, they "
+                "are the same entity" % (left, right)
+            )
+
+        # the right side as given often needs to be adapted.  additionally
+        # a lot of things can be wrong with it.  handle all that and
+        # get back the new effective "right" side
+        r_info, right, onclause = self._join_check_and_adapt_right_side(
+            left, right, onclause, prop, create_aliases, aliased_generation
+        )
+
+        if not r_info.is_selectable:
+            extra_criteria = self._get_extra_criteria(r_info)
+        else:
+            extra_criteria = ()
+
+        if replace_from_obj_index is not None:
+            # splice into an existing element in the
+            # self._from_obj list
+            left_clause = self.from_clauses[replace_from_obj_index]
+
+            self.from_clauses = (
+                self.from_clauses[:replace_from_obj_index]
+                + [
+                    _Snowflake_ORMJoin(  # handle Snowflake BCR bcr-1057
+                        left_clause,
+                        right,
+                        onclause,
+                        isouter=outerjoin,
+                        full=full,
+                        _extra_criteria=extra_criteria,
+                    )
+                ]
+                + self.from_clauses[replace_from_obj_index + 1 :]
+            )
+        else:
+            # add a new element to the self._from_obj list
+            if use_entity_index is not None:
+                # make use of _MapperEntity selectable, which is usually
+                # entity_zero.selectable, but if with_polymorphic() were used
+                # might be distinct
+                assert isinstance(entities_collection[use_entity_index], _MapperEntity)
+                left_clause = entities_collection[use_entity_index].selectable
+            else:
+                left_clause = left
+
+            self.from_clauses = self.from_clauses + [
+                _Snowflake_ORMJoin(  # handle Snowflake BCR bcr-1057
+                    left_clause,
+                    r_info,
+                    onclause,
+                    isouter=outerjoin,
+                    full=full,
+                    _extra_criteria=extra_criteria,
+                )
+            ]
 
 
 class SnowflakeIdentifierPreparer(compiler.IdentifierPreparer):
@@ -506,6 +617,45 @@ class SnowflakeCompiler(compiler.SQLCompiler):
 
     def visit_not_regexp_match_op_binary(self, binary, operator, **kw):
         return f"NOT {self.visit_regexp_match_op_binary(binary, operator, **kw)}"
+
+    def visit_join(self, join, asfrom=False, from_linter=None, **kwargs):
+        if from_linter:
+            from_linter.edges.update(
+                itertools.product(join.left._from_objects, join.right._from_objects)
+            )
+
+        if join.full:
+            join_type = " FULL OUTER JOIN "
+        elif join.isouter:
+            join_type = " LEFT OUTER JOIN "
+        else:
+            join_type = " JOIN "
+
+        join_statement = (
+            join.left._compiler_dispatch(
+                self, asfrom=True, from_linter=from_linter, **kwargs
+            )
+            + join_type
+            + join.right._compiler_dispatch(
+                self, asfrom=True, from_linter=from_linter, **kwargs
+            )
+        )
+
+        if join.onclause is None and isinstance(join.right, Lateral):
+            # in snowflake, onclause is not accepted for lateral due to BCR change:
+            # https://docs.snowflake.com/en/release-notes/bcr-bundles/2023_04/bcr-1057
+            # sqlalchemy only allows join with on condition.
+            # to adapt to snowflake syntax change,
+            # we make the change such that when oncaluse is None and the right part is
+            # Lateral, we do not append the on condition
+            return join_statement
+
+        return (
+            join
+            + " ON "
+            # TODO: likely need asfrom=True here?
+            + join.onclause._compiler_dispatch(self, from_linter=from_linter, **kwargs)
+        )
 
     def render_literal_value(self, value, type_):
         # escape backslash
