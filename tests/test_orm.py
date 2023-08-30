@@ -3,9 +3,20 @@
 #
 
 import enum
+import logging
 
 import pytest
-from sqlalchemy import Column, Enum, ForeignKey, Integer, Sequence, String, select, text
+from sqlalchemy import (
+    Column,
+    Enum,
+    ForeignKey,
+    Integer,
+    Sequence,
+    String,
+    func,
+    select,
+    text,
+)
 from sqlalchemy.orm import Session, declarative_base, relationship
 
 
@@ -358,3 +369,34 @@ def test_outer_lateral_join(engine_testaccount):
     sub = select(Department).lateral()
     query = select(Employee.employee_id).select_from(Employee).outerjoin(sub)
     session.execute(query)
+
+
+def test_lateral_join_without_condition(engine_testaccount, caplog):
+    Base = declarative_base()
+
+    class Employee(Base):
+        __tablename__ = "Employee"
+
+        pkey = Column(String, primary_key=True)
+        uid = Column(Integer)
+        content = Column(String)
+
+    Base.metadata.create_all(engine_testaccount)
+    lateral_table = func.flatten(
+        func.PARSE_JSON(Employee.content), outer=False
+    ).lateral()
+    query = (
+        select(
+            Employee.uid,
+        )
+        .select_from(Employee)
+        .join(lateral_table)
+        .where(Employee.uid == "123")
+    )
+    session = Session(bind=engine_testaccount)
+    with caplog.at_level(logging.DEBUG):
+        session.execute(query)
+    assert (
+        '[SELECT "Employee".uid FROM "Employee" JOIN LATERAL flatten(PARSE_JSON("Employee"'
+        in caplog.text
+    )

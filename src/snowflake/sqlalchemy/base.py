@@ -651,7 +651,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             return join_statement
 
         return (
-            join
+            join_statement
             + " ON "
             # TODO: likely need asfrom=True here?
             + join.onclause._compiler_dispatch(self, from_linter=from_linter, **kwargs)
