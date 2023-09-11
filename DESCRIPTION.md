@@ -14,6 +14,8 @@ Source code is also available at:
   - Added option to create a temporary stage command.
   - Add support for geometry type.
   - Fixed a compatibility issue of regex expression with SQLAlchemy 1.4.49.
+  - Fixed credentials with `externalbrowser` authentication not caching due to incorrect parsing of boolean query parameters.
+    - This fixes other boolean parameter passing to driver as well.
 
 - v1.4.7(Mar 22, 2023)
 
