@@ -243,6 +243,7 @@ class SnowflakeDialect(default.DefaultDialect):
             elif bool in expected_type:
                 opts[name] = parse_url_boolean(value)
             # TODO: how do we handle other types, like int?
+            # https://github.com/snowflakedb/snowflake-sqlalchemy/issues/447
             else:
                 opts[name] = value
 
