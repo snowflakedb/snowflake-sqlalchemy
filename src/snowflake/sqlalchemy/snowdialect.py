@@ -227,7 +227,7 @@ class SnowflakeDialect(default.DefaultDialect):
             opts["port"] = "443"
         opts["autocommit"] = False  # autocommit is disabled by default
 
-        cache_column_metadata = opts.pop("cache_column_metadata")
+        cache_column_metadata = opts.pop("cache_column_metadata", None)
         self._cache_column_metadata = (
             parse_url_boolean(cache_column_metadata) if cache_column_metadata else False
         )
