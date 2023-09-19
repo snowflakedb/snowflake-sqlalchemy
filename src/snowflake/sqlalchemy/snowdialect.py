@@ -227,12 +227,13 @@ class SnowflakeDialect(default.DefaultDialect):
             opts["port"] = "443"
         opts["autocommit"] = False  # autocommit is disabled by default
 
-        cache_column_metadata = opts.pop("cache_column_metadata", None)
+        query = dict(**url.query)  # make mutable
+        cache_column_metadata = query.pop("cache_column_metadata", None)
         self._cache_column_metadata = (
             parse_url_boolean(cache_column_metadata) if cache_column_metadata else False
         )
 
-        for name, value in url.query.items():
+        for name, value in query.items():
             (_, expected_type) = DEFAULT_CONFIGURATION[name]
             if not isinstance(expected_type, tuple):
                 expected_type = (expected_type,)
