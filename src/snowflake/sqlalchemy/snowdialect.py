@@ -413,7 +413,7 @@ class SnowflakeDialect(default.DefaultDialect):
                 referred_schema = self.normalize_name(row._mapping["pk_schema_name"])
                 foreign_key_map[name] = {
                     "constrained_columns": [
-                        self.normalize_name(row._mapping["fk_column_name"])
+                        (row._mapping["key_sequence"], self.normalize_name(row._mapping["fk_column_name"]))
                     ],
                     # referred schema should be None in context where it doesn't need to be specified
                     # https://docs.sqlalchemy.org/en/14/core/reflection.html#reflection-schema-qualified-interaction
@@ -427,7 +427,7 @@ class SnowflakeDialect(default.DefaultDialect):
                         row._mapping["pk_table_name"]
                     ),
                     "referred_columns": [
-                        self.normalize_name(row._mapping["pk_column_name"])
+                        (row._mapping["key_sequence"], self.normalize_name(row._mapping["pk_column_name"]))
                     ],
                     "name": name,
                     "table_name": self.normalize_name(row._mapping["fk_table_name"]),
@@ -444,15 +444,18 @@ class SnowflakeDialect(default.DefaultDialect):
                 foreign_key_map[name]["options"] = options
             else:
                 foreign_key_map[name]["constrained_columns"].append(
-                    self.normalize_name(row._mapping["fk_column_name"])
+                    (row._mapping["key_sequence"], self.normalize_name(row._mapping["fk_column_name"]))
                 )
                 foreign_key_map[name]["referred_columns"].append(
-                    self.normalize_name(row._mapping["pk_column_name"])
+                    (row._mapping["key_sequence"], self.normalize_name(row._mapping["pk_column_name"]))
                 )
 
         ans = {}
 
         for _, v in foreign_key_map.items():
+            v["constrained_columns"] = [col for i, col in sorted(v["constrained_columns"])]
+            v["referred_columns"] = [col for i, col in sorted(v["referred_columns"])]
+
             if v["table_name"] not in ans:
                 ans[v["table_name"]] = []
             ans[v["table_name"]].append(
