@@ -115,6 +115,10 @@ def _update_connection_application_name(**conn_kwargs: Any) -> Any:
     return conn_kwargs
 
 
+# handle Snowflake BCR bcr-1057
+# the BCR impacts sqlalchemy.orm.context.ORMSelectCompileState and sqlalchemy.sql.selectable.SelectState
+# which used the 'sqlalchemy.util.preloaded.sql_util.find_left_clause_to_join_from' method that
+# can not handle the BCR change, we implement it in a way that lateral join does not need onclause
 def _find_left_clause_to_join_from(clauses, join_to, onclause):
     """Given a list of FROM clauses, a selectable,
     and optional ON clause, return a list of integer indexes from the

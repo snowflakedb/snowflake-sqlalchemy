@@ -14,8 +14,9 @@ from sqlalchemy.orm import context
 from sqlalchemy.orm.context import _MapperEntity
 from sqlalchemy.schema import Sequence, Table
 from sqlalchemy.sql import compiler, expression
+from sqlalchemy.sql.base import CompileState
 from sqlalchemy.sql.elements import quoted_name
-from sqlalchemy.sql.selectable import Lateral
+from sqlalchemy.sql.selectable import Lateral, SelectState
 from sqlalchemy.util.compat import string_types
 
 from .custom_commands import AWSBucket, AzureContainer, ExternalStage
@@ -23,6 +24,7 @@ from .util import (
     _find_left_clause_to_join_from,
     _set_connection_interpolate_empty_sequences,
     _Snowflake_ORMJoin,
+    _Snowflake_Selectable_Join,
 )
 
 RESERVED_WORDS = frozenset(
@@ -106,6 +108,113 @@ https://docs.snowflake.com/en/release-notes/bcr-bundles/2023_04/bcr-1057
 """
 
 
+# handle Snowflake BCR bcr-1057
+@CompileState.plugin_for("default", "select")
+class SnowflakeSelectState(SelectState):
+    def _setup_joins(self, args, raw_columns):
+        for (right, onclause, left, flags) in args:
+            isouter = flags["isouter"]
+            full = flags["full"]
+
+            if left is None:
+                (
+                    left,
+                    replace_from_obj_index,
+                ) = self._join_determine_implicit_left_side(
+                    raw_columns, left, right, onclause
+                )
+            else:
+                (replace_from_obj_index) = self._join_place_explicit_left_side(left)
+
+            if replace_from_obj_index is not None:
+                # splice into an existing element in the
+                # self._from_obj list
+                left_clause = self.from_clauses[replace_from_obj_index]
+
+                self.from_clauses = (
+                    self.from_clauses[:replace_from_obj_index]
+                    + (
+                        _Snowflake_Selectable_Join(  # handle Snowflake BCR bcr-1057
+                            left_clause,
+                            right,
+                            onclause,
+                            isouter=isouter,
+                            full=full,
+                        ),
+                    )
+                    + self.from_clauses[replace_from_obj_index + 1 :]
+                )
+            else:
+
+                self.from_clauses = self.from_clauses + (
+                    # handle Snowflake BCR bcr-1057
+                    _Snowflake_Selectable_Join(
+                        left, right, onclause, isouter=isouter, full=full
+                    ),
+                )
+
+    @sa_util.preload_module("sqlalchemy.sql.util")
+    def _join_determine_implicit_left_side(self, raw_columns, left, right, onclause):
+        """When join conditions don't express the left side explicitly,
+        determine if an existing FROM or entity in this query
+        can serve as the left hand side.
+
+        """
+
+        replace_from_obj_index = None
+
+        from_clauses = self.from_clauses
+
+        if from_clauses:
+            # handle Snowflake BCR bcr-1057
+            indexes = _find_left_clause_to_join_from(from_clauses, right, onclause)
+
+            if len(indexes) == 1:
+                replace_from_obj_index = indexes[0]
+                left = from_clauses[replace_from_obj_index]
+        else:
+            potential = {}
+            statement = self.statement
+
+            for from_clause in itertools.chain(
+                itertools.chain.from_iterable(
+                    [element._from_objects for element in raw_columns]
+                ),
+                itertools.chain.from_iterable(
+                    [element._from_objects for element in statement._where_criteria]
+                ),
+            ):
+
+                potential[from_clause] = ()
+
+            all_clauses = list(potential.keys())
+            # handle Snowflake BCR bcr-1057
+            indexes = _find_left_clause_to_join_from(all_clauses, right, onclause)
+
+            if len(indexes) == 1:
+                left = all_clauses[indexes[0]]
+
+        if len(indexes) > 1:
+            raise sa_exc.InvalidRequestError(
+                "Can't determine which FROM clause to join "
+                "from, there are multiple FROMS which can "
+                "join to this entity. Please use the .select_from() "
+                "method to establish an explicit left side, as well as "
+                "providing an explicit ON clause if not present already to "
+                "help resolve the ambiguity."
+            )
+        elif not indexes:
+            raise sa_exc.InvalidRequestError(
+                "Don't know how to join to %r. "
+                "Please use the .select_from() "
+                "method to establish an explicit left side, as well as "
+                "providing an explicit ON clause if not present already to "
+                "help resolve the ambiguity." % (right,)
+            )
+        return left, replace_from_obj_index
+
+
+# handle Snowflake BCR bcr-1057
 @sql.base.CompileState.plugin_for("orm", "select")
 class SnowflakeORMSelectCompileState(context.ORMSelectCompileState):
     def _join_determine_implicit_left_side(
@@ -135,6 +244,7 @@ class SnowflakeORMSelectCompileState(context.ORMSelectCompileState):
             # we have a list of FROMs already.  So by definition this
             # join has to connect to one of those FROMs.
 
+            # handle Snowflake BCR bcr-1057
             indexes = _find_left_clause_to_join_from(
                 self.from_clauses, r_info.selectable, onclause
             )
@@ -182,6 +292,7 @@ class SnowflakeORMSelectCompileState(context.ORMSelectCompileState):
                     potential[ent_info.selectable] = (None, entity)
 
             all_clauses = list(potential.keys())
+            # handle Snowflake BCR bcr-1057
             indexes = _find_left_clause_to_join_from(
                 all_clauses, r_info.selectable, onclause
             )
