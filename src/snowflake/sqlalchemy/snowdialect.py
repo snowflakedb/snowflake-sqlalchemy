@@ -234,7 +234,12 @@ class SnowflakeDialect(default.DefaultDialect):
         )
 
         for name, value in query.items():
-            (_, expected_type) = DEFAULT_CONFIGURATION[name]
+            maybe_type_configuration = DEFAULT_CONFIGURATION.get(name)
+            if not maybe_type_configuration:
+                opts[name] = value
+                continue
+
+            (_, expected_type) = maybe_type_configuration
             if not isinstance(expected_type, tuple):
                 expected_type = (expected_type,)
 
