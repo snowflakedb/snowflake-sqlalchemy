@@ -203,7 +203,6 @@ def test_no_indexes(engine_testaccount, db_parameters):
 
 
 def test_timezone(db_parameters):
-
     test_table_name = "".join([random.choice(string.ascii_letters) for _ in range(5)])
 
     sa_engine = create_engine(
@@ -236,7 +235,6 @@ def test_timezone(db_parameters):
     ).raw_connection()
 
     with sa_engine.connect() as conn:
-
         with conn.begin():
             conn.exec_driver_sql(
                 textwrap.dedent(
