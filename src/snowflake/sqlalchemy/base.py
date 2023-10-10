@@ -124,7 +124,7 @@ class SnowflakeSelectState(SelectState):
                     raw_columns, left, right, onclause
                 )
             else:
-                replace_from_obj_index = self._join_place_explicit_left_side(left)
+                (replace_from_obj_index) = self._join_place_explicit_left_side(left)
 
             if replace_from_obj_index is not None:
                 # splice into an existing element in the
