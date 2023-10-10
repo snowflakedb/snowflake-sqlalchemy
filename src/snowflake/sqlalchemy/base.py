@@ -133,12 +133,14 @@ class SnowflakeSelectState(SelectState):
 
                 self.from_clauses = (
                     self.from_clauses[:replace_from_obj_index]
-                    + _Snowflake_Selectable_Join(  # handle Snowflake BCR bcr-1057
-                        left_clause,
-                        right,
-                        onclause,
-                        isouter=isouter,
-                        full=full,
+                    + (
+                        _Snowflake_Selectable_Join(  # handle Snowflake BCR bcr-1057
+                            left_clause,
+                            right,
+                            onclause,
+                            isouter=isouter,
+                            full=full,
+                        ),
                     )
                     + self.from_clauses[replace_from_obj_index + 1 :]
                 )
