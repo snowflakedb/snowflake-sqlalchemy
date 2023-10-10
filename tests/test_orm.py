@@ -339,8 +339,7 @@ def test_schema_translate_map(
                 Base.metadata.drop_all(con)
 
 
-def test_outer_lateral_join(engine_testaccount):
-    pytest.skip("test case needs to be fixed")
+def test_outer_lateral_join(engine_testaccount, caplog):
     Base = declarative_base()
 
     class Employee(Base):
@@ -348,7 +347,6 @@ def test_outer_lateral_join(engine_testaccount):
 
         employee_id = Column(Integer, primary_key=True)
         last_name = Column(String)
-        department_id = Column(Integer, ForeignKey("departments.department_id"))
 
     class Department(Base):
         __tablename__ = "departments"
@@ -358,17 +356,30 @@ def test_outer_lateral_join(engine_testaccount):
 
     Base.metadata.create_all(engine_testaccount)
     session = Session(bind=engine_testaccount)
-    e1 = Employee(employee_id=101, last_name="Richards", department_id=1)
-    e2 = Employee(employee_id=102, last_name="Paulson", department_id=1)
-    e3 = Employee(employee_id=103, last_name="Johnson", department_id=2)
+    e1 = Employee(employee_id=101, last_name="Richards")
     d1 = Department(department_id=1, name="Engineering")
-    d2 = Department(department_id=2, name="Support")
-    session.add_all([e1, e2, e3, d1, d2])
+    session.add_all([e1, d1])
     session.commit()
 
     sub = select(Department).lateral()
-    query = select(Employee.employee_id).select_from(Employee).outerjoin(sub)
-    session.execute(query)
+    query = (
+        select(Employee.employee_id, Department.department_id)
+        .select_from(Employee)
+        .outerjoin(sub)
+    )
+    assert (
+        str(query.compile(engine_testaccount)).replace("\n", "")
+        == "SELECT employees.employee_id, departments.department_id "
+        "FROM departments, employees LEFT OUTER JOIN LATERAL "
+        "(SELECT departments.department_id AS department_id, departments.name AS name "
+        "FROM departments) AS anon_1"
+    )
+    with caplog.at_level(logging.DEBUG):
+        assert [res for res in session.execute(query)]
+    assert (
+        "SELECT employees.employee_id, departments.department_id FROM departments"
+        in caplog.text
+    )
 
 
 def test_lateral_join_without_condition(engine_testaccount, caplog):

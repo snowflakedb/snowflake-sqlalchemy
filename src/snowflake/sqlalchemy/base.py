@@ -124,7 +124,7 @@ class SnowflakeSelectState(SelectState):
                     raw_columns, left, right, onclause
                 )
             else:
-                (replace_from_obj_index) = self._join_place_explicit_left_side(left)
+                replace_from_obj_index = self._join_place_explicit_left_side(left)
 
             if replace_from_obj_index is not None:
                 # splice into an existing element in the
@@ -133,19 +133,16 @@ class SnowflakeSelectState(SelectState):
 
                 self.from_clauses = (
                     self.from_clauses[:replace_from_obj_index]
-                    + (
-                        _Snowflake_Selectable_Join(  # handle Snowflake BCR bcr-1057
-                            left_clause,
-                            right,
-                            onclause,
-                            isouter=isouter,
-                            full=full,
-                        ),
+                    + _Snowflake_Selectable_Join(  # handle Snowflake BCR bcr-1057
+                        left_clause,
+                        right,
+                        onclause,
+                        isouter=isouter,
+                        full=full,
                     )
                     + self.from_clauses[replace_from_obj_index + 1 :]
                 )
             else:
-
                 self.from_clauses = self.from_clauses + (
                     # handle Snowflake BCR bcr-1057
                     _Snowflake_Selectable_Join(
