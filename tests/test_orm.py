@@ -3,9 +3,20 @@
 #
 
 import enum
+import logging
 
 import pytest
-from sqlalchemy import Column, Enum, ForeignKey, Integer, Sequence, String, text
+from sqlalchemy import (
+    Column,
+    Enum,
+    ForeignKey,
+    Integer,
+    Sequence,
+    String,
+    func,
+    select,
+    text,
+)
 from sqlalchemy.orm import Session, declarative_base, relationship
 
 
@@ -326,3 +337,77 @@ def test_schema_translate_map(
                 assert user.fullname == "test_user"
             finally:
                 Base.metadata.drop_all(con)
+
+
+def test_outer_lateral_join(engine_testaccount, caplog):
+    Base = declarative_base()
+
+    class Employee(Base):
+        __tablename__ = "employees"
+
+        employee_id = Column(Integer, primary_key=True)
+        last_name = Column(String)
+
+    class Department(Base):
+        __tablename__ = "departments"
+
+        department_id = Column(Integer, primary_key=True)
+        name = Column(String)
+
+    Base.metadata.create_all(engine_testaccount)
+    session = Session(bind=engine_testaccount)
+    e1 = Employee(employee_id=101, last_name="Richards")
+    d1 = Department(department_id=1, name="Engineering")
+    session.add_all([e1, d1])
+    session.commit()
+
+    sub = select(Department).lateral()
+    query = (
+        select(Employee.employee_id, Department.department_id)
+        .select_from(Employee)
+        .outerjoin(sub)
+    )
+    assert (
+        str(query.compile(engine_testaccount)).replace("\n", "")
+        == "SELECT employees.employee_id, departments.department_id "
+        "FROM departments, employees LEFT OUTER JOIN LATERAL "
+        "(SELECT departments.department_id AS department_id, departments.name AS name "
+        "FROM departments) AS anon_1"
+    )
+    with caplog.at_level(logging.DEBUG):
+        assert [res for res in session.execute(query)]
+    assert (
+        "SELECT employees.employee_id, departments.department_id FROM departments"
+        in caplog.text
+    )
+
+
+def test_lateral_join_without_condition(engine_testaccount, caplog):
+    Base = declarative_base()
+
+    class Employee(Base):
+        __tablename__ = "Employee"
+
+        pkey = Column(String, primary_key=True)
+        uid = Column(Integer)
+        content = Column(String)
+
+    Base.metadata.create_all(engine_testaccount)
+    lateral_table = func.flatten(
+        func.PARSE_JSON(Employee.content), outer=False
+    ).lateral()
+    query = (
+        select(
+            Employee.uid,
+        )
+        .select_from(Employee)
+        .join(lateral_table)
+        .where(Employee.uid == "123")
+    )
+    session = Session(bind=engine_testaccount)
+    with caplog.at_level(logging.DEBUG):
+        session.execute(query)
+    assert (
+        '[SELECT "Employee".uid FROM "Employee" JOIN LATERAL flatten(PARSE_JSON("Employee"'
+        in caplog.text
+    )
