@@ -327,4 +327,3 @@ class _Snowflake_Selectable_Join(Join):
 
         self.isouter = isouter
         self.full = full
-
