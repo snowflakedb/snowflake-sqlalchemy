@@ -7,6 +7,8 @@ from sqlalchemy.schema import DropColumnComment, DropTableComment
 from sqlalchemy.sql import column, quoted_name, table
 from sqlalchemy.testing import AssertsCompiledSQL
 
+from snowflake.sqlalchemy import snowdialect
+
 table1 = table(
     "table1", column("id", Integer), column("name", String), column("value", Integer)
 )
@@ -107,3 +109,14 @@ def test_quoted_name_label(engine_testaccount):
         sel_from_tbl = select(col).group_by(col).select_from(table("abc"))
         compiled_result = sel_from_tbl.compile()
         assert str(compiled_result) == t["output"]
+
+
+def test_outer_lateral_join():
+    col = column("colname").label("label")
+    col2 = column("colname2").label("label2")
+    lateral_table = func.flatten(func.PARSE_JSON(col2), outer=True).lateral()
+    stmt = select(col).select_from(table("abc")).join(lateral_table).group_by(col)
+    assert (
+        str(stmt.compile(dialect=snowdialect.dialect()))
+        == "SELECT colname AS label \nFROM abc JOIN LATERAL flatten(PARSE_JSON(colname2)) AS anon_1 GROUP BY colname"
+    )
