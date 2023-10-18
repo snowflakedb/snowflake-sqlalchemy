@@ -233,9 +233,12 @@ class SnowflakeDialect(default.DefaultDialect):
             parse_url_boolean(cache_column_metadata) if cache_column_metadata else False
         )
 
+        # URL sets the query parameter values as strings, we need to cast to expected types when necessary
         for name, value in query.items():
             maybe_type_configuration = DEFAULT_CONFIGURATION.get(name)
-            if not maybe_type_configuration:
+            if (
+                not maybe_type_configuration
+            ):  # if the parameter is not found in the type mapping, pass it through as a string
                 opts[name] = value
                 continue
 
@@ -243,14 +246,18 @@ class SnowflakeDialect(default.DefaultDialect):
             if not isinstance(expected_type, tuple):
                 expected_type = (expected_type,)
 
-            if isinstance(value, expected_type):
+            if isinstance(
+                value, expected_type
+            ):  # if the expected type is str, pass it through as a string
                 opts[name] = value
-            # URL sets the query parameter values as strings, we need to revert where we want booleans
-            elif bool in expected_type:
+
+            elif (
+                bool in expected_type
+            ):  # if the expected type is bool, parse it and pass as a boolean
                 opts[name] = parse_url_boolean(value)
-            # TODO: how do we handle other types, like int?
-            # https://github.com/snowflakedb/snowflake-sqlalchemy/issues/447
             else:
+                # TODO: other types like int are stil passed through as string
+                # https://github.com/snowflakedb/snowflake-sqlalchemy/issues/447
                 opts[name] = value
 
         return ([], opts)
