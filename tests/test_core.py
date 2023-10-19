@@ -173,6 +173,27 @@ def test_connect_args():
         engine.dispose()
 
 
+def test_boolean_query_argument_parsing():
+    engine = create_engine(
+        URL(
+            user=CONNECTION_PARAMETERS["user"],
+            password=CONNECTION_PARAMETERS["password"],
+            account=CONNECTION_PARAMETERS["account"],
+            host=CONNECTION_PARAMETERS["host"],
+            port=CONNECTION_PARAMETERS["port"],
+            protocol=CONNECTION_PARAMETERS["protocol"],
+            validate_default_parameters=True,
+        )
+    )
+    try:
+        verify_engine_connection(engine)
+        connection = engine.raw_connection()
+        assert connection.validate_default_parameters is True
+    finally:
+        connection.close()
+        engine.dispose()
+
+
 def test_create_dialect():
     """
     Tests getting only dialect object through create_engine

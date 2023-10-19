@@ -115,6 +115,15 @@ def _update_connection_application_name(**conn_kwargs: Any) -> Any:
     return conn_kwargs
 
 
+def parse_url_boolean(value: str) -> bool:
+    if value == "True":
+        return True
+    elif value == "False":
+        return False
+    else:
+        raise ValueError(f"Invalid boolean value detected: '{value}'")
+
+
 # handle Snowflake BCR bcr-1057
 # the BCR impacts sqlalchemy.orm.context.ORMSelectCompileState and sqlalchemy.sql.selectable.SelectState
 # which used the 'sqlalchemy.util.preloaded.sql_util.find_left_clause_to_join_from' method that
