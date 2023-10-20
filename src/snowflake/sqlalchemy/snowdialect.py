@@ -11,7 +11,7 @@ import sqlalchemy.types as sqltypes
 from sqlalchemy import event as sa_vnt
 from sqlalchemy import exc as sa_exc
 from sqlalchemy import util as sa_util
-from sqlalchemy.engine import default, reflection
+from sqlalchemy.engine import URL, default, reflection
 from sqlalchemy.schema import Table
 from sqlalchemy.sql import text
 from sqlalchemy.sql.elements import quoted_name
@@ -38,6 +38,7 @@ from sqlalchemy.types import (
 )
 
 from snowflake.connector import errors as sf_errors
+from snowflake.connector.connection import DEFAULT_CONFIGURATION
 from snowflake.connector.constants import UTF8
 
 from .base import (
@@ -62,7 +63,7 @@ from .custom_types import (
     _CUSTOM_Float,
     _CUSTOM_Time,
 )
-from .util import _update_connection_application_name
+from .util import _update_connection_application_name, parse_url_boolean
 
 colspecs = {
     Date: _CUSTOM_Date,
@@ -108,7 +109,6 @@ ischema_names = {
     "GEOGRAPHY": GEOGRAPHY,
     "GEOMETRY": GEOMETRY,
 }
-
 
 _ENABLE_SQLALCHEMY_AS_APPLICATION_NAME = True
 
@@ -199,7 +199,7 @@ class SnowflakeDialect(default.DefaultDialect):
 
         return connector
 
-    def create_connect_args(self, url):
+    def create_connect_args(self, url: URL):
         opts = url.translate_connect_args(username="user")
         if "database" in opts:
             name_spaces = [unquote_plus(e) for e in opts["database"].split("/")]
@@ -226,10 +226,40 @@ class SnowflakeDialect(default.DefaultDialect):
             opts["host"] = opts["host"] + ".snowflakecomputing.com"
             opts["port"] = "443"
         opts["autocommit"] = False  # autocommit is disabled by default
-        opts.update(url.query)
+
+        query = dict(**url.query)  # make mutable
+        cache_column_metadata = query.pop("cache_column_metadata", None)
         self._cache_column_metadata = (
-            opts.get("cache_column_metadata", "false").lower() == "true"
+            parse_url_boolean(cache_column_metadata) if cache_column_metadata else False
         )
+
+        # URL sets the query parameter values as strings, we need to cast to expected types when necessary
+        for name, value in query.items():
+            maybe_type_configuration = DEFAULT_CONFIGURATION.get(name)
+            if (
+                not maybe_type_configuration
+            ):  # if the parameter is not found in the type mapping, pass it through as a string
+                opts[name] = value
+                continue
+
+            (_, expected_type) = maybe_type_configuration
+            if not isinstance(expected_type, tuple):
+                expected_type = (expected_type,)
+
+            if isinstance(
+                value, expected_type
+            ):  # if the expected type is str, pass it through as a string
+                opts[name] = value
+
+            elif (
+                bool in expected_type
+            ):  # if the expected type is bool, parse it and pass as a boolean
+                opts[name] = parse_url_boolean(value)
+            else:
+                # TODO: other types like int are stil passed through as string
+                # https://github.com/snowflakedb/snowflake-sqlalchemy/issues/447
+                opts[name] = value
+
         return ([], opts)
 
     def has_table(self, connection, table_name, schema=None):
