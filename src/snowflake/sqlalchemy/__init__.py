@@ -114,3 +114,30 @@ __all__ = (
     "CreateStage",
     "CreateFileFormat",
 )
+
+def snowflake_sqlalchemy_20_monkey_patches():
+    """Ensure Snowflake integrates with sqlalchemy 2.0."""
+    import sqlalchemy.util.compat
+
+    # make strings always return unicode strings
+    sqlalchemy.util.compat.string_types = (str,)
+    sqlalchemy.types.String.RETURNS_UNICODE = True
+
+    import snowflake.sqlalchemy.snowdialect
+
+    snowflake.sqlalchemy.snowdialect.SnowflakeDialect.returns_unicode_strings = True
+
+    # make has_table() support the `info_cache` kwarg
+    import snowflake.sqlalchemy.snowdialect
+
+    def has_table(self, connection, table_name, schema=None, info_cache=None):
+        """
+        Checks if the table exists
+        """
+        return self._has_object(connection, "TABLE", table_name, schema)
+
+    snowflake.sqlalchemy.snowdialect.SnowflakeDialect.has_table = has_table
+
+
+# usage: call this function before creating an engine:
+snowflake_sqlalchemy_20_monkey_patches()
