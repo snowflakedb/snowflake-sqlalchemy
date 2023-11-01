@@ -9,7 +9,7 @@ Source code is also available at:
 
 # Release Notes
 
-- v1.5.1(Unreleased)
+- v1.5.1(November 03, 2023)
 
   - Fixed a compatibility issue with Snowflake Behavioral Change 1057 on outer lateral join, for more details check https://docs.snowflake.com/en/release-notes/bcr-bundles/2023_04/bcr-1057.
   - Fixed credentials with `externalbrowser` authentication not caching due to incorrect parsing of boolean query parameters.
