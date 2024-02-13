@@ -76,9 +76,11 @@ jobs:
         gpg --quiet --batch --yes --decrypt --passphrase="$PARAMETERS_SECRET" \
         .github/workflows/parameters/parameters_${{ matrix.cloud-provider }}.py.gpg > tests/parameters.py
     - name: Upgrade setuptools, pip and wheel
-      run: python -m pip install -U setuptools pip wheel
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install --upgrade setuptools wheel
     - name: Install tox
-      run: python -m pip install tox
+      run: python -m pip install tox, tox-gh-actions
     - name: List installed packages
       run: python -m pip freeze
     - name: Run tests
