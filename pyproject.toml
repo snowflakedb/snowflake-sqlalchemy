@@ -1,0 +1,81 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "snowflake-sqlalchemy"
+dynamic = ["version"]
+description = "Snowflake SQLAlchemy Dialect"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.8"
+authors = [
+  { name = "Snowflake Inc.", email = "triage-snowpark-python-api-dl@snowflake.com" },
+]
+keywords = ["Snowflake", "analytics", "cloud", "database", "db", "warehouse"]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Environment :: Console",
+  "Environment :: Other Environment",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Education",
+  "Intended Audience :: Information Technology",
+  "Intended Audience :: System Administrators",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: SQL",
+  "Topic :: Database",
+  "Topic :: Scientific/Engineering :: Information Analysis",
+  "Topic :: Software Development",
+  "Topic :: Software Development :: Libraries",
+  "Topic :: Software Development :: Libraries :: Application Frameworks",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+  # "importlib-metadata;python_version<\"3.8\"",
+  "snowflake-connector-python",
+  # "sqlalchemy>=2.0.0",
+  "sqlalchemy<2.0.0",
+]
+
+[project.optional-dependencies]
+development = [
+  "mock",
+  "numpy",
+  "pytest",
+  "pytest-cov",
+  "pytest-rerunfailures",
+  "pytest-timeout",
+  "pytz",
+]
+pandas = ["snowflake-connector-python[pandas]"]
+
+[project.entry-points."sqlalchemy.dialects"]
+snowflake = "snowflake.sqlalchemy:dialect"
+
+[project.urls]
+Changelog = "https://github.com/snowflakedb/snowflake-sqlalchemy/blob/main/DESCRIPTION.md"
+Documentation = "https://docs.snowflake.com/en/user-guide/sqlalchemy.html"
+Homepage = "https://www.snowflake.com/"
+Issues = "https://github.com/snowflakedb/snowflake-sqlalchemy/issues"
+Source = "https://github.com/snowflakedb/snowflake-sqlalchemy"
+
+[tool.hatch.version]
+path = "src/snowflake/sqlalchemy/version.py"
+
+[tool.hatch.envs.local]
+features = ["development", "pandas"]
+python = "3.8"
+
+[tool.hatch.build.targets.sdist]
+exclude = ["/.github"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/snowflake"]
