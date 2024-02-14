@@ -16,13 +16,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout Action
-      uses: actions/checkout@v3
+      uses: actions/checkout@v5
       with:
         repository: snowflakedb/whitesource-actions
         token: ${{ secrets.whitesource_action_token }}
         path: whitesource-actions
     - name: Set Env
-      run: echo "repo=$(basename $github_repository)" >> $github_env
+      run: echo "repo=${{ github.event.repository.name }} >> $GITHUB_ENV
     - name: Jira Creation
       uses: ./whitesource-actions/snyk-issue
       with:
