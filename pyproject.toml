@@ -38,12 +38,7 @@ classifiers = [
   "Topic :: Software Development :: Libraries :: Application Frameworks",
   "Topic :: Software Development :: Libraries :: Python Modules",
 ]
-dependencies = [
-  # "importlib-metadata;python_version<\"3.8\"",
-  "snowflake-connector-python",
-  # "sqlalchemy>=2.0.0",
-  "sqlalchemy<2.0.0",
-]
+dependencies = ["snowflake-connector-python", "sqlalchemy<2.1.0,>=1.4.0"]
 
 [project.optional-dependencies]
 development = [
@@ -54,6 +49,7 @@ development = [
   "pytest-rerunfailures",
   "pytest-timeout",
   "pytz",
+  "pre-commit",
 ]
 pandas = ["snowflake-connector-python[pandas]"]
 
