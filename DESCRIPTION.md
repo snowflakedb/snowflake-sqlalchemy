@@ -9,10 +9,14 @@ Source code is also available at:
 
 # Release Notes
 
-- v1.5.3(Unrelased)
+- v1.6.0(Not released)
 
-  - Limit SQLAlchemy to < 2.0.0 before releasing version compatible with 2.0
+  - support for installing with SQLAlchemy 2.0.x
 
+- v1.5.3(Not relased)
+
+    - Limit SQLAlchemy to < 2.0.0 before releasing version compatible with 2.0
+  
 - v1.5.2(April 11, 2024)
 
   - Bump min SQLAlchemy to 1.4.19 for outer lateral join
