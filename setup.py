@@ -7,10 +7,10 @@ import os
 from setuptools import setup
 
 SQLALCHEMY_SRC_DIR = os.path.join("src", "snowflake", "sqlalchemy")
-VERSION = (1, 1, 1, None)  # Default
+VERSION = "1.1.1"
 with open(os.path.join(SQLALCHEMY_SRC_DIR, "version.py"), encoding="utf-8") as f:
     exec(f.read())
-    version = ".".join([str(v) for v in VERSION if v is not None])
+    version = VERSION
 
 setup(
     version=version,
