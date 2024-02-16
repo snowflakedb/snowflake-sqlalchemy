@@ -86,7 +86,6 @@ jobs:
       env:
         PYTHON_VERSION: ${{ matrix.python-version }}
         PYTEST_ADDOPTS: -vvv --color=yes --tb=short
-        TOX_PARALLEL_NO_SPINNER: 1
     - name: Combine coverages
       run: python -m tox -e coverage --skip-missing-interpreters false
       shell: bash
