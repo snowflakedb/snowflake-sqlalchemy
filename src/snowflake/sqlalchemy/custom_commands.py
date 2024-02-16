@@ -10,7 +10,8 @@ from sqlalchemy.sql.ddl import DDLElement
 from sqlalchemy.sql.dml import UpdateBase
 from sqlalchemy.sql.elements import ClauseElement
 from sqlalchemy.sql.roles import FromClauseRole
-from sqlalchemy.util.compat import string_types
+
+from .compat import string_types
 
 NoneType = type(None)
 

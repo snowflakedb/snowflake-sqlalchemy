@@ -15,7 +15,6 @@ from sqlalchemy.engine import URL, default, reflection
 from sqlalchemy.schema import Table
 from sqlalchemy.sql import text
 from sqlalchemy.sql.elements import quoted_name
-from sqlalchemy.sql.sqltypes import String
 from sqlalchemy.types import (
     BIGINT,
     BINARY,
@@ -40,6 +39,7 @@ from sqlalchemy.types import (
 from snowflake.connector import errors as sf_errors
 from snowflake.connector.connection import DEFAULT_CONFIGURATION
 from snowflake.connector.constants import UTF8
+from snowflake.sqlalchemy.compat import returns_unicode
 
 from .base import (
     SnowflakeCompiler,
@@ -134,7 +134,7 @@ class SnowflakeDialect(default.DefaultDialect):
     #  unicode strings
     supports_unicode_statements = True
     supports_unicode_binds = True
-    returns_unicode_strings = String.RETURNS_UNICODE
+    returns_unicode_strings = returns_unicode
     description_encoding = None
 
     # No lastrowid support. See SNOW-11155
@@ -195,6 +195,10 @@ class SnowflakeDialect(default.DefaultDialect):
 
     @classmethod
     def dbapi(cls):
+        return cls.import_dbapi()
+
+    @classmethod
+    def import_dbapi(cls):
         from snowflake import connector
 
         return connector
@@ -262,13 +266,15 @@ class SnowflakeDialect(default.DefaultDialect):
 
         return ([], opts)
 
-    def has_table(self, connection, table_name, schema=None):
+    @reflection.cache
+    def has_table(self, connection, table_name, schema=None, **kw):
         """
         Checks if the table exists
         """
         return self._has_object(connection, "TABLE", table_name, schema)
 
-    def has_sequence(self, connection, sequence_name, schema=None):
+    @reflection.cache
+    def has_sequence(self, connection, sequence_name, schema=None, **kw):
         """
         Checks if the sequence exists
         """

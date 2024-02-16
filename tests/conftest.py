@@ -57,11 +57,6 @@ def pytest_addoption(parser):
 
 
 @pytest.fixture(scope="session")
-def run_v20_sqlalchemy(pytestconfig):
-    return pytestconfig.option.run_v20_sqlalchemy
-
-
-@pytest.fixture(scope="session")
 def on_travis():
     return os.getenv("TRAVIS", "").lower() == "true"
 
