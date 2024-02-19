@@ -195,6 +195,10 @@ class SnowflakeDialect(default.DefaultDialect):
 
     @classmethod
     def dbapi(cls):
+        return cls.import_dbapi()
+
+    @classmethod
+    def import_dbapi(cls):
         from snowflake import connector
 
         return connector
