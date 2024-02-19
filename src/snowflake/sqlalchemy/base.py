@@ -17,8 +17,8 @@ from sqlalchemy.sql import compiler, expression
 from sqlalchemy.sql.base import CompileState
 from sqlalchemy.sql.elements import quoted_name
 from sqlalchemy.sql.selectable import Lateral, SelectState
-from sqlalchemy.util.compat import string_types
 
+from .compat import string_types
 from .custom_commands import AWSBucket, AzureContainer, ExternalStage
 from .util import (
     _find_left_clause_to_join_from,
