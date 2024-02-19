@@ -7,7 +7,7 @@ from itertools import chain
 from typing import Any
 from urllib.parse import quote_plus
 
-from sqlalchemy import exc, inspection, sql, util
+from sqlalchemy import exc, inspection, sql
 from sqlalchemy.exc import NoForeignKeysError
 from sqlalchemy.orm.interfaces import MapperProperty
 from sqlalchemy.orm.util import _ORMJoin as sa_orm_util_ORMJoin
@@ -19,6 +19,7 @@ from sqlalchemy.sql.selectable import Join, Lateral, coercions, operators, roles
 
 from snowflake.connector.compat import IS_STR
 from snowflake.connector.connection import SnowflakeConnection
+from snowflake.sqlalchemy import compat
 
 from ._constants import (
     APPLICATION_NAME,
@@ -212,7 +213,7 @@ class _Snowflake_ORMJoin(sa_orm_util_ORMJoin):
         # then the "_joined_from_info" concept can go
         left_orm_info = getattr(left, "_joined_from_info", left_info)
         self._joined_from_info = right_info
-        if isinstance(onclause, util.string_types):
+        if isinstance(onclause, compat.string_types):
             onclause = getattr(left_orm_info.entity, onclause)
         # ####
 
