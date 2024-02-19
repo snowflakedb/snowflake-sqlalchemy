@@ -241,7 +241,8 @@ def pytest_sessionstart(session):
     # patch the create_engine with future flag
     global create_engine_with_future_flag
     create_engine_with_future_flag = partial(
-        create_engine, future=session.config.option.run_v20_sqlalchemy
+        create_engine,
+        future=True,
     )
 
 
