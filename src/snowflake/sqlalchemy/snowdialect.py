@@ -39,6 +39,7 @@ from sqlalchemy.types import (
 from snowflake.connector import errors as sf_errors
 from snowflake.connector.connection import DEFAULT_CONFIGURATION
 from snowflake.connector.constants import UTF8
+from snowflake.sqlalchemy.compat import returns_unicode
 
 from .base import (
     SnowflakeCompiler,
@@ -133,7 +134,7 @@ class SnowflakeDialect(default.DefaultDialect):
     #  unicode strings
     supports_unicode_statements = True
     supports_unicode_binds = True
-    returns_unicode_strings = True
+    returns_unicode_strings = returns_unicode
     description_encoding = None
 
     # No lastrowid support. See SNOW-11155
