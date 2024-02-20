@@ -35,7 +35,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.exc import DBAPIError, NoSuchTableError
 from sqlalchemy.pool import NullPool
-from sqlalchemy.sql import and_, not_, or_, select
+from sqlalchemy.sql import and_, insert, not_, or_, select
 
 import snowflake.connector.errors
 import snowflake.sqlalchemy.snowdialect
@@ -1440,16 +1440,19 @@ def test_autoincrement(engine_testaccount):
         metadata.create_all(engine_testaccount)
 
         with engine_testaccount.begin() as connection:
-            connection.execute(insert(users), [{"name": "sf1"}])
-            assert connection.execute(select(users)).fetchall() == [(1, "sf1")]
-            connection.execute(insert(users), [{"name": "sf2"}, {"name": "sf3"}])
-            assert connection.execute(select(users)).fetchall() == [
+            insert_stmt = insert(users)
+            select_stmt = select(users.c.name)
+
+            connection.execute(insert_stmt, [{"name": "sf1"}])
+            assert connection.execute(select_stmt).fetchall() == [(1, "sf1")]
+            connection.execute(insert_stmt, [{"name": "sf2"}, {"name": "sf3"}])
+            assert connection.execute(select_stmt).fetchall() == [
                 (1, "sf1"),
                 (2, "sf2"),
                 (3, "sf3"),
             ]
-            connection.execute(insert(users), {"name": "sf4"})
-            assert connection.execute(select(users)).fetchall() == [
+            connection.execute(insert_stmt, {"name": "sf4"})
+            assert connection.execute(select_stmt).fetchall() == [
                 (1, "sf1"),
                 (2, "sf2"),
                 (3, "sf3"),
@@ -1458,8 +1461,8 @@ def test_autoincrement(engine_testaccount):
 
             seq = Sequence("id_seq")
             nextid = connection.execute(seq)
-            connection.execute(insert(users), [{"uid": nextid, "name": "sf5"}])
-            assert connection.execute(select(users)).fetchall() == [
+            connection.execute(insert_stmt, [{"uid": nextid, "name": "sf5"}])
+            assert connection.execute(select_stmt).fetchall() == [
                 (1, "sf1"),
                 (2, "sf2"),
                 (3, "sf3"),
