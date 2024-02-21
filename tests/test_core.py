@@ -1435,37 +1435,36 @@ def test_autoincrement(engine_testaccount):
         Column("name", String(39)),
     )
 
+    insert_stmt = insert(users)
+    select_stmt = select(users.c.name)
+
     try:
         metadata.create_all(engine_testaccount)
 
         with engine_testaccount.connect() as connection:
-            insert_stmt = insert(users)
-            select_stmt = select(users.c.name)
+            connection.execute(insert_stmt, ({"name": "sf1"}))
+            result = connection.execute(select_stmt).all()
+            assert result == [("sf1",)], result
 
-            with connection.begin():
-                connection.execute(insert_stmt, ({"name": "sf1"}))
-                result = connection.execute(select_stmt).all()
-                assert result == [("sf1",)], result
+            connection.execute(insert_stmt, ({"name": "sf2"}, {"name": "sf3"}))
+            result = connection.execute(select_stmt).all()
+            assert result == [("sf1",), ("sf2",), ("sf3",)], result
 
-                connection.execute(insert_stmt, ({"name": "sf2"}, {"name": "sf3"}))
-                result = connection.execute(select_stmt).all()
-                assert result == [("sf1",), ("sf2",), ("sf3",)], result
+            connection.execute(insert_stmt, ({"name": "sf4"}))
+            result = connection.execute(select_stmt).all()
+            assert result == [("sf1",), ("sf2",), ("sf3",), ("sf4",)], result
 
-                connection.execute(insert_stmt, ({"name": "sf4"}))
-                result = connection.execute(select_stmt).all()
-                assert result == [("sf1",), ("sf2",), ("sf3",), ("sf4",)], result
-
-                seq = Sequence("id_seq")
-                nextid = connection.execute(seq)
-                connection.execute(insert_stmt, ({"uid": nextid, "name": "sf5"}))
-                result = connection.execute(select_stmt).all()
-                assert result == [
-                    ("sf1",),
-                    ("sf2",),
-                    ("sf3",),
-                    ("sf4",),
-                    ("sf5",),
-                ], result
+            seq = Sequence("id_seq")
+            nextid = connection.execute(seq)
+            connection.execute(insert_stmt, ({"uid": nextid, "name": "sf5"}))
+            result = connection.execute(select_stmt).all()
+            assert result == [
+                ("sf1",),
+                ("sf2",),
+                ("sf3",),
+                ("sf4",),
+                ("sf5",),
+            ], result
 
     finally:
         metadata.drop_all(engine_testaccount)
