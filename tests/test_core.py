@@ -1459,7 +1459,7 @@ def test_autoincrement(engine_testaccount):
                 (4, "sf4"),
             ]
 
-            seq = Sequence("id_seq")
+            seq = Sequence("id_seq", order=True)
             nextid = connection.execute(seq)
             connection.execute(insert_stmt, [{"uid": nextid, "name": "sf5"}])
             assert connection.execute(select_stmt).fetchall() == [

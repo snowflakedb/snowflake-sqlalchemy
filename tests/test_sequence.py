@@ -37,7 +37,7 @@ def test_table_with_sequence(engine_testaccount, db_parameters):
 
     autoload_metadata = MetaData()
     sequence_insert_stmt = insert(sequence_table)
-    sequence_select_stmt = select(sequence_table.c.data)
+    sequence_select_stmt = select(sequence_table.c.data).order_by("id")
 
     try:
         metadata.create_all(engine_testaccount)
