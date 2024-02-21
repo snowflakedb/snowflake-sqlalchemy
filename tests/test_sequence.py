@@ -36,13 +36,15 @@ def test_table_with_sequence(engine_testaccount, db_parameters):
     )
 
     autoload_metadata = MetaData()
+    sequence_insert_stmt = insert(sequence_table)
+    sequence_select_stmt = select(sequence_table.c.data)
 
     try:
         metadata.create_all(engine_testaccount)
 
         with engine_testaccount.begin() as conn:
-            conn.execute(insert(sequence_table), ({"data": "test_insert_1"}))
-            result = conn.execute(select(sequence_table)).fetchall()
+            conn.execute(sequence_insert_stmt, ({"data": "test_insert_1"}))
+            result = conn.execute(sequence_select_stmt).fetchall()
             assert result == [(1, "test_insert_1")], result
 
             autoload_sequence_table = Table(
@@ -70,7 +72,7 @@ def test_table_with_sequence(engine_testaccount, db_parameters):
                 ({"id": nextid, "data": "test_insert_seq"}),
             )
 
-            result = conn.execute(select(sequence_table)).fetchall()
+            result = conn.execute(sequence_select_stmt).fetchall()
 
             assert result == [
                 (1, "test_insert_1"),
