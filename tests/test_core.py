@@ -1431,12 +1431,12 @@ def test_autoincrement(engine_testaccount):
     users = Table(
         "users",
         metadata,
-        Column("uid", Integer, Sequence("id_seq"), primary_key=True),
+        Column("uid", Integer, Sequence("id_seq", order=True), primary_key=True),
         Column("name", String(39)),
     )
 
     insert_stmt = insert(users)
-    select_stmt = select(users.c.name)
+    select_stmt = select(users.c.name).order_by("uid")
 
     try:
         metadata.create_all(engine_testaccount)
@@ -1454,7 +1454,7 @@ def test_autoincrement(engine_testaccount):
             result = connection.execute(select_stmt).all()
             assert result == [("sf1",), ("sf2",), ("sf3",), ("sf4",)], result
 
-            seq = Sequence("id_seq")
+            seq = Sequence("id_seq", order=True)
             nextid = connection.execute(seq)
             connection.execute(insert_stmt, ({"uid": nextid, "name": "sf5"}))
             result = connection.execute(select_stmt).all()
