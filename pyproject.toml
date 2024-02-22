@@ -78,7 +78,7 @@ packages = ["src/snowflake"]
 
 [tool.sqla_testing]
 requirement_cls = "snowflake.sqlalchemy.requirements:Requirements"
-# profile_file = "tests/profiles.txt"
+profile_file = "tests/profiles.txt"
 
 [tool.ruff]
 line-length = 88
