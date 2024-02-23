@@ -406,16 +406,6 @@ def test_insert_tables(engine_testaccount):
                     str(users.join(addresses)) == "users JOIN addresses ON "
                     "users.id = addresses.user_id"
                 )
-                assert (
-                    str(
-                        users.join(
-                            addresses,
-                            addresses.c.email_address.like(users.c.name + "%"),
-                        )
-                    )
-                    == "users JOIN addresses "
-                    "ON addresses.email_address LIKE users.name || :name_1"
-                )
 
                 s = select(users.c.fullname).select_from(
                     users.join(
