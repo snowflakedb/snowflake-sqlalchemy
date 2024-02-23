@@ -259,7 +259,8 @@ class CSVFormatter(CopyFormatter):
 
     def file_extension(self, ext):
         """String that specifies the extension for files unloaded to a stage. Accepts any extension. The user is
-        responsible for specifying a valid file extension that can be read by the desired software or service."""
+        responsible for specifying a valid file extension that can be read by the desired software or service.
+        """
         if not isinstance(ext, (NoneType, string_types)):
             raise TypeError("File extension should be a string")
         self.options["FILE_EXTENSION"] = ext
@@ -386,7 +387,8 @@ class JSONFormatter(CopyFormatter):
 
     def file_extension(self, ext):
         """String that specifies the extension for files unloaded to a stage. Accepts any extension. The user is
-        responsible for specifying a valid file extension that can be read by the desired software or service."""
+        responsible for specifying a valid file extension that can be read by the desired software or service.
+        """
         if not isinstance(ext, (NoneType, string_types)):
             raise TypeError("File extension should be a string")
         self.options["FILE_EXTENSION"] = ext

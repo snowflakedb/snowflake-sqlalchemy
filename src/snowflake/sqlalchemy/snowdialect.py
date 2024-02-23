@@ -275,7 +275,6 @@ class SnowflakeDialect(default.DefaultDialect):
         return self._has_object(connection, "SEQUENCE", sequence_name, schema)
 
     def _has_object(self, connection, object_type, object_name, schema=None):
-
         full_name = self._denormalize_quote_join(schema, object_name)
         try:
             results = connection.execute(
