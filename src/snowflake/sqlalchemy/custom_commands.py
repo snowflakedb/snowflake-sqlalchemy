@@ -94,6 +94,92 @@ class MergeInto(UpdateBase):
         return clause
 
 
+class InsertMulti(UpdateBase):
+    __visit_name__ = "insert_multi"
+    _bind = None
+
+    def __init__(self, source, overwrite=False, first=False):
+        self.source = source
+        self.overwrite = overwrite
+        self.first = first
+        self.clauses = []
+        self.else__ = None
+
+    @property
+    def is_conditional(self):
+        return any(condition is not None for condition, _, _, _ in self.clauses)
+
+    def __repr__(self):
+        clauses = []
+        for condition, table, columns, values in self.clauses:
+            clauses.append(
+                (f"WHEN {condition!r} THEN " if condition is not None else "")
+                + f" INTO {table!r}"
+                + (f"({', '.join(repr(c) for c in columns)})" if columns else "")
+                + (f" VALUES ({', '.join(str(v) for v in values)})" if values else "")
+            )
+        else_ = f" ELSE {self.else__!r}" if self.else__ else ""
+        overwrite = " OVERWRITE" if self.overwrite else ""
+        condition = "FIRST" if self.is_conditional and self.first else "ALL"
+        return (
+            f"INSERT{overwrite} {condition} {', '.join(clauses)}{else_} {self.source}"
+        )
+
+    def _adapt_columns(self, columns, coll):
+        """Make sure all columns are column instances from the given table, not strings"""
+        if columns is None:
+            return None
+        return [coll[c] if isinstance(c, str) else c for c in columns]
+
+    def into(self, table, columns=None, values=None):
+        if self.is_conditional:
+            raise ValueError(
+                "Cannot add an unconditional clause to a Conditional multi-table insert"
+            )
+        if columns and values:
+            assert len(columns) == len(
+                values
+            ), "columns and values must be of the same length"
+        self.clauses.append(
+            (
+                None,
+                table,
+                self._adapt_columns(columns, table.c),
+                self._adapt_columns(values, self.source.selected_columns),
+            )
+        )
+        return self
+
+    def when(self, condition, table, columns=None, values=None):
+        if self.clauses and not self.is_conditional:
+            raise ValueError(
+                "Cannot add a conditional clause to an Unconditional multi-table insert"
+            )
+        if columns and values:
+            assert len(columns) == len(
+                values
+            ), "columns and values must be of the same length"
+        self.clauses.append(
+            (
+                condition,
+                table,
+                self._adapt_columns(columns, table.c),
+                self._adapt_columns(values, self.source.selected_columns),
+            )
+        )
+        return self
+
+    def else_(self, table, columns=None, values=None):
+        if self.clauses and not self.is_conditional:
+            raise ValueError("Cannot set ELSE on an Unconditional multi-table insert")
+        self.else__ = (
+            table,
+            self._adapt_columns(columns, table.c),
+            self._adapt_columns(values, self.source.selected_columns),
+        )
+        return self
+
+
 class FilesOption:
     """
     Class to represent FILES option for the snowflake COPY INTO statement
