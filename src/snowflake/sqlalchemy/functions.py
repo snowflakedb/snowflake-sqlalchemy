@@ -5,14 +5,12 @@ import warnings
 
 from sqlalchemy.sql import functions as sqlfunc
 
+FLATTEN_WARNING = "For backward compatibility params are not rendered."
+
 
 class flatten(sqlfunc.GenericFunction):
-    name = "FLATTEN"
+    name = "flatten"
 
     def __init__(self, *args, **kwargs):
-        warnings.warn(
-            "For backward compatibility params are not rendered",
-            SyntaxWarning,
-            stacklevel=2,
-        )
+        warnings.warn(FLATTEN_WARNING, DeprecationWarning, stacklevel=2)
         return super().__init__(*args, **kwargs)
