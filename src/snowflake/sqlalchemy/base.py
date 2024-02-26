@@ -13,13 +13,14 @@ from sqlalchemy.engine import default
 from sqlalchemy.orm import context
 from sqlalchemy.orm.context import _MapperEntity
 from sqlalchemy.schema import Sequence, Table
-from sqlalchemy.sql import compiler, expression
+from sqlalchemy.sql import compiler, expression, functions
 from sqlalchemy.sql.base import CompileState
 from sqlalchemy.sql.elements import quoted_name
 from sqlalchemy.sql.selectable import Lateral, SelectState
 
 from .compat import string_types
 from .custom_commands import AWSBucket, AzureContainer, ExternalStage
+from .functions import flatten
 from .util import (
     _find_left_clause_to_join_from,
     _set_connection_interpolate_empty_sequences,
@@ -1056,3 +1057,5 @@ class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
 
 
 construct_arguments = [(Table, {"clusterby": None})]
+
+functions.register_function("flatten", flatten)
