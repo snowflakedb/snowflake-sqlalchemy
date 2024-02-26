@@ -13,7 +13,7 @@ def test_flatten_does_not_render_params():
     In previous version params were not rendered.
     In future this behavior will change.
     """
-    flat = func.flatten("[1, 2]", order=True)
+    flat = func.flatten("[1, 2]", outer=True)
     res = flat.compile(dialect=snowdialect.dialect())
 
     assert str(res) == "flatten(%(flatten_1)s)"
