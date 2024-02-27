@@ -70,6 +70,11 @@ path = "src/snowflake/sqlalchemy/version.py"
 features = ["development", "pandas"]
 python = "3.8"
 
+[tool.hatch.envs.local2]
+features = ["development", "pandas"]
+python = "3.8"
+post-install-commands = ["pip install -U pip", "pip install -U sqlalchemy"]
+
 [tool.hatch.build.targets.sdist]
 exclude = ["/.github"]
 

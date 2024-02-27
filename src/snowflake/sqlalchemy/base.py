@@ -18,7 +18,7 @@ from sqlalchemy.sql.base import CompileState
 from sqlalchemy.sql.elements import quoted_name
 from sqlalchemy.sql.selectable import Lateral, SelectState
 
-from .compat import string_types
+from .compat import IS_VERSION_20, args_reducer, string_types
 from .custom_commands import AWSBucket, AzureContainer, ExternalStage
 from .functions import flatten
 from .util import (
@@ -325,17 +325,10 @@ class SnowflakeORMSelectCompileState(context.ORMSelectCompileState):
 
         return left, replace_from_obj_index, use_entity_index
 
+    # @args_filler(positions_to_insert=((6, False), (7, False)))
+    @args_reducer(positions_to_drop=(6, 7))
     def _join_left_to_right(
-        self,
-        entities_collection,
-        left,
-        right,
-        onclause,
-        prop,
-        create_aliases,
-        aliased_generation,
-        outerjoin,
-        full,
+        self, entities_collection, left, right, onclause, prop, outerjoin, full
     ):
         """given raw "left", "right", "onclause" parameters consumed from
         a particular key within _join(), add a real ORMJoin object to
@@ -365,7 +358,7 @@ class SnowflakeORMSelectCompileState(context.ORMSelectCompileState):
                 use_entity_index,
             ) = self._join_place_explicit_left_side(entities_collection, left)
 
-        if left is right and not create_aliases:
+        if left is right:
             raise sa_exc.InvalidRequestError(
                 "Can't construct a join from %s to %s, they "
                 "are the same entity" % (left, right)
@@ -374,9 +367,15 @@ class SnowflakeORMSelectCompileState(context.ORMSelectCompileState):
         # the right side as given often needs to be adapted.  additionally
         # a lot of things can be wrong with it.  handle all that and
         # get back the new effective "right" side
-        r_info, right, onclause = self._join_check_and_adapt_right_side(
-            left, right, onclause, prop, create_aliases, aliased_generation
-        )
+
+        if IS_VERSION_20:
+            r_info, right, onclause = self._join_check_and_adapt_right_side(
+                left, right, onclause, prop
+            )
+        else:
+            r_info, right, onclause = self._join_check_and_adapt_right_side(
+                left, right, onclause, prop, False, False
+            )
 
         if not r_info.is_selectable:
             extra_criteria = self._get_extra_criteria(r_info)
