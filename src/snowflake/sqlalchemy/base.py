@@ -325,7 +325,6 @@ class SnowflakeORMSelectCompileState(context.ORMSelectCompileState):
 
         return left, replace_from_obj_index, use_entity_index
 
-    # @args_filler(positions_to_insert=((6, False), (7, False)))
     @args_reducer(positions_to_drop=(6, 7))
     def _join_left_to_right(
         self, entities_collection, left, right, onclause, prop, outerjoin, full
