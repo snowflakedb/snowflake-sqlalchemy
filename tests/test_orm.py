@@ -382,6 +382,63 @@ def test_outer_lateral_join(engine_testaccount, caplog):
     )
 
 
+def test_outer_lateral_join_2(engine_testaccount):
+    Base = declarative_base()
+
+    class Employee(Base):
+        __tablename__ = "employees"
+
+        employee_id = Column(Integer, primary_key=True)
+        last_name = Column(String)
+
+    class Department(Base):
+        __tablename__ = "departments"
+
+        department_id = Column(Integer, primary_key=True)
+        name = Column(String)
+
+    Base.metadata.create_all(engine_testaccount)
+    session = Session(bind=engine_testaccount)
+
+    session.add_all(
+        (
+            Employee(employee_id=101, last_name="Richards"),
+            Employee(employee_id=102, last_name="Pualson"),
+            Employee(employee_id=103, last_name="Johnson"),
+            Department(department_id=1, name="Engineering"),
+            Department(department_id=2, name="Engineering"),
+        )
+    )
+    session.commit()
+
+    sub = select(Department).lateral()
+    query = (
+        select(Employee.employee_id, Department.department_id)
+        .select_from(Employee)
+        .outerjoin(sub)
+        .order_by(Employee.employee_id)
+    )
+
+    result = session.execute(query).fetchall()
+    expected_result = [
+        (101, 1),
+        (101, 2),
+        (101, 1),
+        (101, 2),
+        (102, 1),
+        (102, 2),
+        (102, 1),
+        (102, 2),
+        (103, 1),
+        (103, 2),
+        (103, 1),
+        (103, 2),
+    ]
+
+    assert len(result) == 12
+    assert result == expected_result
+
+
 def test_lateral_join_without_condition(engine_testaccount, caplog):
     Base = declarative_base()
 
