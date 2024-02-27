@@ -1544,7 +1544,7 @@ def test_too_many_columns_detection(engine_testaccount, db_parameters):
     """This tests whether a too many column error actually triggers the more granular table version"""
     # Set up a single table
     metadata = MetaData()
-    users = Table(
+    Table(
         "users",
         metadata,
         Column("id", Integer, Sequence("user_id_seq"), primary_key=True),
@@ -1553,7 +1553,7 @@ def test_too_many_columns_detection(engine_testaccount, db_parameters):
         Column("password", String),
     )
     metadata.create_all(engine_testaccount)
-    inspector = inspect(engine_testaccount.connect())
+    inspector = inspect(engine_testaccount)
     # Do test
     original_execute = inspector.bind.execute
 
@@ -1592,9 +1592,8 @@ def test_too_many_columns_detection(engine_testaccount, db_parameters):
             return original_execute(command, *args, **kwargs)
 
     with patch.object(inspector.bind, "execute", side_effect=mock_helper):
-        column_metadata = inspector.get_columns(users, db_parameters["schema"])
+        column_metadata = inspector.get_columns("users", db_parameters["schema"])
     assert len(column_metadata) == 4
-
     # Clean up
     metadata.drop_all(engine_testaccount)
 
