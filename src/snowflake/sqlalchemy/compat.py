@@ -16,6 +16,12 @@ IS_VERSION_20 = tuple(int(v) for v in SA_VERSION.split(".")) >= (2, 0, 0)
 
 
 def args_reducer(positions_to_drop: tuple):
+    """Removes args at positions provided in tuple positions_to_drop.
+
+    For example tuple (3, 5) will remove items at third and fifth position.
+    Keep in mind that on class methods first postion is cls or self.
+    """
+
     def fn_wrapper(fn: Callable):
         @functools.wraps(fn)
         def wrapper(*args):
@@ -35,6 +41,13 @@ def args_reducer(positions_to_drop: tuple):
 
 
 def args_filler(positions_to_insert: tuple):
+    """This method inserts into args values at positions.
+
+    positions_to_insert is a tuple of tuple containing pair of posiotion and a value.
+    ((6, False), (7, 42))
+    It will insert at position 6 value False, and at positoin 6 value 42.
+    """
+
     def fn_wrapper(fn: Callable):
         @functools.wraps(fn)
         def wrapper(*args):
