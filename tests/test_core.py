@@ -1558,9 +1558,13 @@ def test_too_many_columns_detection(engine_testaccount, db_parameters):
     connection = inspector.bind.connect()
     original_execute = connection.execute
 
+    too_many_columns_was_raised = False
+
     def mock_helper(command, *args, **kwargs):
         if "_get_schema_columns" in command.text:
             # Creating exception exactly how SQLAlchemy does
+            nonlocal too_many_columns_was_raised
+            too_many_columns_was_raised = True
             raise DBAPIError.instance(
                 """
             SELECT /* sqlalchemy:_get_schema_columns */
@@ -1597,6 +1601,7 @@ def test_too_many_columns_detection(engine_testaccount, db_parameters):
         with patch.object(connection, "execute", side_effect=mock_helper):
             column_metadata = inspector.get_columns("users", db_parameters["schema"])
     assert len(column_metadata) == 4
+    assert too_many_columns_was_raised
     # Clean up
     metadata.drop_all(engine_testaccount)
 
