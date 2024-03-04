@@ -24,9 +24,9 @@ jobs:
     name: Check linting
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v5
         with:
           python-version: '3.8'
       - name: Display Python version
@@ -37,7 +37,7 @@ jobs:
         run: python -m pip install tox
       - name: Set PY
         run: echo "PY=$(python -VV | sha256sum | cut -d' ' -f1)" >> $GITHUB_ENV
-      - uses: actions/cache@v1
+      - uses: actions/cache@v4
         with:
           path: ~/.cache/pre-commit
           key: pre-commit|${{ env.PY }}|${{ hashFiles('.pre-commit-config.yaml') }}
@@ -61,9 +61,9 @@ jobs:
       python-version: ["3.8"]
       cloud-provider: [aws, azure, gcp]
    steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
     - name: Set up Python
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
     - name: Display Python version
@@ -89,7 +89,7 @@ jobs:
     - name: Combine coverages
       run: python -m tox -e coverage --skip-missing-interpreters false
       shell: bash
-    - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v4
       with:
         name: coverage_${{ matrix.os.download_name }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
         path: |
@@ -102,12 +102,12 @@ jobs:
     needs: [test]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/download-artifact@v2
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
         with:
           path: artifacts
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v5
         with:
           python-version: '3.8'
       - name: Display Python version
@@ -131,15 +131,15 @@ jobs:
       - name: Combine coverages
         run: python -m tox -e coverage
       - name: Publish html coverage
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: overall_cov_html
           path: .tox/htmlcov
       - name: Publish xml coverage
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: overall_cov_xml
           path: .tox/coverage.xml
-      - uses: codecov/codecov-action@v1
+      - uses: codecov/codecov-action@54bcd8715eee62d40e33596ef5e8f0f48dbbccab
         with:
           file: .tox/coverage.xml
