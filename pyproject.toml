@@ -38,7 +38,7 @@ classifiers = [
   "Topic :: Software Development :: Libraries :: Application Frameworks",
   "Topic :: Software Development :: Libraries :: Python Modules",
 ]
-dependencies = ["snowflake-connector-python", "sqlalchemy<2.0.0,>=1.4.0"]
+dependencies = ["snowflake-connector-python", "sqlalchemy>=2.0.0"]
 
 [project.optional-dependencies]
 development = [

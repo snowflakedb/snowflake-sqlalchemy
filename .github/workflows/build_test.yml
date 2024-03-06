@@ -96,51 +96,51 @@ jobs:
         path: |
           .tox/.coverage
           .tox/coverage.xml
-  test_sqlalchemy_v2:
-   name: SQLAlchemy v2 test ${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
-   needs: lint
-   runs-on: ${{ matrix.os }}
-   strategy:
-    fail-fast: false
-    matrix:
-      os: [ubuntu-latest, macos-latest, windows-latest]
-      python-version: ["3.8"]
-      cloud-provider: [aws, azure, gcp]
-   steps:
-    - uses: actions/checkout@v4
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ matrix.python-version }}
-    - name: Display Python version
-      run: python -c "import sys; print(sys.version)"
-    - name: Setup parameters file
-      shell: bash
-      env:
-        PARAMETERS_SECRET: ${{ secrets.PARAMETERS_SECRET }}
-      run: |
-        gpg --quiet --batch --yes --decrypt --passphrase="$PARAMETERS_SECRET" \
-        .github/workflows/parameters/parameters_${{ matrix.cloud-provider }}.py.gpg > tests/parameters.py
-    - name: Upgrade setuptools, pip and wheel
-      run: python -m pip install -U setuptools pip wheel
-    - name: Install tox
-      run: python -m pip install tox
-    - name: List installed packages
-      run: python -m pip freeze
-    - name: Run tests
-      run: python -m tox -e "py${PYTHON_VERSION/\./}-sqlalchemy-v2"
-      env:
-        PYTHON_VERSION: ${{ matrix.python-version }}
-        PYTEST_ADDOPTS: -vvv --color=yes --tb=long
-    - name: Combine coverages
-      run: python -m tox -e coverage --skip-missing-interpreters false
-      shell: bash
-    - uses: actions/upload-artifact@v4
-      with:
-        name: coverage_${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}-sqlalchemy_20
-        path: |
-          .tox/.coverage
-          .tox/coverage.xml
+#  test_sqlalchemy_v2:
+#   name: SQLAlchemy v2 test ${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
+#   needs: lint
+#   runs-on: ${{ matrix.os }}
+#   strategy:
+#    fail-fast: false
+#    matrix:
+#      os: [ubuntu-latest, macos-latest, windows-latest]
+#      python-version: ["3.8"]
+#      cloud-provider: [aws, azure, gcp]
+#   steps:
+#    - uses: actions/checkout@v4
+#    - name: Set up Python
+#      uses: actions/setup-python@v5
+#      with:
+#        python-version: ${{ matrix.python-version }}
+#    - name: Display Python version
+#      run: python -c "import sys; print(sys.version)"
+#    - name: Setup parameters file
+#      shell: bash
+#      env:
+#        PARAMETERS_SECRET: ${{ secrets.PARAMETERS_SECRET }}
+#      run: |
+#        gpg --quiet --batch --yes --decrypt --passphrase="$PARAMETERS_SECRET" \
+#        .github/workflows/parameters/parameters_${{ matrix.cloud-provider }}.py.gpg > tests/parameters.py
+#    - name: Upgrade setuptools, pip and wheel
+#      run: python -m pip install -U setuptools pip wheel
+#    - name: Install tox
+#      run: python -m pip install tox
+#    - name: List installed packages
+#      run: python -m pip freeze
+#    - name: Run tests
+#      run: python -m tox -e "py${PYTHON_VERSION/\./}-sqlalchemy-v2"
+#      env:
+#        PYTHON_VERSION: ${{ matrix.python-version }}
+#        PYTEST_ADDOPTS: -vvv --color=yes --tb=long
+#    - name: Combine coverages
+#      run: python -m tox -e coverage --skip-missing-interpreters false
+#      shell: bash
+#    - uses: actions/upload-artifact@v4
+#      with:
+#        name: coverage_${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}-sqlalchemy_20
+#        path: |
+#          .tox/.coverage
+#          .tox/coverage.xml
 
 
   combine-coverage:
