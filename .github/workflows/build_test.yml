@@ -128,9 +128,7 @@ jobs:
     - name: List installed packages
       run: python -m pip freeze
     - name: Run tests
-      run: |
-        pytest --cov "snowflake.sqlalchemy" --cov-append --junitxml /junit_win.xml tests/sqlalchemy_test_suite
-        pytest --cov "snowflake.sqlalchemy" --cov-append --junitxml /junit_win.xml --run_v20_sqlalchemy tests
+      run: python -m tox -e "py${PYTHON_VERSION/\./}-sqlalchemy-v2"
       env:
         PYTHON_VERSION: ${{ matrix.python-version }}
         PYTEST_ADDOPTS: -vvv --color=yes --tb=long
