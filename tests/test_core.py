@@ -29,6 +29,7 @@ from sqlalchemy import (
     Table,
     UniqueConstraint,
     dialects,
+    insert,
     inspect,
     text,
 )
@@ -57,9 +58,7 @@ PST_TZ = "America/Los_Angeles"
 JST_TZ = "Asia/Tokyo"
 
 
-def _create_users_addresses_tables(
-    engine_testaccount, metadata, fk=None, pk=None, uq=None
-):
+def _create_users_addresses_tables(engine_testaccount, metadata, fk=None, pk=None, uq=None):
     users = Table(
         "users",
         metadata,
@@ -105,10 +104,7 @@ def verify_engine_connection(engine):
     with engine.connect() as conn:
         results = conn.execute(text("select current_version()")).fetchone()
         assert conn.connection.driver_connection.application == APPLICATION_NAME
-        assert (
-            conn.connection.driver_connection._internal_application_name
-            == APPLICATION_NAME
-        )
+        assert conn.connection.driver_connection._internal_application_name == APPLICATION_NAME
         assert (
             conn.connection.driver_connection._internal_application_version
             == SNOWFLAKE_SQLALCHEMY_VERSION
@@ -220,9 +216,7 @@ def test_create_drop_tables(engine_testaccount):
     Creates and Drops tables
     """
     metadata = MetaData()
-    users, addresses = _create_users_addresses_tables_without_sequence(
-        engine_testaccount, metadata
-    )
+    users, addresses = _create_users_addresses_tables_without_sequence(engine_testaccount, metadata)
 
     try:
         # validate the tables exists
@@ -250,9 +244,7 @@ def test_insert_tables(engine_testaccount):
         try:
             with conn.begin():
                 # inserts data with an implicitly generated id
-                results = conn.execute(
-                    users.insert().values(name="jack", fullname="Jack Jones")
-                )
+                results = conn.execute(users.insert().values(name="jack", fullname="Jack Jones"))
                 # Note: SQLAlchemy 1.4 changed what ``inserted_primary_key`` returns
                 #  a cast is here to make sure the test works with both older and newer
                 #  versions
@@ -267,9 +259,7 @@ def test_insert_tables(engine_testaccount):
 
                 # verify the results
                 results = conn.execute(select(users))
-                assert (
-                    len([row for row in results]) == 2
-                ), "number of rows from users table"
+                assert len([row for row in results]) == 2, "number of rows from users table"
                 results.close()
 
                 # fetchone
@@ -278,9 +268,7 @@ def test_insert_tables(engine_testaccount):
                 results.close()
                 assert row._mapping._data[2] == "Jack Jones", "user name"
                 assert row._mapping["fullname"] == "Jack Jones", "user name by dict"
-                assert (
-                    row._mapping[users.c.fullname] == "Jack Jones"
-                ), "user name by Column object"
+                assert row._mapping[users.c.fullname] == "Jack Jones", "user name by Column object"
 
                 conn.execute(
                     addresses.insert(),
@@ -294,15 +282,11 @@ def test_insert_tables(engine_testaccount):
 
                 # more records
                 results = conn.execute(select(addresses))
-                assert (
-                    len([row for row in results]) == 4
-                ), "number of rows from addresses table"
+                assert len([row for row in results]) == 4, "number of rows from addresses table"
                 results.close()
 
                 # select specified column names
-                results = conn.execute(
-                    select(users.c.name, users.c.fullname).order_by("name")
-                )
+                results = conn.execute(select(users.c.name, users.c.fullname).order_by("name"))
                 results.fetchone()
                 row = results.fetchone()
                 assert row._mapping["name"] == "wendy", "name"
@@ -319,19 +303,15 @@ def test_insert_tables(engine_testaccount):
 
                 # Operator
                 assert (
-                    str(users.c.id == addresses.c.user_id)
-                    == "users.id = addresses.user_id"
+                    str(users.c.id == addresses.c.user_id) == "users.id = addresses.user_id"
                 ), "equal operator"
-                assert (
-                    str(users.c.id == 7) == "users.id = :id_1"
-                ), "equal to a static number"
+                assert str(users.c.id == 7) == "users.id = :id_1", "equal to a static number"
                 assert str(users.c.name == None)  # NOQA
                 assert (
                     str(users.c.id + addresses.c.id) == "users.id + addresses.id"
                 ), "number + number"
                 assert (
-                    str(users.c.name + users.c.fullname)
-                    == "users.name || users.fullname"
+                    str(users.c.name + users.c.fullname) == "users.name || users.fullname"
                 ), "str + str"
 
                 # Conjunctions
@@ -353,9 +333,7 @@ def test_insert_tables(engine_testaccount):
                      OR addresses.email_address = :email_address_2)
                      AND users.id <= :id_1"""
                 )
-                assert str(obj) == "".join(
-                    expected_sql.split("\n")
-                ), "complex condition"
+                assert str(obj) == "".join(expected_sql.split("\n")), "complex condition"
 
                 # example 2
                 obj = (
@@ -418,9 +396,7 @@ def test_insert_tables(engine_testaccount):
                 )
 
                 s = select(users.c.fullname).select_from(
-                    users.join(
-                        addresses, addresses.c.email_address.like(users.c.name + "%")
-                    )
+                    users.join(addresses, addresses.c.email_address.like(users.c.name + "%"))
                 )
                 results = conn.execute(s).fetchall()
                 assert results[1] == ("Jack Jones",)
@@ -470,9 +446,7 @@ def test_reflextion(engine_testaccount):
         )
         try:
             meta = MetaData()
-            user_reflected = Table(
-                "user", meta, autoload=True, autoload_with=engine_testaccount
-            )
+            user_reflected = Table("user", meta, autoload=True, autoload_with=engine_testaccount)
             assert user_reflected.c == ["user.id", "user.name", "user.fullname"]
         finally:
             conn.execute("DROP TABLE IF EXISTS user")
@@ -483,9 +457,7 @@ def test_inspect_column(engine_testaccount):
     Tests Inspect
     """
     metadata = MetaData()
-    users, addresses = _create_users_addresses_tables_without_sequence(
-        engine_testaccount, metadata
-    )
+    users, addresses = _create_users_addresses_tables_without_sequence(engine_testaccount, metadata)
     try:
         inspector = inspect(engine_testaccount)
         all_table_names = inspector.get_table_names()
@@ -521,9 +493,7 @@ def test_get_indexes(engine_testaccount):
     NOTE: Snowflake doesn't support indexes
     """
     metadata = MetaData()
-    users, addresses = _create_users_addresses_tables_without_sequence(
-        engine_testaccount, metadata
-    )
+    users, addresses = _create_users_addresses_tables_without_sequence(engine_testaccount, metadata)
     try:
         inspector = inspect(engine_testaccount)
         assert inspector.get_indexes("users") == []
@@ -540,9 +510,7 @@ def test_get_check_constraints(engine_testaccount):
     NOTE: Snowflake doesn't support check constraints
     """
     metadata = MetaData()
-    users, addresses = _create_users_addresses_tables_without_sequence(
-        engine_testaccount, metadata
-    )
+    users, addresses = _create_users_addresses_tables_without_sequence(engine_testaccount, metadata)
     try:
         inspector = inspect(engine_testaccount)
         assert inspector.get_check_constraints("users") == []
@@ -558,9 +526,7 @@ def test_get_primary_keys(engine_testaccount):
     """
     metadata = MetaData()
     pk_name = "pk_addresses"
-    users, addresses = _create_users_addresses_tables(
-        engine_testaccount, metadata, pk=pk_name
-    )
+    users, addresses = _create_users_addresses_tables(engine_testaccount, metadata, pk=pk_name)
     try:
         inspector = inspect(engine_testaccount)
 
@@ -583,9 +549,7 @@ def test_get_unique_constraints(engine_testaccount):
     """
     metadata = MetaData()
     uq_name = "uq_addresses_email_address"
-    users, addresses = _create_users_addresses_tables(
-        engine_testaccount, metadata, uq=uq_name
-    )
+    users, addresses = _create_users_addresses_tables(engine_testaccount, metadata, uq=uq_name)
 
     try:
         inspector = inspect(engine_testaccount)
@@ -603,9 +567,7 @@ def test_get_foreign_keys(engine_testaccount):
     """
     metadata = MetaData()
     fk_name = "fk_users_id_from_addresses"
-    users, addresses = _create_users_addresses_tables(
-        engine_testaccount, metadata, fk=fk_name
-    )
+    users, addresses = _create_users_addresses_tables(engine_testaccount, metadata, fk=fk_name)
 
     try:
         inspector = inspect(engine_testaccount)
@@ -646,8 +608,7 @@ def test_naming_convention_constraint_names(engine_testaccount):
     try:
         inspector = inspect(engine_testaccount)
         assert (
-            inspector.get_unique_constraints("addresses")[0]["name"]
-            == "uq_addresses_email_address"
+            inspector.get_unique_constraints("addresses")[0]["name"] == "uq_addresses_email_address"
         )
         assert inspector.get_pk_constraint("addresses")["name"] == "pk_addresses"
         assert (
@@ -853,9 +814,7 @@ def test_copy(engine_testaccount):
         try:
             with conn.begin():
                 conn.execute(
-                    text(
-                        f"PUT file://{os.path.join(THIS_DIR, 'data', 'users.txt')} @%users"
-                    )
+                    text(f"PUT file://{os.path.join(THIS_DIR, 'data', 'users.txt')} @%users")
                 )
                 conn.execute(text("COPY INTO users"))
                 results = conn.execute(text("SELECT * FROM USERS")).fetchall()
@@ -874,27 +833,17 @@ how to integrate with SQLAlchemy core API yet.
 """
 )
 def test_transaction(engine_testaccount, db_parameters):
-    engine_testaccount.execute(
-        text(f"CREATE TABLE {db_parameters['name']} (c1 number)")
-    )
+    engine_testaccount.execute(text(f"CREATE TABLE {db_parameters['name']} (c1 number)"))
     trans = engine_testaccount.connect().begin()
     try:
-        engine_testaccount.execute(
-            text(f"INSERT INTO {db_parameters['name']} VALUES(123)")
-        )
+        engine_testaccount.execute(text(f"INSERT INTO {db_parameters['name']} VALUES(123)"))
         trans.commit()
-        engine_testaccount.execute(
-            text(f"INSERT INTO {db_parameters['name']} VALUES(456)")
-        )
+        engine_testaccount.execute(text(f"INSERT INTO {db_parameters['name']} VALUES(456)"))
         trans.rollback()
-        results = engine_testaccount.execute(
-            f"SELECT * FROM {db_parameters['name']}"
-        ).fetchall()
+        results = engine_testaccount.execute(f"SELECT * FROM {db_parameters['name']}").fetchall()
         assert results == [(123,)]
     finally:
-        engine_testaccount.execute(
-            text(f"DROP TABLE IF EXISTS {db_parameters['name']}")
-        )
+        engine_testaccount.execute(text(f"DROP TABLE IF EXISTS {db_parameters['name']}"))
 
 
 def test_get_schemas(engine_testaccount):
@@ -936,9 +885,7 @@ def test_column_metadata(engine_testaccount):
     assert str(t.columns["real_data"].type) == "FLOAT"
 
 
-def _get_engine_with_columm_metadata_cache(
-    db_parameters, user=None, password=None, account=None
-):
+def _get_engine_with_columm_metadata_cache(db_parameters, user=None, password=None, account=None):
     """
     Creates a connection with column metadata cache
     """
@@ -990,9 +937,7 @@ def test_many_table_column_metadta(db_parameters):
         Table(
             "mainaddresses" + str(idx),
             metadata,
-            Column(
-                "id" + str(idx), Integer, Sequence("address_id_seq"), primary_key=True
-            ),
+            Column("id" + str(idx), Integer, Sequence("address_id_seq"), primary_key=True),
             Column(
                 "user_id" + str(idx),
                 None,
@@ -1057,9 +1002,7 @@ def test_cache_time(engine_testaccount, db_parameters):
         Table(
             "mainaddresses" + str(idx),
             metadata,
-            Column(
-                "id" + str(idx), Integer, Sequence("address_id_seq"), primary_key=True
-            ),
+            Column("id" + str(idx), Integer, Sequence("address_id_seq"), primary_key=True),
             Column(
                 "user_id" + str(idx),
                 None,
@@ -1087,9 +1030,7 @@ def test_cache_time(engine_testaccount, db_parameters):
         harass_inspector()
         time2 = time.time() - m_time
         time1 = m_time - s_time
-        print(
-            f"Ran inspector through tables twice, times:\n\tfirst: {time1}\n\tsecond: {time2}"
-        )
+        print(f"Ran inspector through tables twice, times:\n\tfirst: {time1}\n\tsecond: {time2}")
         if time2 < time1 * 0.01:
             outcome = True
             break
@@ -1158,9 +1099,7 @@ def test_load_dialect():
         (True, True, False),
     ],
 )
-def test_upsert(
-    engine_testaccount, update_flag, insert_flag, delete_flag, conditional_flag
-):
+def test_upsert(engine_testaccount, update_flag, insert_flag, delete_flag, conditional_flag):
     meta = MetaData()
     users = Table(
         "users",
@@ -1214,9 +1153,7 @@ def test_upsert(
                     ],
                 )
 
-                merge = MergeInto(
-                    users, onboarding_users, users.c.id == onboarding_users.c.id
-                )
+                merge = MergeInto(users, onboarding_users, users.c.id == onboarding_users.c.id)
                 if update_flag:
                     clause = merge.when_matched_then_update().values(
                         name=onboarding_users.c.name,
@@ -1318,9 +1255,7 @@ def test_comments(engine_testaccount):
         try:
             conn.execute(text(f'create table public.{table_name} ("col1" text);'))
             conn.execute(
-                text(
-                    f"alter table public.{table_name} alter \"col1\" comment 'this is my comment'"
-                )
+                text(f"alter table public.{table_name} alter \"col1\" comment 'this is my comment'")
             )
             conn.execute(
                 text(
@@ -1408,9 +1343,7 @@ def test_special_schema_character(db_parameters, on_public_ci):
     options.update({"database": '"' + database + '"', "schema": '"' + schema + '"'})
     with connect(**options) as sf_conn:
         sf_connection = (
-            sf_conn.cursor()
-            .execute("select current_database(), " "current_schema();")
-            .fetchall()
+            sf_conn.cursor().execute("select current_database(), " "current_schema();").fetchall()
         )
     with create_engine(URL(**options)).connect() as sa_conn:
         sa_connection = sa_conn.execute(
@@ -1424,47 +1357,51 @@ def test_special_schema_character(db_parameters, on_public_ci):
 
 
 def test_autoincrement(engine_testaccount):
+    """Snowflake does not guarantee generating sequence numbers without gaps.
+
+    The generated numbers are not necesairly contignous.
+    https://docs.snowflake.com/en/user-guide/querying-sequences
+    """
     metadata = MetaData()
     users = Table(
         "users",
         metadata,
-        Column("uid", Integer, Sequence("id_seq"), primary_key=True),
+        Column("uid", Integer, Sequence("id_seq", order=True), primary_key=True),
         Column("name", String(39)),
     )
 
     try:
-        users.create(engine_testaccount)
+        metadata.create_all(engine_testaccount)
 
-        with engine_testaccount.connect() as connection:
-            with connection.begin():
-                connection.execute(users.insert(), [{"name": "sf1"}])
-                assert connection.execute(select(users)).fetchall() == [(1, "sf1")]
-                connection.execute(users.insert(), [{"name": "sf2"}, {"name": "sf3"}])
-                assert connection.execute(select(users)).fetchall() == [
-                    (1, "sf1"),
-                    (2, "sf2"),
-                    (3, "sf3"),
-                ]
-                connection.execute(users.insert(), {"name": "sf4"})
-                assert connection.execute(select(users)).fetchall() == [
-                    (1, "sf1"),
-                    (2, "sf2"),
-                    (3, "sf3"),
-                    (4, "sf4"),
-                ]
+        with engine_testaccount.begin() as connection:
+            connection.execute(insert(users), [{"name": "sf1"}])
+            assert connection.execute(select(users)).fetchall() == [(1, "sf1")]
+            connection.execute(insert(users), [{"name": "sf2"}, {"name": "sf3"}])
+            assert connection.execute(select(users)).fetchall() == [
+                (1, "sf1"),
+                (2, "sf2"),
+                (3, "sf3"),
+            ]
+            connection.execute(insert(users), {"name": "sf4"})
+            assert connection.execute(select(users)).fetchall() == [
+                (1, "sf1"),
+                (2, "sf2"),
+                (3, "sf3"),
+                (4, "sf4"),
+            ]
 
-                seq = Sequence("id_seq")
-                nextid = connection.execute(seq)
-                connection.execute(users.insert(), [{"uid": nextid, "name": "sf5"}])
-                assert connection.execute(select(users)).fetchall() == [
-                    (1, "sf1"),
-                    (2, "sf2"),
-                    (3, "sf3"),
-                    (4, "sf4"),
-                    (5, "sf5"),
-                ]
+            seq = Sequence("id_seq")
+            nextid = connection.execute(seq)
+            connection.execute(insert(users), [{"uid": nextid, "name": "sf5"}])
+            assert connection.execute(select(users)).fetchall() == [
+                (1, "sf1"),
+                (2, "sf2"),
+                (3, "sf3"),
+                (4, "sf4"),
+                (5, "sf5"),
+            ]
     finally:
-        users.drop(engine_testaccount)
+        metadata.drop_all(engine_testaccount)
 
 
 @pytest.mark.skip(
@@ -1490,9 +1427,7 @@ def test_get_too_many_columns(engine_testaccount, db_parameters):
         Table(
             "mainaddressess" + str(idx),
             metadata,
-            Column(
-                "id" + str(idx), Integer, Sequence("address_id_seq"), primary_key=True
-            ),
+            Column("id" + str(idx), Integer, Sequence("address_id_seq"), primary_key=True),
             Column(
                 "user_id" + str(idx),
                 None,
@@ -1505,9 +1440,7 @@ def test_get_too_many_columns(engine_testaccount, db_parameters):
     schema = db_parameters["schema"]
 
     # Emulate error
-    with patch.object(
-        inspector.dialect, "_get_schema_columns", return_value=None
-    ) as mock_method:
+    with patch.object(inspector.dialect, "_get_schema_columns", return_value=None) as mock_method:
 
         def harass_inspector():
             for table_name in inspector.get_table_names(schema):
@@ -1538,9 +1471,7 @@ def test_get_too_many_columns(engine_testaccount, db_parameters):
                 # Reset inspector to reset cache
                 inspector = inspect(engine_testaccount)
         metadata.drop_all(engine_testaccount)
-        assert (
-            mock_method.call_count > 0
-        )  # Make sure we actually mocked the issue happening
+        assert mock_method.call_count > 0  # Make sure we actually mocked the issue happening
         assert outcome
 
 
@@ -1615,9 +1546,7 @@ def test_empty_comments(engine_testaccount):
             ).fetchall()
             inspector = inspect(engine_testaccount)
             columns = inspector.get_columns(table_name, schema="PUBLIC")
-            assert inspector.get_table_comment(table_name, schema="PUBLIC") == {
-                "text": None
-            }
+            assert inspector.get_table_comment(table_name, schema="PUBLIC") == {"text": None}
             assert all([c["comment"] is None for c in columns])
         finally:
             conn.execute(text(f"drop table public.{table_name}"))
@@ -1639,13 +1568,9 @@ CREATE TEMP TABLE {table_name} (
 """
         )
 
-        table_reflected = Table(
-            table_name, MetaData(), autoload=True, autoload_with=conn
-        )
+        table_reflected = Table(table_name, MetaData(), autoload=True, autoload_with=conn)
         columns = table_reflected.columns
-        assert (
-            len(columns) == len(ischema_names_baseline) - 1
-        )  # -1 because FIXED is not supported
+        assert len(columns) == len(ischema_names_baseline) - 1  # -1 because FIXED is not supported
 
 
 def test_result_type_and_value(engine_testaccount):
@@ -1662,9 +1587,7 @@ CREATE TEMP TABLE {table_name} (
 )
 """
         )
-        table_reflected = Table(
-            table_name, MetaData(), autoload=True, autoload_with=conn
-        )
+        table_reflected = Table(table_name, MetaData(), autoload=True, autoload_with=conn)
         current_date = date.today()
         current_utctime = datetime.utcnow()
         current_localtime = pytz.utc.localize(current_utctime, is_dst=False).astimezone(
@@ -1816,11 +1739,7 @@ CREATE OR REPLACE TEMP TABLE {table_name}
         )
         inspector = inspect(conn)
         columns = inspector.get_columns(table_name)  # denormalize_name will be called
-        assert (
-            len(columns) == 2
-            and columns[0]["name"] == "col"
-            and columns[1]["name"] == ""
-        )
+        assert len(columns) == 2 and columns[0]["name"] == "col" and columns[1]["name"] == ""
 
 
 def test_snowflake_sqlalchemy_as_valid_client_type():
@@ -1858,21 +1777,21 @@ def test_snowflake_sqlalchemy_as_valid_client_type():
         origin_internal_app_name = snowflake.connector.connection.DEFAULT_CONFIGURATION[
             "internal_application_name"
         ]
-        origin_internal_app_version = (
-            snowflake.connector.connection.DEFAULT_CONFIGURATION[
-                "internal_application_version"
-            ]
-        )
+        origin_internal_app_version = snowflake.connector.connection.DEFAULT_CONFIGURATION[
+            "internal_application_version"
+        ]
         snowflake.connector.connection.DEFAULT_CONFIGURATION["application"] = (
             None,
             (type(None), str),
         )
-        snowflake.connector.connection.DEFAULT_CONFIGURATION[
-            "internal_application_name"
-        ] = ("PythonConnector", (type(None), str))
-        snowflake.connector.connection.DEFAULT_CONFIGURATION[
-            "internal_application_version"
-        ] = ("3.0.0", (type(None), str))
+        snowflake.connector.connection.DEFAULT_CONFIGURATION["internal_application_name"] = (
+            "PythonConnector",
+            (type(None), str),
+        )
+        snowflake.connector.connection.DEFAULT_CONFIGURATION["internal_application_version"] = (
+            "3.0.0",
+            (type(None), str),
+        )
         engine = create_engine(
             URL(
                 user=CONNECTION_PARAMETERS["user"],
@@ -1885,14 +1804,8 @@ def test_snowflake_sqlalchemy_as_valid_client_type():
         )
         with engine.connect() as conn:
             conn.exec_driver_sql("select 1").cursor.fetch_pandas_all()
-            assert (
-                conn.connection.driver_connection._internal_application_name
-                == "PythonConnector"
-            )
-            assert (
-                conn.connection.driver_connection._internal_application_version
-                == "3.0.0"
-            )
+            assert conn.connection.driver_connection._internal_application_name == "PythonConnector"
+            assert conn.connection.driver_connection._internal_application_version == "3.0.0"
     finally:
         snowflake.sqlalchemy.snowdialect._ENABLE_SQLALCHEMY_AS_APPLICATION_NAME = True
         snowflake.connector.connection.DEFAULT_CONFIGURATION["application"] = origin_app
