@@ -45,7 +45,6 @@ jobs:
         run: python -m tox -e fix_lint
 
   test:
-   if: false
    name: Test ${{ matrix.os.download_name }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
    needs: lint
    runs-on: ${{ matrix.os.image_name }}
