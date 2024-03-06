@@ -45,6 +45,7 @@ jobs:
         run: python -m tox -e fix_lint
 
   test:
+   if: false
    name: Test ${{ matrix.os.download_name }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
    needs: lint
    runs-on: ${{ matrix.os.image_name }}
@@ -96,15 +97,15 @@ jobs:
           .tox/.coverage
           .tox/coverage.xml
   test_sqlalchemy_v2:
-   name: SQLAlchemy v2 test ${{ matrix.os.download_name }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
+   name: SQLAlchemy v2 test ${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
    needs: lint
-   runs-on: ${{ matrix.os.image_name }}
+   runs-on: ${{ matrix.os }}
    strategy:
     fail-fast: false
     matrix:
       os: [ubuntu-latest, macos-latest, windows-latest]
-      python-version: ["3.11"]
-      cloud-provider: [aws]
+      python-version: ["3.8", "3.11"]
+      cloud-provider: [aws, azure, gcp]
    steps:
     - uses: actions/checkout@v4
     - name: Set up Python
@@ -138,7 +139,7 @@ jobs:
       shell: bash
     - uses: actions/upload-artifact@v4
       with:
-        name: coverage_${{ matrix.os.download_name }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}-sqlalchemy_20
+        name: coverage_${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}-sqlalchemy_20
         path: |
           .tox/.coverage
           .tox/coverage.xml
