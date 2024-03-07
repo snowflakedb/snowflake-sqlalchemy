@@ -9,9 +9,7 @@ from sqlalchemy.testing import AssertsCompiledSQL
 
 from snowflake.sqlalchemy import snowdialect
 
-table1 = table(
-    "table1", column("id", Integer), column("name", String), column("value", Integer)
-)
+table1 = table("table1", column("id", Integer), column("name", String), column("value", Integer))
 
 table2 = table(
     "table2",
@@ -57,11 +55,7 @@ class TestSnowflakeCompiler(AssertsCompiledSQL):
         )
 
     def test_multi_table_update(self):
-        statement = (
-            table1.update()
-            .values(name=table2.c.name)
-            .where(table1.c.id == table2.c.name)
-        )
+        statement = table1.update().values(name=table2.c.name).where(table1.c.id == table2.c.name)
         self.assert_compile(
             statement,
             "UPDATE table1 SET name=test.table2.name FROM test.table2 "
@@ -70,9 +64,7 @@ class TestSnowflakeCompiler(AssertsCompiledSQL):
 
     def test_drop_table_comment(self):
         self.assert_compile(DropTableComment(table1), "COMMENT ON TABLE table1 IS ''")
-        self.assert_compile(
-            DropTableComment(table2), "COMMENT ON TABLE test.table2 IS ''"
-        )
+        self.assert_compile(DropTableComment(table2), "COMMENT ON TABLE test.table2 IS ''")
 
     def test_drop_column_comment(self):
         self.assert_compile(

@@ -31,27 +31,19 @@ class LongNameBlowoutTest(_LongNameBlowoutTest):
 
 
 class FetchLimitOffsetTest(_FetchLimitOffsetTest):
-    @pytest.mark.skip(
-        "Snowflake only takes non-negative integer constants for offset/limit"
-    )
+    @pytest.mark.skip("Snowflake only takes non-negative integer constants for offset/limit")
     def test_bound_offset(self, connection):
         pass
 
-    @pytest.mark.skip(
-        "Snowflake only takes non-negative integer constants for offset/limit"
-    )
+    @pytest.mark.skip("Snowflake only takes non-negative integer constants for offset/limit")
     def test_simple_limit_expr_offset(self, connection):
         pass
 
-    @pytest.mark.skip(
-        "Snowflake only takes non-negative integer constants for offset/limit"
-    )
+    @pytest.mark.skip("Snowflake only takes non-negative integer constants for offset/limit")
     def test_simple_offset(self, connection):
         pass
 
-    @pytest.mark.skip(
-        "Snowflake only takes non-negative integer constants for offset/limit"
-    )
+    @pytest.mark.skip("Snowflake only takes non-negative integer constants for offset/limit")
     def test_simple_offset_zero(self, connection):
         pass
 

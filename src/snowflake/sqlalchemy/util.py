@@ -235,7 +235,14 @@ class _Snowflake_ORMJoin(sa_orm_util_ORMJoin):
             else:
                 adapt_from = left_selectable
 
-            (pj, sj, source, dest, secondary, target_adapter,) = prop._create_joins(
+            (
+                pj,
+                sj,
+                source,
+                dest,
+                secondary,
+                target_adapter,
+            ) = prop._create_joins(
                 source_selectable=adapt_from,
                 dest_selectable=adapt_to,
                 source_polymorphic=True,
@@ -269,9 +276,7 @@ class _Snowflake_ORMJoin(sa_orm_util_ORMJoin):
                 parententity = None
 
             if parententity is not None:
-                self._annotations = self._annotations.union(
-                    {"parententity": parententity}
-                )
+                self._annotations = self._annotations.union({"parententity": parententity})
 
         augment_onclause = onclause is None and _extra_criteria
         # handle Snowflake BCR bcr-1057
@@ -280,11 +285,7 @@ class _Snowflake_ORMJoin(sa_orm_util_ORMJoin):
         if augment_onclause:
             self.onclause &= sql.and_(*_extra_criteria)
 
-        if (
-            not prop
-            and getattr(right_info, "mapper", None)
-            and right_info.mapper.single
-        ):
+        if not prop and getattr(right_info, "mapper", None) and right_info.mapper.single:
             # if single inheritance target and we are using a manual
             # or implicit ON clause, augment it the same way we'd augment the
             # WHERE.
@@ -305,9 +306,7 @@ class _Snowflake_Selectable_Join(Join):
 
         """
         self.left = coercions.expect(roles.FromClauseRole, left, deannotate=True)
-        self.right = coercions.expect(
-            roles.FromClauseRole, right, deannotate=True
-        ).self_group()
+        self.right = coercions.expect(roles.FromClauseRole, right, deannotate=True).self_group()
 
         if onclause is None:
             try:

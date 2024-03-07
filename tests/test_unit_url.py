@@ -78,9 +78,9 @@ def test_url():
         "/testschema?account=testaccount"
     )
 
-    assert URL(
-        user="admin", account="testaccount", password="test", region="eu-central-1"
-    ) == ("snowflake://admin:test@testaccount.eu-central-1/")
+    assert URL(user="admin", account="testaccount", password="test", region="eu-central-1") == (
+        "snowflake://admin:test@testaccount.eu-central-1/"
+    )
 
     assert URL(
         user="admin",
@@ -128,7 +128,4 @@ def test_url():
         account="testaccount",
         password="test",
         authenticator="https://testokta.okta.com",
-    ) == (
-        "snowflake://testuser:test@testaccount"
-        "/?authenticator=https%3A%2F%2Ftestokta.okta.com"
-    )
+    ) == ("snowflake://testuser:test@testaccount" "/?authenticator=https%3A%2F%2Ftestokta.okta.com")

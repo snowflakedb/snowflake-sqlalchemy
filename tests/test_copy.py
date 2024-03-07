@@ -24,16 +24,12 @@ def test_external_stage(sql_compiler):
 
     # All arguments are handled
     assert (
-        sql_compiler(
-            ExternalStage(name="name", path="prefix/path", namespace="namespace")
-        )
+        sql_compiler(ExternalStage(name="name", path="prefix/path", namespace="namespace"))
         == "@namespace.name/prefix/path"
     )
 
     # defaults don't ruin things
-    assert (
-        sql_compiler(ExternalStage(name="name", path=None, namespace=None)) == "@name"
-    )
+    assert sql_compiler(ExternalStage(name="name", path=None, namespace=None)) == "@name"
 
 
 def test_copy_into_location(engine_testaccount, sql_compiler):
@@ -51,10 +47,7 @@ def test_copy_into_location(engine_testaccount, sql_compiler):
         into=AWSBucket.from_uri("s3://backup").encryption_aws_sse_kms(
             "1234abcd-12ab-34cd-56ef-1234567890ab"
         ),
-        formatter=CSVFormatter()
-        .record_delimiter("|")
-        .escape(None)
-        .null_if(["null", "Null"]),
+        formatter=CSVFormatter().record_delimiter("|").escape(None).null_if(["null", "Null"]),
     )
     assert (
         sql_compiler(copy_stmt_1)
@@ -70,8 +63,7 @@ def test_copy_into_location(engine_testaccount, sql_compiler):
         formatter=JSONFormatter().file_extension("json").compression("zstd"),
     )
     assert (
-        sql_compiler(copy_stmt_2)
-        == "COPY INTO 's3://backup' FROM (SELECT python_tests_foods.id, "
+        sql_compiler(copy_stmt_2) == "COPY INTO 's3://backup' FROM (SELECT python_tests_foods.id, "
         "python_tests_foods.name, python_tests_foods.quantity FROM python_tests_foods "
         "WHERE python_tests_foods.id = 1) FILE_FORMAT=(TYPE=json COMPRESSION='zstd' "
         "FILE_EXTENSION='json') CREDENTIALS=(AWS_ROLE='some_iam_role') "
@@ -105,10 +97,7 @@ def test_copy_into_location(engine_testaccount, sql_compiler):
             "1234abcd-12ab-34cd-56ef-1234567890ab"
         ),
         into=food_items,
-        formatter=CSVFormatter()
-        .record_delimiter("|")
-        .escape(None)
-        .null_if(["null", "Null"]),
+        formatter=CSVFormatter().record_delimiter("|").escape(None).null_if(["null", "Null"]),
     )
     assert (
         sql_compiler(copy_stmt_4)
@@ -169,9 +158,7 @@ def test_copy_into_location(engine_testaccount, sql_compiler):
                         acceptable_exc_reasons,
                     )
                 ):
-                    raise Exception(
-                        f"Not acceptable exception: {str(exc)} {str(exc.value)}"
-                    )
+                    raise Exception(f"Not acceptable exception: {str(exc)} {str(exc.value)}")
     finally:
         food_items.drop(engine_testaccount)
 
@@ -270,17 +257,15 @@ def test_copy_into_storage_parquet_named_format(sql_compiler):
     # define the SELECT statement to access the source file.
     # we can probably defined source table metadata and use SQLAlchemy Column objects
     # instead of texts, but this seems to be the easiest way.
-    sel_statement = select(
-        text("$1:COL1::number"), text("$1:COL2::varchar")
-    ).select_from(ExternalStage.from_parent_stage(root_stage, "testdata/out.parquet"))
+    sel_statement = select(text("$1:COL1::number"), text("$1:COL2::varchar")).select_from(
+        ExternalStage.from_parent_stage(root_stage, "testdata/out.parquet")
+    )
 
     # use an existing source format.
     formatter = CopyFormatter(format_name="parquet_file_format")
 
     # setup CopyInto object
-    copy_into = CopyIntoStorage(
-        from_=sel_statement, into=target_table, formatter=formatter
-    )
+    copy_into = CopyIntoStorage(from_=sel_statement, into=target_table, formatter=formatter)
     copy_into.copy_options = {"force": "TRUE"}
 
     # compile and check the result
@@ -326,9 +311,7 @@ def test_copy_into_storage_parquet_files(sql_compiler):
     # define the SELECT statement to access the source file.
     # we can probably defined source table metadata and use SQLAlchemy Column objects
     # instead of texts, but this seems to be the easiest way.
-    sel_statement = select(
-        text("$1:COL1::number"), text("$1:COL2::varchar")
-    ).select_from(
+    sel_statement = select(text("$1:COL1::number"), text("$1:COL2::varchar")).select_from(
         ExternalStage.from_parent_stage(
             root_stage, "testdata/out.parquet", file_format="parquet_file_format"
         )
@@ -388,9 +371,7 @@ def test_copy_into_storage_parquet_pattern(sql_compiler):
     # define the SELECT statement to access the source file.
     # we can probably defined source table metadata and use SQLAlchemy Column objects
     # instead of texts, but this seems to be the easiest way.
-    sel_statement = select(
-        text("$1:COL1::number"), text("$1:COL2::varchar")
-    ).select_from(
+    sel_statement = select(text("$1:COL1::number"), text("$1:COL2::varchar")).select_from(
         ExternalStage.from_parent_stage(
             root_stage, "testdata/out.parquet", file_format="parquet_file_format"
         )

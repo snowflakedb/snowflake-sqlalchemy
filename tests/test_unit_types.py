@@ -16,8 +16,6 @@ def test_type_synonyms():
 
 
 def test_type_baseline():
-    assert set(SnowflakeDialect.ischema_names.keys()) == set(
-        ischema_names_baseline.keys()
-    )
+    assert set(SnowflakeDialect.ischema_names.keys()) == set(ischema_names_baseline.keys())
     for k, v in SnowflakeDialect.ischema_names.items():
         assert issubclass(v, ischema_names_baseline[k])

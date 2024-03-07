@@ -48,9 +48,7 @@ def test_inspect_geometry_datatypes(engine_testaccount):
             test_point = "POINT(-94.58473 39.08985)"
             test_point1 = '{"coordinates": [-94.58473, 39.08985],"type": "Point"}'
 
-            ins = test_geometry.insert().values(
-                id=1, geom1=test_point, geom2=test_point1
-            )
+            ins = test_geometry.insert().values(id=1, geom1=test_point, geom2=test_point1)
 
             with conn.begin():
                 results = conn.execute(ins)
