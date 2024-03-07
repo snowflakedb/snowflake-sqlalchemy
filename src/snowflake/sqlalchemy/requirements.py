@@ -295,3 +295,7 @@ class Requirements(SuiteRequirements):
         # parameters in string forms of timestamp values.
         # Check https://snowflakecomputing.atlassian.net/browse/SNOW-640134 for details on breaking changes discussion.
         return exclusions.closed()
+
+    @property
+    def array_type(self):
+        return exclusions.closed()
