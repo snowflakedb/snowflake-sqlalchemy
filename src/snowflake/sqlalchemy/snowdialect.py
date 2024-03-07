@@ -595,11 +595,13 @@ class SnowflakeDialect(default.DefaultDialect):
                     "autoincrement": is_identity == "YES",
                     "comment": comment,
                     "primary_key": (
-                        column_name
-                        in schema_primary_keys[table_name]["constrained_columns"]
-                    )
-                    if current_table_pks
-                    else False,
+                        (
+                            column_name
+                            in schema_primary_keys[table_name]["constrained_columns"]
+                        )
+                        if current_table_pks
+                        else False
+                    ),
                 }
             )
             if is_identity == "YES":
@@ -688,11 +690,13 @@ class SnowflakeDialect(default.DefaultDialect):
                     "autoincrement": is_identity == "YES",
                     "comment": comment if comment != "" else None,
                     "primary_key": (
-                        column_name
-                        in schema_primary_keys[table_name]["constrained_columns"]
-                    )
-                    if current_table_pks
-                    else False,
+                        (
+                            column_name
+                            in schema_primary_keys[table_name]["constrained_columns"]
+                        )
+                        if current_table_pks
+                        else False
+                    ),
                 }
             )
 
@@ -876,18 +880,22 @@ class SnowflakeDialect(default.DefaultDialect):
             result = self._get_view_comment(connection, table_name, schema)
 
         return {
-            "text": result._mapping["comment"]
-            if result and result._mapping["comment"]
-            else None
+            "text": (
+                result._mapping["comment"]
+                if result and result._mapping["comment"]
+                else None
+            )
         }
 
     def connect(self, *cargs, **cparams):
         return (
             super().connect(
                 *cargs,
-                **_update_connection_application_name(**cparams)
-                if _ENABLE_SQLALCHEMY_AS_APPLICATION_NAME
-                else cparams,
+                **(
+                    _update_connection_application_name(**cparams)
+                    if _ENABLE_SQLALCHEMY_AS_APPLICATION_NAME
+                    else cparams
+                ),
             )
             if _ENABLE_SQLALCHEMY_AS_APPLICATION_NAME
             else super().connect(*cargs, **cparams)

@@ -95,7 +95,9 @@ RESERVED_WORDS = frozenset(
 # - INSERT
 # - DELETE
 # - MERGE
-AUTOCOMMIT_REGEXP = re.compile(r"\s*(?:UPDATE|INSERT|DELETE|MERGE|COPY)", re.I | re.UNICODE)
+AUTOCOMMIT_REGEXP = re.compile(
+    r"\s*(?:UPDATE|INSERT|DELETE|MERGE|COPY)", re.I | re.UNICODE
+)
 
 
 """
@@ -110,7 +112,7 @@ https://docs.snowflake.com/en/release-notes/bcr-bundles/2023_04/bcr-1057
 @CompileState.plugin_for("default", "select")
 class SnowflakeSelectState(SelectState):
     def _setup_joins(self, args, raw_columns):
-        for (right, onclause, left, flags) in args:
+        for right, onclause, left, flags in args:
             isouter = flags["isouter"]
             full = flags["full"]
 
@@ -118,7 +120,9 @@ class SnowflakeSelectState(SelectState):
                 (
                     left,
                     replace_from_obj_index,
-                ) = self._join_determine_implicit_left_side(raw_columns, left, right, onclause)
+                ) = self._join_determine_implicit_left_side(
+                    raw_columns, left, right, onclause
+                )
             else:
                 (replace_from_obj_index) = self._join_place_explicit_left_side(left)
 
@@ -143,7 +147,9 @@ class SnowflakeSelectState(SelectState):
             else:
                 self.from_clauses = self.from_clauses + (
                     # handle Snowflake BCR bcr-1057
-                    _Snowflake_Selectable_Join(left, right, onclause, isouter=isouter, full=full),
+                    _Snowflake_Selectable_Join(
+                        left, right, onclause, isouter=isouter, full=full
+                    ),
                 )
 
     @sa_util.preload_module("sqlalchemy.sql.util")
@@ -170,7 +176,9 @@ class SnowflakeSelectState(SelectState):
             statement = self.statement
 
             for from_clause in itertools.chain(
-                itertools.chain.from_iterable([element._from_objects for element in raw_columns]),
+                itertools.chain.from_iterable(
+                    [element._from_objects for element in raw_columns]
+                ),
                 itertools.chain.from_iterable(
                     [element._from_objects for element in statement._where_criteria]
                 ),
@@ -208,7 +216,9 @@ class SnowflakeSelectState(SelectState):
 # handle Snowflake BCR bcr-1057
 @sql.base.CompileState.plugin_for("orm", "select")
 class SnowflakeORMSelectCompileState(context.ORMSelectCompileState):
-    def _join_determine_implicit_left_side(self, entities_collection, left, right, onclause):
+    def _join_determine_implicit_left_side(
+        self, entities_collection, left, right, onclause
+    ):
         """When join conditions don't express the left side explicitly,
         determine if an existing FROM or entity in this query
         can serve as the left hand side.
@@ -234,7 +244,9 @@ class SnowflakeORMSelectCompileState(context.ORMSelectCompileState):
             # join has to connect to one of those FROMs.
 
             # handle Snowflake BCR bcr-1057
-            indexes = _find_left_clause_to_join_from(self.from_clauses, r_info.selectable, onclause)
+            indexes = _find_left_clause_to_join_from(
+                self.from_clauses, r_info.selectable, onclause
+            )
 
             if len(indexes) == 1:
                 replace_from_obj_index = indexes[0]
@@ -280,7 +292,9 @@ class SnowflakeORMSelectCompileState(context.ORMSelectCompileState):
 
             all_clauses = list(potential.keys())
             # handle Snowflake BCR bcr-1057
-            indexes = _find_left_clause_to_join_from(all_clauses, r_info.selectable, onclause)
+            indexes = _find_left_clause_to_join_from(
+                all_clauses, r_info.selectable, onclause
+            )
 
             if len(indexes) == 1:
                 use_entity_index, left = potential[all_clauses[indexes[0]]]
@@ -337,7 +351,9 @@ class SnowflakeORMSelectCompileState(context.ORMSelectCompileState):
                 left,
                 replace_from_obj_index,
                 use_entity_index,
-            ) = self._join_determine_implicit_left_side(entities_collection, left, right, onclause)
+            ) = self._join_determine_implicit_left_side(
+                entities_collection, left, right, onclause
+            )
         else:
             # left is given via a relationship/name, or as explicit left side.
             # Determine where in our
@@ -350,7 +366,8 @@ class SnowflakeORMSelectCompileState(context.ORMSelectCompileState):
 
         if left is right and not create_aliases:
             raise sa_exc.InvalidRequestError(
-                "Can't construct a join from %s to %s, they " "are the same entity" % (left, right)
+                "Can't construct a join from %s to %s, they "
+                "are the same entity" % (left, right)
             )
 
         # the right side as given often needs to be adapted.  additionally
@@ -462,7 +479,9 @@ class SnowflakeIdentifierPreparer(compiler.IdentifierPreparer):
             ret.append(schema[pre_idx:idx])
 
         # convert the returning strings back to quoted_name types, and assign the original 'quote' attribute on it
-        quoted_ret = [quoted_name(value, quote=getattr(schema, "quote", None)) for value in ret]
+        quoted_ret = [
+            quoted_name(value, quote=getattr(schema, "quote", None)) for value in ret
+        ]
 
         return quoted_ret
 
@@ -475,9 +494,12 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         return "CURRENT_TIMESTAMP"
 
     def visit_merge_into(self, merge_into, **kw):
-        clauses = " ".join(clause._compiler_dispatch(self, **kw) for clause in merge_into.clauses)
-        return f"MERGE INTO {merge_into.target} USING {merge_into.source} ON {merge_into.on}" + (
-            " " + clauses if clauses else ""
+        clauses = " ".join(
+            clause._compiler_dispatch(self, **kw) for clause in merge_into.clauses
+        )
+        return (
+            f"MERGE INTO {merge_into.target} USING {merge_into.source} ON {merge_into.on}"
+            + (" " + clauses if clauses else "")
         )
 
     def visit_merge_into_clause(self, merge_into_clause, **kw):
@@ -505,7 +527,10 @@ class SnowflakeCompiler(compiler.SQLCompiler):
                 set_list.sort(key=operator.itemgetter(0))
             sets = (
                 ", ".join(
-                    [f"{set[0]} = {set[1]._compiler_dispatch(self, **kw)}" for set in set_list]
+                    [
+                        f"{set[0]} = {set[1]._compiler_dispatch(self, **kw)}"
+                        for set in set_list
+                    ]
                 )
                 if merge_into_clause.set
                 else ""
@@ -554,9 +579,11 @@ class SnowflakeCompiler(compiler.SQLCompiler):
                     [
                         "{} = {}".format(
                             n,
-                            v._compiler_dispatch(self, **kw)
-                            if getattr(v, "compiler_dispatch", False)
-                            else str(v),
+                            (
+                                v._compiler_dispatch(self, **kw)
+                                if getattr(v, "compiler_dispatch", False)
+                                else str(v)
+                            ),
                         )
                         for n, v in options_list
                     ]
@@ -579,27 +606,33 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             return f"FILE_FORMAT=(format_name = {formatter.options['format_name']})"
         return "FILE_FORMAT=(TYPE={}{})".format(
             formatter.file_format,
-            " "
-            + " ".join(
-                [
-                    "{}={}".format(
-                        name,
-                        value._compiler_dispatch(self, **kw)
-                        if hasattr(value, "_compiler_dispatch")
-                        else formatter.value_repr(name, value),
-                    )
-                    for name, value in options_list
-                ]
-            )
-            if formatter.options
-            else "",
+            (
+                " "
+                + " ".join(
+                    [
+                        "{}={}".format(
+                            name,
+                            (
+                                value._compiler_dispatch(self, **kw)
+                                if hasattr(value, "_compiler_dispatch")
+                                else formatter.value_repr(name, value)
+                            ),
+                        )
+                        for name, value in options_list
+                    ]
+                )
+                if formatter.options
+                else ""
+            ),
         )
 
     def visit_aws_bucket(self, aws_bucket, **kw):
         credentials_list = list(aws_bucket.credentials_used.items())
         if kw.get("deterministic", False):
             credentials_list.sort(key=operator.itemgetter(0))
-        credentials = "CREDENTIALS=({})".format(" ".join(f"{n}='{v}'" for n, v in credentials_list))
+        credentials = "CREDENTIALS=({})".format(
+            " ".join(f"{n}='{v}'" for n, v in credentials_list)
+        )
         encryption_list = list(aws_bucket.encryption_used.items())
         if kw.get("deterministic", False):
             encryption_list.sort(key=operator.itemgetter(0))
@@ -622,7 +655,9 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         credentials_list = list(azure_container.credentials_used.items())
         if kw.get("deterministic", False):
             credentials_list.sort(key=operator.itemgetter(0))
-        credentials = "CREDENTIALS=({})".format(" ".join(f"{n}='{v}'" for n, v in credentials_list))
+        credentials = "CREDENTIALS=({})".format(
+            " ".join(f"{n}='{v}'" for n, v in credentials_list)
+        )
         encryption_list = list(azure_container.encryption_used.items())
         if kw.get("deterministic", False):
             encryption_list.sort(key=operator.itemgetter(0))
@@ -645,17 +680,25 @@ class SnowflakeCompiler(compiler.SQLCompiler):
 
     def visit_external_stage(self, external_stage, **kw):
         if external_stage.file_format is None:
-            return f"@{external_stage.namespace}{external_stage.name}{external_stage.path}"
+            return (
+                f"@{external_stage.namespace}{external_stage.name}{external_stage.path}"
+            )
         return f"@{external_stage.namespace}{external_stage.name}{external_stage.path} (file_format => {external_stage.file_format})"
 
-    def delete_extra_from_clause(self, delete_stmt, from_table, extra_froms, from_hints, **kw):
+    def delete_extra_from_clause(
+        self, delete_stmt, from_table, extra_froms, from_hints, **kw
+    ):
         return "USING " + ", ".join(
-            t._compiler_dispatch(self, asfrom=True, fromhints=from_hints, **kw) for t in extra_froms
+            t._compiler_dispatch(self, asfrom=True, fromhints=from_hints, **kw)
+            for t in extra_froms
         )
 
-    def update_from_clause(self, update_stmt, from_table, extra_froms, from_hints, **kw):
+    def update_from_clause(
+        self, update_stmt, from_table, extra_froms, from_hints, **kw
+    ):
         return "FROM " + ", ".join(
-            t._compiler_dispatch(self, asfrom=True, fromhints=from_hints, **kw) for t in extra_froms
+            t._compiler_dispatch(self, asfrom=True, fromhints=from_hints, **kw)
+            for t in extra_froms
         )
 
     def _get_regexp_args(self, binary, kw):
@@ -705,9 +748,13 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             join_type = " JOIN "
 
         join_statement = (
-            join.left._compiler_dispatch(self, asfrom=True, from_linter=from_linter, **kwargs)
+            join.left._compiler_dispatch(
+                self, asfrom=True, from_linter=from_linter, **kwargs
+            )
             + join_type
-            + join.right._compiler_dispatch(self, asfrom=True, from_linter=from_linter, **kwargs)
+            + join.right._compiler_dispatch(
+                self, asfrom=True, from_linter=from_linter, **kwargs
+            )
         )
 
         if join.onclause is None and isinstance(join.right, Lateral):
@@ -747,7 +794,10 @@ class SnowflakeExecutionContext(default.DefaultExecutionContext):
     def should_autocommit(self):
         autocommit = self.execution_options.get(
             "autocommit",
-            not self.compiled and self.statement and expression.PARSE_AUTOCOMMIT or False,
+            not self.compiled
+            and self.statement
+            and expression.PARSE_AUTOCOMMIT
+            or False,
         )
 
         if autocommit is expression.PARSE_AUTOCOMMIT:
@@ -799,7 +849,9 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
             self.dialect.type_compiler.process(column.type, type_expression=column),
         ]
 
-        has_identity = column.identity is not None and self.dialect.supports_identity_columns
+        has_identity = (
+            column.identity is not None and self.dialect.supports_identity_columns
+        )
 
         if not column.nullable:
             colspec.append("NOT NULL")

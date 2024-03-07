@@ -29,7 +29,9 @@ def test_table_with_sequence(engine_testaccount, db_parameters):
     sequence_table = Table(
         test_table_name,
         metadata,
-        Column("id", Integer, Sequence(test_sequence_name, order=True), primary_key=True),
+        Column(
+            "id", Integer, Sequence(test_sequence_name, order=True), primary_key=True
+        ),
         Column("data", String(39)),
     )
 
@@ -64,7 +66,8 @@ def test_table_with_sequence(engine_testaccount, db_parameters):
 
             nextid = conn.execute(seq)
             conn.execute(
-                insert(autoload_sequence_table), ({"id": nextid, "data": "test_insert_seq"})
+                insert(autoload_sequence_table),
+                ({"id": nextid, "data": "test_insert_seq"}),
             )
 
             result = conn.execute(select(sequence_table)).fetchall()
