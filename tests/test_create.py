@@ -26,9 +26,9 @@ def test_create_stage(sql_compiler):
         namespace="MY_DB.MY_SCHEMA",
     )
     # define the storage container
-    container = AzureContainer(account="myaccount", container="my-container").credentials(
-        "saas_token"
-    )
+    container = AzureContainer(
+        account="myaccount", container="my-container"
+    ).credentials("saas_token")
     # define the stage object
     create_stage = CreateStage(stage=stage, container=container)
 
@@ -41,7 +41,9 @@ def test_create_stage(sql_compiler):
     )
     assert actual == expected
 
-    create_stage_replace = CreateStage(stage=stage, container=container, replace_if_exists=True)
+    create_stage_replace = CreateStage(
+        stage=stage, container=container, replace_if_exists=True
+    )
 
     # validate that the resulting SQL is as expected
     actual = sql_compiler(create_stage_replace)
@@ -78,7 +80,8 @@ def test_create_csv_format(sql_compiler):
     )
     actual = sql_compiler(create_format)
     expected = (
-        "CREATE FILE FORMAT ML_POC.PUBLIC.CSV_FILE_FORMAT " "TYPE='csv' FIELD_DELIMITER = ','"
+        "CREATE FILE FORMAT ML_POC.PUBLIC.CSV_FILE_FORMAT "
+        "TYPE='csv' FIELD_DELIMITER = ','"
     )
     assert actual == expected
 
@@ -111,7 +114,8 @@ def test_create_parquet_format(sql_compiler):
     )
     actual = sql_compiler(create_format)
     expected = (
-        "CREATE FILE FORMAT ML_POC.PUBLIC.CSV_FILE_FORMAT " "TYPE='parquet' COMPRESSION = 'AUTO'"
+        "CREATE FILE FORMAT ML_POC.PUBLIC.CSV_FILE_FORMAT "
+        "TYPE='parquet' COMPRESSION = 'AUTO'"
     )
     assert actual == expected
 

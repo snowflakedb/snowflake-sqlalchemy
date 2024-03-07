@@ -116,7 +116,9 @@ def test_orm_one_to_many_relationship(engine_testaccount, run_v20_sqlalchemy):
 
         session.delete(jack)
         got_addresses = session.query(Address).all()
-        assert len(got_addresses) == 3, "address records still remain in no " "cascade mode"
+        assert len(got_addresses) == 3, (
+            "address records still remain in no " "cascade mode"
+        )
 
     finally:
         Base.metadata.drop_all(engine_testaccount)
@@ -230,7 +232,9 @@ def test_schema_including_db(engine_testaccount, db_parameters, run_v20_sqlalche
         __tablename__ = "users"
         __table_args__ = {"schema": namespace}
 
-        id = Column(Integer, Sequence("user_id_orm_seq", schema=namespace), primary_key=True)
+        id = Column(
+            Integer, Sequence("user_id_orm_seq", schema=namespace), primary_key=True
+        )
         name = Column(String)
         fullname = Column(String)
 
@@ -265,7 +269,9 @@ def test_schema_including_dot(engine_testaccount, db_parameters, run_v20_sqlalch
         __tablename__ = "users"
         __table_args__ = {"schema": namespace}
 
-        id = Column(Integer, Sequence("user_id_orm_seq", schema=namespace), primary_key=True)
+        id = Column(
+            Integer, Sequence("user_id_orm_seq", schema=namespace), primary_key=True
+        )
         name = Column(String)
         fullname = Column(String)
 
@@ -279,7 +285,9 @@ def test_schema_including_dot(engine_testaccount, db_parameters, run_v20_sqlalch
     )
 
 
-def test_schema_translate_map(engine_testaccount, db_parameters, sql_compiler, run_v20_sqlalchemy):
+def test_schema_translate_map(
+    engine_testaccount, db_parameters, sql_compiler, run_v20_sqlalchemy
+):
     """
     Test schema translate map execution option works replaces schema correctly
     """
@@ -292,7 +300,9 @@ def test_schema_translate_map(engine_testaccount, db_parameters, sql_compiler, r
         __tablename__ = "users"
         __table_args__ = {"schema": schema_map}
 
-        id = Column(Integer, Sequence("user_id_orm_seq", schema=namespace), primary_key=True)
+        id = Column(
+            Integer, Sequence("user_id_orm_seq", schema=namespace), primary_key=True
+        )
         name = Column(String)
         fullname = Column(String)
 
@@ -314,7 +324,9 @@ def test_schema_translate_map(engine_testaccount, db_parameters, sql_compiler, r
                 )
 
                 # assert the precompiled query contains the schema_map and not the actual schema
-                assert str(query).startswith(f'SELECT "{schema_map}".{User.__tablename__}')
+                assert str(query).startswith(
+                    f'SELECT "{schema_map}".{User.__tablename__}'
+                )
 
                 # run query and see that schema translation was done corectly
                 results = query.all()
@@ -351,7 +363,9 @@ def test_outer_lateral_join(engine_testaccount, caplog):
 
     sub = select(Department).lateral()
     query = (
-        select(Employee.employee_id, Department.department_id).select_from(Employee).outerjoin(sub)
+        select(Employee.employee_id, Department.department_id)
+        .select_from(Employee)
+        .outerjoin(sub)
     )
     assert (
         str(query.compile(engine_testaccount)).replace("\n", "")
@@ -362,7 +376,10 @@ def test_outer_lateral_join(engine_testaccount, caplog):
     )
     with caplog.at_level(logging.DEBUG):
         assert [res for res in session.execute(query)]
-    assert "SELECT employees.employee_id, departments.department_id FROM departments" in caplog.text
+    assert (
+        "SELECT employees.employee_id, departments.department_id FROM departments"
+        in caplog.text
+    )
 
 
 def test_lateral_join_without_condition(engine_testaccount, caplog):
@@ -376,7 +393,9 @@ def test_lateral_join_without_condition(engine_testaccount, caplog):
         content = Column(String)
 
     Base.metadata.create_all(engine_testaccount)
-    lateral_table = func.flatten(func.PARSE_JSON(Employee.content), outer=False).lateral()
+    lateral_table = func.flatten(
+        func.PARSE_JSON(Employee.content), outer=False
+    ).lateral()
     query = (
         select(
             Employee.uid,

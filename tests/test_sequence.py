@@ -31,7 +31,9 @@ def test_table_with_sequence(engine_testaccount, db_parameters):
                     autoload_sequence_table.insert(),
                     [{"data": "multi_insert_1"}, {"data": "multi_insert_2"}],
                 )
-                conn.execute(autoload_sequence_table.insert(), [{"data": "test_insert_2"}])
+                conn.execute(
+                    autoload_sequence_table.insert(), [{"data": "test_insert_2"}]
+                )
                 nextid = conn.execute(seq)
                 conn.execute(
                     autoload_sequence_table.insert(),
@@ -74,7 +76,9 @@ def test_table_with_autoincrement(engine_testaccount, db_parameters):
                     autoload_sequence_table.insert(),
                     [{"data": "multi_insert_1"}, {"data": "multi_insert_2"}],
                 )
-                conn.execute(autoload_sequence_table.insert(), [{"data": "test_insert_2"}])
+                conn.execute(
+                    autoload_sequence_table.insert(), [{"data": "test_insert_2"}]
+                )
                 result = conn.execute(select_stmt).fetchall()
                 assert result == [
                     (1, "test_insert_1"),

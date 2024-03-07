@@ -81,7 +81,9 @@ def test_a_simple_read_sql(engine_testaccount):
         with engine_testaccount.connect() as conn:
             # inserts data with an implicitly generated id
             with conn.begin():
-                results = conn.execute(users.insert().values(name="jack", fullname="Jack Jones"))
+                results = conn.execute(
+                    users.insert().values(name="jack", fullname="Jack Jones")
+                )
                 # Note: SQLAlchemy 1.4 changed what ``inserted_primary_key`` returns
                 #  a cast is here to make sure the test works with both older and newer
                 #  versions
@@ -155,7 +157,9 @@ def test_numpy_datatypes(db_parameters):
                     f"INSERT INTO {db_parameters['name']}(c1) values(%s)",
                     (specific_date,),
                 )
-                df = pd.read_sql_query(text(f"SELECT * FROM {db_parameters['name']}"), conn)
+                df = pd.read_sql_query(
+                    text(f"SELECT * FROM {db_parameters['name']}"), conn
+                )
                 assert df.c1.values[0] == specific_date
         finally:
             conn.exec_driver_sql(f"DROP TABLE IF EXISTS {db_parameters['name']}")
@@ -419,7 +423,9 @@ def test_percent_signs(engine_testaccount, run_v20_sqlalchemy):
     table_name = f"test_table_{uuid.uuid4().hex}".upper()
     with engine_testaccount.connect() as conn:
         with conn.begin():
-            conn.exec_driver_sql(f"CREATE OR REPLACE TEMP TABLE {table_name}(c1 int, c2 string)")
+            conn.exec_driver_sql(
+                f"CREATE OR REPLACE TEMP TABLE {table_name}(c1 int, c2 string)"
+            )
             conn.exec_driver_sql(
                 f"""
                 INSERT INTO {table_name}(c1, c2) values

@@ -209,7 +209,9 @@ class SnowflakeDialect(default.DefaultDialect):
                 opts["database"] = name_spaces[0]
                 opts["schema"] = name_spaces[1]
             else:
-                raise sa_exc.ArgumentError(f"Invalid name space is specified: {opts['database']}")
+                raise sa_exc.ArgumentError(
+                    f"Invalid name space is specified: {opts['database']}"
+                )
         if (
             "host" in opts
             and ".snowflakecomputing.com" not in opts["host"]
@@ -292,7 +294,9 @@ class SnowflakeDialect(default.DefaultDialect):
             return None
         if name == "":
             return ""
-        if name.upper() == name and not self.identifier_preparer._requires_quotes(name.lower()):
+        if name.upper() == name and not self.identifier_preparer._requires_quotes(
+            name.lower()
+        ):
             return name.lower()
         elif name.lower() == name:
             return quoted_name(name, quote=True)
@@ -304,7 +308,9 @@ class SnowflakeDialect(default.DefaultDialect):
             return None
         if name == "":
             return ""
-        elif name.lower() == name and not self.identifier_preparer._requires_quotes(name.lower()):
+        elif name.lower() == name and not self.identifier_preparer._requires_quotes(
+            name.lower()
+        ):
             name = name.upper()
         return name
 
@@ -318,7 +324,9 @@ class SnowflakeDialect(default.DefaultDialect):
 
     @reflection.cache
     def _current_database_schema(self, connection, **kw):
-        res = connection.exec_driver_sql("select current_database(), current_schema();").fetchone()
+        res = connection.exec_driver_sql(
+            "select current_database(), current_schema();"
+        ).fetchone()
         return (
             self.normalize_name(res[0]),
             self.normalize_name(res[1]),
@@ -352,7 +360,9 @@ class SnowflakeDialect(default.DefaultDialect):
     @reflection.cache
     def _get_schema_primary_keys(self, connection, schema, **kw):
         result = connection.execute(
-            text(f"SHOW /* sqlalchemy:_get_schema_primary_keys */PRIMARY KEYS IN SCHEMA {schema}")
+            text(
+                f"SHOW /* sqlalchemy:_get_schema_primary_keys */PRIMARY KEYS IN SCHEMA {schema}"
+            )
         )
         ans = {}
         for row in result:
@@ -369,7 +379,9 @@ class SnowflakeDialect(default.DefaultDialect):
 
     def get_pk_constraint(self, connection, table_name, schema=None, **kw):
         schema = schema or self.default_schema_name
-        current_database, current_schema = self._current_database_schema(connection, **kw)
+        current_database, current_schema = self._current_database_schema(
+            connection, **kw
+        )
         full_schema_name = self._denormalize_quote_join(
             current_database, schema if schema else current_schema
         )
@@ -406,7 +418,9 @@ class SnowflakeDialect(default.DefaultDialect):
 
     def get_unique_constraints(self, connection, table_name, schema, **kw):
         schema = schema or self.default_schema_name
-        current_database, current_schema = self._current_database_schema(connection, **kw)
+        current_database, current_schema = self._current_database_schema(
+            connection, **kw
+        )
         full_schema_name = self._denormalize_quote_join(
             current_database, schema if schema else current_schema
         )
@@ -418,7 +432,9 @@ class SnowflakeDialect(default.DefaultDialect):
     def _get_schema_foreign_keys(self, connection, schema, **kw):
         _, current_schema = self._current_database_schema(connection, **kw)
         result = connection.execute(
-            text(f"SHOW /* sqlalchemy:_get_schema_foreign_keys */ IMPORTED KEYS IN SCHEMA {schema}")
+            text(
+                f"SHOW /* sqlalchemy:_get_schema_foreign_keys */ IMPORTED KEYS IN SCHEMA {schema}"
+            )
         )
         foreign_key_map = {}
         for row in result:
@@ -426,24 +442,35 @@ class SnowflakeDialect(default.DefaultDialect):
             if name not in foreign_key_map:
                 referred_schema = self.normalize_name(row._mapping["pk_schema_name"])
                 foreign_key_map[name] = {
-                    "constrained_columns": [self.normalize_name(row._mapping["fk_column_name"])],
+                    "constrained_columns": [
+                        self.normalize_name(row._mapping["fk_column_name"])
+                    ],
                     # referred schema should be None in context where it doesn't need to be specified
                     # https://docs.sqlalchemy.org/en/14/core/reflection.html#reflection-schema-qualified-interaction
                     "referred_schema": (
                         referred_schema
-                        if referred_schema not in (self.default_schema_name, current_schema)
+                        if referred_schema
+                        not in (self.default_schema_name, current_schema)
                         else None
                     ),
-                    "referred_table": self.normalize_name(row._mapping["pk_table_name"]),
-                    "referred_columns": [self.normalize_name(row._mapping["pk_column_name"])],
+                    "referred_table": self.normalize_name(
+                        row._mapping["pk_table_name"]
+                    ),
+                    "referred_columns": [
+                        self.normalize_name(row._mapping["pk_column_name"])
+                    ],
                     "name": name,
                     "table_name": self.normalize_name(row._mapping["fk_table_name"]),
                 }
                 options = {}
                 if self.normalize_name(row._mapping["delete_rule"]) != "NO ACTION":
-                    options["ondelete"] = self.normalize_name(row._mapping["delete_rule"])
+                    options["ondelete"] = self.normalize_name(
+                        row._mapping["delete_rule"]
+                    )
                 if self.normalize_name(row._mapping["update_rule"]) != "NO ACTION":
-                    options["onupdate"] = self.normalize_name(row._mapping["update_rule"])
+                    options["onupdate"] = self.normalize_name(
+                        row._mapping["update_rule"]
+                    )
                 foreign_key_map[name]["options"] = options
             else:
                 foreign_key_map[name]["constrained_columns"].append(
@@ -458,7 +485,9 @@ class SnowflakeDialect(default.DefaultDialect):
         for _, v in foreign_key_map.items():
             if v["table_name"] not in ans:
                 ans[v["table_name"]] = []
-            ans[v["table_name"]].append({k2: v2 for k2, v2 in v.items() if k2 != "table_name"})
+            ans[v["table_name"]].append(
+                {k2: v2 for k2, v2 in v.items() if k2 != "table_name"}
+            )
         return ans
 
     def get_foreign_keys(self, connection, table_name, schema=None, **kw):
@@ -466,7 +495,9 @@ class SnowflakeDialect(default.DefaultDialect):
         Gets all foreign keys for a table
         """
         schema = schema or self.default_schema_name
-        current_database, current_schema = self._current_database_schema(connection, **kw)
+        current_database, current_schema = self._current_database_schema(
+            connection, **kw
+        )
         full_schema_name = self._denormalize_quote_join(
             current_database, schema if schema else current_schema
         )
@@ -484,7 +515,9 @@ class SnowflakeDialect(default.DefaultDialect):
         current_database, _ = self._current_database_schema(connection, **kw)
         full_schema_name = self._denormalize_quote_join(current_database, schema)
         try:
-            schema_primary_keys = self._get_schema_primary_keys(connection, full_schema_name, **kw)
+            schema_primary_keys = self._get_schema_primary_keys(
+                connection, full_schema_name, **kw
+            )
             result = connection.execute(
                 text(
                     """
@@ -535,7 +568,9 @@ class SnowflakeDialect(default.DefaultDialect):
             col_type = self.ischema_names.get(coltype, None)
             col_type_kw = {}
             if col_type is None:
-                sa_util.warn(f"Did not recognize type '{coltype}' of column '{column_name}'")
+                sa_util.warn(
+                    f"Did not recognize type '{coltype}' of column '{column_name}'"
+                )
                 col_type = sqltypes.NULLTYPE
             else:
                 if issubclass(col_type, FLOAT):
@@ -560,7 +595,10 @@ class SnowflakeDialect(default.DefaultDialect):
                     "autoincrement": is_identity == "YES",
                     "comment": comment,
                     "primary_key": (
-                        (column_name in schema_primary_keys[table_name]["constrained_columns"])
+                        (
+                            column_name
+                            in schema_primary_keys[table_name]["constrained_columns"]
+                        )
                         if current_table_pks
                         else False
                     ),
@@ -579,7 +617,9 @@ class SnowflakeDialect(default.DefaultDialect):
         ans = []
         current_database, _ = self._current_database_schema(connection, **kw)
         full_schema_name = self._denormalize_quote_join(current_database, schema)
-        schema_primary_keys = self._get_schema_primary_keys(connection, full_schema_name, **kw)
+        schema_primary_keys = self._get_schema_primary_keys(
+            connection, full_schema_name, **kw
+        )
         result = connection.execute(
             text(
                 """
@@ -623,7 +663,9 @@ class SnowflakeDialect(default.DefaultDialect):
             col_type = self.ischema_names.get(coltype, None)
             col_type_kw = {}
             if col_type is None:
-                sa_util.warn(f"Did not recognize type '{coltype}' of column '{column_name}'")
+                sa_util.warn(
+                    f"Did not recognize type '{coltype}' of column '{column_name}'"
+                )
                 col_type = sqltypes.NULLTYPE
             else:
                 if issubclass(col_type, FLOAT):
@@ -648,7 +690,10 @@ class SnowflakeDialect(default.DefaultDialect):
                     "autoincrement": is_identity == "YES",
                     "comment": comment if comment != "" else None,
                     "primary_key": (
-                        (column_name in schema_primary_keys[table_name]["constrained_columns"])
+                        (
+                            column_name
+                            in schema_primary_keys[table_name]["constrained_columns"]
+                        )
                         if current_table_pks
                         else False
                     ),
@@ -691,7 +736,9 @@ class SnowflakeDialect(default.DefaultDialect):
                 )
             )
         else:
-            cursor = connection.execute(text("SHOW /* sqlalchemy:get_table_names */ TABLES"))
+            cursor = connection.execute(
+                text("SHOW /* sqlalchemy:get_table_names */ TABLES")
+            )
             _, current_schema = self._current_database_schema(connection)
 
         ret = [self.normalize_name(row[1]) for row in cursor]
@@ -711,7 +758,9 @@ class SnowflakeDialect(default.DefaultDialect):
                 )
             )
         else:
-            cursor = connection.execute(text("SHOW /* sqlalchemy:get_view_names */ VIEWS"))
+            cursor = connection.execute(
+                text("SHOW /* sqlalchemy:get_view_names */ VIEWS")
+            )
 
         return [self.normalize_name(row[1]) for row in cursor]
 
@@ -755,7 +804,9 @@ class SnowflakeDialect(default.DefaultDialect):
                 )
             )
         else:
-            cursor = connection.execute(text("SHOW /* sqlalchemy:get_temp_table_names */ TABLES"))
+            cursor = connection.execute(
+                text("SHOW /* sqlalchemy:get_temp_table_names */ TABLES")
+            )
 
         ret = []
         n2i = self.__class__._map_name_to_idx(cursor)
@@ -769,7 +820,9 @@ class SnowflakeDialect(default.DefaultDialect):
         """
         Gets all schema names.
         """
-        cursor = connection.execute(text("SHOW /* sqlalchemy:get_schema_names */ SCHEMAS"))
+        cursor = connection.execute(
+            text("SHOW /* sqlalchemy:get_schema_names */ SCHEMAS")
+        )
 
         return [self.normalize_name(row[1]) for row in cursor]
 
@@ -790,9 +843,12 @@ class SnowflakeDialect(default.DefaultDialect):
         """
         Returns comment of table in a dictionary as described by SQLAlchemy spec.
         """
-        sql_command = "SHOW /* sqlalchemy:_get_table_comment */ " "TABLES LIKE '{}'{}".format(
-            table_name,
-            f" IN SCHEMA {self.normalize_name(schema)}" if schema else "",
+        sql_command = (
+            "SHOW /* sqlalchemy:_get_table_comment */ "
+            "TABLES LIKE '{}'{}".format(
+                table_name,
+                f" IN SCHEMA {self.normalize_name(schema)}" if schema else "",
+            )
         )
         cursor = connection.execute(text(sql_command))
         return cursor.fetchone()
@@ -801,9 +857,12 @@ class SnowflakeDialect(default.DefaultDialect):
         """
         Returns comment of view in a dictionary as described by SQLAlchemy spec.
         """
-        sql_command = "SHOW /* sqlalchemy:_get_view_comment */ " "VIEWS LIKE '{}'{}".format(
-            table_name,
-            f" IN SCHEMA {self.normalize_name(schema)}" if schema else "",
+        sql_command = (
+            "SHOW /* sqlalchemy:_get_view_comment */ "
+            "VIEWS LIKE '{}'{}".format(
+                table_name,
+                f" IN SCHEMA {self.normalize_name(schema)}" if schema else "",
+            )
         )
         cursor = connection.execute(text(sql_command))
         return cursor.fetchone()
@@ -821,7 +880,11 @@ class SnowflakeDialect(default.DefaultDialect):
             result = self._get_view_comment(connection, table_name, schema)
 
         return {
-            "text": result._mapping["comment"] if result and result._mapping["comment"] else None
+            "text": (
+                result._mapping["comment"]
+                if result and result._mapping["comment"]
+                else None
+            )
         }
 
     def connect(self, *cargs, **cparams):

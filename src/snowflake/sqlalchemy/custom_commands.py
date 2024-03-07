@@ -40,7 +40,9 @@ class MergeInto(UpdateBase):
             self.command = command
 
         def __repr__(self):
-            case_predicate = f" AND {str(self.predicate)}" if self.predicate is not None else ""
+            case_predicate = (
+                f" AND {str(self.predicate)}" if self.predicate is not None else ""
+            )
             if self.command == "INSERT":
                 sets, sets_tos = zip(*self.set.items())
                 return "WHEN NOT MATCHED{} THEN {} ({}) VALUES ({})".format(
@@ -529,7 +531,9 @@ class AWSBucket(ClauseElement):
             f" {encryption}" if self.encryption_used else "",
         )
 
-    def credentials(self, aws_role=None, aws_key_id=None, aws_secret_key=None, aws_token=None):
+    def credentials(
+        self, aws_role=None, aws_key_id=None, aws_secret_key=None, aws_token=None
+    ):
         if aws_role is None and (aws_key_id is None and aws_secret_key is None):
             raise ValueError(
                 "Either 'aws_role', or aws_key_id and aws_secret_key has to be supplied"

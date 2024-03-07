@@ -50,7 +50,9 @@ def test_inspect_geography_datatypes(engine_testaccount):
             test_point = "POINT(-122.35 37.55)"
             test_point1 = '{"coordinates": [-122.35,37.55],"type": "Point"}'
 
-            ins = test_geography.insert().values(id=1, geo1=test_point, geo2=test_point1)
+            ins = test_geography.insert().values(
+                id=1, geo1=test_point, geo2=test_point1
+            )
 
             with conn.begin():
                 results = conn.execute(ins)

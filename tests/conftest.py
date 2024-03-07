@@ -35,11 +35,15 @@ snowflake.connector.connection.DEFAULT_CONFIGURATION[PARAM_APPLICATION] = (
     APPLICATION_NAME,
     (type(None), str),
 )
-snowflake.connector.connection.DEFAULT_CONFIGURATION[PARAM_INTERNAL_APPLICATION_NAME] = (
+snowflake.connector.connection.DEFAULT_CONFIGURATION[
+    PARAM_INTERNAL_APPLICATION_NAME
+] = (
     APPLICATION_NAME,
     (type(None), str),
 )
-snowflake.connector.connection.DEFAULT_CONFIGURATION[PARAM_INTERNAL_APPLICATION_VERSION] = (
+snowflake.connector.connection.DEFAULT_CONFIGURATION[
+    PARAM_INTERNAL_APPLICATION_VERSION
+] = (
     SNOWFLAKE_SQLALCHEMY_VERSION,
     (type(None), str),
 )
@@ -264,7 +268,9 @@ def pytest_runtest_setup(item) -> None:
         # If test is tagged for specific cloud providers add the default cloud_provider as supported too
         test_supported_providers.add("dev")
         if current_provider not in test_supported_providers:
-            pytest.skip(f"cannot run unit test against cloud provider {current_provider}")
+            pytest.skip(
+                f"cannot run unit test against cloud provider {current_provider}"
+            )
     if EXTERNAL_SKIP_TAGS.intersection(test_tags) and running_on_public_ci():
         pytest.skip("cannot run this test on external CI")
     elif INTERNAL_SKIP_TAGS.intersection(test_tags) and not running_on_public_ci():
