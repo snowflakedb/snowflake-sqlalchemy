@@ -9,6 +9,10 @@ Source code is also available at:
 
 # Release Notes
 
+- v1.6.0(Not released)
+
+  - support for installing with SQLAlchemy 2.0.x
+
 - v1.5.1(November 03, 2023)
 
   - Fixed a compatibility issue with Snowflake Behavioral Change 1057 on outer lateral join, for more details check https://docs.snowflake.com/en/release-notes/bcr-bundles/2023_04/bcr-1057.
