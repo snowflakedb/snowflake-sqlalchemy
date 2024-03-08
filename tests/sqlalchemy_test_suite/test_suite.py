@@ -1,14 +1,6 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
-import sys
-
-from snowflake.sqlalchemy.compat import IS_VERSION_20
-
-if IS_VERSION_20:
-    sys.exit()
-
-
 import pytest
 from sqlalchemy import Integer, testing
 from sqlalchemy.schema import Column, Sequence, Table
