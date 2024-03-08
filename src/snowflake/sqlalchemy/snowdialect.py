@@ -266,6 +266,7 @@ class SnowflakeDialect(default.DefaultDialect):
 
         return ([], opts)
 
+    @reflection.cache
     def has_table(self, connection, table_name, schema=None, **kw):
         """
         Checks if the table exists

@@ -15,7 +15,6 @@ from sqlalchemy.testing.suite import (
 from sqlalchemy.testing.suite import DateTimeHistoricTest as _DateTimeHistoricTest
 from sqlalchemy.testing.suite import FetchLimitOffsetTest as _FetchLimitOffsetTest
 from sqlalchemy.testing.suite import HasSequenceTest as _HasSequenceTest
-from sqlalchemy.testing.suite import HasTableTest as _HasTableTest
 from sqlalchemy.testing.suite import InsertBehaviorTest as _InsertBehaviorTest
 from sqlalchemy.testing.suite import LikeFunctionsTest as _LikeFunctionsTest
 from sqlalchemy.testing.suite import LongNameBlowoutTest as _LongNameBlowoutTest
@@ -85,10 +84,6 @@ class TrueDivTest(_TrueDivTest):
 
 
 class TimeMicrosecondsTest(_TimeMicrosecondsTest):
-    ...
-
-
-class HasTableTest(_HasTableTest):
     ...
 
 
