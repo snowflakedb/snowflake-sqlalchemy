@@ -84,12 +84,3 @@ packages = ["src/snowflake"]
 [tool.sqla_testing]
 requirement_cls = "snowflake.sqlalchemy.requirements:Requirements"
 profile_file = "tests/profiles.txt"
-
-[tool.pytest.ini_options]
-markers = [
-  "memory_intensive: memory / CPU intensive suite tests",
-  "mypy: mypy integration / plugin tests",
-  "timing_intensive: time-oriented tests that are sensitive to race conditions",
-  "backend: tests that should run on all backends; typically dialect-sensitive",
-  "sparse_backend: tests that should run on multiple backends, not necessarily all",
-]
