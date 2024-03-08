@@ -7,6 +7,9 @@ from sqlalchemy.schema import Column, Sequence, Table
 from sqlalchemy.testing import config
 from sqlalchemy.testing.assertions import eq_
 from sqlalchemy.testing.suite import (
+    BizarroCharacterFKResolutionTest as _BizarroCharacterFKResolutionTest,
+)
+from sqlalchemy.testing.suite import (
     CompositeKeyReflectionTest as _CompositeKeyReflectionTest,
 )
 from sqlalchemy.testing.suite import FetchLimitOffsetTest as _FetchLimitOffsetTest
@@ -67,6 +70,10 @@ class InsertBehaviorTest(_InsertBehaviorTest):
         "Snowflake does not support inserting empty values, The value may be a literal or an expression."
     )
     def test_empty_insert_multiple(self, connection):
+        pass
+
+    @pytest.mark.skip("Snowflake does not support returning in insert.")
+    def test_no_results_for_non_returning_insert(self, connection, style, executemany):
         pass
 
 
@@ -149,3 +156,18 @@ class CompositeKeyReflectionTest(_CompositeKeyReflectionTest):
     def test_pk_column_order(self):
         # Check https://snowflakecomputing.atlassian.net/browse/SNOW-640134 for details on breaking changes discussion.
         super().test_pk_column_order()
+
+
+class BizarroCharacterFKResolutionTest(_BizarroCharacterFKResolutionTest):
+    @testing.combinations(
+        ("id",), ("(3)",), ("col%p",), ("[brack]",), argnames="columnname"
+    )
+    @testing.variation("use_composite", [True, False])
+    @testing.combinations(
+        ("plain",),
+        ("(2)",),
+        ("[brackets]",),
+        argnames="tablename",
+    )
+    def test_fk_ref(self, connection, metadata, use_composite, tablename, columnname):
+        super().test_fk_ref(connection, metadata, use_composite, tablename, columnname)
