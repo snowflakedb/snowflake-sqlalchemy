@@ -7,14 +7,21 @@ from sqlalchemy.schema import Column, Sequence, Table
 from sqlalchemy.testing import config
 from sqlalchemy.testing.assertions import eq_
 from sqlalchemy.testing.suite import (
+    BizarroCharacterFKResolutionTest as _BizarroCharacterFKResolutionTest,
+)
+from sqlalchemy.testing.suite import (
     CompositeKeyReflectionTest as _CompositeKeyReflectionTest,
 )
+from sqlalchemy.testing.suite import DateTimeHistoricTest as _DateTimeHistoricTest
 from sqlalchemy.testing.suite import FetchLimitOffsetTest as _FetchLimitOffsetTest
 from sqlalchemy.testing.suite import HasSequenceTest as _HasSequenceTest
+from sqlalchemy.testing.suite import HasTableTest as _HasTableTest
 from sqlalchemy.testing.suite import InsertBehaviorTest as _InsertBehaviorTest
 from sqlalchemy.testing.suite import LikeFunctionsTest as _LikeFunctionsTest
 from sqlalchemy.testing.suite import LongNameBlowoutTest as _LongNameBlowoutTest
 from sqlalchemy.testing.suite import SimpleUpdateDeleteTest as _SimpleUpdateDeleteTest
+from sqlalchemy.testing.suite import TimeMicrosecondsTest as _TimeMicrosecondsTest
+from sqlalchemy.testing.suite import TrueDivTest as _TrueDivTest
 from sqlalchemy.testing.suite import *  # noqa
 
 # 1. Unsupported by snowflake db
@@ -68,6 +75,29 @@ class InsertBehaviorTest(_InsertBehaviorTest):
     )
     def test_empty_insert_multiple(self, connection):
         pass
+
+
+# road to 2.0
+class TrueDivTest(_TrueDivTest):
+    @pytest.mark.skip("Double slash is comment")
+    def test_floordiv_integer_bound(self, connection):
+        pass
+
+
+class TimeMicrosecondsTest(_TimeMicrosecondsTest):
+    ...
+
+
+class HasTableTest(_HasTableTest):
+    ...
+
+
+class DateTimeHistoricTest(_DateTimeHistoricTest):
+    ...
+
+
+class BizarroCharacterFKResolutionTest(_BizarroCharacterFKResolutionTest):
+    ...
 
 
 # 2. Patched Tests
