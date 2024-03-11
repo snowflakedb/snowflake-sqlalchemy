@@ -112,7 +112,7 @@ https://docs.snowflake.com/en/release-notes/bcr-bundles/2023_04/bcr-1057
 @CompileState.plugin_for("default", "select")
 class SnowflakeSelectState(SelectState):
     def _setup_joins(self, args, raw_columns):
-        for (right, onclause, left, flags) in args:
+        for right, onclause, left, flags in args:
             isouter = flags["isouter"]
             full = flags["full"]
 
@@ -579,9 +579,11 @@ class SnowflakeCompiler(compiler.SQLCompiler):
                     [
                         "{} = {}".format(
                             n,
-                            v._compiler_dispatch(self, **kw)
-                            if getattr(v, "compiler_dispatch", False)
-                            else str(v),
+                            (
+                                v._compiler_dispatch(self, **kw)
+                                if getattr(v, "compiler_dispatch", False)
+                                else str(v)
+                            ),
                         )
                         for n, v in options_list
                     ]
@@ -604,20 +606,24 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             return f"FILE_FORMAT=(format_name = {formatter.options['format_name']})"
         return "FILE_FORMAT=(TYPE={}{})".format(
             formatter.file_format,
-            " "
-            + " ".join(
-                [
-                    "{}={}".format(
-                        name,
-                        value._compiler_dispatch(self, **kw)
-                        if hasattr(value, "_compiler_dispatch")
-                        else formatter.value_repr(name, value),
-                    )
-                    for name, value in options_list
-                ]
-            )
-            if formatter.options
-            else "",
+            (
+                " "
+                + " ".join(
+                    [
+                        "{}={}".format(
+                            name,
+                            (
+                                value._compiler_dispatch(self, **kw)
+                                if hasattr(value, "_compiler_dispatch")
+                                else formatter.value_repr(name, value)
+                            ),
+                        )
+                        for name, value in options_list
+                    ]
+                )
+                if formatter.options
+                else ""
+            ),
         )
 
     def visit_aws_bucket(self, aws_bucket, **kw):
@@ -966,6 +972,29 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
             increment = 1 if identity.increment is None else identity.increment
             text += f"({start},{increment})"
         return text
+
+    def get_identity_options(self, identity_options):
+        text = []
+        if identity_options.increment is not None:
+            text.append(f"INCREMENT BY {identity_options.increment:d}")
+        if identity_options.start is not None:
+            text.append(f"START WITH {identity_options.start:d}")
+        if identity_options.minvalue is not None:
+            text.append(f"MINVALUE {identity_options.minvalue:d}")
+        if identity_options.maxvalue is not None:
+            text.append(f"MAXVALUE {identity_options.maxvalue:d}")
+        if identity_options.nominvalue is not None:
+            text.append("NO MINVALUE")
+        if identity_options.nomaxvalue is not None:
+            text.append("NO MAXVALUE")
+        if identity_options.cache is not None:
+            text.append(f"CACHE {identity_options.cache:d}")
+        if identity_options.cycle is not None:
+            text.append("CYCLE" if identity_options.cycle else "NO CYCLE")
+        if identity_options.order is not None:
+            text.append("ORDER" if identity_options.order else "NOORDER")
+
+        return " ".join(text)
 
 
 class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):

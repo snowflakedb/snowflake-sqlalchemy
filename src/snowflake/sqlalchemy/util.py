@@ -235,7 +235,14 @@ class _Snowflake_ORMJoin(sa_orm_util_ORMJoin):
             else:
                 adapt_from = left_selectable
 
-            (pj, sj, source, dest, secondary, target_adapter,) = prop._create_joins(
+            (
+                pj,
+                sj,
+                source,
+                dest,
+                secondary,
+                target_adapter,
+            ) = prop._create_joins(
                 source_selectable=adapt_from,
                 dest_selectable=adapt_to,
                 source_polymorphic=True,

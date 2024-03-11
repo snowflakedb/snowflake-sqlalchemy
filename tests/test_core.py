@@ -29,6 +29,7 @@ from sqlalchemy import (
     Table,
     UniqueConstraint,
     dialects,
+    insert,
     inspect,
     text,
 )
@@ -1424,47 +1425,51 @@ def test_special_schema_character(db_parameters, on_public_ci):
 
 
 def test_autoincrement(engine_testaccount):
+    """Snowflake does not guarantee generating sequence numbers without gaps.
+
+    The generated numbers are not necessarily contiguous.
+    https://docs.snowflake.com/en/user-guide/querying-sequences
+    """
     metadata = MetaData()
     users = Table(
         "users",
         metadata,
-        Column("uid", Integer, Sequence("id_seq"), primary_key=True),
+        Column("uid", Integer, Sequence("id_seq", order=True), primary_key=True),
         Column("name", String(39)),
     )
 
     try:
-        users.create(engine_testaccount)
+        metadata.create_all(engine_testaccount)
 
-        with engine_testaccount.connect() as connection:
-            with connection.begin():
-                connection.execute(users.insert(), [{"name": "sf1"}])
-                assert connection.execute(select(users)).fetchall() == [(1, "sf1")]
-                connection.execute(users.insert(), [{"name": "sf2"}, {"name": "sf3"}])
-                assert connection.execute(select(users)).fetchall() == [
-                    (1, "sf1"),
-                    (2, "sf2"),
-                    (3, "sf3"),
-                ]
-                connection.execute(users.insert(), {"name": "sf4"})
-                assert connection.execute(select(users)).fetchall() == [
-                    (1, "sf1"),
-                    (2, "sf2"),
-                    (3, "sf3"),
-                    (4, "sf4"),
-                ]
+        with engine_testaccount.begin() as connection:
+            connection.execute(insert(users), [{"name": "sf1"}])
+            assert connection.execute(select(users)).fetchall() == [(1, "sf1")]
+            connection.execute(insert(users), [{"name": "sf2"}, {"name": "sf3"}])
+            assert connection.execute(select(users)).fetchall() == [
+                (1, "sf1"),
+                (2, "sf2"),
+                (3, "sf3"),
+            ]
+            connection.execute(insert(users), {"name": "sf4"})
+            assert connection.execute(select(users)).fetchall() == [
+                (1, "sf1"),
+                (2, "sf2"),
+                (3, "sf3"),
+                (4, "sf4"),
+            ]
 
-                seq = Sequence("id_seq")
-                nextid = connection.execute(seq)
-                connection.execute(users.insert(), [{"uid": nextid, "name": "sf5"}])
-                assert connection.execute(select(users)).fetchall() == [
-                    (1, "sf1"),
-                    (2, "sf2"),
-                    (3, "sf3"),
-                    (4, "sf4"),
-                    (5, "sf5"),
-                ]
+            seq = Sequence("id_seq")
+            nextid = connection.execute(seq)
+            connection.execute(insert(users), [{"uid": nextid, "name": "sf5"}])
+            assert connection.execute(select(users)).fetchall() == [
+                (1, "sf1"),
+                (2, "sf2"),
+                (3, "sf3"),
+                (4, "sf4"),
+                (5, "sf5"),
+            ]
     finally:
-        users.drop(engine_testaccount)
+        metadata.drop_all(engine_testaccount)
 
 
 @pytest.mark.skip(
@@ -1869,10 +1874,16 @@ def test_snowflake_sqlalchemy_as_valid_client_type():
         )
         snowflake.connector.connection.DEFAULT_CONFIGURATION[
             "internal_application_name"
-        ] = ("PythonConnector", (type(None), str))
+        ] = (
+            "PythonConnector",
+            (type(None), str),
+        )
         snowflake.connector.connection.DEFAULT_CONFIGURATION[
             "internal_application_version"
-        ] = ("3.0.0", (type(None), str))
+        ] = (
+            "3.0.0",
+            (type(None), str),
+        )
         engine = create_engine(
             URL(
                 user=CONNECTION_PARAMETERS["user"],
