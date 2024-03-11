@@ -82,8 +82,12 @@ class InsertBehaviorTest(_InsertBehaviorTest):
 
 # road to 2.0
 class TrueDivTest(_TrueDivTest):
-    @pytest.mark.skip("Double slash is comment")
+    @pytest.mark.skip("`//` not supported")
     def test_floordiv_integer_bound(self, connection):
+        """Snowflake does not provide `//` arithmetic operator.
+
+        https://docs.snowflake.com/en/sql-reference/operators-arithmetic.
+        """
         pass
 
 
