@@ -273,6 +273,7 @@ class SnowflakeDialect(default.DefaultDialect):
         """
         return self._has_object(connection, "TABLE", table_name, schema)
 
+    @reflection.cache
     def has_sequence(self, connection, sequence_name, schema=None, **kw):
         """
         Checks if the sequence exists
