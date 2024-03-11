@@ -1427,7 +1427,7 @@ def test_special_schema_character(db_parameters, on_public_ci):
 def test_autoincrement(engine_testaccount):
     """Snowflake does not guarantee generating sequence numbers without gaps.
 
-    The generated numbers are not necesairly contignous.
+    The generated numbers are not necessarily contiguous.
     https://docs.snowflake.com/en/user-guide/querying-sequences
     """
     metadata = MetaData()

@@ -18,7 +18,7 @@ from sqlalchemy.sql import text
 def test_table_with_sequence(engine_testaccount, db_parameters):
     """Snowflake does not guarantee generating sequence numbers without gaps.
 
-    The generated numbers are not necesairly contignous.
+    The generated numbers are not necessarily contiguous.
     https://docs.snowflake.com/en/user-guide/querying-sequences
     """
     # https://github.com/snowflakedb/snowflake-sqlalchemy/issues/124
@@ -87,7 +87,7 @@ def test_table_with_sequence(engine_testaccount, db_parameters):
 def test_table_with_autoincrement(engine_testaccount):
     """Snowflake does not guarantee generating sequence numbers without gaps.
 
-    The generated numbers are not necesairly contignous.
+    The generated numbers are not necessarily contiguous.
     https://docs.snowflake.com/en/user-guide/querying-sequences
     """
     # https://github.com/snowflakedb/snowflake-sqlalchemy/issues/124
