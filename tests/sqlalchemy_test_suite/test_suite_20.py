@@ -90,6 +90,14 @@ class TrueDivTest(_TrueDivTest):
         """
         pass
 
+    @pytest.mark.skip("`//` not supported")
+    def test_floordiv_integer(self, connection, left, right, expected):
+        """Snowflake does not provide `//` arithmetic operator.
+
+        https://docs.snowflake.com/en/sql-reference/operators-arithmetic.
+        """
+        pass
+
 
 class TimeMicrosecondsTest(_TimeMicrosecondsTest):
     ...
