@@ -38,7 +38,7 @@ classifiers = [
   "Topic :: Software Development :: Libraries :: Application Frameworks",
   "Topic :: Software Development :: Libraries :: Python Modules",
 ]
-dependencies = ["SQLAlchemy", "snowflake-connector-python<4.0.0"]
+dependencies = ["SQLAlchemy", "snowflake-connector-python"]
 
 [tool.hatch.version]
 path = "src/snowflake/sqlalchemy/version.py"
@@ -53,7 +53,7 @@ development = [
   "pytz",
   "numpy",
 ]
-pandas = ["snowflake-connector-python[pandas]<4.0.0"]
+pandas = ["snowflake-connector-python[pandas]"]
 
 [project.entry-points."sqlalchemy.dialects"]
 snowflake = "snowflake.sqlalchemy:dialect"
@@ -89,6 +89,7 @@ check = "pre-commit run --all-files"
 test-dialect = "pytest -ra -vvv --tb=short --cov snowflake.sqlalchemy --cov-append --junitxml ./junit.xml --ignore=tests/sqlalchemy_test_suite"
 test-dialect-compatibility = "pytest -ra -vvv --tb=short --cov snowflake.sqlalchemy --cov-append --junitxml ./junit.xml tests/sqlalchemy_test_suite"
 test-run_v20 = "pytest -ra -vvv --tb=short --cov snowflake.sqlalchemy --cov-append --junitxml ./junit.xml --ignore=tests/sqlalchemy_test_suite --run_v20_sqlalchemy"
+gh-cache-sum = "python -VV | sha256sum | cut -d' ' -f1"
 
 [tool.ruff]
 line-length = 88

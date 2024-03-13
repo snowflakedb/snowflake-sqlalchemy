@@ -36,8 +36,9 @@ jobs:
           python -m pip install -U pip
           python -m pip install -U hatch
           python -m hatch env create default
+          python -m hatch env find
       - name: Set PY
-        run: echo "PY=$(python -VV | sha256sum | cut -d' ' -f1)" >> $GITHUB_ENV
+        run: echo "PY=$(hatch run gh-cache-sum)" >> $GITHUB_ENV
       - uses: actions/cache@v4
         with:
           path: ~/.cache/pre-commit
