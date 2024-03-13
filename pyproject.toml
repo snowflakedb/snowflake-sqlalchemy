@@ -95,3 +95,23 @@ line-length = 88
 
 [tool.black]
 line-length = 88
+
+[tool.pytest.ini_options]
+markers = [
+  # Optional dependency groups markers
+  "lambda: AWS lambda tests",
+  "pandas: tests for pandas integration",
+  "sso: tests for sso optional dependency integration",
+  # Cloud provider markers
+  "aws: tests for Amazon Cloud storage",
+  "azure: tests for Azure Cloud storage",
+  "gcp: tests for Google Cloud storage",
+  # Test type markers
+  "integ: integration tests",
+  "unit: unit tests",
+  "skipolddriver: skip for old driver tests",
+  # Other markers
+  "timeout: tests that need a timeout time",
+  "internal: tests that could but should only run on our internal CI",
+  "external: tests that could but should only run on our external CI",
+]
