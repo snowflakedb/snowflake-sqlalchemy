@@ -13,4 +13,4 @@ class flatten(sqlfunc.GenericFunction):
 
     def __init__(self, *args, **kwargs):
         warnings.warn(FLATTEN_WARNING, DeprecationWarning, stacklevel=2)
-        return super().__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
