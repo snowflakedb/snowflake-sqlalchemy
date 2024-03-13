@@ -316,17 +316,15 @@ def test_pandas_writeback(engine_testaccount, run_v20_sqlalchemy):
         sf_connector_version_df = pd.DataFrame(
             sf_connector_version_data, columns=["NAME", "NEWEST_VERSION"]
         )
+        print("After data frame")
         sf_connector_version_df.to_sql(table_name, conn, index=False, method=pd_writer)
+        print("After table create")
 
+        t = pd.read_sql_table(table_name, conn)
+        print("After table read")
         assert (
-            (
-                pd.read_sql_table(table_name, conn).rename(
-                    columns={"newest_version": "NEWEST_VERSION", "name": "NAME"}
-                )
-                == sf_connector_version_df
-            )
-            .all()
-            .all()
+            t.rename(columns={"newest_version": "NEWEST_VERSION", "name": "NAME"})
+            == sf_connector_version_df
         )
 
 
