@@ -1,3 +1,94 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "snowflake-sqlalchemy"
+dynamic = ["version"]
+description = "Snowflake SQLAlchemy Dialect"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.8"
+authors = [
+  { name = "Snowflake Inc.", email = "triage-snowpark-python-api-dl@snowflake.com" },
+]
+keywords = ["Snowflake", "analytics", "cloud", "database", "db", "warehouse"]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Environment :: Console",
+  "Environment :: Other Environment",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Education",
+  "Intended Audience :: Information Technology",
+  "Intended Audience :: System Administrators",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: SQL",
+  "Topic :: Database",
+  "Topic :: Scientific/Engineering :: Information Analysis",
+  "Topic :: Software Development",
+  "Topic :: Software Development :: Libraries",
+  "Topic :: Software Development :: Libraries :: Application Frameworks",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = ["SQLAlchemy", "snowflake-connector-python<4.0.0"]
+
+[tool.hatch.version]
+path = "src/snowflake/sqlalchemy/version.py"
+
+[project.optional-dependencies]
+development = [
+  "pre-commit",
+  "pytest",
+  "pytest-cov",
+  "pytest-timeout",
+  "pytest-rerunfailures",
+  "pytz",
+  "numpy",
+]
+pandas = ["snowflake-connector-python[pandas]<4.0.0"]
+
+[project.entry-points."sqlalchemy.dialects"]
+snowflake = "snowflake.sqlalchemy:dialect"
+
+[project.urls]
+Changelog = "https://github.com/snowflakedb/snowflake-sqlalchemy/blob/main/DESCRIPTION.md"
+Documentation = "https://docs.snowflake.com/en/user-guide/sqlalchemy.html"
+Homepage = "https://www.snowflake.com/"
+Issues = "https://github.com/snowflakedb/snowflake-sqlalchemy/issues"
+Source = "https://github.com/snowflakedb/snowflake-sqlalchemy"
+
+[tool.hatch.build.targets.sdist]
+exclude = ["/.github"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/snowflake"]
+
+[tool.hatch.envs.default]
+extra-dependencies = ["SQLAlchemy<2.0.0,>=1.4.19"]
+features = ["development", "pandas"]
+python = "3.8"
+
+[tool.hatch.envs.sa20]
+extra-dependencies = ["SQLAlchemy>=2.0.0"]
+python = "3.8"
+
+[tool.hatch.envs.default.env-vars]
+COVERAGE_FILE = ".coverage.xml"
+SQLACHEMY_WARN_20 = "1"
+
+[tool.hatch.envs.default.scripts]
+check = "pre-commit run --all-files"
+test-dialect = "pytest -ra -vvv --tb=short --cov snowflake.sqlalchemy --cov-append --junitxml ./junit.xml --ignore=tests/sqlalchemy_test_suite --co"
+test-dialect-compatibility = "pytest -ra -vvv --tb=short --cov snowflake.sqlalchemy --cov-append --junitxml ./junit.xml tests/sqlalchemy_test_suite --co"
+
 [tool.ruff]
 line-length = 88
 
