@@ -38,7 +38,7 @@ classifiers = [
   "Topic :: Software Development :: Libraries :: Application Frameworks",
   "Topic :: Software Development :: Libraries :: Python Modules",
 ]
-dependencies = ["SQLAlchemy", "snowflake-connector-python"]
+dependencies = ["snowflake-connector-python", "SQLAlchemy"]
 
 [tool.hatch.version]
 path = "src/snowflake/sqlalchemy/version.py"
@@ -52,6 +52,7 @@ development = [
   "pytest-rerunfailures",
   "pytz",
   "numpy",
+  "mock",
 ]
 pandas = ["snowflake-connector-python[pandas]"]
 
