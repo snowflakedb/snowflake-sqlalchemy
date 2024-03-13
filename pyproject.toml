@@ -81,7 +81,7 @@ extra-dependencies = ["SQLAlchemy>=2.0.0"]
 python = "3.8"
 
 [tool.hatch.envs.default.env-vars]
-COVERAGE_FILE = ".coverage.xml"
+COVERAGE_FILE = "coverage.xml"
 SQLACHEMY_WARN_20 = "1"
 
 [tool.hatch.envs.default.scripts]
