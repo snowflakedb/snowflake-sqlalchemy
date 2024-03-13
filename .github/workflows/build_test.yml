@@ -54,7 +54,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [
-          ubuntu-latests,
+          ubuntu-latest,
           macos-latest,
           windows-latest,
           ]
