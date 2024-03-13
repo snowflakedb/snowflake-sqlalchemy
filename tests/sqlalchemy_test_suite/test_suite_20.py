@@ -100,11 +100,13 @@ class TrueDivTest(_TrueDivTest):
 
 
 class TimeMicrosecondsTest(_TimeMicrosecondsTest):
-    ...
+    def __init__(self):
+        super().__init__()
 
 
 class DateTimeHistoricTest(_DateTimeHistoricTest):
-    ...
+    def __init__(self):
+        super().__init__()
 
 
 # 2. Patched Tests
