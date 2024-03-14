@@ -269,15 +269,13 @@ def test_timezone(db_parameters):
             conn.exec_driver_sql(f"DROP TABLE {test_table_name};")
 
 
-@pytest.mark.flaky(reruns=3, reruns_delay=7)
-@pytest.mark.timeout(45)
-def test_pandas_writeback(engine_testaccount_with_numpy, run_v20_sqlalchemy):
+def test_pandas_writeback(engine_testaccount, run_v20_sqlalchemy):
     if run_v20_sqlalchemy and sys.version_info < (3, 8):
         pytest.skip(
             "In Python 3.7, this test depends on pandas features of which the implementation is incompatible with sqlachemy 2.0, and pandas does not support Python 3.7 anymore."
         )
 
-    with engine_testaccount_with_numpy.connect() as conn:
+    with engine_testaccount.connect() as conn:
         sf_connector_version_data = [
             ("snowflake-connector-python", "1.2.23"),
             ("snowflake-sqlalchemy", "1.1.1"),
@@ -290,7 +288,9 @@ def test_pandas_writeback(engine_testaccount_with_numpy, run_v20_sqlalchemy):
         sf_connector_version_df = pd.DataFrame(
             sf_connector_version_data, columns=["NAME", "NEWEST_VERSION"]
         )
-        sf_connector_version_df.to_sql(table_name, conn, index=False, method=pd_writer)
+        sf_connector_version_df.to_sql(
+            table_name, conn, index=False, method=pd_writer, if_exists="replace"
+        )
         results = pd.read_sql_table(table_name, conn).rename(
             columns={"newest_version": "NEWEST_VERSION", "name": "NAME"}
         )
