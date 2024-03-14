@@ -48,7 +48,7 @@ jobs:
 
   test-dialect:
     name: Test dialect ${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
-    needs: lint
+#    needs: lint
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
