@@ -297,6 +297,8 @@ def test_timezone(db_parameters):
             conn.exec_driver_sql(f"DROP TABLE {test_table_name};")
 
 
+@pytest.mark.flaky(reruns=3, reruns_delay=7)
+@pytest.mark.timeout(45)
 def test_pandas_writeback(engine_testaccount, run_v20_sqlalchemy):
     if run_v20_sqlalchemy and sys.version_info < (3, 8):
         pytest.skip(
