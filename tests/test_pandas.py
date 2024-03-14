@@ -24,7 +24,6 @@ from sqlalchemy import (
     select,
     text,
 )
-from sqlalchemy.pool import NullPool
 
 from snowflake.connector import ProgrammingError
 from snowflake.connector.pandas_tools import make_pd_writer, pd_writer
@@ -113,40 +112,8 @@ def test_a_simple_read_sql(engine_testaccount):
         users.drop(engine_testaccount)
 
 
-def get_engine_with_numpy(db_parameters, user=None, password=None, account=None):
-    """
-    Creates a connection using the parameters defined in JDBC connect string
-    """
-    from snowflake.sqlalchemy import URL
-
-    if user is not None:
-        db_parameters["user"] = user
-    if password is not None:
-        db_parameters["password"] = password
-    if account is not None:
-        db_parameters["account"] = account
-
-    engine = create_engine(
-        URL(
-            user=db_parameters["user"],
-            password=db_parameters["password"],
-            host=db_parameters["host"],
-            port=db_parameters["port"],
-            database=db_parameters["database"],
-            schema=db_parameters["schema"],
-            account=db_parameters["account"],
-            protocol=db_parameters["protocol"],
-            numpy=True,
-        ),
-        poolclass=NullPool,
-    )
-
-    return engine
-
-
-def test_numpy_datatypes(db_parameters):
-    engine = get_engine_with_numpy(db_parameters)
-    with engine.connect() as conn:
+def test_numpy_datatypes(engine_testaccount_with_numpy, db_parameters):
+    with engine_testaccount_with_numpy.connect() as conn:
         try:
             specific_date = np.datetime64("2016-03-04T12:03:05.123456789")
             with conn.begin():
@@ -163,12 +130,11 @@ def test_numpy_datatypes(db_parameters):
                 assert df.c1.values[0] == specific_date
         finally:
             conn.exec_driver_sql(f"DROP TABLE IF EXISTS {db_parameters['name']}")
-            engine.dispose()
+            engine_testaccount_with_numpy.dispose()
 
 
-def test_to_sql(db_parameters):
-    engine = get_engine_with_numpy(db_parameters)
-    with engine.connect() as conn:
+def test_to_sql(engine_testaccount_with_numpy, db_parameters):
+    with engine_testaccount_with_numpy.connect() as conn:
         total_rows = 10000
         conn.exec_driver_sql(
             textwrap.dedent(
@@ -182,7 +148,13 @@ def test_to_sql(db_parameters):
         conn.exec_driver_sql("create or replace table dst(c1 float)")
         tbl = pd.read_sql_query(text("select * from src"), conn)
 
-        tbl.to_sql("dst", engine, if_exists="append", chunksize=1000, index=False)
+        tbl.to_sql(
+            "dst",
+            engine_testaccount_with_numpy,
+            if_exists="append",
+            chunksize=1000,
+            index=False,
+        )
         df = pd.read_sql_query(text("select count(*) as cnt from dst"), conn)
         assert df.cnt.values[0] == total_rows
 
@@ -299,13 +271,13 @@ def test_timezone(db_parameters):
 
 @pytest.mark.flaky(reruns=3, reruns_delay=7)
 @pytest.mark.timeout(45)
-def test_pandas_writeback(engine_testaccount, run_v20_sqlalchemy):
+def test_pandas_writeback(engine_testaccount_with_numpy, run_v20_sqlalchemy):
     if run_v20_sqlalchemy and sys.version_info < (3, 8):
         pytest.skip(
             "In Python 3.7, this test depends on pandas features of which the implementation is incompatible with sqlachemy 2.0, and pandas does not support Python 3.7 anymore."
         )
 
-    with engine_testaccount.connect() as conn:
+    with engine_testaccount_with_numpy.connect() as conn:
         sf_connector_version_data = [
             ("snowflake-connector-python", "1.2.23"),
             ("snowflake-sqlalchemy", "1.1.1"),
@@ -319,17 +291,10 @@ def test_pandas_writeback(engine_testaccount, run_v20_sqlalchemy):
             sf_connector_version_data, columns=["NAME", "NEWEST_VERSION"]
         )
         sf_connector_version_df.to_sql(table_name, conn, index=False, method=pd_writer)
-
-        assert (
-            (
-                pd.read_sql_table(table_name, conn).rename(
-                    columns={"newest_version": "NEWEST_VERSION", "name": "NAME"}
-                )
-                == sf_connector_version_df
-            )
-            .all()
-            .all()
+        results = pd.read_sql_table(table_name, conn).rename(
+            columns={"newest_version": "NEWEST_VERSION", "name": "NAME"}
         )
+        assert results.equals(sf_connector_version_df)
 
 
 @pytest.mark.parametrize("chunk_size", [5, 1])

@@ -153,7 +153,7 @@ def get_db_parameters():
     return ret
 
 
-def get_engine(user=None, password=None, account=None, schema=None):
+def get_engine(user=None, password=None, account=None, schema=None, numpy=False):
     """
     Creates a connection using the parameters defined in JDBC connect string
     """
@@ -178,6 +178,7 @@ def get_engine(user=None, password=None, account=None, schema=None):
             schema=TEST_SCHEMA if not schema else schema,
             account=ret["account"],
             protocol=ret["protocol"],
+            numpy=numpy,
         ),
         poolclass=NullPool,
     )
@@ -188,6 +189,13 @@ def get_engine(user=None, password=None, account=None, schema=None):
 @pytest.fixture()
 def engine_testaccount(request):
     engine, _ = get_engine()
+    request.addfinalizer(engine.dispose)
+    return engine
+
+
+@pytest.fixture()
+def engine_testaccount_with_numpy(request):
+    engine, _ = get_engine(numpy=True)
     request.addfinalizer(engine.dispose)
     return engine
 
