@@ -1,6 +1,7 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
+from __future__ import annotations
 
 import os
 import sys
@@ -108,7 +109,7 @@ def db_parameters():
     yield get_db_parameters()
 
 
-def get_db_parameters() -> Dict:
+def get_db_parameters() -> dict:
     """
     Sets the db connection parameters
     """

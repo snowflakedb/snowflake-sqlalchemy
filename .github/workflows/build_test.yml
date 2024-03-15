@@ -182,3 +182,43 @@ jobs:
           name: coverage.xml_dialect-run-20-${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
           path: |
             ./coverage.xml
+
+  combine-coverage:
+    name: Combine coverage
+    if: ${{ success() || failure() }}
+    needs: [test-dialect, test-dialect-compatibility, test-dialect-run-v20]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Set up Python
+        uses: arction/setup-python@v5
+        with:
+          python-version: "3.8"
+      - name: Prepare environment
+        run: |
+          pip install -U pip
+          pip install -U hatch
+          python -m hatch env create default
+      - name: Collect coverage files
+        run: |
+          mkdir -p cov_files
+          cp artifacts/coverage.xml_* cov_files
+      - name: Combine coverage files
+        run: |
+          coverage combine -a cov_files/coverage.xml_*
+          coverage report -m
+          coverage xml -o combined_coverage.xml
+          coverage html -d htmlcov
+      - name: Store coverage reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: combined_coverage.xml
+          path: combined_coverage.xml
+      - name: Store htmlcov report
+        uses: actions/upload-artifact@4
+        with:
+          name: combined_htmlcov
+          path: htmlcov
