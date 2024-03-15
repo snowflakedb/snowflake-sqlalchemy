@@ -36,7 +36,6 @@ jobs:
           python -m pip install -U pip
           python -m pip install -U hatch
           python -m hatch env create default
-          python -m hatch env find
       - name: Set PY
         run: echo "PY=$(hatch run gh-cache-sum)" >> $GITHUB_ENV
       - uses: actions/cache@v4
@@ -94,7 +93,6 @@ jobs:
 
   test-dialect-compatibility:
     name: Test dialect compatibility ${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
-    # needs: test-dialect
     needs: lint
     runs-on: ${{ matrix.os }}
     strategy:
@@ -141,7 +139,6 @@ jobs:
 
   test-dialect-run-v20:
     name: Test dialect run v20 ${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
-    # needs: test-dialect
     needs: lint
     runs-on: ${{ matrix.os }}
     strategy:
