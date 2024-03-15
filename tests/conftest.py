@@ -108,7 +108,7 @@ def db_parameters():
     yield get_db_parameters()
 
 
-def get_db_parameters() -> dict:
+def get_db_parameters() -> Dict:
     """
     Sets the db connection parameters
     """
