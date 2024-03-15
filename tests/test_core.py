@@ -28,13 +28,13 @@ from sqlalchemy import (
     String,
     Table,
     UniqueConstraint,
+    create_engine,
     dialects,
     insert,
     inspect,
     text,
 )
 from sqlalchemy.exc import DBAPIError, NoSuchTableError
-from sqlalchemy.pool import NullPool
 from sqlalchemy.sql import and_, not_, or_, select
 
 import snowflake.connector.errors
@@ -47,8 +47,7 @@ from snowflake.sqlalchemy._constants import (
 )
 from snowflake.sqlalchemy.snowdialect import SnowflakeDialect
 
-from .conftest import create_engine_with_future_flag as create_engine
-from .conftest import get_engine
+from .conftest import get_engine, url_factory
 from .parameters import CONNECTION_PARAMETERS
 from .util import ischema_names_baseline, random_string
 
@@ -937,37 +936,6 @@ def test_column_metadata(engine_testaccount):
     assert str(t.columns["real_data"].type) == "FLOAT"
 
 
-def _get_engine_with_columm_metadata_cache(
-    db_parameters, user=None, password=None, account=None
-):
-    """
-    Creates a connection with column metadata cache
-    """
-    if user is not None:
-        db_parameters["user"] = user
-    if password is not None:
-        db_parameters["password"] = password
-    if account is not None:
-        db_parameters["account"] = account
-
-    engine = create_engine(
-        URL(
-            user=db_parameters["user"],
-            password=db_parameters["password"],
-            host=db_parameters["host"],
-            port=db_parameters["port"],
-            database=db_parameters["database"],
-            schema=db_parameters["schema"],
-            account=db_parameters["account"],
-            protocol=db_parameters["protocol"],
-            cache_column_metadata=True,
-        ),
-        poolclass=NullPool,
-    )
-
-    return engine
-
-
 def test_many_table_column_metadta(db_parameters):
     """
     Get dozens of table metadata with column metadata cache.
@@ -975,7 +943,9 @@ def test_many_table_column_metadta(db_parameters):
     cache_column_metadata=True will cache all column metadata for all tables
     in the schema.
     """
-    engine = _get_engine_with_columm_metadata_cache(db_parameters)
+    url = url_factory(cache_column_metadata=True)
+    engine = get_engine(url)
+
     RE_SUFFIX_NUM = re.compile(r".*(\d+)$")
     metadata = MetaData()
     total_objects = 10
@@ -1344,7 +1314,8 @@ def test_comment_sqlalchemy(db_parameters, engine_testaccount, on_public_ci):
     column_comment1 = random_string(10, choices=string.ascii_uppercase)
     table_comment2 = random_string(10, choices=string.ascii_uppercase)
     column_comment2 = random_string(10, choices=string.ascii_uppercase)
-    engine2, _ = get_engine(schema=new_schema)
+
+    engine2 = get_engine(url_factory(schema=new_schema))
     con2 = None
     if not on_public_ci:
         con2 = engine2.connect()

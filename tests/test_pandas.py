@@ -27,9 +27,6 @@ from sqlalchemy import (
 
 from snowflake.connector import ProgrammingError
 from snowflake.connector.pandas_tools import make_pd_writer, pd_writer
-from snowflake.sqlalchemy import URL
-
-from .conftest import create_engine_with_future_flag as create_engine
 
 
 def _create_users_addresses_tables(engine_testaccount, metadata):
@@ -174,38 +171,12 @@ def test_no_indexes(engine_testaccount, db_parameters):
         assert str(exc.value) == "Snowflake does not support indexes"
 
 
-def test_timezone(db_parameters):
+def test_timezone(db_parameters, engine_testaccount, engine_testaccount_with_numpy):
 
     test_table_name = "".join([random.choice(string.ascii_letters) for _ in range(5)])
 
-    sa_engine = create_engine(
-        URL(
-            account=db_parameters["account"],
-            password=db_parameters["password"],
-            database=db_parameters["database"],
-            port=db_parameters["port"],
-            user=db_parameters["user"],
-            host=db_parameters["host"],
-            protocol=db_parameters["protocol"],
-            schema=db_parameters["schema"],
-            numpy=True,
-        )
-    )
-
-    sa_engine2_raw_conn = create_engine(
-        URL(
-            account=db_parameters["account"],
-            password=db_parameters["password"],
-            database=db_parameters["database"],
-            port=db_parameters["port"],
-            user=db_parameters["user"],
-            host=db_parameters["host"],
-            protocol=db_parameters["protocol"],
-            schema=db_parameters["schema"],
-            timezone="America/Los_Angeles",
-            numpy="",
-        )
-    ).raw_connection()
+    sa_engine = engine_testaccount_with_numpy
+    sa_engine2_raw_conn = engine_testaccount.raw_connection()
 
     with sa_engine.connect() as conn:
 
