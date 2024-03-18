@@ -203,17 +203,13 @@ jobs:
         run: |
           pip install -U pip
           pip install -U hatch
-          python -m hatch env create default
-      - name: Collect coverage files
-        run: |
-          mkdir -p cov_files
-          cp -r artifacts/coverage.xml_* cov_files
+          hatch env create default
       - name: Combine coverage files
         run: |
-          coverage combine -a cov_files/coverage.xml_*
-          coverage report -m
-          coverage xml -o combined_coverage.xml
-          coverage html -d htmlcov
+          hatch run coverage combine -a cov_files/coverage.xml_*/coverage.xml
+          hatch run coverage report -m
+          hatch run coverage xml -o combined_coverage.xml
+          hatch run coverage html -d htmlcov
       - name: Store coverage reports
         uses: actions/upload-artifact@v4
         with:
