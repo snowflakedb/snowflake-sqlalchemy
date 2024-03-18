@@ -189,12 +189,6 @@ jobs:
     needs: [test-dialect, test-dialect-compatibility, test-dialect-run-v20]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -204,8 +198,15 @@ jobs:
           pip install -U pip
           pip install -U hatch
           hatch env create default
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
       - name: Combine coverage files
         run: |
+          hatch run coverage combine -a artifacts/coverage.xml_*/coverage.xml
           hatch run coverage combine -a artifacts/coverage.xml_*/coverage.xml
           hatch run coverage report -m
           hatch run coverage xml -o combined_coverage.xml
