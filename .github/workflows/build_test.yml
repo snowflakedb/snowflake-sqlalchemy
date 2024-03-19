@@ -207,7 +207,6 @@ jobs:
       - name: Combine coverage files
         run: |
           hatch run coverage combine -a artifacts/coverage.xml_*/coverage.xml
-          hatch run coverage combine -a artifacts/coverage.xml_*/coverage.xml
           hatch run coverage report -m
           hatch run coverage xml -o combined_coverage.xml
           hatch run coverage html -d htmlcov
