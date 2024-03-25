@@ -9,4 +9,4 @@ PARAM_INTERNAL_APPLICATION_NAME = "internal_application_name"
 PARAM_INTERNAL_APPLICATION_VERSION = "internal_application_version"
 
 APPLICATION_NAME = "SnowflakeSQLAlchemy"
-SNOWFLAKE_SQLALCHEMY_VERSION = ".".join([str(v) for v in VERSION if v is not None])
+SNOWFLAKE_SQLALCHEMY_VERSION = VERSION

@@ -24,13 +24,9 @@ from sqlalchemy import (
     select,
     text,
 )
-from sqlalchemy.pool import NullPool
 
 from snowflake.connector import ProgrammingError
 from snowflake.connector.pandas_tools import make_pd_writer, pd_writer
-from snowflake.sqlalchemy import URL
-
-from .conftest import create_engine_with_future_flag as create_engine
 
 
 def _create_users_addresses_tables(engine_testaccount, metadata):
@@ -113,40 +109,8 @@ def test_a_simple_read_sql(engine_testaccount):
         users.drop(engine_testaccount)
 
 
-def get_engine_with_numpy(db_parameters, user=None, password=None, account=None):
-    """
-    Creates a connection using the parameters defined in JDBC connect string
-    """
-    from snowflake.sqlalchemy import URL
-
-    if user is not None:
-        db_parameters["user"] = user
-    if password is not None:
-        db_parameters["password"] = password
-    if account is not None:
-        db_parameters["account"] = account
-
-    engine = create_engine(
-        URL(
-            user=db_parameters["user"],
-            password=db_parameters["password"],
-            host=db_parameters["host"],
-            port=db_parameters["port"],
-            database=db_parameters["database"],
-            schema=db_parameters["schema"],
-            account=db_parameters["account"],
-            protocol=db_parameters["protocol"],
-            numpy=True,
-        ),
-        poolclass=NullPool,
-    )
-
-    return engine
-
-
-def test_numpy_datatypes(db_parameters):
-    engine = get_engine_with_numpy(db_parameters)
-    with engine.connect() as conn:
+def test_numpy_datatypes(engine_testaccount_with_numpy, db_parameters):
+    with engine_testaccount_with_numpy.connect() as conn:
         try:
             specific_date = np.datetime64("2016-03-04T12:03:05.123456789")
             with conn.begin():
@@ -163,12 +127,11 @@ def test_numpy_datatypes(db_parameters):
                 assert df.c1.values[0] == specific_date
         finally:
             conn.exec_driver_sql(f"DROP TABLE IF EXISTS {db_parameters['name']}")
-            engine.dispose()
+            engine_testaccount_with_numpy.dispose()
 
 
-def test_to_sql(db_parameters):
-    engine = get_engine_with_numpy(db_parameters)
-    with engine.connect() as conn:
+def test_to_sql(engine_testaccount_with_numpy, db_parameters):
+    with engine_testaccount_with_numpy.connect() as conn:
         total_rows = 10000
         conn.exec_driver_sql(
             textwrap.dedent(
@@ -182,7 +145,13 @@ def test_to_sql(db_parameters):
         conn.exec_driver_sql("create or replace table dst(c1 float)")
         tbl = pd.read_sql_query(text("select * from src"), conn)
 
-        tbl.to_sql("dst", engine, if_exists="append", chunksize=1000, index=False)
+        tbl.to_sql(
+            "dst",
+            engine_testaccount_with_numpy,
+            if_exists="append",
+            chunksize=1000,
+            index=False,
+        )
         df = pd.read_sql_query(text("select count(*) as cnt from dst"), conn)
         assert df.cnt.values[0] == total_rows
 
@@ -202,38 +171,12 @@ def test_no_indexes(engine_testaccount, db_parameters):
         assert str(exc.value) == "Snowflake does not support indexes"
 
 
-def test_timezone(db_parameters):
+def test_timezone(db_parameters, engine_testaccount, engine_testaccount_with_numpy):
 
     test_table_name = "".join([random.choice(string.ascii_letters) for _ in range(5)])
 
-    sa_engine = create_engine(
-        URL(
-            account=db_parameters["account"],
-            password=db_parameters["password"],
-            database=db_parameters["database"],
-            port=db_parameters["port"],
-            user=db_parameters["user"],
-            host=db_parameters["host"],
-            protocol=db_parameters["protocol"],
-            schema=db_parameters["schema"],
-            numpy=True,
-        )
-    )
-
-    sa_engine2_raw_conn = create_engine(
-        URL(
-            account=db_parameters["account"],
-            password=db_parameters["password"],
-            database=db_parameters["database"],
-            port=db_parameters["port"],
-            user=db_parameters["user"],
-            host=db_parameters["host"],
-            protocol=db_parameters["protocol"],
-            schema=db_parameters["schema"],
-            timezone="America/Los_Angeles",
-            numpy="",
-        )
-    ).raw_connection()
+    sa_engine = engine_testaccount_with_numpy
+    sa_engine2_raw_conn = engine_testaccount.raw_connection()
 
     with sa_engine.connect() as conn:
 
@@ -316,18 +259,13 @@ def test_pandas_writeback(engine_testaccount, run_v20_sqlalchemy):
         sf_connector_version_df = pd.DataFrame(
             sf_connector_version_data, columns=["NAME", "NEWEST_VERSION"]
         )
-        sf_connector_version_df.to_sql(table_name, conn, index=False, method=pd_writer)
-
-        assert (
-            (
-                pd.read_sql_table(table_name, conn).rename(
-                    columns={"newest_version": "NEWEST_VERSION", "name": "NAME"}
-                )
-                == sf_connector_version_df
-            )
-            .all()
-            .all()
+        sf_connector_version_df.to_sql(
+            table_name, conn, index=False, method=pd_writer, if_exists="replace"
         )
+        results = pd.read_sql_table(table_name, conn).rename(
+            columns={"newest_version": "NEWEST_VERSION", "name": "NAME"}
+        )
+        assert results.equals(sf_connector_version_df)
 
 
 @pytest.mark.parametrize("chunk_size", [5, 1])

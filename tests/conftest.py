@@ -1,16 +1,17 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
+from __future__ import annotations
 
 import os
 import sys
 import time
 import uuid
-from functools import partial
 from logging import getLogger
 
 import pytest
 from sqlalchemy import create_engine
+from sqlalchemy.pool import NullPool
 
 import snowflake.connector
 import snowflake.connector.connection
@@ -44,8 +45,6 @@ snowflake.connector.connection.DEFAULT_CONFIGURATION[
 
 TEST_SCHEMA = f"sqlalchemy_tests_{str(uuid.uuid4()).replace('-', '_')}"
 
-create_engine_with_future_flag = create_engine
-
 
 def pytest_addoption(parser):
     parser.addoption(
@@ -55,6 +54,11 @@ def pytest_addoption(parser):
         "the migration guide: https://docs.sqlalchemy.org/en/14/changelog/migration_20.html",
         action="store_true",
     )
+
+
+@pytest.fixture(scope="session")
+def run_v20_sqlalchemy(pytestconfig):
+    return pytestconfig.option.run_v20_sqlalchemy
 
 
 @pytest.fixture(scope="session")
@@ -102,10 +106,10 @@ DEFAULT_PARAMETERS = {
 
 @pytest.fixture(scope="session")
 def db_parameters():
-    return get_db_parameters()
+    yield get_db_parameters()
 
 
-def get_db_parameters():
+def get_db_parameters() -> dict:
     """
     Sets the db connection parameters
     """
@@ -113,12 +117,9 @@ def get_db_parameters():
     os.environ["TZ"] = "UTC"
     if not IS_WINDOWS:
         time.tzset()
-    for k, v in CONNECTION_PARAMETERS.items():
-        ret[k] = v
 
-    for k, v in DEFAULT_PARAMETERS.items():
-        if k not in ret:
-            ret[k] = v
+    ret.update(DEFAULT_PARAMETERS)
+    ret.update(CONNECTION_PARAMETERS)
 
     if "account" in ret and ret["account"] == DEFAULT_PARAMETERS["account"]:
         help()
@@ -153,43 +154,49 @@ def get_db_parameters():
     return ret
 
 
-def get_engine(user=None, password=None, account=None, schema=None):
-    """
-    Creates a connection using the parameters defined in JDBC connect string
-    """
-    ret = get_db_parameters()
+def url_factory(**kwargs) -> URL:
+    url_params = get_db_parameters()
+    url_params.update(kwargs)
+    return URL(**url_params)
 
-    if user is not None:
-        ret["user"] = user
-    if password is not None:
-        ret["password"] = password
-    if account is not None:
-        ret["account"] = account
 
-    from sqlalchemy.pool import NullPool
-
-    engine = create_engine_with_future_flag(
-        URL(
-            user=ret["user"],
-            password=ret["password"],
-            host=ret["host"],
-            port=ret["port"],
-            database=ret["database"],
-            schema=TEST_SCHEMA if not schema else schema,
-            account=ret["account"],
-            protocol=ret["protocol"],
-        ),
-        poolclass=NullPool,
-    )
-
-    return engine, ret
+def get_engine(url: URL, run_v20_sqlalchemy=False, **engine_kwargs):
+    engine_params = {
+        "poolclass": NullPool,
+        "future": run_v20_sqlalchemy,
+    }
+    engine_params.update(engine_kwargs)
+    engine = create_engine(url, **engine_kwargs)
+    return engine
 
 
 @pytest.fixture()
-def engine_testaccount(request):
-    engine, _ = get_engine()
+def engine_testaccount(request, run_v20_sqlalchemy):
+    url = url_factory()
+    engine = get_engine(url, run_v20_sqlalchemy=run_v20_sqlalchemy)
     request.addfinalizer(engine.dispose)
-    return engine
+    yield engine
+
+
+@pytest.fixture()
+def engine_testaccount_with_numpy(request):
+    url = url_factory(numpy=True)
+    engine = get_engine(url, run_v20_sqlalchemy=run_v20_sqlalchemy)
+    request.addfinalizer(engine.dispose)
+    yield engine
+
+
+@pytest.fixture()
+def engine_testaccount_with_qmark(request, run_v20_sqlalchemy):
+    snowflake.connector.paramstyle = "qmark"
+
+    url = url_factory()
+    engine = get_engine(url, run_v20_sqlalchemy=run_v20_sqlalchemy)
+    request.addfinalizer(engine.dispose)
+
+    yield engine
+
+    snowflake.connector.paramstyle = "pyformat"
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -230,19 +237,6 @@ def sql_compiler():
             compile_kwargs={"literal_binds": True, "deterministic": True},
         )
     ).replace("\n", "")
-
-
-@pytest.fixture(scope="session")
-def run_v20_sqlalchemy(pytestconfig):
-    return pytestconfig.option.run_v20_sqlalchemy
-
-
-def pytest_sessionstart(session):
-    # patch the create_engine with future flag
-    global create_engine_with_future_flag
-    create_engine_with_future_flag = partial(
-        create_engine, future=session.config.option.run_v20_sqlalchemy
-    )
 
 
 def running_on_public_ci() -> bool:
