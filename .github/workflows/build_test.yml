@@ -257,7 +257,7 @@ jobs:
   combine-coverage:
     name: Combine coverage
     if: ${{ success() || failure() }}
-    needs: [test-dialect, test-dialect-compatibility, test-dialect-run-v20]
+    needs: [test-dialect, test-dialect-compatibility, test-dialect-v20, test-dialect-compatibility-v20]
     runs-on: ubuntu-latest
     steps:
       - name: Set up Python
