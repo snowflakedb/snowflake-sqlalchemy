@@ -5,7 +5,7 @@
 from sqlalchemy import Integer, String, and_, func, select
 from sqlalchemy.schema import DropColumnComment, DropTableComment
 from sqlalchemy.sql import column, quoted_name, table
-from sqlalchemy.testing import AssertsCompiledSQL
+from sqlalchemy.testing.assertions import AssertsCompiledSQL
 
 from snowflake.sqlalchemy import snowdialect
 

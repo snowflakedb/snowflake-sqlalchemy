@@ -290,8 +290,24 @@ class Requirements(SuiteRequirements):
         return exclusions.closed()
 
     @property
+    def date_implicit_bound(self):
+        # Supporting this would require behavior breaking change to implicitly convert str to timestamp when binding
+        # parameters in string forms of timestamp values.
+        return exclusions.closed()
+
+    @property
+    def time_implicit_bound(self):
+        # Supporting this would require behavior breaking change to implicitly convert str to timestamp when binding
+        # parameters in string forms of timestamp values.
+        return exclusions.closed()
+
+    @property
     def timestamp_microseconds_implicit_bound(self):
         # Supporting this would require behavior breaking change to implicitly convert str to timestamp when binding
         # parameters in string forms of timestamp values.
         # Check https://snowflakecomputing.atlassian.net/browse/SNOW-640134 for details on breaking changes discussion.
+        return exclusions.closed()
+
+    @property
+    def array_type(self):
         return exclusions.closed()

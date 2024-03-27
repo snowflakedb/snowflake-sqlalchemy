@@ -27,6 +27,7 @@ from sqlalchemy import (
 
 from snowflake.connector import ProgrammingError
 from snowflake.connector.pandas_tools import make_pd_writer, pd_writer
+from snowflake.sqlalchemy.compat import IS_VERSION_20
 
 
 def _create_users_addresses_tables(engine_testaccount, metadata):
@@ -240,8 +241,8 @@ def test_timezone(db_parameters, engine_testaccount, engine_testaccount_with_num
             conn.exec_driver_sql(f"DROP TABLE {test_table_name};")
 
 
-def test_pandas_writeback(engine_testaccount, run_v20_sqlalchemy):
-    if run_v20_sqlalchemy and sys.version_info < (3, 8):
+def test_pandas_writeback(engine_testaccount):
+    if IS_VERSION_20 and sys.version_info < (3, 8):
         pytest.skip(
             "In Python 3.7, this test depends on pandas features of which the implementation is incompatible with sqlachemy 2.0, and pandas does not support Python 3.7 anymore."
         )
@@ -352,8 +353,8 @@ def test_pandas_invalid_make_pd_writer(engine_testaccount):
         )
 
 
-def test_percent_signs(engine_testaccount, run_v20_sqlalchemy):
-    if run_v20_sqlalchemy and sys.version_info < (3, 8):
+def test_percent_signs(engine_testaccount):
+    if IS_VERSION_20 and sys.version_info < (3, 8):
         pytest.skip(
             "In Python 3.7, this test depends on pandas features of which the implementation is incompatible with sqlachemy 2.0, and pandas does not support Python 3.7 anymore."
         )
@@ -376,7 +377,7 @@ def test_percent_signs(engine_testaccount, run_v20_sqlalchemy):
             not_like_sql = f"select * from {table_name} where c2 not like '%b%'"
             like_sql = f"select * from {table_name} where c2 like '%b%'"
             calculate_sql = "SELECT 1600 % 400 AS a, 1599 % 400 as b"
-            if run_v20_sqlalchemy:
+            if IS_VERSION_20:
                 not_like_sql = sqlalchemy.text(not_like_sql)
                 like_sql = sqlalchemy.text(like_sql)
                 calculate_sql = sqlalchemy.text(calculate_sql)

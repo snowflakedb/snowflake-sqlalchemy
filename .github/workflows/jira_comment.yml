@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Jira login
-        uses: atlassian/gajira-login@master
+        uses: atlassian/gajira-login@v3
         env:
           JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
           JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
@@ -22,7 +22,7 @@ jobs:
           jira=$(echo -n $TITLE | awk '{print $1}' | sed -e 's/://')
           echo ::set-output name=jira::$jira
       - name: Comment on issue
-        uses: atlassian/gajira-comment@master
+        uses: atlassian/gajira-comment@v3
         if: startsWith(steps.extract.outputs.jira, 'SNOW-')
         with:
           issue: "${{ steps.extract.outputs.jira }}"

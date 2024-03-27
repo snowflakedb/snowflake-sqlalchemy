@@ -9,6 +9,10 @@ Source code is also available at:
 
 # Release Notes
 
+- v1.6.0(Not released)
+
+  - support for installing with SQLAlchemy 2.0.x
+
 - 1.5.2
 
   - Add support for sequence ordering in tests

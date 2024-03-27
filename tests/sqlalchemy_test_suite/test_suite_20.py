@@ -7,14 +7,20 @@ from sqlalchemy.schema import Column, Sequence, Table
 from sqlalchemy.testing import config
 from sqlalchemy.testing.assertions import eq_
 from sqlalchemy.testing.suite import (
+    BizarroCharacterFKResolutionTest as _BizarroCharacterFKResolutionTest,
+)
+from sqlalchemy.testing.suite import (
     CompositeKeyReflectionTest as _CompositeKeyReflectionTest,
 )
+from sqlalchemy.testing.suite import DateTimeHistoricTest as _DateTimeHistoricTest
 from sqlalchemy.testing.suite import FetchLimitOffsetTest as _FetchLimitOffsetTest
 from sqlalchemy.testing.suite import HasSequenceTest as _HasSequenceTest
 from sqlalchemy.testing.suite import InsertBehaviorTest as _InsertBehaviorTest
 from sqlalchemy.testing.suite import LikeFunctionsTest as _LikeFunctionsTest
 from sqlalchemy.testing.suite import LongNameBlowoutTest as _LongNameBlowoutTest
 from sqlalchemy.testing.suite import SimpleUpdateDeleteTest as _SimpleUpdateDeleteTest
+from sqlalchemy.testing.suite import TimeMicrosecondsTest as _TimeMicrosecondsTest
+from sqlalchemy.testing.suite import TrueDivTest as _TrueDivTest
 from sqlalchemy.testing.suite import *  # noqa
 
 # 1. Unsupported by snowflake db
@@ -72,6 +78,35 @@ class InsertBehaviorTest(_InsertBehaviorTest):
     @pytest.mark.skip("Snowflake does not support returning in insert.")
     def test_no_results_for_non_returning_insert(self, connection, style, executemany):
         pass
+
+
+# road to 2.0
+class TrueDivTest(_TrueDivTest):
+    @pytest.mark.skip("`//` not supported")
+    def test_floordiv_integer_bound(self, connection):
+        """Snowflake does not provide `//` arithmetic operator.
+
+        https://docs.snowflake.com/en/sql-reference/operators-arithmetic.
+        """
+        pass
+
+    @pytest.mark.skip("`//` not supported")
+    def test_floordiv_integer(self, connection, left, right, expected):
+        """Snowflake does not provide `//` arithmetic operator.
+
+        https://docs.snowflake.com/en/sql-reference/operators-arithmetic.
+        """
+        pass
+
+
+class TimeMicrosecondsTest(_TimeMicrosecondsTest):
+    def __init__(self):
+        super().__init__()
+
+
+class DateTimeHistoricTest(_DateTimeHistoricTest):
+    def __init__(self):
+        super().__init__()
 
 
 # 2. Patched Tests
@@ -153,3 +188,18 @@ class CompositeKeyReflectionTest(_CompositeKeyReflectionTest):
     def test_pk_column_order(self):
         # Check https://snowflakecomputing.atlassian.net/browse/SNOW-640134 for details on breaking changes discussion.
         super().test_pk_column_order()
+
+
+class BizarroCharacterFKResolutionTest(_BizarroCharacterFKResolutionTest):
+    @testing.combinations(
+        ("id",), ("(3)",), ("col%p",), ("[brack]",), argnames="columnname"
+    )
+    @testing.variation("use_composite", [True, False])
+    @testing.combinations(
+        ("plain",),
+        ("(2)",),
+        ("[brackets]",),
+        argnames="tablename",
+    )
+    def test_fk_ref(self, connection, metadata, use_composite, tablename, columnname):
+        super().test_fk_ref(connection, metadata, use_composite, tablename, columnname)

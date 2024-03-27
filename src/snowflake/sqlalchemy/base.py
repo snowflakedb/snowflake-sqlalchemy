@@ -13,13 +13,14 @@ from sqlalchemy.engine import default
 from sqlalchemy.orm import context
 from sqlalchemy.orm.context import _MapperEntity
 from sqlalchemy.schema import Sequence, Table
-from sqlalchemy.sql import compiler, expression
+from sqlalchemy.sql import compiler, expression, functions
 from sqlalchemy.sql.base import CompileState
 from sqlalchemy.sql.elements import quoted_name
 from sqlalchemy.sql.selectable import Lateral, SelectState
-from sqlalchemy.util.compat import string_types
 
+from .compat import IS_VERSION_20, args_reducer, string_types
 from .custom_commands import AWSBucket, AzureContainer, ExternalStage
+from .functions import flatten
 from .util import (
     _find_left_clause_to_join_from,
     _set_connection_interpolate_empty_sequences,
@@ -324,17 +325,9 @@ class SnowflakeORMSelectCompileState(context.ORMSelectCompileState):
 
         return left, replace_from_obj_index, use_entity_index
 
+    @args_reducer(positions_to_drop=(6, 7))
     def _join_left_to_right(
-        self,
-        entities_collection,
-        left,
-        right,
-        onclause,
-        prop,
-        create_aliases,
-        aliased_generation,
-        outerjoin,
-        full,
+        self, entities_collection, left, right, onclause, prop, outerjoin, full
     ):
         """given raw "left", "right", "onclause" parameters consumed from
         a particular key within _join(), add a real ORMJoin object to
@@ -364,7 +357,7 @@ class SnowflakeORMSelectCompileState(context.ORMSelectCompileState):
                 use_entity_index,
             ) = self._join_place_explicit_left_side(entities_collection, left)
 
-        if left is right and not create_aliases:
+        if left is right:
             raise sa_exc.InvalidRequestError(
                 "Can't construct a join from %s to %s, they "
                 "are the same entity" % (left, right)
@@ -373,9 +366,15 @@ class SnowflakeORMSelectCompileState(context.ORMSelectCompileState):
         # the right side as given often needs to be adapted.  additionally
         # a lot of things can be wrong with it.  handle all that and
         # get back the new effective "right" side
-        r_info, right, onclause = self._join_check_and_adapt_right_side(
-            left, right, onclause, prop, create_aliases, aliased_generation
-        )
+
+        if IS_VERSION_20:
+            r_info, right, onclause = self._join_check_and_adapt_right_side(
+                left, right, onclause, prop
+            )
+        else:
+            r_info, right, onclause = self._join_check_and_adapt_right_side(
+                left, right, onclause, prop, False, False
+            )
 
         if not r_info.is_selectable:
             extra_criteria = self._get_extra_criteria(r_info)
@@ -976,24 +975,23 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
     def get_identity_options(self, identity_options):
         text = []
         if identity_options.increment is not None:
-            text.append(f"INCREMENT BY {identity_options.increment:d}")
+            text.append("INCREMENT BY %d" % identity_options.increment)
         if identity_options.start is not None:
-            text.append(f"START WITH {identity_options.start:d}")
+            text.append("START WITH %d" % identity_options.start)
         if identity_options.minvalue is not None:
-            text.append(f"MINVALUE {identity_options.minvalue:d}")
+            text.append("MINVALUE %d" % identity_options.minvalue)
         if identity_options.maxvalue is not None:
-            text.append(f"MAXVALUE {identity_options.maxvalue:d}")
+            text.append("MAXVALUE %d" % identity_options.maxvalue)
         if identity_options.nominvalue is not None:
             text.append("NO MINVALUE")
         if identity_options.nomaxvalue is not None:
             text.append("NO MAXVALUE")
         if identity_options.cache is not None:
-            text.append(f"CACHE {identity_options.cache:d}")
+            text.append("CACHE %d" % identity_options.cache)
         if identity_options.cycle is not None:
             text.append("CYCLE" if identity_options.cycle else "NO CYCLE")
         if identity_options.order is not None:
             text.append("ORDER" if identity_options.order else "NOORDER")
-
         return " ".join(text)
 
 
@@ -1063,3 +1061,5 @@ class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
 
 
 construct_arguments = [(Table, {"clusterby": None})]
+
+functions.register_function("flatten", flatten)

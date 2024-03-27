@@ -12,11 +12,11 @@ from sqlalchemy import text
 THIS_DIR = os.path.dirname(os.path.realpath(__file__))
 
 
-def test_qmark_bulk_insert(run_v20_sqlalchemy, engine_testaccount_with_qmark):
+def test_qmark_bulk_insert(engine_testaccount_with_qmark):
     """
     Bulk insert using qmark paramstyle
     """
-    if run_v20_sqlalchemy and sys.version_info < (3, 8):
+    if sys.version_info < (3, 8):
         pytest.skip(
             "In Python 3.7, this test depends on pandas features of which the implementation is incompatible with sqlachemy 2.0, and pandas does not support Python 3.7 anymore."
         )
