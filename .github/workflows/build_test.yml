@@ -279,22 +279,15 @@ jobs:
         run: |
           hatch run coverage combine -a artifacts/coverage.xml_*/coverage.xml
           hatch run coverage report -m
-          hatch run coverage xml -o combined_coverage.xml
-          hatch run coverage html -d htmlcov
       - name: Store coverage reports
         uses: actions/upload-artifact@v4
         with:
-          name: combined_coverage.xml
-          path: combined_coverage.xml
-      - name: Store htmlcov report
-        uses: actions/upload-artifact@v4
-        with:
-          name: combined_htmlcov
-          path: htmlcov
+          name: coverage.xml
+          path: coverage.xml
       - name: Uplaod to codecov
         uses: codecov/codecov-action@v4
         with:
-          file: combined_coverage.xml
+          file: coverage.xml
           env_vars: OS,PYTHON
           fail_ci_if_error: false
           flags: unittests
