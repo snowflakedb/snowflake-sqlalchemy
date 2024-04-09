@@ -156,7 +156,6 @@ def get_engine(url: URL, **engine_kwargs):
     return engine
 
 
-# @pytest.fixture(scope="session")
 @pytest.fixture()
 def engine_testaccount(request):
     url = url_factory()
@@ -165,7 +164,6 @@ def engine_testaccount(request):
     yield engine
 
 
-# @pytest.fixture(scope="session")
 @pytest.fixture()
 def engine_testaccount_with_numpy(request):
     url = url_factory(numpy=True)
@@ -174,7 +172,6 @@ def engine_testaccount_with_numpy(request):
     yield engine
 
 
-# @pytest.fixture(scope="session")
 @pytest.fixture()
 def engine_testaccount_with_qmark(request):
     snowflake.connector.paramstyle = "qmark"
