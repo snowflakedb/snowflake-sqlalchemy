@@ -11,6 +11,7 @@ Source code is also available at:
 
 - 1.5.2
 
+  - Bump min SQLAlchemy to 1.4.19 for outer lateral join
   - Add support for sequence ordering in tests
 
 - v1.5.1(November 03, 2023)
