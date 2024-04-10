@@ -73,7 +73,12 @@ exclude = ["/.github"]
 packages = ["src/snowflake"]
 
 [tool.hatch.envs.default]
+extra-dependencies = ["SQLAlchemy>=1.4.19,<2.0.0"]
 features = ["development", "pandas"]
+python = "3.8"
+
+[tool.hatch.envs.sa20]
+extra-dependencies = ["SQLAlchemy>=2.0.0,<=2.1.0"]
 python = "3.8"
 
 [tool.hatch.envs.default.env-vars]
