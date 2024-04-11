@@ -9,7 +9,7 @@ Source code is also available at:
 
 # Release Notes
 
-- 1.5.2
+- v1.5.2(April 11, 2024)
 
   - Bump min SQLAlchemy to 1.4.19 for outer lateral join
   - Add support for sequence ordering in tests
