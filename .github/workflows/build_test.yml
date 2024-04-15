@@ -67,8 +67,7 @@ jobs:
           python -m hatch build
       - name: Install and check import
         run: |
-          pip install dist/snowflake-sqlalchemy
-          python -m pip install dist/snowflake_sqlalchemy-1.5.2-py3-none-any.whl
+          python -m pip install dist/snowflake_sqlalchemy-*.whl
           python -c "import snowflake.sqlalchemy; print(snowflake.sqlalchemy.__version__)"
 
   test-dialect:
