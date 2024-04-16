@@ -78,7 +78,7 @@ features = ["development", "pandas"]
 python = "3.8"
 
 [tool.hatch.envs.sa20]
-extra-dependencies = ["SQLAlchemy>=2.0.0,<=2.1.0"]
+extra-dependencies = ["SQLAlchemy>=1.4.19,<=2.1.0"]
 python = "3.8"
 
 [tool.hatch.envs.default.env-vars]
@@ -90,6 +90,7 @@ check = "pre-commit run --all-files"
 test-dialect = "pytest -ra -vvv --tb=short --cov snowflake.sqlalchemy --cov-append --junitxml ./junit.xml --ignore=tests/sqlalchemy_test_suite tests/"
 test-dialect-compatibility = "pytest -ra -vvv --tb=short --cov snowflake.sqlalchemy --cov-append --junitxml ./junit.xml tests/sqlalchemy_test_suite tests/"
 gh-cache-sum = "python -VV | sha256sum | cut -d' ' -f1"
+check-import = "python -c 'import snowflake.sqlalchemy; print(snowflake.sqlalchemy.__version__)'"
 
 [tool.ruff]
 line-length = 88
