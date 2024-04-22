@@ -10,6 +10,7 @@ def sync():
 
     with snyk_reqiurements.open("w") as fh:
         fh.write("\n".join(dependencies))
+        fh.write("\n")
 
 
 if __name__ == "__main__":
