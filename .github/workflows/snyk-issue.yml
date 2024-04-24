@@ -18,6 +18,7 @@ jobs:
     - name: Checkout Action
       uses: actions/checkout@v4
       with:
+        persist-credentials: false
         repository: snowflakedb/whitesource-actions
         token: ${{ secrets.whitesource_action_token }}
         path: whitesource-actions

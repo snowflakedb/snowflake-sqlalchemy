@@ -17,12 +17,14 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
       with:
+        persist-credentials: false
         ref: ${{ github.event.pull_request.head.ref }}
         fetch-depth: 0
 
     - name: Checkout Action
       uses: actions/checkout@v4
       with:
+        persist-credentials: false
         repository: snowflakedb/whitesource-actions
         token: ${{ secrets.whitesource_action_token }}
         path: whitesource-actions
