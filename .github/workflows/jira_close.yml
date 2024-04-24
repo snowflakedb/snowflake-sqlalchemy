@@ -9,8 +9,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
+          persist-credentials: false
           repository: snowflakedb/gh-actions
           ref: jira_v1
           token: ${{ secrets.SNOWFLAKE_GITHUB_TOKEN }} # stored in GitHub secrets
