@@ -971,6 +971,8 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
             start = 1 if identity.start is None else identity.start
             increment = 1 if identity.increment is None else identity.increment
             text += f"({start},{increment})"
+        order = "ORDER" if identity.order else "NOORDER"
+        text += f" {order}"
         return text
 
     def get_identity_options(self, identity_options):
