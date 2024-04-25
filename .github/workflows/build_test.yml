@@ -220,7 +220,7 @@ jobs:
       matrix:
         os: [
           ubuntu-latest,
-          macos-latest,
+          macos-13,
           windows-latest,
           ]
         python-version: ["3.8"]
