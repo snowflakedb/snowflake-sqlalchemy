@@ -38,7 +38,7 @@ classifiers = [
   "Topic :: Software Development :: Libraries :: Application Frameworks",
   "Topic :: Software Development :: Libraries :: Python Modules",
 ]
-dependencies = ["SQLAlchemy>=1.4.19,<2.0.0", "snowflake-connector-python<4.0.0"]
+dependencies = ["SQLAlchemy>=1.4.19", "snowflake-connector-python<4.0.0"]
 
 [tool.hatch.version]
 path = "src/snowflake/sqlalchemy/version.py"
