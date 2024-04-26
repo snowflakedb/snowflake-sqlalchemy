@@ -63,7 +63,7 @@ from .custom_types import (
     _CUSTOM_Float,
     _CUSTOM_Time,
 )
-from .util import _update_connection_application_name, parse_url_boolean
+from .util import _update_connection_application_name, parse_url_boolean, _update_connection_session_parameters
 
 colspecs = {
     Date: _CUSTOM_Date,
@@ -110,7 +110,7 @@ ischema_names = {
     "GEOMETRY": GEOMETRY,
 }
 
-_ENABLE_SQLALCHEMY_AS_APPLICATION_NAME = True
+_CUSTOMIZE_APPLICATION_NAME_AND_SESSION_PARAMETERS = True
 
 
 class SnowflakeDialect(default.DefaultDialect):
@@ -888,18 +888,10 @@ class SnowflakeDialect(default.DefaultDialect):
         }
 
     def connect(self, *cargs, **cparams):
-        return (
-            super().connect(
-                *cargs,
-                **(
-                    _update_connection_application_name(**cparams)
-                    if _ENABLE_SQLALCHEMY_AS_APPLICATION_NAME
-                    else cparams
-                ),
-            )
-            if _ENABLE_SQLALCHEMY_AS_APPLICATION_NAME
-            else super().connect(*cargs, **cparams)
-        )
+        if _CUSTOMIZE_APPLICATION_NAME_AND_SESSION_PARAMETERS:
+            cparams = _update_connection_application_name(**cparams)
+            cparams = _update_connection_session_parameters(**cparams)
+        return super().connect(*cargs, **cparams)
 
 
 @sa_vnt.listens_for(Table, "before_create")
