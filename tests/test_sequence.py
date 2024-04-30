@@ -4,6 +4,7 @@
 
 from sqlalchemy import (
     Column,
+    Identity,
     Integer,
     MetaData,
     Sequence,
@@ -13,6 +14,7 @@ from sqlalchemy import (
     select,
 )
 from sqlalchemy.sql import text
+from sqlalchemy.sql.ddl import CreateTable
 
 
 def test_table_with_sequence(engine_testaccount, db_parameters):
@@ -135,3 +137,27 @@ def test_table_with_autoincrement(engine_testaccount):
 
     finally:
         metadata.drop_all(engine_testaccount)
+
+
+def test_table_with_identity(sql_compiler):
+    test_table_name = "identity"
+    metadata = MetaData()
+    identity_autoincrement_table = Table(
+        test_table_name,
+        metadata,
+        Column(
+            "id", Integer, Identity(start=1, increment=1, order=True), primary_key=True
+        ),
+        Column("identity_col_unordered", Integer, Identity(order=False)),
+        Column("identity_col", Integer, Identity()),
+    )
+    create_table = CreateTable(identity_autoincrement_table)
+    actual = sql_compiler(create_table)
+    expected = (
+        "CREATE TABLE identity ("
+        "\tid INTEGER NOT NULL IDENTITY(1,1) ORDER, "
+        "\tidentity_col_unordered INTEGER NOT NULL IDENTITY NOORDER, "
+        "\tidentity_col INTEGER NOT NULL IDENTITY, "
+        "\tPRIMARY KEY (id))"
+    )
+    assert actual == expected

@@ -966,13 +966,14 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
         )
 
     def visit_identity_column(self, identity, **kw):
-        text = " IDENTITY"
+        text = "IDENTITY"
         if identity.start is not None or identity.increment is not None:
             start = 1 if identity.start is None else identity.start
             increment = 1 if identity.increment is None else identity.increment
             text += f"({start},{increment})"
-        order = "ORDER" if identity.order else "NOORDER"
-        text += f" {order}"
+        if identity.order is not None:
+            order = "ORDER" if identity.order else "NOORDER"
+            text += f" {order}"
         return text
 
     def get_identity_options(self, identity_options):
