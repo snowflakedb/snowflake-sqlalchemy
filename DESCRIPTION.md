@@ -9,7 +9,11 @@ Source code is also available at:
 
 # Release Notes
 
-- v1.5.3(Unrelased)
+- v1.5.4
+
+  - Add ability to set ORDER / NOORDER sequence on columns with IDENTITY
+  
+- v1.5.3(April 16, 2024)
 
   - Limit SQLAlchemy to < 2.0.0 before releasing version compatible with 2.0
 
