@@ -26,6 +26,8 @@ from ._constants import (
     PARAM_INTERNAL_APPLICATION_NAME,
     PARAM_INTERNAL_APPLICATION_VERSION,
     SNOWFLAKE_SQLALCHEMY_VERSION,
+    PARAM_QUERY_TAG,
+    PARAM_SESSION_PARAMETERS,
 )
 
 
@@ -112,6 +114,14 @@ def _update_connection_application_name(**conn_kwargs: Any) -> Any:
         conn_kwargs[PARAM_INTERNAL_APPLICATION_NAME] = APPLICATION_NAME
     if PARAM_INTERNAL_APPLICATION_VERSION not in conn_kwargs:
         conn_kwargs[PARAM_INTERNAL_APPLICATION_VERSION] = SNOWFLAKE_SQLALCHEMY_VERSION
+    return conn_kwargs
+
+
+def _update_connection_session_parameters(**conn_kwargs: Any) -> Any:
+    if PARAM_QUERY_TAG in conn_kwargs:
+        session_parameters = {}
+        session_parameters.update({"QUERY_TAG": conn_kwargs[PARAM_QUERY_TAG]})
+        conn_kwargs[PARAM_SESSION_PARAMETERS] = session_parameters
     return conn_kwargs
 
 

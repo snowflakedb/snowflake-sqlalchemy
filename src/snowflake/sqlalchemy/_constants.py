@@ -10,3 +10,6 @@ PARAM_INTERNAL_APPLICATION_VERSION = "internal_application_version"
 
 APPLICATION_NAME = "SnowflakeSQLAlchemy"
 SNOWFLAKE_SQLALCHEMY_VERSION = VERSION
+
+PARAM_QUERY_TAG = "query_tag"
+PARAM_SESSION_PARAMETERS = "session_parameters"
