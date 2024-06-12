@@ -5,6 +5,7 @@
 [![PyPi](https://img.shields.io/pypi/v/snowflake-sqlalchemy.svg)](https://pypi.python.org/pypi/snowflake-sqlalchemy/)
 [![License Apache-2.0](https://img.shields.io/:license-Apache%202-brightgreen.svg)](http://www.apache.org/licenses/LICENSE-2.0.txt)
 [![Codestyle Black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![snowflake-sqlalchemy Downloads Last Month](https://assets.piptrends.com/get-last-month-downloads-badge/snowflake-sqlalchemy.svg 'snowflake-sqlalchemy Downloads Last Month by pip Trends')](https://piptrends.com/package/snowflake-sqlalchemy)
 
 Snowflake SQLAlchemy runs on the top of the Snowflake Connector for Python as a [dialect](http://docs.sqlalchemy.org/en/latest/dialects/) to bridge a Snowflake database and SQLAlchemy applications.
 
