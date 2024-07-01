@@ -21,10 +21,10 @@ jobs:
       - name: Display Python version
         run: python -c "import sys; print(sys.version)"
       - name: Upgrade setuptools, pip and wheel
-        run: python -m pip install -U setuptools pip wheel
+        run: python -m pip install -U setuptools pip wheel uv
       - name: Install Snowflake SQLAlchemy
         shell: bash
-        run: python -m pip install .
+        run: python -m uv pip install .
       - name: Generate reqs file name
         shell: bash
         run: echo "requirements_file=temp_requirement/requirements_$(python -c 'from sys import version_info;print(str(version_info.major)+str(version_info.minor))').reqs" >> $GITHUB_ENV
@@ -34,7 +34,7 @@ jobs:
           mkdir temp_requirement
           echo "# Generated on: $(python --version)" >${{ env.requirements_file }}
           python -m pip freeze | grep -v snowflake-sqlalchemy 1>>${{ env.requirements_file }} 2>/dev/null
-          echo "snowflake-sqlalchemy==$(python -m pip show snowflake-sqlalchemy | grep ^Version | cut -d' ' -f2-)" >>${{ env.requirements_file }}
+          echo "snowflake-sqlalchemy==$(python -m uv pip show snowflake-sqlalchemy | grep ^Version | cut -d' ' -f2-)" >>${{ env.requirements_file }}
         id: create-reqs-file
       - name: Show created req file
         shell: bash
