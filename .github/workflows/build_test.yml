@@ -52,7 +52,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        hatch-env: [default, sa20]
+        hatch-env: [default, sa14]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -165,8 +165,8 @@ jobs:
           path: |
             ./coverage.xml
 
-  test-dialect-v20:
-    name: Test dialect v20 ${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
+  test-dialect-v14:
+    name: Test dialect v14 ${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
     needs: [ lint, build-install ]
     runs-on: ${{ matrix.os }}
     strategy:
@@ -204,15 +204,15 @@ jobs:
           python -m uv pip install -U hatch
           python -m hatch env create default
       - name: Run tests
-        run: hatch run sa20:test-dialect
+        run: hatch run sa14:test-dialect
       - uses: actions/upload-artifact@v4
         with:
-          name: coverage.xml_dialect-v20-${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
+          name: coverage.xml_dialect-v14-${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
           path: |
             ./coverage.xml
 
-  test-dialect-compatibility-v20:
-    name: Test dialect v20 compatibility ${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
+  test-dialect-compatibility-v14:
+    name: Test dialect v14 compatibility ${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
     needs: lint
     runs-on: ${{ matrix.os }}
     strategy:
@@ -250,17 +250,17 @@ jobs:
           gpg --quiet --batch --yes --decrypt --passphrase="$PARAMETERS_SECRET" \
           .github/workflows/parameters/parameters_${{ matrix.cloud-provider }}.py.gpg > tests/parameters.py
       - name: Run tests
-        run: hatch run sa20:test-dialect-compatibility
+        run: hatch run sa14:test-dialect-compatibility
       - uses: actions/upload-artifact@v4
         with:
-          name: coverage.xml_dialect-v20-compatibility-${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
+          name: coverage.xml_dialect-v14-compatibility-${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
           path: |
             ./coverage.xml
 
   combine-coverage:
     name: Combine coverage
     if: ${{ success() || failure() }}
-    needs: [test-dialect, test-dialect-compatibility, test-dialect-v20, test-dialect-compatibility-v20]
+    needs: [test-dialect, test-dialect-compatibility, test-dialect-v14, test-dialect-compatibility-v14]
     runs-on: ubuntu-latest
     steps:
       - name: Set up Python
