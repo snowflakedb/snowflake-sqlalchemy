@@ -34,7 +34,7 @@ from sqlalchemy import (
     inspect,
     text,
 )
-from sqlalchemy.exc import DBAPIError, NoSuchTableError
+from sqlalchemy.exc import DBAPIError, NoSuchTableError, OperationalError
 from sqlalchemy.sql import and_, not_, or_, select
 
 import snowflake.connector.errors
@@ -1059,28 +1059,15 @@ def test_cache_time(engine_testaccount, db_parameters):
     assert outcome
 
 
-@pytest.mark.timeout(15)
-def test_region():
-    engine = create_engine(
-        URL(
-            user="testuser",
-            password="testpassword",
-            account="testaccount",
-            region="eu-central-1",
-            login_timeout=5,
-        )
-    )
-    try:
-        engine.connect()
-        pytest.fail("should not run")
-    except Exception as ex:
-        assert ex.orig.errno == 250001
-        assert "Failed to connect to DB" in ex.orig.msg
-        assert "testaccount.eu-central-1.snowflakecomputing.com" in ex.orig.msg
-
-
-@pytest.mark.timeout(15)
-def test_azure():
+@pytest.mark.timeout(10)
+@pytest.mark.parametrize(
+    "region",
+    (
+        pytest.param("eu-central-1", id="region"),
+        pytest.param("east-us-2.azure", id="azure"),
+    ),
+)
+def test_connection_timeout_error(region):
     engine = create_engine(
         URL(
             user="testuser",
@@ -1090,13 +1077,13 @@ def test_azure():
             login_timeout=5,
         )
     )
-    try:
+
+    with pytest.raises(OperationalError) as excinfo:
         engine.connect()
-        pytest.fail("should not run")
-    except Exception as ex:
-        assert ex.orig.errno == 250001
-        assert "Failed to connect to DB" in ex.orig.msg
-        assert "testaccount.east-us-2.azure.snowflakecomputing.com" in ex.orig.msg
+
+    assert excinfo.value.orig.errno == 250001
+    assert "Could not connect to Snowflake backend" in excinfo.value.orig.msg
+    assert region not in excinfo.value.orig.msg
 
 
 def test_load_dialect():

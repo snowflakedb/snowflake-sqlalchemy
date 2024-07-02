@@ -5,6 +5,7 @@
 import operator
 from collections import defaultdict
 from functools import reduce
+from typing import Any
 from urllib.parse import unquote_plus
 
 import sqlalchemy.types as sqltypes
@@ -63,7 +64,11 @@ from .custom_types import (
     _CUSTOM_Float,
     _CUSTOM_Time,
 )
-from .util import _update_connection_application_name, parse_url_boolean
+from .util import (
+    _update_connection_application_name,
+    parse_url_boolean,
+    parse_url_integer,
+)
 
 colspecs = {
     Date: _CUSTOM_Date,
@@ -203,6 +208,26 @@ class SnowflakeDialect(default.DefaultDialect):
 
         return connector
 
+    @staticmethod
+    def parse_query_param_type(name: str, value: Any) -> Any:
+        """Cast param value if possible to type defined in connector-python."""
+        if not (maybe_type_configuration := DEFAULT_CONFIGURATION.get(name)):
+            return value
+
+        _, expected_type = maybe_type_configuration
+        if not isinstance(expected_type, tuple):
+            expected_type = (expected_type,)
+
+        if isinstance(value, expected_type):
+            return value
+
+        elif bool in expected_type:
+            return parse_url_boolean(value)
+        elif int in expected_type:
+            return parse_url_integer(value)
+        else:
+            return value
+
     def create_connect_args(self, url: URL):
         opts = url.translate_connect_args(username="user")
         if "database" in opts:
@@ -239,30 +264,7 @@ class SnowflakeDialect(default.DefaultDialect):
 
         # URL sets the query parameter values as strings, we need to cast to expected types when necessary
         for name, value in query.items():
-            maybe_type_configuration = DEFAULT_CONFIGURATION.get(name)
-            if (
-                not maybe_type_configuration
-            ):  # if the parameter is not found in the type mapping, pass it through as a string
-                opts[name] = value
-                continue
-
-            (_, expected_type) = maybe_type_configuration
-            if not isinstance(expected_type, tuple):
-                expected_type = (expected_type,)
-
-            if isinstance(
-                value, expected_type
-            ):  # if the expected type is str, pass it through as a string
-                opts[name] = value
-
-            elif (
-                bool in expected_type
-            ):  # if the expected type is bool, parse it and pass as a boolean
-                opts[name] = parse_url_boolean(value)
-            else:
-                # TODO: other types like int are stil passed through as string
-                # https://github.com/snowflakedb/snowflake-sqlalchemy/issues/447
-                opts[name] = value
+            opts[name] = self.parse_query_param_type(name, value)
 
         return ([], opts)
 
@@ -281,7 +283,6 @@ class SnowflakeDialect(default.DefaultDialect):
         return self._has_object(connection, "SEQUENCE", sequence_name, schema)
 
     def _has_object(self, connection, object_type, object_name, schema=None):
-
         full_name = self._denormalize_quote_join(schema, object_name)
         try:
             results = connection.execute(
