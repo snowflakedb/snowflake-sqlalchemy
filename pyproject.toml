@@ -94,6 +94,14 @@ test-dialect-compatibility = "pytest -ra -vvv --tb=short --cov snowflake.sqlalch
 gh-cache-sum = "python -VV | sha256sum | cut -d' ' -f1"
 check-import = "python -c 'import snowflake.sqlalchemy; print(snowflake.sqlalchemy.__version__)'"
 
+[[tool.hatch.envs.release.matrix]]
+python = ["3.8", "3.9", "3.10", "3.11", "3.12"]
+features = ["development", "pandas"]
+
+[tool.hatch.envs.release.scripts]
+test-dialect = "pytest -ra -vvv --tb=short --ignore=tests/sqlalchemy_test_suite tests/"
+test-compatibility = "pytest -ra -vvv --tb=short tests/sqlalchemy_test_suite tests/"
+
 [tool.ruff]
 line-length = 88
 
