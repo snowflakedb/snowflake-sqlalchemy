@@ -7,7 +7,7 @@ from itertools import chain
 from typing import Any
 from urllib.parse import quote_plus
 
-from sqlalchemy import exc, inspection, sql, util
+from sqlalchemy import exc, inspection, sql
 from sqlalchemy.exc import NoForeignKeysError
 from sqlalchemy.orm.interfaces import MapperProperty
 from sqlalchemy.orm.util import _ORMJoin as sa_orm_util_ORMJoin
@@ -19,6 +19,7 @@ from sqlalchemy.sql.selectable import Join, Lateral, coercions, operators, roles
 
 from snowflake.connector.compat import IS_STR
 from snowflake.connector.connection import SnowflakeConnection
+from snowflake.sqlalchemy import compat
 
 from ._constants import (
     APPLICATION_NAME,
@@ -124,6 +125,13 @@ def parse_url_boolean(value: str) -> bool:
         raise ValueError(f"Invalid boolean value detected: '{value}'")
 
 
+def parse_url_integer(value: str) -> int:
+    try:
+        return int(value)
+    except ValueError as e:
+        raise ValueError(f"Invalid int value detected: '{value}") from e
+
+
 # handle Snowflake BCR bcr-1057
 # the BCR impacts sqlalchemy.orm.context.ORMSelectCompileState and sqlalchemy.sql.selectable.SelectState
 # which used the 'sqlalchemy.util.preloaded.sql_util.find_left_clause_to_join_from' method that
@@ -212,7 +220,7 @@ class _Snowflake_ORMJoin(sa_orm_util_ORMJoin):
         # then the "_joined_from_info" concept can go
         left_orm_info = getattr(left, "_joined_from_info", left_info)
         self._joined_from_info = right_info
-        if isinstance(onclause, util.string_types):
+        if isinstance(onclause, compat.string_types):
             onclause = getattr(left_orm_info.entity, onclause)
         # ####
 

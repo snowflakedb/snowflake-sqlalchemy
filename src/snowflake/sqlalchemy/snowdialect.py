@@ -5,6 +5,7 @@
 import operator
 from collections import defaultdict
 from functools import reduce
+from typing import Any
 from urllib.parse import unquote_plus
 
 import sqlalchemy.types as sqltypes
@@ -15,7 +16,6 @@ from sqlalchemy.engine import URL, default, reflection
 from sqlalchemy.schema import Table
 from sqlalchemy.sql import text
 from sqlalchemy.sql.elements import quoted_name
-from sqlalchemy.sql.sqltypes import String
 from sqlalchemy.types import (
     BIGINT,
     BINARY,
@@ -40,6 +40,7 @@ from sqlalchemy.types import (
 from snowflake.connector import errors as sf_errors
 from snowflake.connector.connection import DEFAULT_CONFIGURATION
 from snowflake.connector.constants import UTF8
+from snowflake.sqlalchemy.compat import returns_unicode
 
 from .base import (
     SnowflakeCompiler,
@@ -63,7 +64,11 @@ from .custom_types import (
     _CUSTOM_Float,
     _CUSTOM_Time,
 )
-from .util import _update_connection_application_name, parse_url_boolean
+from .util import (
+    _update_connection_application_name,
+    parse_url_boolean,
+    parse_url_integer,
+)
 
 colspecs = {
     Date: _CUSTOM_Date,
@@ -134,7 +139,7 @@ class SnowflakeDialect(default.DefaultDialect):
     #  unicode strings
     supports_unicode_statements = True
     supports_unicode_binds = True
-    returns_unicode_strings = String.RETURNS_UNICODE
+    returns_unicode_strings = returns_unicode
     description_encoding = None
 
     # No lastrowid support. See SNOW-11155
@@ -195,9 +200,33 @@ class SnowflakeDialect(default.DefaultDialect):
 
     @classmethod
     def dbapi(cls):
+        return cls.import_dbapi()
+
+    @classmethod
+    def import_dbapi(cls):
         from snowflake import connector
 
         return connector
+
+    @staticmethod
+    def parse_query_param_type(name: str, value: Any) -> Any:
+        """Cast param value if possible to type defined in connector-python."""
+        if not (maybe_type_configuration := DEFAULT_CONFIGURATION.get(name)):
+            return value
+
+        _, expected_type = maybe_type_configuration
+        if not isinstance(expected_type, tuple):
+            expected_type = (expected_type,)
+
+        if isinstance(value, expected_type):
+            return value
+
+        elif bool in expected_type:
+            return parse_url_boolean(value)
+        elif int in expected_type:
+            return parse_url_integer(value)
+        else:
+            return value
 
     def create_connect_args(self, url: URL):
         opts = url.translate_connect_args(username="user")
@@ -235,47 +264,25 @@ class SnowflakeDialect(default.DefaultDialect):
 
         # URL sets the query parameter values as strings, we need to cast to expected types when necessary
         for name, value in query.items():
-            maybe_type_configuration = DEFAULT_CONFIGURATION.get(name)
-            if (
-                not maybe_type_configuration
-            ):  # if the parameter is not found in the type mapping, pass it through as a string
-                opts[name] = value
-                continue
-
-            (_, expected_type) = maybe_type_configuration
-            if not isinstance(expected_type, tuple):
-                expected_type = (expected_type,)
-
-            if isinstance(
-                value, expected_type
-            ):  # if the expected type is str, pass it through as a string
-                opts[name] = value
-
-            elif (
-                bool in expected_type
-            ):  # if the expected type is bool, parse it and pass as a boolean
-                opts[name] = parse_url_boolean(value)
-            else:
-                # TODO: other types like int are stil passed through as string
-                # https://github.com/snowflakedb/snowflake-sqlalchemy/issues/447
-                opts[name] = value
+            opts[name] = self.parse_query_param_type(name, value)
 
         return ([], opts)
 
-    def has_table(self, connection, table_name, schema=None):
+    @reflection.cache
+    def has_table(self, connection, table_name, schema=None, **kw):
         """
         Checks if the table exists
         """
         return self._has_object(connection, "TABLE", table_name, schema)
 
-    def has_sequence(self, connection, sequence_name, schema=None):
+    @reflection.cache
+    def has_sequence(self, connection, sequence_name, schema=None, **kw):
         """
         Checks if the sequence exists
         """
         return self._has_object(connection, "SEQUENCE", sequence_name, schema)
 
     def _has_object(self, connection, object_type, object_name, schema=None):
-
         full_name = self._denormalize_quote_join(schema, object_name)
         try:
             results = connection.execute(

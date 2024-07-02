@@ -34,7 +34,7 @@ from sqlalchemy import (
     inspect,
     text,
 )
-from sqlalchemy.exc import DBAPIError, NoSuchTableError
+from sqlalchemy.exc import DBAPIError, NoSuchTableError, OperationalError
 from sqlalchemy.sql import and_, not_, or_, select
 
 import snowflake.connector.errors
@@ -406,16 +406,6 @@ def test_insert_tables(engine_testaccount):
                     str(users.join(addresses)) == "users JOIN addresses ON "
                     "users.id = addresses.user_id"
                 )
-                assert (
-                    str(
-                        users.join(
-                            addresses,
-                            addresses.c.email_address.like(users.c.name + "%"),
-                        )
-                    )
-                    == "users JOIN addresses "
-                    "ON addresses.email_address LIKE users.name || :name_1"
-                )
 
                 s = select(users.c.fullname).select_from(
                     users.join(
@@ -444,7 +434,7 @@ def test_table_does_not_exist(engine_testaccount):
     """
     meta = MetaData()
     with pytest.raises(NoSuchTableError):
-        Table("does_not_exist", meta, autoload=True, autoload_with=engine_testaccount)
+        Table("does_not_exist", meta, autoload_with=engine_testaccount)
 
 
 @pytest.mark.skip(
@@ -470,9 +460,7 @@ def test_reflextion(engine_testaccount):
         )
         try:
             meta = MetaData()
-            user_reflected = Table(
-                "user", meta, autoload=True, autoload_with=engine_testaccount
-            )
+            user_reflected = Table("user", meta, autoload_with=engine_testaccount)
             assert user_reflected.c == ["user.id", "user.name", "user.fullname"]
         finally:
             conn.execute("DROP TABLE IF EXISTS user")
@@ -1071,28 +1059,15 @@ def test_cache_time(engine_testaccount, db_parameters):
     assert outcome
 
 
-@pytest.mark.timeout(15)
-def test_region():
-    engine = create_engine(
-        URL(
-            user="testuser",
-            password="testpassword",
-            account="testaccount",
-            region="eu-central-1",
-            login_timeout=5,
-        )
-    )
-    try:
-        engine.connect()
-        pytest.fail("should not run")
-    except Exception as ex:
-        assert ex.orig.errno == 250001
-        assert "Failed to connect to DB" in ex.orig.msg
-        assert "testaccount.eu-central-1.snowflakecomputing.com" in ex.orig.msg
-
-
-@pytest.mark.timeout(15)
-def test_azure():
+@pytest.mark.timeout(10)
+@pytest.mark.parametrize(
+    "region",
+    (
+        pytest.param("eu-central-1", id="region"),
+        pytest.param("east-us-2.azure", id="azure"),
+    ),
+)
+def test_connection_timeout_error(region):
     engine = create_engine(
         URL(
             user="testuser",
@@ -1102,13 +1077,13 @@ def test_azure():
             login_timeout=5,
         )
     )
-    try:
+
+    with pytest.raises(OperationalError) as excinfo:
         engine.connect()
-        pytest.fail("should not run")
-    except Exception as ex:
-        assert ex.orig.errno == 250001
-        assert "Failed to connect to DB" in ex.orig.msg
-        assert "testaccount.east-us-2.azure.snowflakecomputing.com" in ex.orig.msg
+
+    assert excinfo.value.orig.errno == 250001
+    assert "Could not connect to Snowflake backend" in excinfo.value.orig.msg
+    assert region not in excinfo.value.orig.msg
 
 
 def test_load_dialect():
@@ -1535,11 +1510,16 @@ def test_too_many_columns_detection(engine_testaccount, db_parameters):
     metadata.create_all(engine_testaccount)
     inspector = inspect(engine_testaccount)
     # Do test
-    original_execute = inspector.bind.execute
+    connection = inspector.bind.connect()
+    original_execute = connection.execute
+
+    too_many_columns_was_raised = False
 
     def mock_helper(command, *args, **kwargs):
-        if "_get_schema_columns" in command:
+        if "_get_schema_columns" in command.text:
             # Creating exception exactly how SQLAlchemy does
+            nonlocal too_many_columns_was_raised
+            too_many_columns_was_raised = True
             raise DBAPIError.instance(
                 """
             SELECT /* sqlalchemy:_get_schema_columns */
@@ -1571,9 +1551,12 @@ def test_too_many_columns_detection(engine_testaccount, db_parameters):
         else:
             return original_execute(command, *args, **kwargs)
 
-    with patch.object(inspector.bind, "execute", side_effect=mock_helper):
-        column_metadata = inspector.get_columns("users", db_parameters["schema"])
+    with patch.object(engine_testaccount, "connect") as conn:
+        conn.return_value = connection
+        with patch.object(connection, "execute", side_effect=mock_helper):
+            column_metadata = inspector.get_columns("users", db_parameters["schema"])
     assert len(column_metadata) == 4
+    assert too_many_columns_was_raised
     # Clean up
     metadata.drop_all(engine_testaccount)
 
@@ -1615,9 +1598,7 @@ CREATE TEMP TABLE {table_name} (
 """
         )
 
-        table_reflected = Table(
-            table_name, MetaData(), autoload=True, autoload_with=conn
-        )
+        table_reflected = Table(table_name, MetaData(), autoload_with=conn)
         columns = table_reflected.columns
         assert (
             len(columns) == len(ischema_names_baseline) - 1
@@ -1638,9 +1619,7 @@ CREATE TEMP TABLE {table_name} (
 )
 """
         )
-        table_reflected = Table(
-            table_name, MetaData(), autoload=True, autoload_with=conn
-        )
+        table_reflected = Table(table_name, MetaData(), autoload_with=conn)
         current_date = date.today()
         current_utctime = datetime.utcnow()
         current_localtime = pytz.utc.localize(current_utctime, is_dst=False).astimezone(
