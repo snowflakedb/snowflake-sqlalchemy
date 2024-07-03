@@ -90,7 +90,7 @@ SQLACHEMY_WARN_20 = "1"
 [tool.hatch.envs.default.scripts]
 check = "pre-commit run --all-files"
 test-dialect = "pytest -ra -vvv --tb=short --cov snowflake.sqlalchemy --cov-append --junitxml ./junit.xml --ignore=tests/sqlalchemy_test_suite tests/"
-test-dialect-compatibility = "pytest -ra -vvv --tb=short --cov snowflake.sqlalchemy --cov-append --junitxml ./junit.xml tests/sqlalchemy_test_suite tests/"
+test-dialect-compatibility = "pytest -ra -vvv --tb=short --cov snowflake.sqlalchemy --cov-append --junitxml ./junit.xml tests/sqlalchemy_test_suite"
 gh-cache-sum = "python -VV | sha256sum | cut -d' ' -f1"
 check-import = "python -c 'import snowflake.sqlalchemy; print(snowflake.sqlalchemy.__version__)'"
 
