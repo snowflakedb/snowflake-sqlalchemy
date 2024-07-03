@@ -101,6 +101,7 @@ containing special characters need to be URL encoded to be parsed correctly. Thi
 characters could lead to authentication failure.
 
 The encoding for the password can be generated using `urllib.parse`:
+
 ```python
 import urllib.parse
 urllib.parse.quote("kx@% jj5/g")
@@ -111,6 +112,7 @@ urllib.parse.quote("kx@% jj5/g")
 
 To create an engine with the proper encodings, either manually constructing the url string by formatting
 or taking advantage of the `snowflake.sqlalchemy.URL` helper method:
+
 ```python
 import urllib.parse
 from snowflake.sqlalchemy import URL
@@ -191,13 +193,22 @@ engine = create_engine(...)
 engine.execute(<SQL>)
 engine.dispose()
 
-# Do this.
+# Better.
 engine = create_engine(...)
 connection = engine.connect()
 try:
-    connection.execute(<SQL>)
+  connection.execute(text(<SQL>))
 finally:
     connection.close()
+    engine.dispose()
+
+# Best
+try:
+    with engine.connext() as connection:
+        connection.execute(text(<SQL>))
+        # or
+        connection.exec_driver_sql(<SQL>)
+finally:
     engine.dispose()
 ```
 
@@ -242,14 +253,14 @@ engine = create_engine(URL(
 
 specific_date = np.datetime64('2016-03-04T12:03:05.123456789Z')
 
-connection = engine.connect()
-connection.execute(
-    "CREATE OR REPLACE TABLE ts_tbl(c1 TIMESTAMP_NTZ)")
-connection.execute(
-    "INSERT INTO ts_tbl(c1) values(%s)", (specific_date,)
-)
-df = pd.read_sql_query("SELECT * FROM ts_tbl", engine)
-assert df.c1.values[0] == specific_date
+with engine.connect() as connection:
+    connection.exec_driver_sql(
+        "CREATE OR REPLACE TABLE ts_tbl(c1 TIMESTAMP_NTZ)")
+    connection.exec_driver_sql(
+        "INSERT INTO ts_tbl(c1) values(%s)", (specific_date,)
+    )
+    df = pd.read_sql_query("SELECT * FROM ts_tbl", connection)
+    assert df.c1.values[0] == specific_date
 ```
 
 The following `NumPy` data types are supported:

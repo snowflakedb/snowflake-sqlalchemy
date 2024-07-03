@@ -9,9 +9,10 @@ Source code is also available at:
 
 # Release Notes
 
-- v1.6.0(Not released)
+- v1.6.0(July 4, 2024)
 
   - support for installing with SQLAlchemy 2.0.x
+  - use `hatch` & `uv` for managing project virtual environments
 
 - v1.5.4
 
