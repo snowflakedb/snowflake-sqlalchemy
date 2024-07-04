@@ -16,6 +16,7 @@ if [ -d "${DIST_DIR}" ]; then
 fi
 
 # Constants and setup
+export PATH=$PATH:$HOME/.local/bin
 
 echo "[Info] Building snowflake-sqlalchemy with $PYTHON"
 # Clean up possible build artifacts

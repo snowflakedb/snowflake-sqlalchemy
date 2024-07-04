@@ -76,7 +76,7 @@ packages = ["src/snowflake"]
 extra-dependencies = ["SQLAlchemy>=1.4.19,<2.1.0"]
 features = ["development", "pandas"]
 python = "3.8"
-installer = "uv"
+# installer = "uv"
 
 [tool.hatch.envs.sa14]
 extra-dependencies = ["SQLAlchemy>=1.4.19,<2.0.0"]
