@@ -21,8 +21,6 @@ export PATH=$PATH:$HOME/.local/bin
 echo "[Info] Building snowflake-sqlalchemy with $PYTHON"
 # Clean up possible build artifacts
 rm -rf build generated_version.py
-# ${PYTHON} -m pip install --upgrade pip setuptools wheel build
-# ${PYTHON} -m build --outdir ${DIST_DIR} .
 export UV_NO_CACHE=true
 ${PYTHON} -m pip install uv hatch
 ${PYTHON} -m hatch build
