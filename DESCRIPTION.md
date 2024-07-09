@@ -11,7 +11,7 @@ Source code is also available at:
 
 - v1.6.1(July 9, 2024)
 
-  - Update workflow with pypi publishing
+  - Update internal project workflow with pypi publishing
 
 - v1.6.0(July 8, 2024)
 
