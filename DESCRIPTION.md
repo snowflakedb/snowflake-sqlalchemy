@@ -9,6 +9,10 @@ Source code is also available at:
 
 # Release Notes
 
+- v1.6.1(July 9, 2024)
+
+  - Update internal project workflow with pypi publishing
+
 - v1.6.0(July 8, 2024)
 
   - support for installing with SQLAlchemy 2.0.x
