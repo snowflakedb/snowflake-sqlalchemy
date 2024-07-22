@@ -209,7 +209,7 @@ finally:
 
 # Best
 try:
-    with engine.connext() as connection:
+    with engine.connect() as connection:
         connection.execute(text(<SQL>))
         # or
         connection.exec_driver_sql(<SQL>)
