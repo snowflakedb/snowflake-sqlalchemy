@@ -62,6 +62,16 @@ def test_copy_into_location(engine_testaccount, sql_compiler):
         "ESCAPE=None NULL_IF=('null', 'Null') RECORD_DELIMITER='|') ENCRYPTION="
         "(KMS_KEY_ID='1234abcd-12ab-34cd-56ef-1234567890ab' TYPE='AWS_SSE_KMS')"
     )
+    copy_stmt_1a = CopyIntoStorage(
+        from_=food_items,
+        into=AWSBucket.from_uri("s3://backup").storage_integration("foobar"),
+        formatter=CSVFormatter(),
+    )
+    assert (
+        sql_compiler(copy_stmt_1a)
+        == "COPY INTO 's3://backup' FROM python_tests_foods FILE_FORMAT=(TYPE=csv) "
+        "STORAGE_INTEGRATION=foobar"
+    )
     copy_stmt_2 = CopyIntoStorage(
         from_=select(food_items).where(food_items.c.id == 1),  # Test sub-query
         into=AWSBucket.from_uri("s3://backup")
