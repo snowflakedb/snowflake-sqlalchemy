@@ -89,7 +89,7 @@ SQLACHEMY_WARN_20 = "1"
 
 [tool.hatch.envs.default.scripts]
 check = "pre-commit run --all-files"
-test-dialect = "pytest -ra -vvv --tb=short --cov snowflake.sqlalchemy --cov-append --junitxml ./junit.xml --ignore=tests/sqlalchemy_test_suite tests/"
+test-dialect = "pytest -ra -vvv --tb=short --cov snowflake.sqlalchemy --cov-append --junitxml ./junit.xml --ignore=tests/sqlalchemy_test_suite tests/ --collect-only"
 test-dialect-compatibility = "pytest -ra -vvv --tb=short --cov snowflake.sqlalchemy --cov-append --junitxml ./junit.xml tests/sqlalchemy_test_suite"
 gh-cache-sum = "python -VV | sha256sum | cut -d' ' -f1"
 check-import = "python -c 'import snowflake.sqlalchemy; print(snowflake.sqlalchemy.__version__)'"
@@ -109,6 +109,7 @@ line-length = 88
 line-length = 88
 
 [tool.pytest.ini_options]
+addopts = "-m 'not feature_max_lob_size'"
 markers = [
   # Optional dependency groups markers
   "lambda: AWS lambda tests",
@@ -126,4 +127,5 @@ markers = [
   "timeout: tests that need a timeout time",
   "internal: tests that could but should only run on our internal CI",
   "external: tests that could but should only run on our external CI",
+  "feature_max_lob_size: tests that could but should only run on our external CI",
 ]
