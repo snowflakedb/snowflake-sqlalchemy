@@ -1,10 +1,10 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
-
+import json
 
 import pytest
-from sqlalchemy import Column, Integer, MetaData, Table
+from sqlalchemy import Column, MetaData, Table, text
 
 from snowflake.sqlalchemy import TEXT, custom_types
 
@@ -47,11 +47,22 @@ def test_create_table_with_text_type_and_max_lob_size(engine_testaccount):
     test_max_lob_size = Table(
         table_name,
         metadata,
-        Column("id", Integer, primary_key=True),
-        Column("name", TEXT(20000000), primary_key=True),
+        Column("name", TEXT(), primary_key=True),
     )
+
     metadata.create_all(engine_testaccount)
     try:
         assert test_max_lob_size is not None
+
+        with engine_testaccount.connect() as conn:
+            with conn.begin():
+                query = text(f"SHOW COLUMNS IN {table_name}")
+                result = conn.execute(query)
+                row = result.mappings().fetchone()["data_type"]
+                type_length = json.loads(row)["length"]
+                assert (
+                    type_length >= 134217728
+                ), f"Expected length to be greater than or equal to 134217728, got {type_length}"
+
     finally:
         test_max_lob_size.drop(engine_testaccount)
