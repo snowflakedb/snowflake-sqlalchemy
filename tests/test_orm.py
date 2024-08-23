@@ -7,6 +7,7 @@ import logging
 
 import pytest
 from sqlalchemy import (
+    TEXT,
     Column,
     Enum,
     ForeignKey,
@@ -413,3 +414,25 @@ def test_lateral_join_without_condition(engine_testaccount, caplog):
         '[SELECT "Employee".uid FROM "Employee" JOIN LATERAL flatten(PARSE_JSON("Employee"'
         in caplog.text
     )
+
+
+@pytest.mark.feature_max_lob_size
+def test_basic_orm_metadata(engine_testaccount):
+    Base = declarative_base()
+
+    class User(Base):
+        __tablename__ = "user"
+
+        name = Column(String, primary_key=True)
+        fullname = Column(TEXT(134217728))
+
+        def __repr__(self):
+            return f"<User({self.name!r}, {self.fullname!r})>"
+
+    Base.metadata.create_all(engine_testaccount)
+
+    try:
+        assert User.__table__.columns["fullname"].type.length == 134217728
+
+    finally:
+        Base.metadata.drop_all(engine_testaccount)

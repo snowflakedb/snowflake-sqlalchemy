@@ -41,7 +41,7 @@ def test_string_conversions():
 
 
 @pytest.mark.feature_max_lob_size
-def test_create_table_with_text_type_and_max_lob_size(engine_testaccount):
+def test_create_table_with_text_type(engine_testaccount):
     metadata = MetaData()
     table_name = "test_max_lob_size_0"
     test_max_lob_size = Table(
