@@ -11,6 +11,21 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# Update this for the versions
-# Don't change the forth version number from None
-VERSION = "1.6.1"
+
+from sqlalchemy import DDLElement
+
+
+class CreateStage(DDLElement):
+    """
+    Encapsulates a CREATE STAGE statement, using a container (physical base for the
+    stage) and the actual ExternalStage object.
+    """
+
+    __visit_name__ = "create_stage"
+
+    def __init__(self, container, stage, replace_if_exists=False, *, temporary=False):
+        super().__init__()
+        self.container = container
+        self.temporary = temporary
+        self.stage = stage
+        self.replace_if_exists = replace_if_exists
