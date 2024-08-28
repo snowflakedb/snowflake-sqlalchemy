@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from sqlalchemy import ClauseElement
+from sqlalchemy.sql.elements import ClauseElement
 
 from snowflake.sqlalchemy.compat import string_types
 

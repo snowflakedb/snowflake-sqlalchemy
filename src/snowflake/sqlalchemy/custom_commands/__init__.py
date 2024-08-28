@@ -25,11 +25,6 @@ from .merge_into import MergeInto
 from .parquet_formater import PARQUETFormatter
 from .utils import translate_bool
 
-# The __all__ list is used to maintain backward compatibility with previous versions of the package.
-# After splitting a large file into a module, __all__ explicitly defines the public API, ensuring
-# that existing imports from the original file still work as expected. This approach prevents
-# breaking changes by controlling which functions, classes, and variables are exposed when
-# the module is imported.
 __all__ = [
     "AWSBucket",
     "AzureContainer",
