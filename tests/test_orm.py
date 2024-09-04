@@ -417,14 +417,14 @@ def test_lateral_join_without_condition(engine_testaccount, caplog):
 
 
 @pytest.mark.feature_max_lob_size
-def test_basic_orm_metadata(engine_testaccount):
+def test_basic_table_with_large_lob_size_in_memory(engine_testaccount, sql_compiler):
     Base = declarative_base()
 
     class User(Base):
         __tablename__ = "user"
 
-        name = Column(String, primary_key=True)
-        fullname = Column(TEXT(134217728))
+        id = Column(Integer, primary_key=True)
+        full_name = Column(TEXT(), server_default=text("id::varchar"))
 
         def __repr__(self):
             return f"<User({self.name!r}, {self.fullname!r})>"
@@ -432,7 +432,16 @@ def test_basic_orm_metadata(engine_testaccount):
     Base.metadata.create_all(engine_testaccount)
 
     try:
-        assert User.__table__.columns["fullname"].type.length == 134217728
+        assert User.__table__ is not None
+
+        with engine_testaccount.connect() as conn:
+            with conn.begin():
+                query = text(f"SELECT GET_DDL('TABLE', '{User.__tablename__}')")
+                result = conn.execute(query)
+                row = str(result.mappings().fetchone())
+                assert (
+                    "VARCHAR(134217728)" in row
+                ), f"Expected VARCHAR(134217728) in {row}"
 
     finally:
         Base.metadata.drop_all(engine_testaccount)

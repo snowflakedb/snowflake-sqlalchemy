@@ -1,10 +1,9 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
-import json
 
 import pytest
-from sqlalchemy import Column, MetaData, Table, text
+from sqlalchemy import Column, Integer, MetaData, Table, text
 
 from snowflake.sqlalchemy import TEXT, custom_types
 
@@ -47,7 +46,8 @@ def test_create_table_with_text_type(engine_testaccount):
     test_max_lob_size = Table(
         table_name,
         metadata,
-        Column("name", TEXT(), primary_key=True),
+        Column("id", Integer, primary_key=True),
+        Column("full_name", TEXT(), server_default=text("id::varchar")),
     )
 
     metadata.create_all(engine_testaccount)
@@ -56,13 +56,12 @@ def test_create_table_with_text_type(engine_testaccount):
 
         with engine_testaccount.connect() as conn:
             with conn.begin():
-                query = text(f"SHOW COLUMNS IN {table_name}")
+                query = text(f"SELECT GET_DDL('TABLE', '{table_name}')")
                 result = conn.execute(query)
-                row = result.mappings().fetchone()["data_type"]
-                type_length = json.loads(row)["length"]
+                row = str(result.mappings().fetchone())
                 assert (
-                    type_length >= 134217728
-                ), f"Expected length to be greater than or equal to 134217728, got {type_length}"
+                    "VARCHAR(134217728)" in row
+                ), f"Expected VARCHAR(134217728) in {row}"
 
     finally:
         test_max_lob_size.drop(engine_testaccount)
