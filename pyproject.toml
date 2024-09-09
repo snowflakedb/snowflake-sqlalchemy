@@ -109,6 +109,7 @@ line-length = 88
 line-length = 88
 
 [tool.pytest.ini_options]
+addopts = "-m 'not feature_max_lob_size'"
 markers = [
   # Optional dependency groups markers
   "lambda: AWS lambda tests",
@@ -126,4 +127,5 @@ markers = [
   "timeout: tests that need a timeout time",
   "internal: tests that could but should only run on our internal CI",
   "external: tests that could but should only run on our external CI",
+  "feature_max_lob_size: tests that could but should only run on our external CI",
 ]
