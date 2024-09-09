@@ -61,6 +61,7 @@ from .custom_types import (
     VARBINARY,
     VARIANT,
 )
+from .functions import flatten as flatten
 from .util import _url as URL
 
 base.dialect = dialect = snowdialect.dialect
