@@ -53,6 +53,7 @@ development = [
   "pytz",
   "numpy",
   "mock",
+  "syrupy==4.6.1",
 ]
 pandas = ["snowflake-connector-python[pandas]"]
 
