@@ -7,6 +7,7 @@ from typing import Any
 from sqlalchemy.exc import ArgumentError
 from sqlalchemy.sql.schema import MetaData, SchemaItem, Table
 
+from ...compat import IS_VERSION_20
 from ...constants import DIALECT_NAME
 from ...custom_commands import NoneType
 from .options.table_option import TableOption
@@ -26,7 +27,7 @@ class CustomTableBase(Table):
         if self.__table_prefix__ != "":
             prefixes = kw.get("prefixes", []) + [self.__table_prefix__]
             kw.update(prefixes=prefixes)
-        if kw["alternative_initializer"] and hasattr(super(), "_init"):
+        if not IS_VERSION_20 and hasattr(super(), "_init"):
             super()._init(name, metadata, *args, **kw)
         else:
             super().__init__(name, metadata, *args, **kw)

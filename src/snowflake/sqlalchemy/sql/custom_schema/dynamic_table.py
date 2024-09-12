@@ -57,7 +57,6 @@ class DynamicTable(TableFromQueryBase):
         *args: SchemaItem,
         **kw: Any,
     ) -> None:
-        kw["alternative_initializer"] = True
         super().__init__(name, metadata, *args, **kw)
 
     def _validate_table(self):
