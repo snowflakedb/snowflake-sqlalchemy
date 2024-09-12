@@ -5,17 +5,16 @@
 import typing
 from typing import Any
 
-from sqlalchemy import exc, inspection
 from sqlalchemy.sql.schema import MetaData, SchemaItem
 
 from snowflake.sqlalchemy.custom_commands import NoneType
 
 from .options.target_lag import TargetLag
 from .options.warehouse import Warehouse
-from .table_from_query import TableFromQuery
+from .table_from_query import TableFromQueryBase
 
 
-class DynamicTable(TableFromQuery, inspection.Inspectable["DynamicTable"]):
+class DynamicTable(TableFromQueryBase):
     """
     A class representing a dynamic table with configurable options and settings.
 

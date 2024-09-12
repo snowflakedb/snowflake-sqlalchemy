@@ -2,7 +2,6 @@
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
 import typing
-from abc import ABC
 from typing import Any
 
 from sqlalchemy.exc import ArgumentError
@@ -13,7 +12,7 @@ from ...custom_commands import NoneType
 from .options.table_option import TableOption
 
 
-class CustomTable(Table, ABC):
+class CustomTableBase(Table):
     __table_prefix__ = ""
     _support_primary_and_foreign_keys = True
 

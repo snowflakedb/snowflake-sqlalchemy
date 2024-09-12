@@ -1,6 +1,7 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 # from enum import Enum
+from enum import Enum
 from typing import Optional
 
 from .table_option import TableOption

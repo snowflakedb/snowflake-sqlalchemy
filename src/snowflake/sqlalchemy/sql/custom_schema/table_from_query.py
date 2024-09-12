@@ -2,19 +2,18 @@
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
 import typing
-from abc import ABC
 from typing import Any, Optional
 
 import sqlalchemy
-from sqlalchemy import Selectable
+from sqlalchemy.sql import Selectable
 from sqlalchemy.sql.schema import Column, MetaData, SchemaItem
 from sqlalchemy.util import NoneType
 
-from .custom_table import CustomTable
+from .custom_table_base import CustomTableBase
 from .options.as_query import AsQuery
 
 
-class TableFromQuery(CustomTable, ABC):
+class TableFromQueryBase(CustomTableBase):
 
     @property
     def as_query(self):

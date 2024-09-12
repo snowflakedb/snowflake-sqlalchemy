@@ -3,7 +3,7 @@
 #
 from typing import Union
 
-from sqlalchemy import Selectable
+from sqlalchemy.sql import Selectable
 
 from .table_option import TableOption
 from .table_option_base import Priority
