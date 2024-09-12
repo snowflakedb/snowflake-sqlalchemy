@@ -24,8 +24,13 @@ class CustomTableBase(Table):
         **kw: Any,
     ) -> None:
         if self.__table_prefix__ != "":
-            kw.update(prefixes=kw.get("prefixes", []) + [self.__table_prefix__])
-        super().__init__(name, metadata, *args, **kw)
+            prefixes = kw.get("prefixes", []) + [self.__table_prefix__]
+            kw.update(prefixes=prefixes)
+        if kw["alternative_initializer"] and hasattr(super(), "_init"):
+            super()._init(name, metadata, *args, **kw)
+        else:
+            super().__init__(name, metadata, *args, **kw)
+
         if not kw.get("autoload_with", False):
             self._validate_table()
 

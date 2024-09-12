@@ -4,7 +4,6 @@
 import typing
 from typing import Any, Optional
 
-import sqlalchemy
 from sqlalchemy.sql import Selectable
 from sqlalchemy.sql.schema import Column, MetaData, SchemaItem
 from sqlalchemy.util import NoneType
@@ -53,7 +52,7 @@ class TableFromQueryBase(CustomTableBase):
     def __create_columns_from_selectable(
         self, selectable: Selectable
     ) -> Optional[typing.List[Column]]:
-        if not isinstance(selectable, sqlalchemy.Selectable):
+        if not isinstance(selectable, Selectable):
             return
         columns: typing.List[Column] = []
         for _, c in selectable.exported_columns.items():

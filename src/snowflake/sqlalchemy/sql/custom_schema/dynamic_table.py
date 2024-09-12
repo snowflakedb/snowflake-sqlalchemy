@@ -5,6 +5,7 @@
 import typing
 from typing import Any
 
+from sqlalchemy.exc import ArgumentError
 from sqlalchemy.sql.schema import MetaData, SchemaItem
 
 from snowflake.sqlalchemy.custom_commands import NoneType
@@ -49,6 +50,16 @@ class DynamicTable(TableFromQueryBase):
             return
         super().__init__(name, metadata, *args, **kw)
 
+    def _init(
+        self,
+        name: str,
+        metadata: MetaData,
+        *args: SchemaItem,
+        **kw: Any,
+    ) -> None:
+        kw["alternative_initializer"] = True
+        super().__init__(name, metadata, *args, **kw)
+
     def _validate_table(self):
         missing_attributes = []
         if self.target_lag is NoneType:
@@ -58,7 +69,7 @@ class DynamicTable(TableFromQueryBase):
         if self.as_query is NoneType:
             missing_attributes.append("AsQuery")
         if missing_attributes:
-            raise exc.ArgumentError(
+            raise ArgumentError(
                 "DYNAMIC TABLE must have the following arguments: %s"
                 % ", ".join(missing_attributes)
             )
@@ -70,5 +81,7 @@ class DynamicTable(TableFromQueryBase):
             + [repr(self.metadata)]
             + [repr(x) for x in self.columns]
             + [repr(self.target_lag)]
+            + [repr(self.warehouse)]
+            + [repr(self.as_query)]
             + [f"{k}={repr(getattr(self, k))}" for k in ["schema"]]
         )
