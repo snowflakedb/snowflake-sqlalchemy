@@ -184,7 +184,6 @@ class SnowflakeSelectState(SelectState):
                     [element._from_objects for element in statement._where_criteria]
                 ),
             ):
-
                 potential[from_clause] = ()
 
             all_clauses = list(potential.keys())
@@ -1065,4 +1064,4 @@ class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
 
 construct_arguments = [(Table, {"clusterby": None})]
 
-functions.register_function("flatten", flatten)
+functions.register_function("flatten", flatten, "snowflake")
