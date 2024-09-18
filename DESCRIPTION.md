@@ -10,7 +10,7 @@ Source code is also available at:
 # Release Notes
 
 - 1.6.2
-  - Fixed SAWarning when registering functions with existing name
+  - Fixed SAWarning when registering functions with existing name in default namespace
 
 - v1.6.1(July 9, 2024)
 
