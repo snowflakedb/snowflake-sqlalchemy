@@ -18,7 +18,7 @@ class TimeUnit(Enum):
 class TargetLag(TableOption):
     """Class to represent the target lag clause.
     This configuration option is used to specify the target lag time for the dynamic table.
-    FFor further information on this clause, please refer to: https://docs.snowflake.com/en/sql-reference/sql/create-dynamic-table
+    For further information on this clause, please refer to: https://docs.snowflake.com/en/sql-reference/sql/create-dynamic-table
 
 
     Target lag example usage:
