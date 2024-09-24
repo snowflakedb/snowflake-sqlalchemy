@@ -7,6 +7,10 @@ Snowflake Documentation is available at:
 Source code is also available at:
 <https://github.com/snowflakedb/snowflake-sqlalchemy>
 
+# Unreleased notes
+
+- Split large files into modules and update license headers
+
 # Release Notes
 
 - v1.6.1(July 9, 2024)

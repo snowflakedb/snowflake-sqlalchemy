@@ -11,6 +11,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# Update this for the versions
-# Don't change the forth version number from None
-VERSION = "1.6.1"
+
+from sqlalchemy import false, true
+
+
+def translate_bool(bln):
+    if bln:
+        return true()
+    return false()

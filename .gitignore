@@ -98,6 +98,7 @@ ENV/
 generated_version.py
 *coverage.xml
 .DS_Store
+junit.xml
 
 # Editor specific
 .idea/
