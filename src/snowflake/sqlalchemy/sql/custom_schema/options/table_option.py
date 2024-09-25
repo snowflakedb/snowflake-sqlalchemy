@@ -7,7 +7,7 @@ from sqlalchemy import exc
 from sqlalchemy.sql.base import SchemaEventTarget
 from sqlalchemy.sql.schema import SchemaItem, Table
 
-from snowflake.sqlalchemy.constants import DIALECT_NAME
+from snowflake.sqlalchemy._constants import DIALECT_NAME
 
 from .table_option_base import TableOptionBase
 

@@ -18,8 +18,8 @@ from sqlalchemy.sql.base import CompileState
 from sqlalchemy.sql.elements import quoted_name
 from sqlalchemy.sql.selectable import Lateral, SelectState
 
+from snowflake.sqlalchemy._constants import DIALECT_NAME
 from snowflake.sqlalchemy.compat import IS_VERSION_20, args_reducer, string_types
-from snowflake.sqlalchemy.constants import DIALECT_NAME
 from snowflake.sqlalchemy.custom_commands import (
     AWSBucket,
     AzureContainer,
