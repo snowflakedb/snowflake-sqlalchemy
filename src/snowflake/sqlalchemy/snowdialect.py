@@ -42,6 +42,7 @@ from snowflake.connector.connection import DEFAULT_CONFIGURATION
 from snowflake.connector.constants import UTF8
 from snowflake.sqlalchemy.compat import returns_unicode
 
+from ._constants import DIALECT_NAME
 from .base import (
     SnowflakeCompiler,
     SnowflakeDDLCompiler,
@@ -49,7 +50,6 @@ from .base import (
     SnowflakeIdentifierPreparer,
     SnowflakeTypeCompiler,
 )
-from .constants import DIALECT_NAME
 from .custom_types import (
     _CUSTOM_DECIMAL,
     ARRAY,

@@ -48,7 +48,7 @@ class TargetLag(TableOption):
 
     def get_expression(self):
         return (
-            ("'" + str(self.time) + " " + str(self.unit.value) + "'")
+            f"'{str(self.time)} {str(self.unit.value)}'"
             if not self.down_stream
             else "DOWNSTREAM"
         )

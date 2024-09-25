@@ -7,8 +7,8 @@ from typing import Any
 from sqlalchemy.exc import ArgumentError
 from sqlalchemy.sql.schema import MetaData, SchemaItem, Table
 
+from ..._constants import DIALECT_NAME
 from ...compat import IS_VERSION_20
-from ...constants import DIALECT_NAME
 from ...custom_commands import NoneType
 from .options.table_option import TableOption
 
