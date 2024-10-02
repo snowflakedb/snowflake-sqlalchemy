@@ -9,7 +9,10 @@ Source code is also available at:
 
 # Release Notes
 
-- 1.6.2
+- (Unreleased)
+
+  - Add support for dynamic tables and required options
+  - Fixed SAWarning when registering functions with existing name in default namespace
   - Fixed SAWarning when registering functions with existing name in default namespace
 
 - v1.6.1(July 9, 2024)

@@ -42,6 +42,7 @@ from snowflake.connector.connection import DEFAULT_CONFIGURATION
 from snowflake.connector.constants import UTF8
 from snowflake.sqlalchemy.compat import returns_unicode
 
+from ._constants import DIALECT_NAME
 from .base import (
     SnowflakeCompiler,
     SnowflakeDDLCompiler,
@@ -119,7 +120,7 @@ _ENABLE_SQLALCHEMY_AS_APPLICATION_NAME = True
 
 
 class SnowflakeDialect(default.DefaultDialect):
-    name = "snowflake"
+    name = DIALECT_NAME
     driver = "snowflake"
     max_identifier_length = 255
     cte_follows_insert = True
