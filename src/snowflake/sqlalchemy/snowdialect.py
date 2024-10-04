@@ -65,6 +65,7 @@ from .custom_types import (
     _CUSTOM_Float,
     _CUSTOM_Time,
 )
+from .sql.custom_schema.custom_table_prefix import CustomTablePrefix
 from .util import (
     _update_connection_application_name,
     parse_url_boolean,
@@ -898,15 +899,21 @@ class SnowflakeDialect(default.DefaultDialect):
         """
         Gets the indexes definition
         """
+
+        table_prefixes = self.get_multi_prefixes(
+            connection, schema, filter_prefix=CustomTablePrefix.HYBRID.name
+        )
+        if len(table_prefixes) == 0:
+            return []
         schema = schema or self.default_schema_name
         if not schema:
             result = connection.execute(
-                text("SHOW /* sqlalchemy:get_view_definition */ INDEXES")
+                text("SHOW /* sqlalchemy:get_multi_indexes */ INDEXES")
             )
         else:
             result = connection.execute(
                 text(
-                    f"SHOW /* sqlalchemy:get_indexes */ INDEXES IN SCHEMA {self._denormalize_quote_join(schema)}"
+                    f"SHOW /* sqlalchemy:get_multi_indexes */ INDEXES IN SCHEMA {self._denormalize_quote_join(schema)}"
                 )
             )
 
@@ -918,6 +925,12 @@ class SnowflakeDialect(default.DefaultDialect):
             if (
                 row[n2i["name"]] == f'SYS_INDEX_{row[n2i["table"]]}_PRIMARY'
                 or table not in filter_names
+                or (schema, table) not in table_prefixes
+                or (
+                    (schema, table) in table_prefixes
+                    and CustomTablePrefix.HYBRID.name
+                    not in table_prefixes[(schema, table)]
+                )
             ):
                 continue
             index = {
@@ -941,6 +954,50 @@ class SnowflakeDialect(default.DefaultDialect):
             return dic_data[(schema, table)]
         else:
             return []
+
+    def get_prefixes_from_data(self, n2i, row, **kw):
+        prefixes_found = []
+        for valid_prefix in CustomTablePrefix:
+            key = f"is_{valid_prefix.name.lower()}"
+            if key in n2i and row[n2i[key]] == "Y":
+                prefixes_found.append(valid_prefix.name)
+        return prefixes_found
+
+    @reflection.cache
+    def get_multi_prefixes(
+        self, connection, schema, table_name=None, filter_prefix=None, **kw
+    ):
+        """
+        Gets all table prefixes
+        """
+        schema = schema or self.default_schema_name
+        filter = f"LIKE '{table_name}'" if table_name else ""
+        if schema:
+            result = connection.execute(
+                text(
+                    f"SHOW /* sqlalchemy:get_multi_prefixes */ {filter} TABLES IN SCHEMA {schema}"
+                )
+            )
+        else:
+            result = connection.execute(
+                text(
+                    f"SHOW /* sqlalchemy:get_multi_prefixes */ {filter} TABLES LIKE '{table_name}'"
+                )
+            )
+
+        n2i = self.__class__._map_name_to_idx(result)
+        tables_prefixes = {}
+        for row in result.cursor.fetchall():
+            table = self.normalize_name(str(row[n2i["name"]]))
+            table_prefixes = self.get_prefixes_from_data(n2i, row)
+            if filter_prefix and filter_prefix not in table_prefixes:
+                continue
+            if (schema, table) in tables_prefixes:
+                tables_prefixes[(schema, table)].append(table_prefixes)
+            else:
+                tables_prefixes[(schema, table)] = table_prefixes
+
+        return tables_prefixes
 
     @reflection.cache
     def get_indexes(self, connection, tablename, schema, **kw):
@@ -976,7 +1033,7 @@ def check_table(table, connection, _ddl_runner, **kw):
     if HybridTable.is_equal_type(table):  # noqa
         return True
     if isinstance(_ddl_runner.dialect, SnowflakeDialect) and table.indexes:
-        raise NotImplementedError("Snowflake does not support indexes")
+        raise NotImplementedError("Only Snowflake Hybrid Tables supports indexes")
 
 
 dialect = SnowflakeDialect

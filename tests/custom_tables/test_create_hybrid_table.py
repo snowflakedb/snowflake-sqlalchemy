@@ -6,9 +6,10 @@ import sqlalchemy.exc
 from sqlalchemy import Column, Index, Integer, MetaData, String, select
 from sqlalchemy.orm import Session, declarative_base
 
-from src.snowflake.sqlalchemy import HybridTable
+from snowflake.sqlalchemy import HybridTable
 
 
+@pytest.mark.aws
 def test_create_hybrid_table(engine_testaccount, db_parameters, snapshot):
     metadata = MetaData()
     table_name = "test_create_hybrid_table"
@@ -24,7 +25,6 @@ def test_create_hybrid_table(engine_testaccount, db_parameters, snapshot):
 
     with engine_testaccount.connect() as conn:
         ins = dynamic_test_table_1.insert().values(id=1, name="test")
-
         conn.execute(ins)
         conn.commit()
 
@@ -37,6 +37,7 @@ def test_create_hybrid_table(engine_testaccount, db_parameters, snapshot):
         metadata.drop_all(engine_testaccount)
 
 
+@pytest.mark.aws
 def test_create_hybrid_table_with_multiple_index(
     engine_testaccount, db_parameters, snapshot, sql_compiler
 ):
@@ -64,6 +65,7 @@ def test_create_hybrid_table_with_multiple_index(
         metadata.drop_all(engine_testaccount)
 
 
+@pytest.mark.aws
 def test_create_hybrid_table_with_orm(sql_compiler, engine_testaccount):
     Base = declarative_base()
     session = Session(bind=engine_testaccount)

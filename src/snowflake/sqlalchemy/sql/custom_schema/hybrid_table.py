@@ -10,6 +10,7 @@ from sqlalchemy.sql.schema import MetaData, SchemaItem
 from snowflake.sqlalchemy.custom_commands import NoneType
 
 from .custom_table_base import CustomTableBase
+from .custom_table_prefix import CustomTablePrefix
 
 
 class HybridTable(CustomTableBase):
@@ -22,7 +23,7 @@ class HybridTable(CustomTableBase):
     interface for creating dynamic tables and management.
     """
 
-    __table_prefix__ = "HYBRID"
+    __table_prefixes__ = [CustomTablePrefix.HYBRID]
 
     _support_primary_and_foreign_keys = True
 

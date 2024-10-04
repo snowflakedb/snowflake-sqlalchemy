@@ -1,7 +1,7 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
-
+import pytest
 from sqlalchemy import Column, Integer, MetaData, String
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.sql.ddl import CreateTable
@@ -9,6 +9,7 @@ from sqlalchemy.sql.ddl import CreateTable
 from snowflake.sqlalchemy import GEOMETRY, HybridTable
 
 
+@pytest.mark.aws
 def test_compile_hybrid_table(sql_compiler, snapshot):
     metadata = MetaData()
     table_name = "test_hybrid_table"
@@ -27,6 +28,7 @@ def test_compile_hybrid_table(sql_compiler, snapshot):
     assert actual == snapshot
 
 
+@pytest.mark.aws
 def test_compile_hybrid_table_orm(sql_compiler, snapshot):
     Base = declarative_base()
 

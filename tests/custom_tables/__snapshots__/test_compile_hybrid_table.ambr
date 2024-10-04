@@ -1,0 +1,7 @@
+# serializer version: 1
+# name: test_compile_hybrid_table
+  'CREATE HYBRID TABLE test_hybrid_table (\tid INTEGER NOT NULL AUTOINCREMENT, \tname VARCHAR, \tgeom GEOMETRY, \tPRIMARY KEY (id))'
+# ---
+# name: test_compile_hybrid_table_orm
+  'CREATE HYBRID TABLE test_hybrid_table_orm (\tid INTEGER NOT NULL AUTOINCREMENT, \tname VARCHAR, \tPRIMARY KEY (id))'
+# ---

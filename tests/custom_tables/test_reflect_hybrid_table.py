@@ -1,10 +1,12 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
+import pytest
 from sqlalchemy import MetaData, Table
 from sqlalchemy.sql.ddl import CreateTable
 
 
+@pytest.mark.aws
 def test_simple_reflection_hybrid_table_as_table(
     engine_testaccount, db_parameters, sql_compiler, snapshot
 ):
@@ -37,6 +39,7 @@ def test_simple_reflection_hybrid_table_as_table(
         metadata.drop_all(engine_testaccount)
 
 
+@pytest.mark.aws
 def test_reflect_hybrid_table_with_index(
     engine_testaccount, db_parameters, sql_compiler
 ):

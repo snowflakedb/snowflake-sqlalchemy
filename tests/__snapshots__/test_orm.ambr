@@ -1,0 +1,4 @@
+# serializer version: 1
+# name: test_orm_one_to_many_relationship_with_hybrid_table
+  ProgrammingError('(snowflake.connector.errors.ProgrammingError) 200009 (22000): Foreign key constraint "SYS_INDEX_HB_TBL_ADDRESS_FOREIGN_KEY_USER_ID_HB_TBL_USER_ID" was violated.')
+# ---

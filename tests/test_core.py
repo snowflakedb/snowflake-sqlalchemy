@@ -506,7 +506,7 @@ def test_get_indexes(engine_testaccount, db_parameters):
     """
     Tests get indexes
 
-    NOTE: Snowflake Tables doesn't support indexes
+    NOTE: Only Snowflake Hybrid Tables support indexes
     """
     schema = db_parameters["schema"]
     metadata = MetaData()

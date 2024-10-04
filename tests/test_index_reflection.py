@@ -1,10 +1,12 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
+import pytest
 from sqlalchemy import MetaData
 from sqlalchemy.engine import reflection
 
 
+@pytest.mark.aws
 def test_indexes_reflection(engine_testaccount, db_parameters, sql_compiler):
     metadata = MetaData()
 

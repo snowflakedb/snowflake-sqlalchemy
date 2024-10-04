@@ -111,6 +111,9 @@ jobs:
         run: |
           gpg --quiet --batch --yes --decrypt --passphrase="$PARAMETERS_SECRET" \
           .github/workflows/parameters/parameters_${{ matrix.cloud-provider }}.py.gpg > tests/parameters.py
+      - name: Run test for AWS
+        run: hatch run test-dialect-aws
+        if: matrix.cloud-provider == 'aws'
       - name: Run tests
         run: hatch run test-dialect
       - uses: actions/upload-artifact@v4
@@ -203,6 +206,9 @@ jobs:
           python -m pip install -U uv
           python -m uv pip install -U hatch
           python -m hatch env create default
+      - name: Run test for AWS
+        run: hatch run sa14:test-dialect-aws
+        if: matrix.cloud-provider == 'aws'
       - name: Run tests
         run: hatch run sa14:test-dialect
       - uses: actions/upload-artifact@v4

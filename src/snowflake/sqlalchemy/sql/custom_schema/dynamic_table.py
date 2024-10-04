@@ -10,6 +10,7 @@ from sqlalchemy.sql.schema import MetaData, SchemaItem
 
 from snowflake.sqlalchemy.custom_commands import NoneType
 
+from .custom_table_prefix import CustomTablePrefix
 from .options.target_lag import TargetLag
 from .options.warehouse import Warehouse
 from .table_from_query import TableFromQueryBase
@@ -27,7 +28,7 @@ class DynamicTable(TableFromQueryBase):
 
     """
 
-    __table_prefix__ = "DYNAMIC"
+    __table_prefixes__ = [CustomTablePrefix.DYNAMIC]
 
     _support_primary_and_foreign_keys = False
 
