@@ -76,6 +76,7 @@ def test_create_dynamic_table_without_dynamictable_class(
         TargetLag(1, TimeUnit.HOURS),
         Warehouse(warehouse),
         AsQuery("SELECT id, name from test_table_1;"),
+        AsQuery("SELECT id, name from test_table_1;"),
         prefixes=["DYNAMIC"],
     )
 

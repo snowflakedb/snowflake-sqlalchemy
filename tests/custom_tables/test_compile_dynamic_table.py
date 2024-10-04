@@ -121,11 +121,13 @@ def test_compile_dynamic_table_orm(sql_compiler, snapshot):
     assert actual == snapshot
 
 
-def test_compile_dynamic_table_orm_with_str_keys(sql_compiler, snapshot):
+def test_compile_dynamic_table_orm_with_str_keys(sql_compiler, db_parameters, snapshot):
     Base = declarative_base()
+    schema = db_parameters["schema"]
 
     class TestDynamicTableOrm(Base):
         __tablename__ = "test_dynamic_table_orm_2"
+        __table_args__ = {"schema": schema}
 
         @classmethod
         def __table_cls__(cls, name, metadata, *arg, **kw):

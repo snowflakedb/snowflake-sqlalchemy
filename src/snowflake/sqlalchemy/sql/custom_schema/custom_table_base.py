@@ -49,3 +49,12 @@ class CustomTableBase(Table):
         if option_name in self.dialect_options[DIALECT_NAME]:
             return self.dialect_options[DIALECT_NAME][option_name]
         return NoneType
+
+    @classmethod
+    def is_equal_type(cls, table: Table) -> bool:
+        if isinstance(table, cls.__class__):
+            return True
+        for prefix in table._prefixes:
+            if prefix == cls.__table_prefix__:
+                return True
+        return False

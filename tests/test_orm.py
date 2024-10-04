@@ -14,11 +14,15 @@ from sqlalchemy import (
     Integer,
     Sequence,
     String,
+    Table,
+    exc,
     func,
     select,
     text,
 )
 from sqlalchemy.orm import Session, declarative_base, relationship
+
+from src.snowflake.sqlalchemy import HybridTable
 
 
 def test_basic_orm(engine_testaccount):
@@ -56,14 +60,15 @@ def test_basic_orm(engine_testaccount):
         Base.metadata.drop_all(engine_testaccount)
 
 
-def test_orm_one_to_many_relationship(engine_testaccount):
+def test_orm_one_to_many_relationship(engine_testaccount, db_parameters):
     """
     Tests One to Many relationship
     """
     Base = declarative_base()
+    prefix = "tbl_"
 
     class User(Base):
-        __tablename__ = "user"
+        __tablename__ = prefix + "user"
 
         id = Column(Integer, Sequence("user_id_seq"), primary_key=True)
         name = Column(String)
@@ -73,13 +78,13 @@ def test_orm_one_to_many_relationship(engine_testaccount):
             return f"<User({self.name!r}, {self.fullname!r})>"
 
     class Address(Base):
-        __tablename__ = "address"
+        __tablename__ = prefix + "address"
 
         id = Column(Integer, Sequence("address_id_seq"), primary_key=True)
         email_address = Column(String, nullable=False)
-        user_id = Column(Integer, ForeignKey("user.id"))
+        user_id = Column(Integer, ForeignKey(f"{User.__tablename__}.id"))
 
-        user = relationship("User", backref="addresses")
+        user = relationship(User, backref="addresses")
 
         def __repr__(self):
             return f"<Address({repr(self.email_address)})>"
@@ -123,14 +128,84 @@ def test_orm_one_to_many_relationship(engine_testaccount):
         Base.metadata.drop_all(engine_testaccount)
 
 
-def test_delete_cascade(engine_testaccount):
+def test_orm_one_to_many_relationship_with_hybrid_table(engine_testaccount, snapshot):
+    """
+    Tests One to Many relationship
+    """
+    Base = declarative_base()
+
+    class User(Base):
+        __tablename__ = "hb_tbl_user"
+
+        @classmethod
+        def __table_cls__(cls, name, metadata, *arg, **kw):
+            return HybridTable(name, metadata, *arg, **kw)
+
+        id = Column(Integer, Sequence("user_id_seq"), primary_key=True)
+        name = Column(String)
+        fullname = Column(String)
+
+        def __repr__(self):
+            return f"<User({self.name!r}, {self.fullname!r})>"
+
+    class Address(Base):
+        __tablename__ = "hb_tbl_address"
+
+        @classmethod
+        def __table_cls__(cls, name, metadata, *arg, **kw):
+            return HybridTable(name, metadata, *arg, **kw)
+
+        id = Column(Integer, Sequence("address_id_seq"), primary_key=True)
+        email_address = Column(String, nullable=False)
+        user_id = Column(Integer, ForeignKey(f"{User.__tablename__}.id"))
+
+        user = relationship(User, backref="addresses")
+
+        def __repr__(self):
+            return f"<Address({repr(self.email_address)})>"
+
+    Base.metadata.create_all(engine_testaccount)
+
+    try:
+        jack = User(name="jack", fullname="Jack Bean")
+        assert jack.addresses == [], "one to many record is empty list"
+
+        jack.addresses = [
+            Address(email_address="jack@gmail.com"),
+            Address(email_address="j25@yahoo.com"),
+            Address(email_address="jack@hotmail.com"),
+        ]
+
+        session = Session(bind=engine_testaccount)
+        session.add(jack)  # cascade each Address into the Session as well
+        session.commit()
+
+        session.delete(jack)
+
+        with pytest.raises(exc.ProgrammingError) as exc_info:
+            session.query(Address).all()
+
+        assert exc_info.value == snapshot, "Iceberg Table enforce FK constraint"
+
+    finally:
+        Base.metadata.drop_all(engine_testaccount)
+
+
+@pytest.mark.parametrize(
+    "table_class, prefix", [(Table, "tbl_"), (HybridTable, "hb_tbl_")]
+)
+def test_delete_cascade(engine_testaccount, table_class, prefix):
     """
     Test delete cascade
     """
     Base = declarative_base()
 
     class User(Base):
-        __tablename__ = "user"
+        __tablename__ = prefix + "user"
+
+        @classmethod
+        def __table_cls__(cls, name, metadata, *arg, **kw):
+            return table_class(name, metadata, *arg, **kw)
 
         id = Column(Integer, Sequence("user_id_seq"), primary_key=True)
         name = Column(String)
@@ -144,13 +219,17 @@ def test_delete_cascade(engine_testaccount):
             return f"<User({self.name!r}, {self.fullname!r})>"
 
     class Address(Base):
-        __tablename__ = "address"
+        __tablename__ = prefix + "address"
+
+        @classmethod
+        def __table_cls__(cls, name, metadata, *arg, **kw):
+            return table_class(name, metadata, *arg, **kw)
 
         id = Column(Integer, Sequence("address_id_seq"), primary_key=True)
         email_address = Column(String, nullable=False)
-        user_id = Column(Integer, ForeignKey("user.id"))
+        user_id = Column(Integer, ForeignKey(f"{User.__tablename__}.id"))
 
-        user = relationship("User", back_populates="addresses")
+        user = relationship(User, back_populates="addresses")
 
         def __repr__(self):
             return f"<Address({repr(self.email_address)})>"

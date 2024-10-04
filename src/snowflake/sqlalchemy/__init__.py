@@ -61,7 +61,7 @@ from .custom_types import (
     VARBINARY,
     VARIANT,
 )
-from .sql.custom_schema import DynamicTable
+from .sql.custom_schema import DynamicTable, HybridTable
 from .sql.custom_schema.options import AsQuery, TargetLag, TimeUnit, Warehouse
 from .util import _url as URL
 
@@ -120,4 +120,5 @@ __all__ = (
     "TargetLag",
     "TimeUnit",
     "Warehouse",
+    "HybridTable",
 )

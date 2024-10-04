@@ -353,14 +353,6 @@ class SnowflakeDialect(default.DefaultDialect):
         return name_to_idx
 
     @reflection.cache
-    def get_indexes(self, connection, table_name, schema=None, **kw):
-        """
-        Gets all indexes
-        """
-        # no index is supported by Snowflake
-        return []
-
-    @reflection.cache
     def get_check_constraints(self, connection, table_name, schema, **kw):
         # check constraints are not supported by Snowflake
         return []
@@ -895,6 +887,73 @@ class SnowflakeDialect(default.DefaultDialect):
             )
         }
 
+    def get_multi_indexes(
+        self,
+        connection,
+        *,
+        schema,
+        filter_names,
+        **kw,
+    ):
+        """
+        Gets the indexes definition
+        """
+        schema = schema or self.default_schema_name
+        if not schema:
+            result = connection.execute(
+                text("SHOW /* sqlalchemy:get_view_definition */ INDEXES")
+            )
+        else:
+            result = connection.execute(
+                text(
+                    f"SHOW /* sqlalchemy:get_indexes */ INDEXES IN SCHEMA {self._denormalize_quote_join(schema)}"
+                )
+            )
+
+        n2i = self.__class__._map_name_to_idx(result)
+        indexes = {}
+
+        for row in result.cursor.fetchall():
+            table = self.normalize_name(str(row[n2i["table"]]))
+            if (
+                row[n2i["name"]] == f'SYS_INDEX_{row[n2i["table"]]}_PRIMARY'
+                or table not in filter_names
+            ):
+                continue
+            index = {
+                "name": row[n2i["name"]],
+                "unique": row[n2i["is_unique"]] == "Y",
+                "column_names": row[n2i["columns"]],
+                "include_columns": row[n2i["included_columns"]],
+                "dialect_options": {},
+            }
+            if (schema, table) in indexes:
+                indexes[(schema, table)] = indexes[(schema, table)].append(index)
+            else:
+                indexes[(schema, table)] = [index]
+
+        return list(indexes.items())
+
+    def _value_or_default(self, data, table, schema):
+        table = self.normalize_name(str(table))
+        dic_data = dict(data)
+        if (schema, table) in dic_data:
+            return dic_data[(schema, table)]
+        else:
+            return []
+
+    @reflection.cache
+    def get_indexes(self, connection, tablename, schema, **kw):
+        """
+        Gets the indexes definition
+        """
+        table_name = self.normalize_name(str(tablename))
+        data = self.get_multi_indexes(
+            connection=connection, schema=schema, filter_names=[table_name], **kw
+        )
+
+        return self._value_or_default(data, table_name, schema)
+
     def connect(self, *cargs, **cparams):
         return (
             super().connect(
@@ -912,6 +971,10 @@ class SnowflakeDialect(default.DefaultDialect):
 
 @sa_vnt.listens_for(Table, "before_create")
 def check_table(table, connection, _ddl_runner, **kw):
+    from .sql.custom_schema.hybrid_table import HybridTable
+
+    if HybridTable.is_equal_type(table):  # noqa
+        return True
     if isinstance(_ddl_runner.dialect, SnowflakeDialect) and table.indexes:
         raise NotImplementedError("Snowflake does not support indexes")
 

@@ -502,19 +502,20 @@ def test_inspect_column(engine_testaccount):
         users.drop(engine_testaccount)
 
 
-def test_get_indexes(engine_testaccount):
+def test_get_indexes(engine_testaccount, db_parameters):
     """
     Tests get indexes
 
-    NOTE: Snowflake doesn't support indexes
+    NOTE: Snowflake Tables doesn't support indexes
     """
+    schema = db_parameters["schema"]
     metadata = MetaData()
     users, addresses = _create_users_addresses_tables_without_sequence(
         engine_testaccount, metadata
     )
     try:
         inspector = inspect(engine_testaccount)
-        assert inspector.get_indexes("users") == []
+        assert inspector.get_indexes("users", schema) == []
 
     finally:
         addresses.drop(engine_testaccount)
