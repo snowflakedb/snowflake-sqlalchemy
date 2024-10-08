@@ -2,7 +2,6 @@
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
 
-import typing
 from typing import Any
 
 from sqlalchemy.exc import ArgumentError
@@ -10,35 +9,23 @@ from sqlalchemy.sql.schema import MetaData, SchemaItem
 
 from snowflake.sqlalchemy.custom_commands import NoneType
 
+from .custom_table_base import CustomTableBase
 from .custom_table_prefix import CustomTablePrefix
-from .options.target_lag import TargetLag
-from .options.warehouse import Warehouse
-from .table_from_query import TableFromQueryBase
 
 
-class DynamicTable(TableFromQueryBase):
+class HybridTable(CustomTableBase):
     """
-    A class representing a dynamic table with configurable options and settings.
+    A class representing a hybrid table with configurable options and settings.
 
-    The `DynamicTable` class allows for the creation and querying of tables with
-    specific options, such as `Warehouse` and `TargetLag`.
+    The `HybridTable` class allows for the creation and querying of OLTP Snowflake Tables .
 
     While it does not support reflection at this time, it provides a flexible
     interface for creating dynamic tables and management.
-
     """
 
-    __table_prefixes__ = [CustomTablePrefix.DYNAMIC]
+    __table_prefixes__ = [CustomTablePrefix.HYBRID]
 
-    _support_primary_and_foreign_keys = False
-
-    @property
-    def warehouse(self) -> typing.Optional[Warehouse]:
-        return self._get_dialect_option(Warehouse.__option_name__)
-
-    @property
-    def target_lag(self) -> typing.Optional[TargetLag]:
-        return self._get_dialect_option(TargetLag.__option_name__)
+    _support_primary_and_foreign_keys = True
 
     def __init__(
         self,
@@ -62,26 +49,19 @@ class DynamicTable(TableFromQueryBase):
 
     def _validate_table(self):
         missing_attributes = []
-        if self.target_lag is NoneType:
-            missing_attributes.append("TargetLag")
-        if self.warehouse is NoneType:
-            missing_attributes.append("Warehouse")
-        if self.as_query is NoneType:
-            missing_attributes.append("AsQuery")
+        if self.key is NoneType:
+            missing_attributes.append("Primary Key")
         if missing_attributes:
             raise ArgumentError(
-                "DYNAMIC TABLE must have the following arguments: %s"
+                "HYBRID TABLE must have the following arguments: %s"
                 % ", ".join(missing_attributes)
             )
         super()._validate_table()
 
     def __repr__(self) -> str:
-        return "DynamicTable(%s)" % ", ".join(
+        return "HybridTable(%s)" % ", ".join(
             [repr(self.name)]
             + [repr(self.metadata)]
             + [repr(x) for x in self.columns]
-            + [repr(self.target_lag)]
-            + [repr(self.warehouse)]
-            + [repr(self.as_query)]
             + [f"{k}={repr(getattr(self, k))}" for k in ["schema"]]
         )

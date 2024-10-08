@@ -10,12 +10,17 @@ from sqlalchemy.sql.schema import MetaData, SchemaItem, Table
 from ..._constants import DIALECT_NAME
 from ...compat import IS_VERSION_20
 from ...custom_commands import NoneType
+from .custom_table_prefix import CustomTablePrefix
 from .options.table_option import TableOption
 
 
 class CustomTableBase(Table):
-    __table_prefix__ = ""
-    _support_primary_and_foreign_keys = True
+    __table_prefixes__: typing.List[CustomTablePrefix] = []
+    _support_primary_and_foreign_keys: bool = True
+
+    @property
+    def table_prefixes(self) -> typing.List[str]:
+        return [prefix.name for prefix in self.__table_prefixes__]
 
     def __init__(
         self,
@@ -24,8 +29,8 @@ class CustomTableBase(Table):
         *args: SchemaItem,
         **kw: Any,
     ) -> None:
-        if self.__table_prefix__ != "":
-            prefixes = kw.get("prefixes", []) + [self.__table_prefix__]
+        if len(self.__table_prefixes__) > 0:
+            prefixes = kw.get("prefixes", []) + self.table_prefixes
             kw.update(prefixes=prefixes)
         if not IS_VERSION_20 and hasattr(super(), "_init"):
             super()._init(name, metadata, *args, **kw)
@@ -40,7 +45,7 @@ class CustomTableBase(Table):
             self.primary_key or self.foreign_keys
         ):
             raise ArgumentError(
-                f"Primary key and foreign keys are not supported in {self.__table_prefix__} TABLE."
+                f"Primary key and foreign keys are not supported in {' '.join(self.table_prefixes)} TABLE."
             )
 
         return True
@@ -49,3 +54,11 @@ class CustomTableBase(Table):
         if option_name in self.dialect_options[DIALECT_NAME]:
             return self.dialect_options[DIALECT_NAME][option_name]
         return NoneType
+
+    @classmethod
+    def is_equal_type(cls, table: Table) -> bool:
+        for prefix in cls.__table_prefixes__:
+            if prefix.name not in table._prefixes:
+                return False
+
+        return True

@@ -12,7 +12,7 @@ Source code is also available at:
 - (Unreleased)
 
   - Add support for dynamic tables and required options
-  - Fixed SAWarning when registering functions with existing name in default namespace
+  - Add support for hybrid tables
   - Fixed SAWarning when registering functions with existing name in default namespace
 
 - v1.6.1(July 9, 2024)
