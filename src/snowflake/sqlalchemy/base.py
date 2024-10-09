@@ -569,11 +569,11 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         # everything else (selects, etc.)
         else:
             from_ = f"({copy_into.from_._compiler_dispatch(self, **kw)})"
-        credentials, encryption = "", ""
+        storage_integration, credentials, encryption = "", "", ""
         if isinstance(into, tuple):
-            into, credentials, encryption = into
+            into, storage_integration, credentials, encryption = into
         elif isinstance(from_, tuple):
-            from_, credentials, encryption = from_
+            from_, storage_integration, credentials, encryption = from_
         options_list = list(copy_into.copy_options.items())
         if kw.get("deterministic", False):
             options_list.sort(key=operator.itemgetter(0))
@@ -597,6 +597,8 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             if copy_into.copy_options
             else ""
         )
+        if storage_integration:
+            options += f" {storage_integration}"
         if credentials:
             options += f" {credentials}"
         if encryption:
@@ -635,6 +637,9 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         credentials_list = list(aws_bucket.credentials_used.items())
         if kw.get("deterministic", False):
             credentials_list.sort(key=operator.itemgetter(0))
+        storage_integration = "STORAGE_INTEGRATION={}".format(
+            aws_bucket.storage_integration_used
+        )
         credentials = "CREDENTIALS=({})".format(
             " ".join(f"{n}='{v}'" for n, v in credentials_list)
         )
@@ -652,6 +657,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         )
         return (
             uri,
+            storage_integration if aws_bucket.storage_integration_used else "",
             credentials if aws_bucket.credentials_used else "",
             encryption if aws_bucket.encryption_used else "",
         )
@@ -660,6 +666,9 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         credentials_list = list(azure_container.credentials_used.items())
         if kw.get("deterministic", False):
             credentials_list.sort(key=operator.itemgetter(0))
+        storage_integration = "STORAGE_INTEGRATION={}".format(
+            azure_container.storage_integration_used
+        )
         credentials = "CREDENTIALS=({})".format(
             " ".join(f"{n}='{v}'" for n, v in credentials_list)
         )
@@ -679,6 +688,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         )
         return (
             uri,
+            storage_integration if azure_container.storage_integration_used else "",
             credentials if azure_container.credentials_used else "",
             encryption if azure_container.encryption_used else "",
         )
