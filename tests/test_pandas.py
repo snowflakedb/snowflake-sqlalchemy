@@ -169,7 +169,7 @@ def test_no_indexes(engine_testaccount, db_parameters):
                 con=conn,
                 if_exists="replace",
             )
-        assert str(exc.value) == "Snowflake does not support indexes"
+        assert str(exc.value) == "Only Snowflake Hybrid Tables supports indexes"
 
 
 def test_timezone(db_parameters, engine_testaccount, engine_testaccount_with_numpy):

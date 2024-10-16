@@ -18,9 +18,16 @@ from sqlalchemy.sql.base import CompileState
 from sqlalchemy.sql.elements import quoted_name
 from sqlalchemy.sql.selectable import Lateral, SelectState
 
-from .compat import IS_VERSION_20, args_reducer, string_types
-from .custom_commands import AWSBucket, AzureContainer, ExternalStage
+from snowflake.sqlalchemy._constants import DIALECT_NAME
+from snowflake.sqlalchemy.compat import IS_VERSION_20, args_reducer, string_types
+from snowflake.sqlalchemy.custom_commands import (
+    AWSBucket,
+    AzureContainer,
+    ExternalStage,
+)
+
 from .functions import flatten
+from .sql.custom_schema.options.table_option_base import TableOptionBase
 from .util import (
     _find_left_clause_to_join_from,
     _set_connection_interpolate_empty_sequences,
@@ -184,7 +191,6 @@ class SnowflakeSelectState(SelectState):
                     [element._from_objects for element in statement._where_criteria]
                 ),
             ):
-
                 potential[from_clause] = ()
 
             all_clauses = list(potential.keys())
@@ -879,7 +885,7 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
 
         return " ".join(colspec)
 
-    def post_create_table(self, table):
+    def handle_cluster_by(self, table):
         """
         Handles snowflake-specific ``CREATE TABLE ... CLUSTER BY`` syntax.
 
@@ -909,12 +915,27 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
         <BLANKLINE>
         """
         text = ""
-        info = table.dialect_options["snowflake"]
+        info = table.dialect_options[DIALECT_NAME]
         cluster = info.get("clusterby")
         if cluster:
             text += " CLUSTER BY ({})".format(
                 ", ".join(self.denormalize_column_name(key) for key in cluster)
             )
+        return text
+
+    def post_create_table(self, table):
+        text = self.handle_cluster_by(table)
+        options = [
+            option
+            for _, option in table.dialect_options[DIALECT_NAME].items()
+            if isinstance(option, TableOptionBase)
+        ]
+        options.sort(
+            key=lambda x: (x.__priority__.value, x.__option_name__), reverse=True
+        )
+        for option in options:
+            text += "\t" + option.render_option(self)
+
         return text
 
     def visit_create_stage(self, create_stage, **kw):
@@ -1065,4 +1086,4 @@ class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
 
 construct_arguments = [(Table, {"clusterby": None})]
 
-functions.register_function("flatten", flatten)
+functions.register_function("flatten", flatten, "snowflake")
