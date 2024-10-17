@@ -14,6 +14,8 @@ Source code is also available at:
   - Add support for dynamic tables and required options
   - Add support for hybrid tables
   - Fixed SAWarning when registering functions with existing name in default namespace
+  - Update options to be defined in key arguments instead of arguments.
+  - Add support for refresh_mode option in DynamicTable
 
 - v1.6.1(July 9, 2024)
 

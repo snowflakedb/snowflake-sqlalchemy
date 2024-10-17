@@ -8,6 +8,7 @@ from snowflake.sqlalchemy import (
     IdentifierOption,
     KeywordOption,
     LiteralOption,
+    SnowflakeKeyword,
     TableOptionKey,
     TargetLagOption,
     exc,
@@ -35,23 +36,25 @@ def test_identifier_option_without_name(snapshot):
 
 
 def test_identifier_option_with_wrong_type(snapshot):
-    identifier = IdentifierOption(23)
-    with pytest.raises(exc.OptionKeyNotProvidedError) as exc_info:
+    identifier = IdentifierOption.create(TableOptionKey.WAREHOUSE, 23)
+    with pytest.raises(exc.InvalidTableParameterTypeError) as exc_info:
         identifier.render_option(None)
     assert exc_info.value == snapshot
 
 
 def test_literal_option_with_wrong_type(snapshot):
-    literal = LiteralOption(0.32)
-    with pytest.raises(exc.OptionKeyNotProvidedError) as exc_info:
+    literal = LiteralOption.create(
+        TableOptionKey.WAREHOUSE, SnowflakeKeyword.DOWNSTREAM
+    )
+    with pytest.raises(exc.InvalidTableParameterTypeError) as exc_info:
         literal.render_option(None)
     assert exc_info.value == snapshot
 
 
 def test_invalid_as_query_option(snapshot):
-    identifier = IdentifierOption(23)
-    with pytest.raises(exc.OptionKeyNotProvidedError) as exc_info:
-        identifier.render_option(None)
+    as_query = AsQueryOption.create(23)
+    with pytest.raises(exc.InvalidTableParameterTypeError) as exc_info:
+        as_query.render_option(None)
     assert exc_info.value == snapshot
 
 

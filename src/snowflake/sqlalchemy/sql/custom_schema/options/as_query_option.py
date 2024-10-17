@@ -12,11 +12,10 @@ from .table_option import Priority, TableOption, TableOptionKey
 
 class AsQueryOption(TableOption):
     """Class to represent an AS clause in tables.
-    This configuration option is used to specify the query from which the table is created.
     For further information on this clause, please refer to: https://docs.snowflake.com/en/sql-reference/sql/create-table#create-table-as-select-also-referred-to-as-ctas
 
     Example:
-        as_query=AsQuery('select name, address from existing_table where name = "test"')
+        as_query=AsQueryOption('select name, address from existing_table where name = "test"')
 
         is equivalent to:
 
@@ -32,9 +31,9 @@ class AsQueryOption(TableOption):
     def create(
         value: Optional[Union["AsQueryOption", str, Selectable]]
     ) -> "TableOption":
-        if isinstance(value, NoneType) or isinstance(value, AsQueryOption):
+        if isinstance(value, (NoneType, AsQueryOption)):
             return value
-        if isinstance(value, str) or isinstance(value, Selectable):
+        if isinstance(value, (str, Selectable)):
             return AsQueryOption(value)
         return TableOption._get_invalid_table_option(
             TableOptionKey.AS_QUERY,
@@ -58,7 +57,7 @@ class AsQueryOption(TableOption):
         return self.template() % (self.__get_expression())
 
     def __repr__(self) -> str:
-        return "AsQuery(%s)" % self.__get_expression()
+        return "AsQueryOption(%s)" % self.__get_expression()
 
 
 AsQueryOptionType = Union[AsQueryOption, str, Selectable]

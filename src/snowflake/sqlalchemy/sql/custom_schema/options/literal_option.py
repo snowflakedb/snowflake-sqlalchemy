@@ -12,7 +12,7 @@ class LiteralOption(TableOption):
     """Class to represent a literal option in Snowflake Table.
 
     Example:
-        warehouse = Literal('my_warehouse')
+        warehouse = LiteralOption('my_warehouse')
 
         is equivalent to:
 

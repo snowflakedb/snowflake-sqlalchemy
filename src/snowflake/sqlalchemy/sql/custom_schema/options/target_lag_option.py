@@ -19,14 +19,12 @@ class TimeUnit(Enum):
 
 
 class TargetLagOption(TableOption):
-    """Class to represent the target lag clause.
-    This configuration option is used to specify the target lag time for the dynamic table.
+    """Class to represent the target lag clause in Dynamic Tables.
     For further information on this clause, please refer to: https://docs.snowflake.com/en/sql-reference/sql/create-dynamic-table
-
 
     Example using the time and unit parameters:
 
-        target_lag = TargetLag(10, TimeUnit.SECONDS)
+        target_lag = TargetLagOption(10, TimeUnit.SECONDS)
 
         is equivalent to:
 
@@ -90,7 +88,7 @@ class TargetLagOption(TableOption):
         return self.template() % (self.__get_expression())
 
     def __repr__(self) -> str:
-        return "TargetLag(%s)" % self.__get_expression()
+        return "TargetLagOption(%s)" % self.__get_expression()
 
 
 TargetLagOptionType = Union[TargetLagOption, Tuple[int, TimeUnit]]

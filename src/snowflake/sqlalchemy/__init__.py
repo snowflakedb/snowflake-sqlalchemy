@@ -129,7 +129,7 @@ __all__ = (
     # Custom Tables
     "HybridTable",
     "DynamicTable",
-    # Custom Schema Options
+    # Custom Table Options
     "AsQueryOption",
     "TargetLagOption",
     "LiteralOption",

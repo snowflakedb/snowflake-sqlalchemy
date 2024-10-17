@@ -13,7 +13,7 @@ class KeywordOption(TableOption):
     """Class to represent a keyword option in Snowflake Tables.
 
     Example:
-        target_lag = Keyword(SnowflakeKeyword.DOWNSTREAM)
+        target_lag = KeywordOption(SnowflakeKeyword.DOWNSTREAM)
 
         is equivalent to:
 

@@ -12,7 +12,7 @@ class IdentifierOption(TableOption):
     """Class to represent an identifier option in Snowflake Tables.
 
     Example:
-        warehouse = Identifier('my_warehouse')
+        warehouse = IdentifierOption('my_warehouse')
 
         is equivalent to:
 

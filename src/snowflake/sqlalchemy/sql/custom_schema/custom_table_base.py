@@ -50,13 +50,6 @@ class CustomTableBase(Table):
         if not kw.get("autoload_with", False):
             self._validate_table()
 
-    def _append_parameter_error(
-        self, parameter: str, expected_argument: str, current_argument: str
-    ) -> None:
-        if not hasattr(self, "_parameter_error"):
-            self._parameter_error = []
-        self._parameter_error.append((parameter, expected_argument, current_argument))
-
     def _validate_table(self):
         exceptions: List[Exception] = []
 
