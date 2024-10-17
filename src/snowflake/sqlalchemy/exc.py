@@ -71,4 +71,4 @@ class MultipleErrors(ArgumentError):
         self.errors = errors
 
     def __str__(self):
-        return "\n ".join(str(e) for e in self.errors)
+        return "".join(str(e) for e in self.errors)
