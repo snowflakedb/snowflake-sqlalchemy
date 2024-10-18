@@ -1,0 +1,13 @@
+# serializer version: 1
+# name: test_identifier_option_with_wrong_type
+  InvalidTableParameterTypeError("Invalid parameter type 'int' provided for 'warehouse'. Expected one of the following types: 'IdentifierOption', 'str'.\n")
+# ---
+# name: test_identifier_option_without_name
+  OptionKeyNotProvidedError('Expected option key in IdentifierOption option but got NoneType instead.')
+# ---
+# name: test_invalid_as_query_option
+  InvalidTableParameterTypeError("Invalid parameter type 'int' provided for 'as_query'. Expected one of the following types: 'AsQueryOption', 'str', 'Selectable'.\n")
+# ---
+# name: test_literal_option_with_wrong_type
+  InvalidTableParameterTypeError("Invalid parameter type 'SnowflakeKeyword' provided for 'warehouse'. Expected one of the following types: 'LiteralOption', 'str', 'int'.\n")
+# ---

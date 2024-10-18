@@ -5,6 +5,7 @@
 import itertools
 import operator
 import re
+from typing import List
 
 from sqlalchemy import exc as sa_exc
 from sqlalchemy import inspect, sql
@@ -26,8 +27,13 @@ from snowflake.sqlalchemy.custom_commands import (
     ExternalStage,
 )
 
+from .exc import (
+    CustomOptionsAreOnlySupportedOnSnowflakeTables,
+    UnexpectedOptionTypeError,
+)
 from .functions import flatten
-from .sql.custom_schema.options.table_option_base import TableOptionBase
+from .sql.custom_schema.custom_table_base import CustomTableBase
+from .sql.custom_schema.options.table_option import TableOption
 from .util import (
     _find_left_clause_to_join_from,
     _set_connection_interpolate_empty_sequences,
@@ -925,16 +931,24 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
 
     def post_create_table(self, table):
         text = self.handle_cluster_by(table)
-        options = [
-            option
-            for _, option in table.dialect_options[DIALECT_NAME].items()
-            if isinstance(option, TableOptionBase)
-        ]
-        options.sort(
-            key=lambda x: (x.__priority__.value, x.__option_name__), reverse=True
-        )
-        for option in options:
-            text += "\t" + option.render_option(self)
+        options = []
+        invalid_options: List[str] = []
+
+        for key, option in table.dialect_options[DIALECT_NAME].items():
+            if isinstance(option, TableOption):
+                options.append(option)
+            elif key not in ["clusterby", "*"]:
+                invalid_options.append(key)
+
+        if len(invalid_options) > 0:
+            raise UnexpectedOptionTypeError(sorted(invalid_options))
+
+        if isinstance(table, CustomTableBase):
+            options.sort(key=lambda x: (x.priority.value, x.option_name), reverse=True)
+            for option in options:
+                text += "\t" + option.render_option(self)
+        elif len(options) > 0:
+            raise CustomOptionsAreOnlySupportedOnSnowflakeTables()
 
         return text
 

@@ -74,7 +74,7 @@ def test_simple_reflection_without_options_loading(engine_testaccount, db_parame
     )
 
     # TODO: Add support for loading options when table is reflected
-    assert dynamic_test_table.warehouse is NoneType
+    assert isinstance(dynamic_test_table.warehouse, NoneType)
 
     try:
         with engine_testaccount.connect() as conn:

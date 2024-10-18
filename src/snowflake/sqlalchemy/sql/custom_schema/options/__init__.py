@@ -2,8 +2,29 @@
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
 
-from .as_query import AsQuery
-from .target_lag import TargetLag, TimeUnit
-from .warehouse import Warehouse
+from .as_query_option import AsQueryOption, AsQueryOptionType
+from .identifier_option import IdentifierOption, IdentifierOptionType
+from .keyword_option import KeywordOption, KeywordOptionType
+from .keywords import SnowflakeKeyword
+from .literal_option import LiteralOption, LiteralOptionType
+from .table_option import TableOptionKey
+from .target_lag_option import TargetLagOption, TargetLagOptionType, TimeUnit
 
-__all__ = ["Warehouse", "AsQuery", "TargetLag", "TimeUnit"]
+__all__ = [
+    # Options
+    "IdentifierOption",
+    "LiteralOption",
+    "KeywordOption",
+    "AsQueryOption",
+    "TargetLagOption",
+    # Enums
+    "TimeUnit",
+    "SnowflakeKeyword",
+    "TableOptionKey",
+    # Types
+    "IdentifierOptionType",
+    "LiteralOptionType",
+    "AsQueryOptionType",
+    "TargetLagOptionType",
+    "KeywordOptionType",
+]

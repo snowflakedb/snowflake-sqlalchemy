@@ -4,10 +4,7 @@
 
 from typing import Any
 
-from sqlalchemy.exc import ArgumentError
 from sqlalchemy.sql.schema import MetaData, SchemaItem
-
-from snowflake.sqlalchemy.custom_commands import NoneType
 
 from .custom_table_base import CustomTableBase
 from .custom_table_prefix import CustomTablePrefix
@@ -21,11 +18,20 @@ class HybridTable(CustomTableBase):
 
     While it does not support reflection at this time, it provides a flexible
     interface for creating dynamic tables and management.
+
+    For further information on this clause, please refer to: https://docs.snowflake.com/en/sql-reference/sql/create-hybrid-table
+
+    Example usage:
+    HybridTable(
+        table_name,
+        metadata,
+        Column("id", Integer, primary_key=True),
+        Column("name", String)
+    )
     """
 
     __table_prefixes__ = [CustomTablePrefix.HYBRID]
-
-    _support_primary_and_foreign_keys = True
+    _enforce_primary_keys: bool = True
 
     def __init__(
         self,
@@ -45,18 +51,7 @@ class HybridTable(CustomTableBase):
         *args: SchemaItem,
         **kw: Any,
     ) -> None:
-        super().__init__(name, metadata, *args, **kw)
-
-    def _validate_table(self):
-        missing_attributes = []
-        if self.key is NoneType:
-            missing_attributes.append("Primary Key")
-        if missing_attributes:
-            raise ArgumentError(
-                "HYBRID TABLE must have the following arguments: %s"
-                % ", ".join(missing_attributes)
-            )
-        super()._validate_table()
+        self.__init__(name, metadata, *args, _no_init=False, **kw)
 
     def __repr__(self) -> str:
         return "HybridTable(%s)" % ", ".join(
