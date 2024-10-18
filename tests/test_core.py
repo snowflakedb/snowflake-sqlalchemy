@@ -1060,6 +1060,7 @@ def test_cache_time(engine_testaccount, db_parameters):
     assert outcome
 
 
+@pytest.mark.skip(reason="Testaccount is not available, it returns 404 error.")
 @pytest.mark.timeout(10)
 @pytest.mark.parametrize(
     "region",
