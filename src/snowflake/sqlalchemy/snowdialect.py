@@ -7,6 +7,7 @@ from collections import defaultdict
 from functools import reduce
 from typing import Any
 from urllib.parse import unquote_plus
+import collections
 
 import sqlalchemy.types as sqltypes
 from sqlalchemy import event as sa_vnt
@@ -71,6 +72,7 @@ from .util import (
     parse_url_boolean,
     parse_url_integer,
 )
+from sqlalchemy.util.concurrency import await_fallback, await_only
 
 colspecs = {
     Date: _CUSTOM_Date,
@@ -287,6 +289,7 @@ class SnowflakeDialect(default.DefaultDialect):
     def _has_object(self, connection, object_type, object_name, schema=None):
         full_name = self._denormalize_quote_join(schema, object_name)
         try:
+            # this one will call async if it's async dialect
             results = connection.execute(
                 text(f"DESC {object_type} /* sqlalchemy:_has_object */ {full_name}")
             )
@@ -333,6 +336,7 @@ class SnowflakeDialect(default.DefaultDialect):
 
     @reflection.cache
     def _current_database_schema(self, connection, **kw):
+        # for async dielect, this wraps the execute coroutine
         res = connection.exec_driver_sql(
             "select current_database(), current_schema();"
         ).fetchone()
@@ -1025,6 +1029,10 @@ class SnowflakeDialect(default.DefaultDialect):
             else super().connect(*cargs, **cparams)
         )
 
+    @classmethod
+    def get_async_dialect_cls(cls, url):
+        return SnowflakeAsyncDialect
+
 
 @sa_vnt.listens_for(Table, "before_create")
 def check_table(table, connection, _ddl_runner, **kw):
@@ -1036,4 +1044,83 @@ def check_table(table, connection, _ddl_runner, **kw):
         raise NotImplementedError("Only Snowflake Hybrid Tables supports indexes")
 
 
+from sqlalchemy.connectors.asyncio import (
+    AsyncAdapt_dbapi_connection,
+    AsyncAdapt_dbapi_cursor,
+)
+from snowflake.connector.aio import SnowflakeCursor, SnowflakeConnection
+
+class AsyncAdapt_snow_cursor(AsyncAdapt_dbapi_cursor):
+    _cursor: SnowflakeCursor
+    __slots__ = ()
+
+    async def _execute_async(self, operation, parameters):
+        # override to not use mutex, oracledb already has mutex
+
+        if parameters is None:
+            result = await self._cursor.execute(operation)
+        else:
+            result = await self._cursor.execute(operation, parameters)
+        self._rows = collections.deque(await self._cursor.fetchall())
+
+    async def _executemany_async(
+        self,
+        operation,
+        seq_of_parameters,
+    ):
+        # override to not use mutex, oracledb already has mutex
+        return await self._cursor.executemany(operation, seq_of_parameters)
+
+
+class AsyncAdapt_snow_connection(AsyncAdapt_dbapi_connection):
+    _connection: SnowflakeConnection
+    __slots__ = ()
+    _cursor_cls = AsyncAdapt_snow_cursor
+    Error = sf_errors.ProgrammingError
+    def cursor(self):
+        return AsyncAdapt_snow_cursor(self)
+
+
+class SnowflakeAdaptDBAPI:
+
+    paramstyle = "pyformat"
+
+    def connect(self, *arg, **kw):
+        from snowflake.connector.aio import SnowflakeConnection
+        conn = SnowflakeConnection(*arg, **kw)
+        await_fallback(conn.connect())
+        return AsyncAdapt_snow_connection(
+            self, conn
+        )
+
+
+class SnowExecutionContextAsync_snow(SnowflakeExecutionContext):
+    # restore default create cursor
+    create_cursor = default.DefaultExecutionContext.create_cursor
+
+    def create_default_cursor(self):
+        # copy of OracleExecutionContext_cx_oracle.create_cursor
+        c = self._dbapi_connection.cursor()
+        return c
+
+
+class SnowflakeAsyncDialect(SnowflakeDialect):
+    is_async = True
+    execution_ctx_cls = SnowExecutionContextAsync_snow
+
+    # thick_mode mode is not supported by asyncio, oracledb will raise
+    @classmethod
+    def import_dbapi(cls):
+        return SnowflakeAdaptDBAPI()
+
+    def get_driver_connection(self, connection):
+        return connection._connection
+
+    @classmethod
+    def get_pool_class(cls, url: URL):
+        from sqlalchemy.pool import AsyncAdaptedQueuePool
+        return getattr(cls, "poolclass", AsyncAdaptedQueuePool)
+
+
 dialect = SnowflakeDialect
+dialect_async = SnowflakeAsyncDialect
