@@ -112,7 +112,7 @@ RESERVED_WORDS = frozenset(
 AUTOCOMMIT_REGEXP = re.compile(
     r"\s*(?:UPDATE|INSERT|DELETE|MERGE|COPY)", re.I | re.UNICODE
 )
-
+ILLEGAL_INITIAL_CHARACTERS = frozenset({d for d in string.digits}.union({"_", "$"}))
 
 """
 Overwrite methods to handle Snowflake BCR change:
@@ -437,6 +437,7 @@ class SnowflakeORMSelectCompileState(context.ORMSelectCompileState):
 
 class SnowflakeIdentifierPreparer(compiler.IdentifierPreparer):
     reserved_words = {x.lower() for x in RESERVED_WORDS}
+    illegal_initial_characters = ILLEGAL_INITIAL_CHARACTERS
 
     def __init__(self, dialect, **kw):
         quote = '"'
