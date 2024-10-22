@@ -19,7 +19,10 @@ from .parameters import CONNECTION_PARAMETERS
 
 @pytest.mark.parametrize(
     "identifier",
-    (pytest.param("_", id="underscore"),),
+    (
+        pytest.param("_", id="underscore"),
+        pytest.param(".", id="dot"),
+    ),
 )
 def test_insert_with_identifier_as_column_name(identifier: str):
     expected_identifier = f"test: {identifier}"

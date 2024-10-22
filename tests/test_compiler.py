@@ -44,7 +44,7 @@ class TestSnowflakeCompiler(AssertsCompiledSQL):
         stmt = insert(_table).values({"ca": 1, "cb": "test", ".": "test_"})
         self.assert_compile(
             stmt,
-            'INSERT INTO table_1745924 (ca, cb, ".") VALUES (%(ca)s, %(cb)s, %(_)s)',
+            'INSERT INTO table_1745924 (ca, cb, ".") VALUES (%(ca)s, %(cb)s, %(.)s)',
             dialect="snowflake",
         )
 
