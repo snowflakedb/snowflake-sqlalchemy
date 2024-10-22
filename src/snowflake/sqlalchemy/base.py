@@ -112,6 +112,7 @@ RESERVED_WORDS = frozenset(
 AUTOCOMMIT_REGEXP = re.compile(
     r"\s*(?:UPDATE|INSERT|DELETE|MERGE|COPY)", re.I | re.UNICODE
 )
+# used for quoting identifiers ie. table names, column names, etc.
 ILLEGAL_INITIAL_CHARACTERS = frozenset({d for d in string.digits}.union({"_", "$"}))
 
 """

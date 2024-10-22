@@ -33,6 +33,21 @@ class TestSnowflakeCompiler(AssertsCompiledSQL):
             dialect="snowflake",
         )
 
+    def test_dot_as_valid_identifier(self):
+        _table = table(
+            "table_1745924",
+            column("ca", Integer),
+            column("cb", String),
+            column(".", String),
+        )
+
+        stmt = insert(_table).values({"ca": 1, "cb": "test", ".": "test_"})
+        self.assert_compile(
+            stmt,
+            'INSERT INTO table_1745924 (ca, cb, ".") VALUES (%(ca)s, %(cb)s, %(_)s)',
+            dialect="snowflake",
+        )
+
     def test_underscore_as_valid_identifier(self):
         _table = table(
             "table_1745924",
