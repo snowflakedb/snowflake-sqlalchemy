@@ -62,7 +62,16 @@ from .custom_types import (
     VARIANT,
 )
 from .sql.custom_schema import DynamicTable, HybridTable
-from .sql.custom_schema.options import AsQuery, TargetLag, TimeUnit, Warehouse
+from .sql.custom_schema.options import (
+    AsQueryOption,
+    IdentifierOption,
+    KeywordOption,
+    LiteralOption,
+    SnowflakeKeyword,
+    TableOptionKey,
+    TargetLagOption,
+    TimeUnit,
+)
 from .util import _url as URL
 
 base.dialect = dialect = snowdialect.dialect
@@ -70,6 +79,7 @@ base.dialect = dialect = snowdialect.dialect
 __version__ = importlib_metadata.version("snowflake-sqlalchemy")
 
 __all__ = (
+    # Custom Types
     "BIGINT",
     "BINARY",
     "BOOLEAN",
@@ -104,6 +114,7 @@ __all__ = (
     "TINYINT",
     "VARBINARY",
     "VARIANT",
+    # Custom Commands
     "MergeInto",
     "CSVFormatter",
     "JSONFormatter",
@@ -115,10 +126,17 @@ __all__ = (
     "ExternalStage",
     "CreateStage",
     "CreateFileFormat",
-    "DynamicTable",
-    "AsQuery",
-    "TargetLag",
-    "TimeUnit",
-    "Warehouse",
+    # Custom Tables
     "HybridTable",
+    "DynamicTable",
+    # Custom Table Options
+    "AsQueryOption",
+    "TargetLagOption",
+    "LiteralOption",
+    "IdentifierOption",
+    "KeywordOption",
+    # Enums
+    "TimeUnit",
+    "TableOptionKey",
+    "SnowflakeKeyword",
 )
