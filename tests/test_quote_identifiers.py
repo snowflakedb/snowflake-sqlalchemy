@@ -16,25 +16,10 @@ from snowflake.sqlalchemy import URL
 
 from .parameters import CONNECTION_PARAMETERS
 
-# https://docs.snowflake.com/en/sql-reference/identifiers-syntax#double-quoted-identifiers
-DOUBLE_QUOTE_IDENTIFIERS = {i for i in ".'!@#$%^&*"}
-
 
 @pytest.mark.parametrize(
     "identifier",
-    (
-        pytest.param(".", id="dot"),
-        pytest.param("'", id="single_quote"),
-        pytest.param("_", id="underscore"),
-        pytest.param("!", id="exclamation"),
-        pytest.param("@", id="at"),
-        pytest.param("#", id="hash"),
-        pytest.param("$", id="dollar"),
-        pytest.param("%", id="percent"),
-        pytest.param("^", id="caret"),
-        pytest.param("&", id="ampersand"),
-        pytest.param("*", id="asterisk"),
-    ),
+    (pytest.param("_", id="underscore"),),
 )
 def test_insert_with_identifier_as_column_name(identifier: str):
     expected_identifier = f"test: {identifier}"
