@@ -8,7 +8,6 @@ from sqlalchemy.exc import ProgrammingError
 from snowflake.sqlalchemy import IcebergTable
 
 
-@pytest.mark.skip(reason="Issuficient priviliges to create external volume")
 def test_create_iceberg_table(engine_testaccount, db_parameters, snapshot):
     metadata = MetaData()
     role = db_parameters["role"]
