@@ -44,7 +44,7 @@ class DynamicTable(TableFromQueryBase):
         as_query="SELECT id, name from test_table_1;"
     )
 
-    Example using full options:
+    Example using explicit options:
         DynamicTable(
         "dynamic_test_table_1",
         metadata,

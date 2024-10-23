@@ -32,7 +32,7 @@ class IcebergTable(TableFromQueryBase):
         base_location='my_iceberg_table'"
     )
 
-    Example using full options:
+    Example using explicit options:
         DynamicTable(
         "dynamic_test_table_1",
         metadata,

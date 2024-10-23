@@ -8,7 +8,10 @@ from sqlalchemy.orm import declarative_base
 from sqlalchemy.sql.ddl import CreateTable
 
 from snowflake.sqlalchemy import IcebergTable
-from snowflake.sqlalchemy.sql.custom_schema.options import LiteralOption
+from snowflake.sqlalchemy.sql.custom_schema.options import (
+    IdentifierOption,
+    LiteralOption,
+)
 
 
 def test_compile_iceberg_table(sql_compiler, snapshot):

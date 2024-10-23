@@ -36,6 +36,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.exc import DBAPIError, NoSuchTableError, OperationalError
 from sqlalchemy.sql import and_, not_, or_, select
+from sqlalchemy.sql.ddl import CreateTable
 
 import snowflake.connector.errors
 import snowflake.sqlalchemy.snowdialect
@@ -697,6 +698,39 @@ def test_create_table_with_cluster_by(engine_testaccount):
         assert columns_in_table[0]["name"] == "Id", "name"
     finally:
         user.drop(engine_testaccount)
+
+
+def test_create_table_with_cluster_by_with_expression(engine_testaccount):
+    metadata = MetaData()
+    user = Table(
+        "clustered_user",
+        metadata,
+        Column("Id", Integer, primary_key=True),
+        Column("name", String),
+        snowflake_clusterby=["Id", "name", text('"Id" > 5')],
+    )
+    metadata.create_all(engine_testaccount)
+    try:
+        inspector = inspect(engine_testaccount)
+        columns_in_table = inspector.get_columns("clustered_user")
+        assert columns_in_table[0]["name"] == "Id", "name"
+    finally:
+        user.drop(engine_testaccount)
+
+
+def test_compile_table_with_cluster_by_with_expression(sql_compiler, snapshot):
+    metadata = MetaData()
+    user = Table(
+        "clustered_user",
+        metadata,
+        Column("Id", Integer, primary_key=True),
+        Column("name", String),
+        snowflake_clusterby=["Id", "name", text('"Id" > 5')],
+    )
+
+    create_table = CreateTable(user)
+
+    assert sql_compiler(create_table) == snapshot
 
 
 def test_view_names(engine_testaccount):

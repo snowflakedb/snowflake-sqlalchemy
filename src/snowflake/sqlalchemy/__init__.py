@@ -61,9 +61,15 @@ from .custom_types import (  # noqa
     VARBINARY,
     VARIANT,
 )
-from .sql.custom_schema import DynamicTable, HybridTable, IcebergTable  # noqa
+from .sql.custom_schema import (  # noqa
+    DynamicTable,
+    HybridTable,
+    IcebergTable,
+    SnowflakeTable,
+)
 from .sql.custom_schema.options import (  # noqa
     AsQueryOption,
+    ClusterByOption,
     IdentifierOption,
     KeywordOption,
     LiteralOption,
@@ -129,7 +135,7 @@ _custom_commands = (
     "CreateFileFormat",
 )
 
-_custom_tables = ("HybridTable", "DynamicTable", "IcebergTable")
+_custom_tables = ("HybridTable", "DynamicTable", "IcebergTable", "SnowflakeTable")
 
 _custom_table_options = (
     "AsQueryOption",
@@ -137,6 +143,7 @@ _custom_table_options = (
     "LiteralOption",
     "IdentifierOption",
     "KeywordOption",
+    "ClusterByOption",
 )
 
 _enums = (
