@@ -10,6 +10,5 @@
   )	EXTERNAL_VOLUME = 'exvol'	CATALOG = 'SNOWFLAKE'	BASE_LOCATION = 'my_iceberg_table'
   
   ]
-  (Background on this error at: https://sqlalche.me/e/20/f405)
   '''
 # ---

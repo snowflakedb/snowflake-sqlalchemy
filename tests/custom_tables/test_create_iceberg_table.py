@@ -39,4 +39,5 @@ def test_create_iceberg_table(engine_testaccount, snapshot):
     with pytest.raises(ProgrammingError) as argument_error:
         metadata.create_all(engine_testaccount)
 
-    assert str(argument_error.value) == snapshot
+    error_str = str(argument_error.value)
+    assert error_str[: error_str.rfind("\n")] == snapshot
