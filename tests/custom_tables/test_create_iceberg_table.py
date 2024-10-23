@@ -8,7 +8,8 @@ from sqlalchemy.exc import ProgrammingError
 from snowflake.sqlalchemy import IcebergTable
 
 
-def test_create_iceberg_table(engine_testaccount, db_parameters, snapshot):
+@pytest.mark.skip(reason="Insufficient privileges to create external volume")
+def test_create_iceberg_table(engine_testaccount, snapshot):
     metadata = MetaData()
     external_volume_name = "exvol"
     create_external_volume = f"""
@@ -25,7 +26,6 @@ def test_create_iceberg_table(engine_testaccount, db_parameters, snapshot):
           );
         """
     with engine_testaccount.connect() as connection:
-        connection.exec_driver_sql("USE ROLE ACCOUNTADMIN;")
         connection.exec_driver_sql(create_external_volume)
     IcebergTable(
         "Iceberg_Table_1",
