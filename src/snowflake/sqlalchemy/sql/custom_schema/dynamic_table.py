@@ -12,7 +12,6 @@ from .options import (
     IdentifierOption,
     IdentifierOptionType,
     KeywordOptionType,
-    LiteralOption,
     TableOptionKey,
     TargetLagOption,
     TargetLagOptionType,
@@ -67,7 +66,7 @@ class DynamicTable(TableFromQueryBase):
     ]
 
     @property
-    def warehouse(self) -> typing.Optional[LiteralOption]:
+    def warehouse(self) -> typing.Optional[IdentifierOption]:
         return self._get_dialect_option(TableOptionKey.WAREHOUSE)
 
     @property

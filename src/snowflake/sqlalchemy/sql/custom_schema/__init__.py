@@ -3,5 +3,6 @@
 #
 from .dynamic_table import DynamicTable
 from .hybrid_table import HybridTable
+from .iceberg_table import IcebergTable
 
-__all__ = ["DynamicTable", "HybridTable"]
+__all__ = ["DynamicTable", "HybridTable", "IcebergTable"]
