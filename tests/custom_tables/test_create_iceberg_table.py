@@ -8,8 +8,16 @@ from sqlalchemy.exc import ProgrammingError
 from snowflake.sqlalchemy import IcebergTable
 
 
-def test_create_iceberg_table(engine_testaccount, snapshot):
+@pytest.mark.skip(reason="Issuficient priviliges to create external volume")
+def test_create_iceberg_table(engine_testaccount, db_parameters, snapshot):
     metadata = MetaData()
+    role = db_parameters["role"]
+    grant_privileges = f"""
+    GRANT CREATE EXTERNAL VOLUME ON ACCOUNT TO ROLE {role};
+    """
+    with engine_testaccount.connect() as connection:
+        connection.exec_driver_sql(grant_privileges)
+
     external_volume_name = "exvol"
     create_external_volume = f"""
         CREATE OR REPLACE EXTERNAL VOLUME {external_volume_name}
