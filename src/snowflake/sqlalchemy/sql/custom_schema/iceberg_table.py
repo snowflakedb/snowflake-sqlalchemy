@@ -17,7 +17,7 @@ class IcebergTable(TableFromQueryBase):
     A class representing an iceberg table with configurable options and settings.
 
     While it does not support reflection at this time, it provides a flexible
-    interface for creating dynamic tables and management.
+    interface for creating iceberg tables and management.
 
     For further information on this clause, please refer to: https://docs.snowflake.com/en/sql-reference/sql/create-iceberg-table
 
@@ -95,6 +95,7 @@ class IcebergTable(TableFromQueryBase):
             + [repr(self.external_volume)]
             + [repr(self.base_location)]
             + [repr(self.catalog)]
+            + [repr(self.cluster_by)]
             + [repr(self.as_query)]
             + [f"{k}={repr(getattr(self, k))}" for k in ["schema"]]
         )

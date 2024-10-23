@@ -76,7 +76,7 @@ def test_compile_snowflake_table_with_wrong_option_types(snapshot):
     assert str(argument_error.value) == snapshot
 
 
-def test_compile_dynamic_table_with_primary_key(sql_compiler, snapshot):
+def test_compile_snowflake_table_with_primary_key(sql_compiler, snapshot):
     metadata = MetaData()
     table_name = "test_table_2"
     test_geometry = SnowflakeTable(
@@ -95,7 +95,7 @@ def test_compile_dynamic_table_with_primary_key(sql_compiler, snapshot):
     assert actual == snapshot
 
 
-def test_compile_dynamic_table_with_foreign_key(sql_compiler, snapshot):
+def test_compile_snowflake_table_with_foreign_key(sql_compiler, snapshot):
     metadata = MetaData()
 
     SnowflakeTable(
@@ -126,7 +126,7 @@ def test_compile_dynamic_table_with_foreign_key(sql_compiler, snapshot):
     assert actual == snapshot
 
 
-def test_compile_dynamic_table_orm_with_str_keys(sql_compiler, snapshot):
+def test_compile_snowflake_table_orm_with_str_keys(sql_compiler, snapshot):
     Base = declarative_base()
 
     class TestSnowflakeTableOrm(Base):

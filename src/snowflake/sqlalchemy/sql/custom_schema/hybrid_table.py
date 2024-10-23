@@ -17,7 +17,7 @@ class HybridTable(CustomTableBase):
     The `HybridTable` class allows for the creation and querying of OLTP Snowflake Tables .
 
     While it does not support reflection at this time, it provides a flexible
-    interface for creating dynamic tables and management.
+    interface for creating hybrid tables and management.
 
     For further information on this clause, please refer to: https://docs.snowflake.com/en/sql-reference/sql/create-hybrid-table
 

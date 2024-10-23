@@ -12,14 +12,13 @@ from .table_option import Priority, TableOption, TableOptionKey
 
 class ClusterByOption(TableOption):
     """Class to represent the cluster by clause in tables.
-    For further information on this clause, please refer to: https://docs.snowflake.com/en/sql-reference/sql/create-table#create-table-as-select-also-referred-to-as-ctas
-
+    For further information on this clause, please refer to: https://docs.snowflake.com/en/user-guide/tables-clustering-keys
     Example:
         cluster_by=ClusterByOption('name', text('id > 0'))
 
         is equivalent to:
 
-        cluster by = (name, id > 0')
+        cluster by (name, id > 0)
     """
 
     def __init__(self, *expressions: Union[str, TextClause]) -> None:
@@ -44,7 +43,7 @@ class ClusterByOption(TableOption):
 
     @property
     def priority(self) -> Priority:
-        return Priority.LOWEST
+        return Priority.HIGH
 
     def __get_expression(self):
         return ", ".join([str(expression) for expression in self.expressions])

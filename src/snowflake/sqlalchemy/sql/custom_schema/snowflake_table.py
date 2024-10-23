@@ -14,7 +14,7 @@ class SnowflakeTable(TableFromQueryBase):
     A class representing a table in Snowflake with configurable options and settings.
 
     While it does not support reflection at this time, it provides a flexible
-    interface for creating dynamic tables and management.
+    interface for creating tables and management.
 
     For further information on this clause, please refer to: https://docs.snowflake.com/en/sql-reference/sql/create-table
     Example usage:
@@ -37,10 +37,7 @@ class SnowflakeTable(TableFromQueryBase):
         cluster_by = ClusterByOption("id", text("name > 5"))
     )
 
-
     """
-
-    _support_primary_and_foreign_keys = True
 
     def __init__(
         self,
@@ -67,5 +64,7 @@ class SnowflakeTable(TableFromQueryBase):
             [repr(self.name)]
             + [repr(self.metadata)]
             + [repr(x) for x in self.columns]
+            + [repr(self.cluster_by)]
+            + [repr(self.as_query)]
             + [f"{k}={repr(getattr(self, k))}" for k in ["schema"]]
         )

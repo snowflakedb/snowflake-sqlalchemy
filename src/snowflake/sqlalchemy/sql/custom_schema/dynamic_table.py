@@ -111,6 +111,7 @@ class DynamicTable(TableFromQueryBase):
             + [repr(x) for x in self.columns]
             + [repr(self.target_lag)]
             + [repr(self.warehouse)]
+            + [repr(self.cluster_by)]
             + [repr(self.as_query)]
             + [f"{k}={repr(getattr(self, k))}" for k in ["schema"]]
         )
