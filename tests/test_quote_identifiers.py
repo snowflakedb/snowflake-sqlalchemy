@@ -1,20 +1,9 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
+
+# Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 import pytest
-from sqlalchemy import (
-    Column,
-    Integer,
-    MetaData,
-    String,
-    Table,
-    create_engine,
-    insert,
-    select,
-)
-
-from snowflake.sqlalchemy import URL
-
-from .parameters import CONNECTION_PARAMETERS
+from sqlalchemy import Column, Integer, MetaData, String, Table, insert, select
 
 
 @pytest.mark.parametrize(
@@ -24,7 +13,7 @@ from .parameters import CONNECTION_PARAMETERS
         pytest.param(".", id="dot"),
     ),
 )
-def test_insert_with_identifier_as_column_name(identifier: str):
+def test_insert_with_identifier_as_column_name(identifier: str, engine_testaccount):
     expected_identifier = f"test: {identifier}"
     metadata = MetaData()
     table = Table(
@@ -35,12 +24,10 @@ def test_insert_with_identifier_as_column_name(identifier: str):
         Column(identifier, String),
     )
 
-    engine = create_engine(URL(**CONNECTION_PARAMETERS))
-
     try:
-        metadata.create_all(engine)
+        metadata.create_all(engine_testaccount)
 
-        with engine.connect() as connection:
+        with engine_testaccount.connect() as connection:
             connection.execute(
                 insert(table).values(
                     {
@@ -53,4 +40,4 @@ def test_insert_with_identifier_as_column_name(identifier: str):
             result = connection.execute(select(table)).fetchall()
             assert result == [(1, "test", expected_identifier)]
     finally:
-        metadata.drop_all(engine)
+        metadata.drop_all(engine_testaccount)
