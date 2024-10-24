@@ -9,7 +9,7 @@ from sqlalchemy.sql.schema import MetaData, SchemaItem
 from .table_from_query import TableFromQueryBase
 
 
-class Table(TableFromQueryBase):
+class SnowflakeTable(TableFromQueryBase):
     """
     A class representing a table in Snowflake with configurable options and settings.
 

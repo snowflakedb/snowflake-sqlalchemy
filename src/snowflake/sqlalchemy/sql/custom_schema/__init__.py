@@ -4,6 +4,6 @@
 from .dynamic_table import DynamicTable
 from .hybrid_table import HybridTable
 from .iceberg_table import IcebergTable
-from .table import Table
+from .snowflake_table import SnowflakeTable
 
-__all__ = ["DynamicTable", "HybridTable", "IcebergTable", "Table"]
+__all__ = ["DynamicTable", "HybridTable", "IcebergTable", "SnowflakeTable"]

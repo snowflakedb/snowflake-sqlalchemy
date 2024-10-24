@@ -4,7 +4,7 @@
 from sqlalchemy import Column, Integer, MetaData, String, select, text
 from sqlalchemy.orm import Session, declarative_base
 
-from snowflake.sqlalchemy import Table
+from snowflake.sqlalchemy import SnowflakeTable
 
 
 def test_create_snowflake_table_with_cluster_by(
@@ -13,7 +13,7 @@ def test_create_snowflake_table_with_cluster_by(
     metadata = MetaData()
     table_name = "test_create_snowflake_table"
 
-    test_table_1 = Table(
+    test_table_1 = SnowflakeTable(
         table_name,
         metadata,
         Column("id", Integer, primary_key=True),
@@ -46,7 +46,7 @@ def test_create_snowflake_table_with_orm(sql_compiler, engine_testaccount):
 
         @classmethod
         def __table_cls__(cls, name, metadata, *arg, **kw):
-            return Table(name, metadata, *arg, **kw)
+            return SnowflakeTable(name, metadata, *arg, **kw)
 
         id = Column(Integer, primary_key=True)
         name = Column(String)

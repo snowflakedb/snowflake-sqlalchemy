@@ -15,7 +15,7 @@ from sqlalchemy.exc import ArgumentError
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.sql.ddl import CreateTable
 
-from snowflake.sqlalchemy import Table
+from snowflake.sqlalchemy import SnowflakeTable
 from snowflake.sqlalchemy.sql.custom_schema.options import (
     AsQueryOption,
     ClusterByOption,
@@ -25,7 +25,7 @@ from snowflake.sqlalchemy.sql.custom_schema.options import (
 def test_compile_snowflake_table(sql_compiler, snapshot):
     metadata = MetaData()
     table_name = "test_table_1"
-    test_geometry = Table(
+    test_geometry = SnowflakeTable(
         table_name,
         metadata,
         Column("id", Integer),
@@ -44,7 +44,7 @@ def test_compile_snowflake_table(sql_compiler, snapshot):
 def test_compile_snowflake_table_with_explicit_options(sql_compiler, snapshot):
     metadata = MetaData()
     table_name = "test_table_2"
-    test_geometry = Table(
+    test_geometry = SnowflakeTable(
         table_name,
         metadata,
         Column("id", Integer),
@@ -64,7 +64,7 @@ def test_compile_snowflake_table_with_wrong_option_types(snapshot):
     metadata = MetaData()
     table_name = "test_snowflake_table"
     with pytest.raises(ArgumentError) as argument_error:
-        Table(
+        SnowflakeTable(
             table_name,
             metadata,
             Column("id", Integer),
@@ -79,7 +79,7 @@ def test_compile_snowflake_table_with_wrong_option_types(snapshot):
 def test_compile_snowflake_table_with_primary_key(sql_compiler, snapshot):
     metadata = MetaData()
     table_name = "test_table_2"
-    test_geometry = Table(
+    test_geometry = SnowflakeTable(
         table_name,
         metadata,
         Column("id", Integer, primary_key=True),
@@ -98,7 +98,7 @@ def test_compile_snowflake_table_with_primary_key(sql_compiler, snapshot):
 def test_compile_snowflake_table_with_foreign_key(sql_compiler, snapshot):
     metadata = MetaData()
 
-    Table(
+    SnowflakeTable(
         "table",
         metadata,
         Column("id", Integer, primary_key=True),
@@ -109,7 +109,7 @@ def test_compile_snowflake_table_with_foreign_key(sql_compiler, snapshot):
     )
 
     table_name = "test_table_2"
-    test_geometry = Table(
+    test_geometry = SnowflakeTable(
         table_name,
         metadata,
         Column("id", Integer, primary_key=True),
@@ -134,7 +134,7 @@ def test_compile_snowflake_table_orm_with_str_keys(sql_compiler, snapshot):
 
         @classmethod
         def __table_cls__(cls, name, metadata, *arg, **kw):
-            return Table(name, metadata, *arg, **kw)
+            return SnowflakeTable(name, metadata, *arg, **kw)
 
         __table_args__ = {
             "schema": "SCHEMA_DB",
@@ -158,7 +158,7 @@ def test_compile_snowflake_table_orm_with_str_keys(sql_compiler, snapshot):
 def test_compile_snowflake_table_with_selectable(sql_compiler, snapshot):
     Base = declarative_base()
 
-    test_table_1 = Table(
+    test_table_1 = SnowflakeTable(
         "test_table_1",
         Base.metadata,
         Column("id", Integer, primary_key=True),
@@ -167,7 +167,7 @@ def test_compile_snowflake_table_with_selectable(sql_compiler, snapshot):
         cluster_by=ClusterByOption("id", text("id > 100")),
     )
 
-    test_table_2 = Table(
+    test_table_2 = SnowflakeTable(
         "snowflake_test_table_1",
         Base.metadata,
         as_query=select(test_table_1).where(test_table_1.c.id == 23),
