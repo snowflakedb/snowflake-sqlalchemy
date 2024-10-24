@@ -73,6 +73,7 @@ class TableOptionKey(Enum):
     BASE_LOCATION = "base_location"
     CATALOG = "catalog"
     CATALOG_SYNC = "catalog_sync"
+    CLUSTER_BY = "cluster by"
     DATA_RETENTION_TIME_IN_DAYS = "data_retention_time_in_days"
     DEFAULT_DDL_COLLATION = "default_ddl_collation"
     EXTERNAL_VOLUME = "external_volume"

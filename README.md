@@ -340,7 +340,7 @@ This example shows how to create a table with two columns, `id` and `name`, as t
 t = Table('myuser', metadata,
     Column('id', Integer, primary_key=True),
     Column('name', String),
-    snowflake_clusterby=['id', 'name'], ...
+    snowflake_clusterby=['id', 'name', text('id > 5')], ...
 )
 metadata.create_all(engine)
 ```

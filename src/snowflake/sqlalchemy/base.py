@@ -908,7 +908,7 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
         ...     metadata,
         ...     sa.Column('id', sa.Integer, primary_key=True),
         ...     sa.Column('name', sa.String),
-        ...     snowflake_clusterby=['id', 'name']
+        ...     snowflake_clusterby=['id', 'name', text("id > 5")]
         ... )
         >>> print(CreateTable(user).compile(engine))
         <BLANKLINE>
@@ -916,7 +916,7 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
             id INTEGER NOT NULL AUTOINCREMENT,
             name VARCHAR,
             PRIMARY KEY (id)
-        ) CLUSTER BY (id, name)
+        ) CLUSTER BY (id, name, id > 5)
         <BLANKLINE>
         <BLANKLINE>
         """
@@ -925,7 +925,14 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
         cluster = info.get("clusterby")
         if cluster:
             text += " CLUSTER BY ({})".format(
-                ", ".join(self.denormalize_column_name(key) for key in cluster)
+                ", ".join(
+                    (
+                        self.denormalize_column_name(key)
+                        if isinstance(key, str)
+                        else str(key)
+                    )
+                    for key in cluster
+                )
             )
         return text
 

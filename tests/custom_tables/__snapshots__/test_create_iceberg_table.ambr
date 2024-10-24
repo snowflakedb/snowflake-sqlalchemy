@@ -1,0 +1,14 @@
+# serializer version: 1
+# name: test_create_iceberg_table
+  '''
+  (snowflake.connector.errors.ProgrammingError) 091017 (22000): S3 bucket 'my_example_bucket' does not exist or not authorized.
+  [SQL: 
+  CREATE ICEBERG TABLE "Iceberg_Table_1" (
+  	id INTEGER NOT NULL AUTOINCREMENT, 
+  	geom VARCHAR, 
+  	PRIMARY KEY (id)
+  )	EXTERNAL_VOLUME = 'exvol'	CATALOG = 'SNOWFLAKE'	BASE_LOCATION = 'my_iceberg_table'
+  
+  ]
+  '''
+# ---

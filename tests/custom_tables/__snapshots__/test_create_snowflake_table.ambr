@@ -1,0 +1,4 @@
+# serializer version: 1
+# name: test_create_snowflake_table_with_cluster_by
+  "[(1, 'test')]"
+# ---

@@ -6,32 +6,38 @@ from typing import Any
 
 from sqlalchemy.sql.schema import MetaData, SchemaItem
 
-from .custom_table_base import CustomTableBase
-from .custom_table_prefix import CustomTablePrefix
+from .table_from_query import TableFromQueryBase
 
 
-class HybridTable(CustomTableBase):
+class SnowflakeTable(TableFromQueryBase):
     """
-    A class representing a hybrid table with configurable options and settings.
-
-    The `HybridTable` class allows for the creation and querying of OLTP Snowflake Tables .
+    A class representing a table in Snowflake with configurable options and settings.
 
     While it does not support reflection at this time, it provides a flexible
-    interface for creating hybrid tables and management.
+    interface for creating tables and management.
 
-    For further information on this clause, please refer to: https://docs.snowflake.com/en/sql-reference/sql/create-hybrid-table
-
+    For further information on this clause, please refer to: https://docs.snowflake.com/en/sql-reference/sql/create-table
     Example usage:
-    HybridTable(
+
+    SnowflakeTable(
         table_name,
         metadata,
         Column("id", Integer, primary_key=True),
-        Column("name", String)
+        Column("name", String),
+        cluster_by = ["id", text("name > 5")]
     )
-    """
 
-    __table_prefixes__ = [CustomTablePrefix.HYBRID]
-    _enforce_primary_keys: bool = True
+    Example using explict options:
+
+        SnowflakeTable(
+        table_name,
+        metadata,
+        Column("id", Integer, primary_key=True),
+        Column("name", String),
+        cluster_by = ClusterByOption("id", text("name > 5"))
+    )
+
+    """
 
     def __init__(
         self,
@@ -54,9 +60,11 @@ class HybridTable(CustomTableBase):
         self.__init__(name, metadata, *args, _no_init=False, **kw)
 
     def __repr__(self) -> str:
-        return "HybridTable(%s)" % ", ".join(
+        return "SnowflakeTable(%s)" % ", ".join(
             [repr(self.name)]
             + [repr(self.metadata)]
             + [repr(x) for x in self.columns]
+            + [repr(self.cluster_by)]
+            + [repr(self.as_query)]
             + [f"{k}={repr(getattr(self, k))}" for k in ["schema"]]
         )

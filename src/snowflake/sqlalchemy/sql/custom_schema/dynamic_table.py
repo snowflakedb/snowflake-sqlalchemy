@@ -12,7 +12,6 @@ from .options import (
     IdentifierOption,
     IdentifierOptionType,
     KeywordOptionType,
-    LiteralOption,
     TableOptionKey,
     TargetLagOption,
     TargetLagOptionType,
@@ -45,7 +44,7 @@ class DynamicTable(TableFromQueryBase):
         as_query="SELECT id, name from test_table_1;"
     )
 
-    Example using full options:
+    Example using explicit options:
         DynamicTable(
         "dynamic_test_table_1",
         metadata,
@@ -67,7 +66,7 @@ class DynamicTable(TableFromQueryBase):
     ]
 
     @property
-    def warehouse(self) -> typing.Optional[LiteralOption]:
+    def warehouse(self) -> typing.Optional[IdentifierOption]:
         return self._get_dialect_option(TableOptionKey.WAREHOUSE)
 
     @property
@@ -112,6 +111,7 @@ class DynamicTable(TableFromQueryBase):
             + [repr(x) for x in self.columns]
             + [repr(self.target_lag)]
             + [repr(self.warehouse)]
+            + [repr(self.cluster_by)]
             + [repr(self.as_query)]
             + [f"{k}={repr(getattr(self, k))}" for k in ["schema"]]
         )

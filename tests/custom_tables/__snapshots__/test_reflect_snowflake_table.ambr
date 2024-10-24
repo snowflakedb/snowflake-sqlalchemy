@@ -1,0 +1,7 @@
+# serializer version: 1
+# name: test_simple_reflection_of_table_as_snowflake_table
+  'CREATE TABLE test_snowflake_table_reflection (\tid DECIMAL(38, 0) NOT NULL, \tname VARCHAR(16777216), \tCONSTRAINT demo_name PRIMARY KEY (id))'
+# ---
+# name: test_simple_reflection_of_table_as_sqlalchemy_table
+  'CREATE TABLE test_snowflake_table_reflection (\tid DECIMAL(38, 0) NOT NULL, \tname VARCHAR(16777216), \tCONSTRAINT demo_name PRIMARY KEY (id))'
+# ---

@@ -16,6 +16,8 @@ Source code is also available at:
   - Fixed SAWarning when registering functions with existing name in default namespace
   - Update options to be defined in key arguments instead of arguments.
   - Add support for refresh_mode option in DynamicTable
+  - Add support for iceberg table with Snowflake Catalog
+  - Fix cluster by option to support explicit expressions
 
 - v1.6.1(July 9, 2024)
 
