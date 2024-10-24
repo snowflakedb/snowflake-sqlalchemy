@@ -4,7 +4,7 @@
 from sqlalchemy import MetaData, Table
 from sqlalchemy.sql.ddl import CreateTable
 
-from src.snowflake.sqlalchemy import SnowflakeTable
+from src.snowflake.sqlalchemy import Table as SnowflakeTable
 
 
 def test_simple_reflection_of_table_as_sqlalchemy_table(
