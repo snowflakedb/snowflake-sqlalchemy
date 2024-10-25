@@ -702,7 +702,7 @@ def test_create_table_with_cluster_by(engine_testaccount):
 
 def test_create_table_with_cluster_by_with_expression(engine_testaccount):
     metadata = MetaData()
-    user = Table(
+    Table(
         "clustered_user",
         metadata,
         Column("Id", Integer, primary_key=True),
@@ -715,7 +715,7 @@ def test_create_table_with_cluster_by_with_expression(engine_testaccount):
         columns_in_table = inspector.get_columns("clustered_user")
         assert columns_in_table[0]["name"] == "Id", "name"
     finally:
-        user.drop(engine_testaccount)
+        metadata.drop_all(engine_testaccount)
 
 
 def test_compile_table_with_cluster_by_with_expression(sql_compiler, snapshot):
