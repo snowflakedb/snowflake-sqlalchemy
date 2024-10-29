@@ -503,6 +503,7 @@ class AWSBucket(ClauseElement):
         self.path = path
         self.encryption_used = {}
         self.credentials_used = {}
+        self.storage_integration_used = None
 
     @classmethod
     def from_uri(cls, uri):
@@ -531,6 +532,10 @@ class AWSBucket(ClauseElement):
             f" {credentials}" if self.credentials_used else "",
             f" {encryption}" if self.encryption_used else "",
         )
+
+    def storage_integration(self, integration_name):
+        self.storage_integration_used = integration_name
+        return self
 
     def credentials(
         self, aws_role=None, aws_key_id=None, aws_secret_key=None, aws_token=None
@@ -576,6 +581,7 @@ class AzureContainer(ClauseElement):
         self.path = path
         self.encryption_used = {}
         self.credentials_used = {}
+        self.storage_integration_used = None
 
     @classmethod
     def from_uri(cls, uri):
@@ -609,6 +615,10 @@ class AzureContainer(ClauseElement):
             f" {credentials}" if self.credentials_used else "",
             f" {encryption}" if self.encryption_used else "",
         )
+
+    def storage_integration(self, integration_name):
+        self.storage_integration_used = integration_name
+        return self
 
     def credentials(self, azure_sas_token):
         self.credentials_used = {"AZURE_SAS_TOKEN": azure_sas_token}
