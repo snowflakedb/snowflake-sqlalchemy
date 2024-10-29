@@ -3,6 +3,7 @@
 #
 
 from .as_query_option import AsQueryOption, AsQueryOptionType
+from .cluster_by_option import ClusterByOption, ClusterByOptionType
 from .identifier_option import IdentifierOption, IdentifierOptionType
 from .keyword_option import KeywordOption, KeywordOptionType
 from .keywords import SnowflakeKeyword
@@ -17,6 +18,7 @@ __all__ = [
     "KeywordOption",
     "AsQueryOption",
     "TargetLagOption",
+    "ClusterByOption",
     # Enums
     "TimeUnit",
     "SnowflakeKeyword",
@@ -27,4 +29,5 @@ __all__ = [
     "AsQueryOptionType",
     "TargetLagOptionType",
     "KeywordOptionType",
+    "ClusterByOptionType",
 ]
