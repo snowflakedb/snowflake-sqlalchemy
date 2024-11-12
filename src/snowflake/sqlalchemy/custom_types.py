@@ -1,9 +1,11 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
+from typing import Union
 
 import sqlalchemy.types as sqltypes
 import sqlalchemy.util as util
+from sqlalchemy.util import NoneType
 
 TEXT = sqltypes.VARCHAR
 CHARACTER = sqltypes.CHAR
@@ -35,6 +37,26 @@ class SnowflakeType(sqltypes.TypeEngine):
 
 class VARIANT(SnowflakeType):
     __visit_name__ = "VARIANT"
+
+
+class StructuredType(SnowflakeType):
+    def __init__(self):
+        super().__init__()
+
+
+class MAP(StructuredType):
+    __visit_name__ = "MAP"
+
+    def __init__(
+        self,
+        key_type: Union[TEXT, NUMBER],
+        value_type: Union[SnowflakeType, NoneType] = None,
+        nullable: bool = False,
+    ):
+        self.key_type = key_type
+        self.value_type = value_type
+        self.nullable = nullable
+        super().__init__()
 
 
 class OBJECT(SnowflakeType):

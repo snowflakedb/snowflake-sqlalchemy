@@ -30,6 +30,7 @@ from sqlalchemy import (
     UniqueConstraint,
     create_engine,
     dialects,
+    exc,
     insert,
     inspect,
     text,
@@ -1549,15 +1550,8 @@ def test_too_many_columns_detection(engine_testaccount, db_parameters):
     connection = inspector.bind.connect()
     original_execute = connection.execute
 
-    too_many_columns_was_raised = False
-
-    def mock_helper(command, *args, **kwargs):
-        if "_get_schema_columns" in command.text:
-            # Creating exception exactly how SQLAlchemy does
-            nonlocal too_many_columns_was_raised
-            too_many_columns_was_raised = True
-            raise DBAPIError.instance(
-                """
+    exception_instance = DBAPIError.instance(
+        """
             SELECT /* sqlalchemy:_get_schema_columns */
                    ic.table_name,
                    ic.column_name,
@@ -1572,27 +1566,32 @@ def test_too_many_columns_detection(engine_testaccount, db_parameters):
               FROM information_schema.columns ic
              WHERE ic.table_schema='schema_name'
              ORDER BY ic.ordinal_position""",
-                {"table_schema": "TESTSCHEMA"},
-                ProgrammingError(
-                    "Information schema query returned too much data. Please repeat query with more "
-                    "selective predicates.",
-                    90030,
-                ),
-                Error,
-                hide_parameters=False,
-                connection_invalidated=False,
-                dialect=SnowflakeDialect(),
-                ismulti=None,
-            )
+        {"table_schema": "TESTSCHEMA"},
+        ProgrammingError(
+            "Information schema query returned too much data. Please repeat query with more "
+            "selective predicates.",
+            90030,
+        ),
+        Error,
+        hide_parameters=False,
+        connection_invalidated=False,
+        dialect=SnowflakeDialect(),
+        ismulti=None,
+    )
+
+    def mock_helper(command, *args, **kwargs):
+        if "_get_schema_columns" in command.text:
+            # Creating exception exactly how SQLAlchemy does
+            raise exception_instance
         else:
             return original_execute(command, *args, **kwargs)
 
     with patch.object(engine_testaccount, "connect") as conn:
         conn.return_value = connection
         with patch.object(connection, "execute", side_effect=mock_helper):
-            column_metadata = inspector.get_columns("users", db_parameters["schema"])
-    assert len(column_metadata) == 4
-    assert too_many_columns_was_raised
+            with pytest.raises(exc.ProgrammingError) as exception:
+                inspector.get_columns("users", db_parameters["schema"])
+    assert exception.value.orig == exception_instance.orig
     # Clean up
     metadata.drop_all(engine_testaccount)
 

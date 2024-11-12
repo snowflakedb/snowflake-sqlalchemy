@@ -50,6 +50,7 @@ from .custom_types import (  # noqa
     FIXED,
     GEOGRAPHY,
     GEOMETRY,
+    MAP,
     NUMBER,
     OBJECT,
     STRING,
@@ -119,6 +120,7 @@ _custom_types = (
     "TINYINT",
     "VARBINARY",
     "VARIANT",
+    "MAP",
 )
 
 _custom_commands = (
