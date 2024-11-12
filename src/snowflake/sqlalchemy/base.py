@@ -564,7 +564,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             else copy_into.into._compiler_dispatch(self, **kw)
         )
         if isinstance(copy_into.from_, Table):
-            from_ = copy_into.from_
+            from_ = copy_into.from_.name
         # this is intended to catch AWSBucket and AzureContainer
         elif (
             isinstance(copy_into.from_, AWSBucket)

@@ -151,13 +151,13 @@ def test_copy_into_location(engine_testaccount, sql_compiler):
         == "COPY INTO @name.stage_name/prefix/file FROM python_tests_foods FILE_FORMAT=(TYPE=csv)"
     )
 
-    copy_stmt_7 = CopyIntoStorage(
+    copy_stmt_8 = CopyIntoStorage(
         from_=food_items,
         into=ExternalStage(name="stage_name"),
-        partition_by="('YEAR=' || year)"
+        partition_by="('YEAR=' || year)",
     )
     assert (
-        sql_compiler(copy_stmt_7)
+        sql_compiler(copy_stmt_8)
         == "COPY INTO @stage_name FROM python_tests_foods PARTITION BY ('YEAR=' || year)"
     )
 
