@@ -146,7 +146,7 @@ def test_reflect_structured_data_types(
     table_name = "test_reflect_st_types"
     create_table_sql = f"""
 CREATE OR REPLACE ICEBERG TABLE {table_name} (
-       id number(38,0),
+       id number(38,0) primary key,
        map_id {structured_type})
 CATALOG = 'SNOWFLAKE'
 EXTERNAL_VOLUME = '{external_volume}'
