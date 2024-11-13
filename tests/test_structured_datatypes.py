@@ -157,6 +157,9 @@ BASE_LOCATION = '{base_location}';
         connection.exec_driver_sql(create_table_sql)
 
     iceberg_table = IcebergTable(table_name, metadata, autoload_with=engine_testaccount)
+    constraint = iceberg_table.constraints.pop()
+    constraint.name = "constraint_name"
+    iceberg_table.constraints.add(constraint)
 
     try:
         with engine_testaccount.connect():

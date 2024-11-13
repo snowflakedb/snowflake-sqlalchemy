@@ -17,27 +17,7 @@ from sqlalchemy.engine import URL, default, reflection
 from sqlalchemy.schema import Table
 from sqlalchemy.sql import text
 from sqlalchemy.sql.elements import quoted_name
-from sqlalchemy.types import (
-    BIGINT,
-    BINARY,
-    BOOLEAN,
-    CHAR,
-    DATE,
-    DATETIME,
-    DECIMAL,
-    FLOAT,
-    INTEGER,
-    REAL,
-    SMALLINT,
-    TIME,
-    TIMESTAMP,
-    VARCHAR,
-    Date,
-    DateTime,
-    Float,
-    NullType,
-    Time,
-)
+from sqlalchemy.types import FLOAT, Date, DateTime, Float, NullType, Time
 
 from snowflake.connector import errors as sf_errors
 from snowflake.connector.connection import DEFAULT_CONFIGURATION
@@ -53,22 +33,13 @@ from .base import (
     SnowflakeTypeCompiler,
 )
 from .custom_types import (
-    _CUSTOM_DECIMAL,
-    ARRAY,
-    GEOGRAPHY,
-    GEOMETRY,
     MAP,
-    OBJECT,
-    TIMESTAMP_LTZ,
-    TIMESTAMP_NTZ,
-    TIMESTAMP_TZ,
-    VARIANT,
     _CUSTOM_Date,
     _CUSTOM_DateTime,
     _CUSTOM_Float,
     _CUSTOM_Time,
 )
-from .parser.custom_type_parser import parse_column_type
+from .parser.custom_type_parser import ischema_names, parse_column_type
 from .sql.custom_schema.custom_table_prefix import CustomTablePrefix
 from .util import (
     _update_connection_application_name,
@@ -81,45 +52,6 @@ colspecs = {
     DateTime: _CUSTOM_DateTime,
     Time: _CUSTOM_Time,
     Float: _CUSTOM_Float,
-}
-
-ischema_names = {
-    "BIGINT": BIGINT,
-    "BINARY": BINARY,
-    # 'BIT': BIT,
-    "BOOLEAN": BOOLEAN,
-    "CHAR": CHAR,
-    "CHARACTER": CHAR,
-    "DATE": DATE,
-    "DATETIME": DATETIME,
-    "DEC": DECIMAL,
-    "DECIMAL": DECIMAL,
-    "DOUBLE": FLOAT,
-    "FIXED": DECIMAL,
-    "FLOAT": FLOAT,
-    "INT": INTEGER,
-    "INTEGER": INTEGER,
-    "NUMBER": _CUSTOM_DECIMAL,
-    # 'OBJECT': ?
-    "REAL": REAL,
-    "BYTEINT": SMALLINT,
-    "SMALLINT": SMALLINT,
-    "STRING": VARCHAR,
-    "TEXT": VARCHAR,
-    "TIME": TIME,
-    "TIMESTAMP": TIMESTAMP,
-    "TIMESTAMP_TZ": TIMESTAMP_TZ,
-    "TIMESTAMP_LTZ": TIMESTAMP_LTZ,
-    "TIMESTAMP_NTZ": TIMESTAMP_NTZ,
-    "TINYINT": SMALLINT,
-    "VARBINARY": BINARY,
-    "VARCHAR": VARCHAR,
-    "VARIANT": VARIANT,
-    "MAP": MAP,
-    "OBJECT": OBJECT,
-    "ARRAY": ARRAY,
-    "GEOGRAPHY": GEOGRAPHY,
-    "GEOMETRY": GEOMETRY,
 }
 
 _ENABLE_SQLALCHEMY_AS_APPLICATION_NAME = True
@@ -680,11 +612,11 @@ class SnowflakeDialect(default.DefaultDialect):
             _privacy_domain,
             _name_mapping,
         ) in result:
+
             column_name = self.normalize_name(column_name)
             if column_name.startswith("sys_clustering_column"):
                 continue  # ignoring clustering column
-
-            type_instance = parse_column_type(coltype, column_name, self)
+            type_instance = parse_column_type(coltype, column_name)
 
             identity = None
             match = re.match(
@@ -703,11 +635,11 @@ class SnowflakeDialect(default.DefaultDialect):
                 {
                     "name": column_name,
                     "type": type_instance,
-                    "nullable": is_nullable == "YES",
+                    "nullable": is_nullable == "Y",
                     "default": None if is_identity else column_default,
                     "autoincrement": is_identity,
                     "comment": comment if comment != "" else None,
-                    "primary_key": primary_key,
+                    "primary_key": primary_key == "Y",
                 }
             )
 

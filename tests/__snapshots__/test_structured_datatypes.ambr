@@ -36,7 +36,7 @@
       'comment': None,
       'default': None,
       'name': 'map_id',
-      'nullable': False,
+      'nullable': True,
       'primary_key': False,
       'type': MAP(_CUSTOM_DECIMAL(precision=10, scale=0), value_type=VARCHAR(length=16777216)),
     }),
@@ -62,15 +62,15 @@
       'comment': None,
       'default': None,
       'name': 'map_id',
-      'nullable': False,
+      'nullable': True,
       'primary_key': False,
       'type': MAP(_CUSTOM_DECIMAL(precision=10, scale=0), value_type=MAP(_CUSTOM_DECIMAL(precision=10, scale=0), value_type=VARCHAR(length=16777216))),
     }),
   ])
 # ---
 # name: test_reflect_structured_data_types[MAP(NUMBER(10, 0), MAP(NUMBER(10, 0), VARCHAR))]
-  'CREATE ICEBERG TABLE test_reflect_st_types (\tid DECIMAL(38, 0) NOT NULL, \tmap_id MAP(DECIMAL(10, 0), MAP(DECIMAL(10, 0), VARCHAR(16777216))) NOT NULL, \tCONSTRAINT "SYS_CONSTRAINT_98dc7df8-0a51-4b69-a974-55c656fb6543" PRIMARY KEY (id))\tCATALOG = \'SNOWFLAKE\''
+  "CREATE ICEBERG TABLE test_reflect_st_types (\tid DECIMAL(38, 0) NOT NULL, \tmap_id MAP(DECIMAL(10, 0), MAP(DECIMAL(10, 0), VARCHAR(16777216))), \tCONSTRAINT constraint_name PRIMARY KEY (id))\tCATALOG = 'SNOWFLAKE'"
 # ---
 # name: test_reflect_structured_data_types[MAP(NUMBER(10, 0), VARCHAR)]
-  'CREATE ICEBERG TABLE test_reflect_st_types (\tid DECIMAL(38, 0) NOT NULL, \tmap_id MAP(DECIMAL(10, 0), VARCHAR(16777216)) NOT NULL, \tCONSTRAINT "SYS_CONSTRAINT_2b003f01-6ab6-4c30-a12d-191973a1cf14" PRIMARY KEY (id))\tCATALOG = \'SNOWFLAKE\''
+  "CREATE ICEBERG TABLE test_reflect_st_types (\tid DECIMAL(38, 0) NOT NULL, \tmap_id MAP(DECIMAL(10, 0), VARCHAR(16777216)), \tCONSTRAINT constraint_name PRIMARY KEY (id))\tCATALOG = 'SNOWFLAKE'"
 # ---
