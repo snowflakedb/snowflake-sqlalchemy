@@ -538,7 +538,7 @@ class AWSBucket(ClauseElement):
         )
 
     def credentials(
-            self, aws_role=None, aws_key_id=None, aws_secret_key=None, aws_token=None
+        self, aws_role=None, aws_key_id=None, aws_secret_key=None, aws_token=None
     ):
         if aws_role is None and (aws_key_id is None and aws_secret_key is None):
             raise ValueError(
