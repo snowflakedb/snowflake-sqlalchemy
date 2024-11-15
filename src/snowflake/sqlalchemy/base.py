@@ -1073,7 +1073,7 @@ class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
         return "VARIANT"
 
     def visit_MAP(self, type_, **kw):
-        not_null = "" if type_.nullable is False else f" {NOT_NULL}"
+        not_null = f" {NOT_NULL}" if type_.not_null else ""
         return (
             f"MAP({type_.key_type.compile()}, {type_.value_type.compile()}{not_null})"
         )

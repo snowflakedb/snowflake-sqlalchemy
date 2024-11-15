@@ -1,11 +1,9 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
-from typing import Union
 
 import sqlalchemy.types as sqltypes
 import sqlalchemy.util as util
-from sqlalchemy.util import NoneType
 
 TEXT = sqltypes.VARCHAR
 CHARACTER = sqltypes.CHAR
@@ -49,13 +47,13 @@ class MAP(StructuredType):
 
     def __init__(
         self,
-        key_type: Union[TEXT, NUMBER],
-        value_type: Union[SnowflakeType, NoneType] = None,
-        nullable: bool = False,
+        key_type: sqltypes.TypeEngine,
+        value_type: sqltypes.TypeEngine,
+        not_null: bool = False,
     ):
         self.key_type = key_type
         self.value_type = value_type
-        self.nullable = nullable
+        self.not_null = not_null
         super().__init__()
 
 

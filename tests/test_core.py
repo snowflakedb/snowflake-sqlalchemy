@@ -1635,9 +1635,9 @@ CREATE TEMP TABLE {table_name} (
 
         table_reflected = Table(table_name, MetaData(), autoload_with=conn)
         columns = table_reflected.columns
-        assert (
-            len(columns) == len(ischema_names_baseline) - 1
-        )  # -1 because FIXED is not supported
+        assert len(columns) == (
+            len(ischema_names_baseline) - 2
+        )  # -2 because FIXED and MAP is not supported
 
 
 def test_result_type_and_value(engine_testaccount):

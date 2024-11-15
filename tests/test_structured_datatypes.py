@@ -23,6 +23,11 @@ from snowflake.sqlalchemy.custom_types import MAP, TEXT
 from snowflake.sqlalchemy.exc import StructuredTypeNotSupportedInTableColumnsError
 
 
+def test_compile_map_with_not_null(snapshot):
+    user_table = MAP(NUMBER(10, 0), TEXT(), not_null=True)
+    assert user_table.compile() == snapshot
+
+
 def test_compile_table_with_cluster_by_with_expression(sql_compiler, snapshot):
     metadata = MetaData()
     user_table = Table(
@@ -226,3 +231,46 @@ def test_snowflake_tables_with_structured_types(sql_compiler):
             Column("name", MAP(NUMBER(10, 0), TEXT())),
         )
     assert programming_error is not None
+
+
+@pytest.mark.requires_external_volume
+def test_select_map_orm(engine_testaccount, external_volume, base_location, snapshot):
+    metadata = MetaData()
+    table_name = "test_select_map_orm"
+    test_map = IcebergTable(
+        table_name,
+        metadata,
+        Column("id", Integer, primary_key=True),
+        Column("map_id", MAP(NUMBER(10, 0), TEXT())),
+        external_volume=external_volume,
+        base_location=base_location,
+    )
+    metadata.create_all(engine_testaccount)
+
+    with engine_testaccount.connect() as conn:
+        slt1 = select(
+            2,
+            cast(text("{'100':'item1', '200':'item2'}"), MAP(NUMBER(10, 0), TEXT())),
+        )
+        slt2 = select(
+            1,
+            cast(text("{'100':'item1', '200':'item2'}"), MAP(NUMBER(10, 0), TEXT())),
+        ).union_all(slt1)
+        ins = test_map.insert().from_select(["id", "map_id"], slt2)
+        conn.execute(ins)
+        conn.commit()
+
+    Base = declarative_base()
+    session = Session(bind=engine_testaccount)
+
+    class TestIcebergTableOrm(Base):
+        __table__ = test_map
+
+        def __repr__(self):
+            return f"({self.id!r}, {self.map_id!r})"
+
+    try:
+        data = session.query(TestIcebergTableOrm).all()
+        snapshot.assert_match(data)
+    finally:
+        test_map.drop(engine_testaccount)

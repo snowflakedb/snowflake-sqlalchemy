@@ -127,7 +127,7 @@ def _parse_map_type_parameters(parameters):
     return {
         "key_type": key_type,
         "value_type": value_type,
-        "nullable": not_null,
+        "not_null": not_null,
     }
 
 
