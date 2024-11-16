@@ -125,14 +125,26 @@ def test_connect_args():
     Snowflake connect string supports account name as a replacement of
     host:port
     """
+    server = ""
+    if "host" in CONNECTION_PARAMETERS and "port" in CONNECTION_PARAMETERS:
+        server = "{host}:{port}".format(
+            host=CONNECTION_PARAMETERS["host"], port=CONNECTION_PARAMETERS["port"]
+        )
+    elif "account" in CONNECTION_PARAMETERS and "region" in CONNECTION_PARAMETERS:
+        server = "{account}.{region}".format(
+            account=CONNECTION_PARAMETERS["account"],
+            region=CONNECTION_PARAMETERS["region"],
+        )
+    elif "account" in CONNECTION_PARAMETERS:
+        server = CONNECTION_PARAMETERS["account"]
+
     engine = create_engine(
-        "snowflake://{user}:{password}@{host}:{port}/{database}/{schema}"
+        "snowflake://{user}:{password}@{server}/{database}/{schema}"
         "?account={account}&protocol={protocol}".format(
             user=CONNECTION_PARAMETERS["user"],
             account=CONNECTION_PARAMETERS["account"],
             password=CONNECTION_PARAMETERS["password"],
-            host=CONNECTION_PARAMETERS["host"],
-            port=CONNECTION_PARAMETERS["port"],
+            server=server,
             database=CONNECTION_PARAMETERS["database"],
             schema=CONNECTION_PARAMETERS["schema"],
             protocol=CONNECTION_PARAMETERS["protocol"],
@@ -143,32 +155,14 @@ def test_connect_args():
     finally:
         engine.dispose()
 
-    engine = create_engine(
-        URL(
-            user=CONNECTION_PARAMETERS["user"],
-            password=CONNECTION_PARAMETERS["password"],
-            account=CONNECTION_PARAMETERS["account"],
-            host=CONNECTION_PARAMETERS["host"],
-            port=CONNECTION_PARAMETERS["port"],
-            protocol=CONNECTION_PARAMETERS["protocol"],
-        )
-    )
+    engine = create_engine(URL(**CONNECTION_PARAMETERS))
     try:
         verify_engine_connection(engine)
     finally:
         engine.dispose()
 
-    engine = create_engine(
-        URL(
-            user=CONNECTION_PARAMETERS["user"],
-            password=CONNECTION_PARAMETERS["password"],
-            account=CONNECTION_PARAMETERS["account"],
-            host=CONNECTION_PARAMETERS["host"],
-            port=CONNECTION_PARAMETERS["port"],
-            protocol=CONNECTION_PARAMETERS["protocol"],
-            warehouse="testwh",
-        )
-    )
+    CONNECTION_PARAMETERS["warehouse"] = "testwh"
+    engine = create_engine(URL(**CONNECTION_PARAMETERS))
     try:
         verify_engine_connection(engine)
     finally:
@@ -176,14 +170,10 @@ def test_connect_args():
 
 
 def test_boolean_query_argument_parsing():
+
     engine = create_engine(
         URL(
-            user=CONNECTION_PARAMETERS["user"],
-            password=CONNECTION_PARAMETERS["password"],
-            account=CONNECTION_PARAMETERS["account"],
-            host=CONNECTION_PARAMETERS["host"],
-            port=CONNECTION_PARAMETERS["port"],
-            protocol=CONNECTION_PARAMETERS["protocol"],
+            **CONNECTION_PARAMETERS,
             validate_default_parameters=True,
         )
     )
@@ -1815,30 +1805,14 @@ CREATE OR REPLACE TEMP TABLE {table_name}
 
 def test_snowflake_sqlalchemy_as_valid_client_type():
     engine = create_engine(
-        URL(
-            user=CONNECTION_PARAMETERS["user"],
-            password=CONNECTION_PARAMETERS["password"],
-            account=CONNECTION_PARAMETERS["account"],
-            host=CONNECTION_PARAMETERS["host"],
-            port=CONNECTION_PARAMETERS["port"],
-            protocol=CONNECTION_PARAMETERS["protocol"],
-        ),
+        URL(**CONNECTION_PARAMETERS),
         connect_args={"internal_application_name": "UnknownClient"},
     )
     with engine.connect() as conn:
         with pytest.raises(snowflake.connector.errors.NotSupportedError):
             conn.exec_driver_sql("select 1").cursor.fetch_pandas_all()
 
-    engine = create_engine(
-        URL(
-            user=CONNECTION_PARAMETERS["user"],
-            password=CONNECTION_PARAMETERS["password"],
-            account=CONNECTION_PARAMETERS["account"],
-            host=CONNECTION_PARAMETERS["host"],
-            port=CONNECTION_PARAMETERS["port"],
-            protocol=CONNECTION_PARAMETERS["protocol"],
-        )
-    )
+    engine = create_engine(URL(**CONNECTION_PARAMETERS))
     with engine.connect() as conn:
         conn.exec_driver_sql("select 1").cursor.fetch_pandas_all()
 
@@ -1869,16 +1843,7 @@ def test_snowflake_sqlalchemy_as_valid_client_type():
             "3.0.0",
             (type(None), str),
         )
-        engine = create_engine(
-            URL(
-                user=CONNECTION_PARAMETERS["user"],
-                password=CONNECTION_PARAMETERS["password"],
-                account=CONNECTION_PARAMETERS["account"],
-                host=CONNECTION_PARAMETERS["host"],
-                port=CONNECTION_PARAMETERS["port"],
-                protocol=CONNECTION_PARAMETERS["protocol"],
-            )
-        )
+        engine = create_engine(URL(**CONNECTION_PARAMETERS))
         with engine.connect() as conn:
             conn.exec_driver_sql("select 1").cursor.fetch_pandas_all()
             assert (

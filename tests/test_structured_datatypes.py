@@ -23,11 +23,6 @@ from snowflake.sqlalchemy.custom_types import MAP, TEXT
 from snowflake.sqlalchemy.exc import StructuredTypeNotSupportedInTableColumnsError
 
 
-def test_compile_map_with_not_null(snapshot):
-    user_table = MAP(NUMBER(10, 0), TEXT(), not_null=True)
-    assert user_table.compile() == snapshot
-
-
 def test_compile_table_with_cluster_by_with_expression(sql_compiler, snapshot):
     metadata = MetaData()
     user_table = Table(

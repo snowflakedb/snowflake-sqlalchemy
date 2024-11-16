@@ -21,10 +21,10 @@ from sqlalchemy.types import (
     NullType,
 )
 
-from .. import util as sa_util
 from ..custom_types import (
     _CUSTOM_DECIMAL,
     ARRAY,
+    DOUBLE,
     GEOGRAPHY,
     GEOMETRY,
     MAP,
@@ -46,9 +46,9 @@ ischema_names = {
     "DATETIME": DATETIME,
     "DEC": DECIMAL,
     "DECIMAL": DECIMAL,
-    "DOUBLE": FLOAT,
+    "DOUBLE": DOUBLE,
     "FIXED": DECIMAL,
-    "FLOAT": FLOAT,
+    "FLOAT": FLOAT,  # Snowflake FLOAT datatype doesn't has parameters
     "INT": INTEGER,
     "INTEGER": INTEGER,
     "NUMBER": _CUSTOM_DECIMAL,
@@ -75,41 +75,69 @@ ischema_names = {
 }
 
 
-def parse_column_type(column_type: str, column_name: str = "") -> TypeEngine:
-    index = column_type.find("(")
-    type_name = column_type[:index] if index != -1 else column_type
-    parameters = column_type[index + 1 : -1] if type_name != column_type else []
+def extract_parameters(text: str) -> list:
+    """
+    Extracts parameters from a comma-separated string, handling parentheses.
+
+    :param text: A string with comma-separated parameters, which may include parentheses.
+
+    :return: A list of parameters as strings.
+
+    :example:
+        For input `"a, (b, c), d"`, the output is `['a', '(b, c)', 'd']`.
+    """
+
+    output_parameters = []
+    parameter = ""
+    open_parenthesis = 0
+    for c in text:
+
+        if c == "(":
+            open_parenthesis += 1
+        elif c == ")":
+            open_parenthesis -= 1
+
+        if open_parenthesis > 0 or c != ",":
+            parameter += c
+        elif c == ",":
+            output_parameters.append(parameter.strip(" "))
+            parameter = ""
+    if parameter != "":
+        output_parameters.append(parameter.strip(" "))
+    return output_parameters
+
+
+def parse_type(type_text: str) -> TypeEngine:
+    index = type_text.find("(")
+    type_name = type_text[:index] if index != -1 else type_text
+    parameters = (
+        extract_parameters(type_text[index + 1 : -1]) if type_name != type_text else []
+    )
 
     col_type_class = ischema_names.get(type_name, None)
     col_type_kw = {}
     if col_type_class is None:
         col_type_class = NullType
     else:
-        if issubclass(col_type_class, FLOAT) and parameters:
-            col_type_kw = _parse_float_type_parameters(parameters)
-        elif issubclass(col_type_class, sqltypes.Numeric):
-            col_type_kw = _parse_numeric_type_parameters(parameters)
+        if issubclass(col_type_class, sqltypes.Numeric):
+            col_type_kw = __parse_numeric_type_parameters(parameters)
         elif issubclass(col_type_class, (sqltypes.String, sqltypes.BINARY)):
-            col_type_kw = _parse_type_with_length_parameters(parameters)
+            col_type_kw = __parse_type_with_length_parameters(parameters)
         elif issubclass(col_type_class, MAP):
-            col_type_kw = _parse_map_type_parameters(parameters)
+            col_type_kw = __parse_map_type_parameters(parameters)
         if col_type_kw is None:
             col_type_class = NullType
-    if col_type_class is NullType and column_name != "":
-        sa_util.warn(
-            f"Did not recognize type '{column_type}' of column '{column_name}'"
-        )
+            col_type_kw = {}
 
     return col_type_class(**col_type_kw)
 
 
-def _parse_map_type_parameters(parameters):
-    parameters_list = parameters.split(", ", maxsplit=1)
-    if len(parameters_list) != 2:
+def __parse_map_type_parameters(parameters):
+    if len(parameters) != 2:
         return None
 
-    key_type_str = parameters_list[0]
-    value_type_str = parameters_list[1]
+    key_type_str = parameters[0]
+    value_type_str = parameters[1]
     not_null_str = "NOT NULL"
     not_null = False
     if (
@@ -119,8 +147,8 @@ def _parse_map_type_parameters(parameters):
         not_null = True
         value_type_str = value_type_str[: -len(not_null_str) - 1]
 
-    key_type: TypeEngine = parse_column_type(key_type_str)
-    value_type: TypeEngine = parse_column_type(value_type_str)
+    key_type: TypeEngine = parse_type(key_type_str)
+    value_type: TypeEngine = parse_type(value_type_str)
     if isinstance(key_type, NullType) or isinstance(value_type, NullType):
         return None
 
@@ -131,35 +159,18 @@ def _parse_map_type_parameters(parameters):
     }
 
 
-def _parse_type_with_length_parameters(parameters):
-    return {"length": int(parameters)} if str.isdigit(parameters) else None
+def __parse_type_with_length_parameters(parameters):
+    return (
+        {"length": int(parameters[0])}
+        if len(parameters) == 1 and str.isdigit(parameters[0])
+        else {}
+    )
 
 
-def _parse_numeric_type_parameters(parameters):
-    parameters_list = parameters.split(",") if parameters else []
-    if (
-        len(parameters_list) == 2
-        and str.isdigit(parameters_list[0])
-        and str.isdigit(parameters_list[1])
-    ):
-        return {
-            "precision": int(parameters_list[0]),
-            "scale": int(parameters_list[1]),
-        }
-
-    return None
-
-
-def _parse_float_type_parameters(parameters):
-    parameters_list = parameters.split(",") if parameters else []
-    if (
-        len(parameters_list) == 2
-        and str.isdigit(parameters_list[0])
-        and str.isdigit(parameters_list[1])
-    ):
-        return {
-            "precision": int(parameters_list[0]),
-            "decimal_return_scale": int(parameters_list[1]),
-        }
-
-    return None
+def __parse_numeric_type_parameters(parameters):
+    result = {}
+    if len(parameters) >= 1 and str.isdigit(parameters[0]):
+        result["precision"] = int(parameters[0])
+    if len(parameters) == 2 and str.isdigit(parameters[1]):
+        result["scale"] = int(parameters[1])
+    return result

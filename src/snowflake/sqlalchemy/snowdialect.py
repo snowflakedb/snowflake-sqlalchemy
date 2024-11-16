@@ -39,7 +39,7 @@ from .custom_types import (
     _CUSTOM_Float,
     _CUSTOM_Time,
 )
-from .parser.custom_type_parser import ischema_names, parse_column_type
+from .parser.custom_type_parser import ischema_names, parse_type
 from .sql.custom_schema.custom_table_prefix import CustomTablePrefix
 from .util import (
     _update_connection_application_name,
@@ -616,7 +616,11 @@ class SnowflakeDialect(default.DefaultDialect):
             column_name = self.normalize_name(column_name)
             if column_name.startswith("sys_clustering_column"):
                 continue  # ignoring clustering column
-            type_instance = parse_column_type(coltype, column_name)
+            type_instance = parse_type(coltype)
+            if isinstance(type_instance, NullType):
+                sa_util.warn(
+                    f"Did not recognize type '{coltype}' of column '{column_name}'"
+                )
 
             identity = None
             match = re.match(
