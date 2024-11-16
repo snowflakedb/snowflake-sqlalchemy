@@ -160,9 +160,9 @@ def test_connect_args():
         verify_engine_connection(engine)
     finally:
         engine.dispose()
-
-    CONNECTION_PARAMETERS["warehouse"] = "testwh"
-    engine = create_engine(URL(**CONNECTION_PARAMETERS))
+    parameters = {**CONNECTION_PARAMETERS}
+    parameters["warehouse"] = "testwh"
+    engine = create_engine(URL(**parameters))
     try:
         verify_engine_connection(engine)
     finally:
