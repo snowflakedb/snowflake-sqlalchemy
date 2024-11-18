@@ -108,6 +108,20 @@ def extract_parameters(text: str) -> list:
 
 
 def parse_type(type_text: str) -> TypeEngine:
+    """
+    Parses a type definition string and returns the corresponding SQLAlchemy type.
+
+    The function handles types with or without parameters, such as `VARCHAR(255)` or `INTEGER`.
+
+    :param type_text: A string representing a SQLAlchemy type, which may include parameters
+                       in parentheses (e.g., "VARCHAR(255)" or "DECIMAL(10, 2)").
+    :return: An instance of the corresponding SQLAlchemy type class (e.g., `String`, `Integer`),
+             or `NullType` if the type is not recognized.
+
+    :example:
+        parse_type("VARCHAR(255)")
+        String(length=255)
+    """
     index = type_text.find("(")
     type_name = type_text[:index] if index != -1 else type_text
     parameters = (
