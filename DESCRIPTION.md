@@ -11,8 +11,9 @@ Source code is also available at:
 
 - (Unreleased)
   - Add support for partition by to copy into <location>
+  - Fix flag `div_is_floordiv` to `False` in `SnowflakeDialect` to avoid division wrong CAST when trying to do a integer division when using `/`
 
-- v1.7.0(November 22, 2024)
+- v1.7.0(November 21, 2024)
 
   - Add support for dynamic tables and required options
   - Add support for hybrid tables
