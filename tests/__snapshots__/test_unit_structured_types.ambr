@@ -1,0 +1,4 @@
+# serializer version: 1
+# name: test_compile_map_with_not_null
+  'MAP(DECIMAL(10, 0), VARCHAR NOT NULL)'
+# ---

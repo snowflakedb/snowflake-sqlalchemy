@@ -72,3 +72,11 @@ class MultipleErrors(ArgumentError):
 
     def __str__(self):
         return "".join(str(e) for e in self.errors)
+
+
+class StructuredTypeNotSupportedInTableColumnsError(ArgumentError):
+    def __init__(self, table_type: str, table_name: str, column_name: str):
+        super().__init__(
+            f"Column '{column_name}' is of a structured type, which is only supported on Iceberg tables. "
+            f"The table '{table_name}' is of type '{table_type}', not Iceberg."
+        )

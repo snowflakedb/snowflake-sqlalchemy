@@ -9,10 +9,12 @@ from sqlalchemy.sql.schema import MetaData, SchemaItem, Table
 from ..._constants import DIALECT_NAME
 from ...compat import IS_VERSION_20
 from ...custom_commands import NoneType
+from ...custom_types import StructuredType
 from ...exc import (
     MultipleErrors,
     NoPrimaryKeyError,
     RequiredParametersNotProvidedError,
+    StructuredTypeNotSupportedInTableColumnsError,
     UnsupportedPrimaryKeysAndForeignKeysError,
 )
 from .custom_table_prefix import CustomTablePrefix
@@ -25,6 +27,7 @@ class CustomTableBase(Table):
     _support_primary_and_foreign_keys: bool = True
     _enforce_primary_keys: bool = False
     _required_parameters: List[TableOptionKey] = []
+    _support_structured_types: bool = False
 
     @property
     def table_prefixes(self) -> typing.List[str]:
@@ -52,6 +55,10 @@ class CustomTableBase(Table):
 
     def _validate_table(self):
         exceptions: List[Exception] = []
+
+        columns_validation = self.__validate_columns()
+        if columns_validation is not None:
+            exceptions.append(columns_validation)
 
         for _, option in self.dialect_options[DIALECT_NAME].items():
             if isinstance(option, InvalidTableOption):
@@ -83,6 +90,15 @@ class CustomTableBase(Table):
             raise MultipleErrors(exceptions)
         elif len(exceptions) == 1:
             raise exceptions[0]
+
+    def __validate_columns(self):
+        for column in self.columns:
+            if not self._support_structured_types and isinstance(
+                column.type, StructuredType
+            ):
+                return StructuredTypeNotSupportedInTableColumnsError(
+                    self.__class__.__name__, self.name, column.name
+                )
 
     def _get_dialect_option(
         self, option_name: TableOptionKey

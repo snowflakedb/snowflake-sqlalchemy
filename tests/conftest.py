@@ -94,6 +94,36 @@ def db_parameters():
     yield get_db_parameters()
 
 
+@pytest.fixture(scope="session")
+def external_volume():
+    db_parameters = get_db_parameters()
+    if "external_volume" in db_parameters:
+        yield db_parameters["external_volume"]
+    else:
+        raise ValueError("External_volume is not set")
+
+
+@pytest.fixture(scope="session")
+def external_stage():
+    db_parameters = get_db_parameters()
+    if "external_stage" in db_parameters:
+        yield db_parameters["external_stage"]
+    else:
+        raise ValueError("External_stage is not set")
+
+
+@pytest.fixture(scope="function")
+def base_location(external_stage, engine_testaccount):
+    unique_id = str(uuid.uuid4())
+    base_location = "L" + unique_id.replace("-", "_")
+    yield base_location
+    remove_base_location = f"""
+    REMOVE @{external_stage} pattern='.*{base_location}.*';
+     """
+    with engine_testaccount.connect() as connection:
+        connection.exec_driver_sql(remove_base_location)
+
+
 def get_db_parameters() -> dict:
     """
     Sets the db connection parameters
