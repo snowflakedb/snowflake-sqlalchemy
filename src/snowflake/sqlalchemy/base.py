@@ -7,7 +7,6 @@ import operator
 import re
 from typing import List
 
-from sqlalchemy import Executable
 from sqlalchemy import exc as sa_exc
 from sqlalchemy import inspect, sql
 from sqlalchemy import util as sa_util
@@ -18,6 +17,7 @@ from sqlalchemy.schema import Sequence, Table
 from sqlalchemy.sql import compiler, expression, functions
 from sqlalchemy.sql.base import CompileState
 from sqlalchemy.sql.elements import BindParameter, quoted_name
+from sqlalchemy.sql.expression import Executable
 from sqlalchemy.sql.selectable import Lateral, SelectState
 
 from snowflake.sqlalchemy._constants import DIALECT_NAME
