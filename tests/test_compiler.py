@@ -135,3 +135,33 @@ def test_outer_lateral_join():
         str(stmt.compile(dialect=snowdialect.dialect()))
         == "SELECT colname AS label \nFROM abc JOIN LATERAL flatten(PARSE_JSON(colname2)) AS anon_1 GROUP BY colname"
     )
+
+
+def test_division_operator():
+    col1 = column("col1")
+    col2 = column("col2")
+    stmt = col1 / col2
+    assert str(stmt.compile(dialect=snowdialect.dialect())) == "col1 / col2"
+
+
+def test_division_operator_with_denominator_expr():
+    col1 = column("col1")
+    col2 = column("col2")
+    stmt = col1 / func.sqrt(col2)
+    assert str(stmt.compile(dialect=snowdialect.dialect())) == "col1 / sqrt(col2)"
+
+
+def test_floor_division_operator():
+    col1 = column("col1")
+    col2 = column("col2")
+    stmt = col1 // col2
+    assert str(stmt.compile(dialect=snowdialect.dialect())) == "FLOOR(col1 / col2)"
+
+
+def test_floor_division_operator_with_denominator_expr():
+    col1 = column("col1")
+    col2 = column("col2")
+    stmt = col1 // func.sqrt(col2)
+    assert (
+        str(stmt.compile(dialect=snowdialect.dialect())) == "FLOOR(col1 / sqrt(col2))"
+    )

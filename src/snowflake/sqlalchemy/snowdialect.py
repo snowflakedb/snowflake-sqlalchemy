@@ -79,6 +79,9 @@ class SnowflakeDialect(default.DefaultDialect):
     colspecs = colspecs
     ischema_names = ischema_names
 
+    # target database treats the / division operator as “floor division”
+    div_is_floordiv = False
+
     # all str types must be converted in Unicode
     convert_unicode = True
 
