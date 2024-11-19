@@ -577,7 +577,9 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             from_ = f"({copy_into.from_._compiler_dispatch(self, **kw)})"
 
         partition_by = ""
-        if copy_into.partition_by is not None:
+        if isinstance(copy_into.partition_by, str):
+            partition_by = f"PARTITION BY '{copy_into.partition_by}'"
+        elif copy_into.partition_by is not None:
             partition_by = f"PARTITION BY {copy_into.partition_by}"
 
         credentials, encryption = "", ""

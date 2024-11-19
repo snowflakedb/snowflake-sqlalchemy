@@ -4,7 +4,7 @@
 
 import pytest
 from sqlalchemy import Column, Integer, MetaData, Sequence, String, Table
-from sqlalchemy.sql import select, text
+from sqlalchemy.sql import functions, select, text
 
 from snowflake.sqlalchemy import (
     AWSBucket,
@@ -154,11 +154,23 @@ def test_copy_into_location(engine_testaccount, sql_compiler):
     copy_stmt_8 = CopyIntoStorage(
         from_=food_items,
         into=ExternalStage(name="stage_name"),
-        partition_by="('YEAR=' || year)",
+        partition_by=text("('YEAR=' || year)"),
     )
     assert (
         sql_compiler(copy_stmt_8)
         == "COPY INTO @stage_name FROM python_tests_foods PARTITION BY ('YEAR=' || year)  "
+    )
+
+    copy_stmt_9 = CopyIntoStorage(
+        from_=food_items,
+        into=ExternalStage(name="stage_name"),
+        partition_by=functions.concat(
+            text("'YEAR='"), text(food_items.columns["name"].name)
+        ),
+    )
+    assert (
+        sql_compiler(copy_stmt_9)
+        == "COPY INTO @stage_name FROM python_tests_foods PARTITION BY concat('YEAR=', name)  "
     )
 
     # NOTE Other than expect known compiled text, submit it to RegressionTests environment and expect them to fail, but
