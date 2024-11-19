@@ -10,6 +10,7 @@ Source code is also available at:
 # Release Notes
 - (Unreleased)
   - Fix return value of snowflake get_table_names
+  - Fix flag `div_is_floordiv` to `False` in `SnowflakeDialect` to avoid division wrong CAST when trying to do a integer division when using `/`
 
 - v1.7.2(December 18, 2024)
   - Fix quoting of `_` as column name
