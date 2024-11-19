@@ -7,6 +7,7 @@ import operator
 import re
 from typing import List
 
+from sqlalchemy import Executable
 from sqlalchemy import exc as sa_exc
 from sqlalchemy import inspect, sql
 from sqlalchemy import util as sa_util
@@ -16,7 +17,7 @@ from sqlalchemy.orm.context import _MapperEntity
 from sqlalchemy.schema import Sequence, Table
 from sqlalchemy.sql import compiler, expression, functions
 from sqlalchemy.sql.base import CompileState
-from sqlalchemy.sql.elements import quoted_name
+from sqlalchemy.sql.elements import BindParameter, quoted_name
 from sqlalchemy.sql.selectable import Lateral, SelectState
 
 from snowflake.sqlalchemy._constants import DIALECT_NAME
@@ -576,11 +577,17 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         else:
             from_ = f"({copy_into.from_._compiler_dispatch(self, **kw)})"
 
-        partition_by = ""
-        if isinstance(copy_into.partition_by, str):
-            partition_by = f"PARTITION BY '{copy_into.partition_by}'"
+        partition_by_value = ""
+        if isinstance(copy_into.partition_by, (BindParameter, Executable)):
+            partition_by_value = copy_into.partition_by.compile(
+                compile_kwargs={"literal_binds": True}
+            )
         elif copy_into.partition_by is not None:
-            partition_by = f"PARTITION BY {copy_into.partition_by}"
+            partition_by_value = copy_into.partition_by
+
+        partition_by = (
+            f"PARTITION BY {partition_by_value}" if partition_by_value != "" else ""
+        )
 
         credentials, encryption = "", ""
         if isinstance(into, tuple):
