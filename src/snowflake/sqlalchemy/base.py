@@ -577,7 +577,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         else:
             from_ = f"({copy_into.from_._compiler_dispatch(self, **kw)})"
 
-        partition_by_value = ""
+        partition_by_value = None
         if isinstance(copy_into.partition_by, (BindParameter, Executable)):
             partition_by_value = copy_into.partition_by.compile(
                 compile_kwargs={"literal_binds": True}
@@ -586,7 +586,9 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             partition_by_value = copy_into.partition_by
 
         partition_by = (
-            f"PARTITION BY {partition_by_value}" if partition_by_value != "" else ""
+            f"PARTITION BY {partition_by_value}"
+            if partition_by_value is not None
+            else ""
         )
 
         credentials, encryption = "", ""
