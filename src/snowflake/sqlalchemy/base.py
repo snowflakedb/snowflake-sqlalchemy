@@ -587,7 +587,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
 
         partition_by = (
             f"PARTITION BY {partition_by_value}"
-            if partition_by_value is not None
+            if partition_by_value is not None and partition_by_value != ""
             else ""
         )
 
