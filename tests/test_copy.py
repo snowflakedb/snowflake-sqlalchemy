@@ -173,6 +173,15 @@ def test_copy_into_location(engine_testaccount, sql_compiler):
         == "COPY INTO @stage_name FROM python_tests_foods PARTITION BY concat('YEAR=', name)  "
     )
 
+    copy_stmt_10 = CopyIntoStorage(
+        from_=food_items,
+        into=ExternalStage(name="stage_name"),
+        partition_by="",
+    )
+    assert (
+        sql_compiler(copy_stmt_10) == "COPY INTO @stage_name FROM python_tests_foods   "
+    )
+
     # NOTE Other than expect known compiled text, submit it to RegressionTests environment and expect them to fail, but
     # because of the right reasons
     acceptable_exc_reasons = {
