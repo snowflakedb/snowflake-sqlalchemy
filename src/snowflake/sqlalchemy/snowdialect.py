@@ -140,6 +140,19 @@ class SnowflakeDialect(default.DefaultDialect):
 
     supports_identity_columns = True
 
+    def __init__(
+        self,
+        force_div_is_floordiv: bool = True,
+        **kwargs,
+    ):
+        default.DefaultDialect.__init__(self, **kwargs)
+        self.force_div_is_floordiv = force_div_is_floordiv
+        self.div_is_floordiv = force_div_is_floordiv
+
+    def initialize(self, connection):
+        super().initialize(connection)
+        self.div_is_floordiv = self.force_div_is_floordiv
+
     @classmethod
     def dbapi(cls):
         return cls.import_dbapi()
