@@ -9,7 +9,7 @@ Source code is also available at:
 
 # Release Notes
 
-- v1.7.0(November 12, 2024)
+- v1.7.0(November 20, 2024)
 
   - Add support for dynamic tables and required options
   - Add support for hybrid tables
