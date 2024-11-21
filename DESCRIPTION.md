@@ -9,6 +9,9 @@ Source code is also available at:
 
 # Release Notes
 
+- (Unreleased)
+  - Add support for partition by to copy into <location>
+
 - v1.7.0(November 22, 2024)
 
   - Add support for dynamic tables and required options
@@ -19,7 +22,6 @@ Source code is also available at:
   - Add support for iceberg table with Snowflake Catalog
   - Fix cluster by option to support explicit expressions
   - Add support for MAP datatype
-  - Add support for partition by to copy into <location>
 
 - v1.6.1(July 9, 2024)
 
