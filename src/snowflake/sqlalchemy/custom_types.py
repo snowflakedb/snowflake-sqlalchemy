@@ -37,6 +37,26 @@ class VARIANT(SnowflakeType):
     __visit_name__ = "VARIANT"
 
 
+class StructuredType(SnowflakeType):
+    def __init__(self):
+        super().__init__()
+
+
+class MAP(StructuredType):
+    __visit_name__ = "MAP"
+
+    def __init__(
+        self,
+        key_type: sqltypes.TypeEngine,
+        value_type: sqltypes.TypeEngine,
+        not_null: bool = False,
+    ):
+        self.key_type = key_type
+        self.value_type = value_type
+        self.not_null = not_null
+        super().__init__()
+
+
 class OBJECT(SnowflakeType):
     __visit_name__ = "OBJECT"
 

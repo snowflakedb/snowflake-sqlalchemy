@@ -27,6 +27,7 @@ from snowflake.sqlalchemy.custom_commands import (
     ExternalStage,
 )
 
+from ._constants import NOT_NULL
 from .exc import (
     CustomOptionsAreOnlySupportedOnSnowflakeTables,
     UnexpectedOptionTypeError,
@@ -1070,6 +1071,12 @@ class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
 
     def visit_VARIANT(self, type_, **kw):
         return "VARIANT"
+
+    def visit_MAP(self, type_, **kw):
+        not_null = f" {NOT_NULL}" if type_.not_null else ""
+        return (
+            f"MAP({type_.key_type.compile()}, {type_.value_type.compile()}{not_null})"
+        )
 
     def visit_ARRAY(self, type_, **kw):
         return "ARRAY"

@@ -44,6 +44,7 @@ class IcebergTable(TableFromQueryBase):
     """
 
     __table_prefixes__ = [CustomTablePrefix.ICEBERG]
+    _support_structured_types = True
 
     @property
     def external_volume(self) -> typing.Optional[LiteralOption]:
