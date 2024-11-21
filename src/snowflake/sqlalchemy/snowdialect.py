@@ -3,6 +3,7 @@
 #
 
 import operator
+import re
 from collections import defaultdict
 from functools import reduce
 from typing import Any
@@ -16,32 +17,14 @@ from sqlalchemy.engine import URL, default, reflection
 from sqlalchemy.schema import Table
 from sqlalchemy.sql import text
 from sqlalchemy.sql.elements import quoted_name
-from sqlalchemy.types import (
-    BIGINT,
-    BINARY,
-    BOOLEAN,
-    CHAR,
-    DATE,
-    DATETIME,
-    DECIMAL,
-    FLOAT,
-    INTEGER,
-    REAL,
-    SMALLINT,
-    TIME,
-    TIMESTAMP,
-    VARCHAR,
-    Date,
-    DateTime,
-    Float,
-    Time,
-)
+from sqlalchemy.types import FLOAT, Date, DateTime, Float, NullType, Time
 
 from snowflake.connector import errors as sf_errors
 from snowflake.connector.connection import DEFAULT_CONFIGURATION
 from snowflake.connector.constants import UTF8
 from snowflake.sqlalchemy.compat import returns_unicode
 
+from ._constants import DIALECT_NAME
 from .base import (
     SnowflakeCompiler,
     SnowflakeDDLCompiler,
@@ -50,20 +33,14 @@ from .base import (
     SnowflakeTypeCompiler,
 )
 from .custom_types import (
-    _CUSTOM_DECIMAL,
-    ARRAY,
-    GEOGRAPHY,
-    GEOMETRY,
-    OBJECT,
-    TIMESTAMP_LTZ,
-    TIMESTAMP_NTZ,
-    TIMESTAMP_TZ,
-    VARIANT,
+    MAP,
     _CUSTOM_Date,
     _CUSTOM_DateTime,
     _CUSTOM_Float,
     _CUSTOM_Time,
 )
+from .parser.custom_type_parser import ischema_names, parse_type
+from .sql.custom_schema.custom_table_prefix import CustomTablePrefix
 from .util import (
     _update_connection_application_name,
     parse_url_boolean,
@@ -77,49 +54,11 @@ colspecs = {
     Float: _CUSTOM_Float,
 }
 
-ischema_names = {
-    "BIGINT": BIGINT,
-    "BINARY": BINARY,
-    # 'BIT': BIT,
-    "BOOLEAN": BOOLEAN,
-    "CHAR": CHAR,
-    "CHARACTER": CHAR,
-    "DATE": DATE,
-    "DATETIME": DATETIME,
-    "DEC": DECIMAL,
-    "DECIMAL": DECIMAL,
-    "DOUBLE": FLOAT,
-    "FIXED": DECIMAL,
-    "FLOAT": FLOAT,
-    "INT": INTEGER,
-    "INTEGER": INTEGER,
-    "NUMBER": _CUSTOM_DECIMAL,
-    # 'OBJECT': ?
-    "REAL": REAL,
-    "BYTEINT": SMALLINT,
-    "SMALLINT": SMALLINT,
-    "STRING": VARCHAR,
-    "TEXT": VARCHAR,
-    "TIME": TIME,
-    "TIMESTAMP": TIMESTAMP,
-    "TIMESTAMP_TZ": TIMESTAMP_TZ,
-    "TIMESTAMP_LTZ": TIMESTAMP_LTZ,
-    "TIMESTAMP_NTZ": TIMESTAMP_NTZ,
-    "TINYINT": SMALLINT,
-    "VARBINARY": BINARY,
-    "VARCHAR": VARCHAR,
-    "VARIANT": VARIANT,
-    "OBJECT": OBJECT,
-    "ARRAY": ARRAY,
-    "GEOGRAPHY": GEOGRAPHY,
-    "GEOMETRY": GEOMETRY,
-}
-
 _ENABLE_SQLALCHEMY_AS_APPLICATION_NAME = True
 
 
 class SnowflakeDialect(default.DefaultDialect):
-    name = "snowflake"
+    name = DIALECT_NAME
     driver = "snowflake"
     max_identifier_length = 255
     cte_follows_insert = True
@@ -331,8 +270,8 @@ class SnowflakeDialect(default.DefaultDialect):
 
     @reflection.cache
     def _current_database_schema(self, connection, **kw):
-        res = connection.exec_driver_sql(
-            "select current_database(), current_schema();"
+        res = connection.execute(
+            text("select current_database(), current_schema();")
         ).fetchone()
         return (
             self.normalize_name(res[0]),
@@ -350,14 +289,6 @@ class SnowflakeDialect(default.DefaultDialect):
         for idx, col in enumerate(result.cursor.description):
             name_to_idx[col[0]] = idx
         return name_to_idx
-
-    @reflection.cache
-    def get_indexes(self, connection, table_name, schema=None, **kw):
-        """
-        Gets all indexes
-        """
-        # no index is supported by Snowflake
-        return []
 
     @reflection.cache
     def get_check_constraints(self, connection, table_name, schema, **kw):
@@ -514,6 +445,12 @@ class SnowflakeDialect(default.DefaultDialect):
         )
         return foreign_key_map.get(table_name, [])
 
+    def table_columns_as_dict(self, columns):
+        result = {}
+        for column in columns:
+            result[column["name"]] = column
+        return result
+
     @reflection.cache
     def _get_schema_columns(self, connection, schema, **kw):
         """Get all columns in the schema, if we hit 'Information schema query returned too much data' problem return
@@ -521,10 +458,12 @@ class SnowflakeDialect(default.DefaultDialect):
         ans = {}
         current_database, _ = self._current_database_schema(connection, **kw)
         full_schema_name = self._denormalize_quote_join(current_database, schema)
+        full_columns_descriptions = {}
         try:
             schema_primary_keys = self._get_schema_primary_keys(
                 connection, full_schema_name, **kw
             )
+            schema_name = self.denormalize_name(schema)
             result = connection.execute(
                 text(
                     """
@@ -545,7 +484,7 @@ class SnowflakeDialect(default.DefaultDialect):
              WHERE ic.table_schema=:table_schema
              ORDER BY ic.ordinal_position"""
                 ),
-                {"table_schema": self.denormalize_name(schema)},
+                {"table_schema": schema_name},
             )
         except sa_exc.ProgrammingError as pe:
             if pe.orig.errno == 90030:
@@ -575,10 +514,7 @@ class SnowflakeDialect(default.DefaultDialect):
             col_type = self.ischema_names.get(coltype, None)
             col_type_kw = {}
             if col_type is None:
-                sa_util.warn(
-                    f"Did not recognize type '{coltype}' of column '{column_name}'"
-                )
-                col_type = sqltypes.NULLTYPE
+                col_type = NullType
             else:
                 if issubclass(col_type, FLOAT):
                     col_type_kw["precision"] = numeric_precision
@@ -588,6 +524,33 @@ class SnowflakeDialect(default.DefaultDialect):
                     col_type_kw["scale"] = numeric_scale
                 elif issubclass(col_type, (sqltypes.String, sqltypes.BINARY)):
                     col_type_kw["length"] = character_maximum_length
+                elif issubclass(col_type, MAP):
+                    if (schema_name, table_name) not in full_columns_descriptions:
+                        full_columns_descriptions[(schema_name, table_name)] = (
+                            self.table_columns_as_dict(
+                                self._get_table_columns(
+                                    connection, table_name, schema_name
+                                )
+                            )
+                        )
+
+                    if (
+                        (schema_name, table_name) in full_columns_descriptions
+                        and column_name
+                        in full_columns_descriptions[(schema_name, table_name)]
+                    ):
+                        ans[table_name].append(
+                            full_columns_descriptions[(schema_name, table_name)][
+                                column_name
+                            ]
+                        )
+                        continue
+                    else:
+                        col_type = NullType
+            if col_type == NullType:
+                sa_util.warn(
+                    f"Did not recognize type '{coltype}' of column '{column_name}'"
+                )
 
             type_instance = col_type(**col_type_kw)
 
@@ -622,90 +585,70 @@ class SnowflakeDialect(default.DefaultDialect):
     def _get_table_columns(self, connection, table_name, schema=None, **kw):
         """Get all columns in a table in a schema"""
         ans = []
-        current_database, _ = self._current_database_schema(connection, **kw)
-        full_schema_name = self._denormalize_quote_join(current_database, schema)
-        schema_primary_keys = self._get_schema_primary_keys(
-            connection, full_schema_name, **kw
+        current_database, default_schema = self._current_database_schema(
+            connection, **kw
         )
+        schema = schema if schema else default_schema
+        table_schema = self.denormalize_name(schema)
+        table_name = self.denormalize_name(table_name)
         result = connection.execute(
             text(
-                """
-        SELECT /* sqlalchemy:get_table_columns */
-               ic.table_name,
-               ic.column_name,
-               ic.data_type,
-               ic.character_maximum_length,
-               ic.numeric_precision,
-               ic.numeric_scale,
-               ic.is_nullable,
-               ic.column_default,
-               ic.is_identity,
-               ic.comment
-          FROM information_schema.columns ic
-         WHERE ic.table_schema=:table_schema
-           AND ic.table_name=:table_name
-         ORDER BY ic.ordinal_position"""
-            ),
-            {
-                "table_schema": self.denormalize_name(schema),
-                "table_name": self.denormalize_name(table_name),
-            },
+                "DESC /* sqlalchemy:_get_schema_columns */"
+                f" TABLE {table_schema}.{table_name} TYPE = COLUMNS"
+            )
         )
         for (
-            table_name,
             column_name,
             coltype,
-            character_maximum_length,
-            numeric_precision,
-            numeric_scale,
+            _kind,
             is_nullable,
             column_default,
-            is_identity,
+            primary_key,
+            _unique_key,
+            _check,
+            _expression,
             comment,
+            _policy_name,
+            _privacy_domain,
+            _name_mapping,
         ) in result:
-            table_name = self.normalize_name(table_name)
+
             column_name = self.normalize_name(column_name)
             if column_name.startswith("sys_clustering_column"):
                 continue  # ignoring clustering column
-            col_type = self.ischema_names.get(coltype, None)
-            col_type_kw = {}
-            if col_type is None:
+            type_instance = parse_type(coltype)
+            if isinstance(type_instance, NullType):
                 sa_util.warn(
                     f"Did not recognize type '{coltype}' of column '{column_name}'"
                 )
-                col_type = sqltypes.NULLTYPE
-            else:
-                if issubclass(col_type, FLOAT):
-                    col_type_kw["precision"] = numeric_precision
-                    col_type_kw["decimal_return_scale"] = numeric_scale
-                elif issubclass(col_type, sqltypes.Numeric):
-                    col_type_kw["precision"] = numeric_precision
-                    col_type_kw["scale"] = numeric_scale
-                elif issubclass(col_type, (sqltypes.String, sqltypes.BINARY)):
-                    col_type_kw["length"] = character_maximum_length
 
-            type_instance = col_type(**col_type_kw)
-
-            current_table_pks = schema_primary_keys.get(table_name)
+            identity = None
+            match = re.match(
+                r"IDENTITY START (?P<start>\d+) INCREMENT (?P<increment>\d+) (?P<order_type>ORDER|NOORDER)",
+                column_default if column_default else "",
+            )
+            if match:
+                identity = {
+                    "start": int(match.group("start")),
+                    "increment": int(match.group("increment")),
+                    "order_type": match.group("order_type"),
+                }
+            is_identity = identity is not None
 
             ans.append(
                 {
                     "name": column_name,
                     "type": type_instance,
-                    "nullable": is_nullable == "YES",
-                    "default": column_default,
-                    "autoincrement": is_identity == "YES",
+                    "nullable": is_nullable == "Y",
+                    "default": None if is_identity else column_default,
+                    "autoincrement": is_identity,
                     "comment": comment if comment != "" else None,
-                    "primary_key": (
-                        (
-                            column_name
-                            in schema_primary_keys[table_name]["constrained_columns"]
-                        )
-                        if current_table_pks
-                        else False
-                    ),
+                    "primary_key": primary_key == "Y",
                 }
             )
+
+            if is_identity:
+                ans[-1]["identity"] = identity
 
         # If we didn't find any columns for the table, the table doesn't exist.
         if len(ans) == 0:
@@ -894,6 +837,129 @@ class SnowflakeDialect(default.DefaultDialect):
             )
         }
 
+    def get_multi_indexes(
+        self,
+        connection,
+        *,
+        schema,
+        filter_names,
+        **kw,
+    ):
+        """
+        Gets the indexes definition
+        """
+
+        table_prefixes = self.get_multi_prefixes(
+            connection, schema, filter_prefix=CustomTablePrefix.HYBRID.name
+        )
+        if len(table_prefixes) == 0:
+            return []
+        schema = schema or self.default_schema_name
+        if not schema:
+            result = connection.execute(
+                text("SHOW /* sqlalchemy:get_multi_indexes */ INDEXES")
+            )
+        else:
+            result = connection.execute(
+                text(
+                    f"SHOW /* sqlalchemy:get_multi_indexes */ INDEXES IN SCHEMA {self._denormalize_quote_join(schema)}"
+                )
+            )
+
+        n2i = self.__class__._map_name_to_idx(result)
+        indexes = {}
+
+        for row in result.cursor.fetchall():
+            table = self.normalize_name(str(row[n2i["table"]]))
+            if (
+                row[n2i["name"]] == f'SYS_INDEX_{row[n2i["table"]]}_PRIMARY'
+                or table not in filter_names
+                or (schema, table) not in table_prefixes
+                or (
+                    (schema, table) in table_prefixes
+                    and CustomTablePrefix.HYBRID.name
+                    not in table_prefixes[(schema, table)]
+                )
+            ):
+                continue
+            index = {
+                "name": row[n2i["name"]],
+                "unique": row[n2i["is_unique"]] == "Y",
+                "column_names": row[n2i["columns"]],
+                "include_columns": row[n2i["included_columns"]],
+                "dialect_options": {},
+            }
+            if (schema, table) in indexes:
+                indexes[(schema, table)] = indexes[(schema, table)].append(index)
+            else:
+                indexes[(schema, table)] = [index]
+
+        return list(indexes.items())
+
+    def _value_or_default(self, data, table, schema):
+        table = self.normalize_name(str(table))
+        dic_data = dict(data)
+        if (schema, table) in dic_data:
+            return dic_data[(schema, table)]
+        else:
+            return []
+
+    def get_prefixes_from_data(self, n2i, row, **kw):
+        prefixes_found = []
+        for valid_prefix in CustomTablePrefix:
+            key = f"is_{valid_prefix.name.lower()}"
+            if key in n2i and row[n2i[key]] == "Y":
+                prefixes_found.append(valid_prefix.name)
+        return prefixes_found
+
+    @reflection.cache
+    def get_multi_prefixes(
+        self, connection, schema, table_name=None, filter_prefix=None, **kw
+    ):
+        """
+        Gets all table prefixes
+        """
+        schema = schema or self.default_schema_name
+        filter = f"LIKE '{table_name}'" if table_name else ""
+        if schema:
+            result = connection.execute(
+                text(
+                    f"SHOW /* sqlalchemy:get_multi_prefixes */ {filter} TABLES IN SCHEMA {schema}"
+                )
+            )
+        else:
+            result = connection.execute(
+                text(
+                    f"SHOW /* sqlalchemy:get_multi_prefixes */ {filter} TABLES LIKE '{table_name}'"
+                )
+            )
+
+        n2i = self.__class__._map_name_to_idx(result)
+        tables_prefixes = {}
+        for row in result.cursor.fetchall():
+            table = self.normalize_name(str(row[n2i["name"]]))
+            table_prefixes = self.get_prefixes_from_data(n2i, row)
+            if filter_prefix and filter_prefix not in table_prefixes:
+                continue
+            if (schema, table) in tables_prefixes:
+                tables_prefixes[(schema, table)].append(table_prefixes)
+            else:
+                tables_prefixes[(schema, table)] = table_prefixes
+
+        return tables_prefixes
+
+    @reflection.cache
+    def get_indexes(self, connection, tablename, schema, **kw):
+        """
+        Gets the indexes definition
+        """
+        table_name = self.normalize_name(str(tablename))
+        data = self.get_multi_indexes(
+            connection=connection, schema=schema, filter_names=[table_name], **kw
+        )
+
+        return self._value_or_default(data, table_name, schema)
+
     def connect(self, *cargs, **cparams):
         return (
             super().connect(
@@ -911,8 +977,12 @@ class SnowflakeDialect(default.DefaultDialect):
 
 @sa_vnt.listens_for(Table, "before_create")
 def check_table(table, connection, _ddl_runner, **kw):
+    from .sql.custom_schema.hybrid_table import HybridTable
+
+    if HybridTable.is_equal_type(table):  # noqa
+        return True
     if isinstance(_ddl_runner.dialect, SnowflakeDialect) and table.indexes:
-        raise NotImplementedError("Snowflake does not support indexes")
+        raise NotImplementedError("Only Snowflake Hybrid Tables supports indexes")
 
 
 dialect = SnowflakeDialect

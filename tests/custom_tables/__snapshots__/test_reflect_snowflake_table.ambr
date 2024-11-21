@@ -1,0 +1,29 @@
+# serializer version: 1
+# name: test_inspect_snowflake_table
+  list([
+    dict({
+      'autoincrement': False,
+      'comment': None,
+      'default': None,
+      'name': 'id',
+      'nullable': False,
+      'primary_key': True,
+      'type': _CUSTOM_DECIMAL(precision=38, scale=0),
+    }),
+    dict({
+      'autoincrement': False,
+      'comment': None,
+      'default': None,
+      'name': 'name',
+      'nullable': True,
+      'primary_key': False,
+      'type': VARCHAR(length=16777216),
+    }),
+  ])
+# ---
+# name: test_simple_reflection_of_table_as_snowflake_table
+  'CREATE TABLE test_snowflake_table_reflection (\tid DECIMAL(38, 0) NOT NULL, \tname VARCHAR(16777216), \tCONSTRAINT demo_name PRIMARY KEY (id))'
+# ---
+# name: test_simple_reflection_of_table_as_sqlalchemy_table
+  'CREATE TABLE test_snowflake_table_reflection (\tid DECIMAL(38, 0) NOT NULL, \tname VARCHAR(16777216), \tCONSTRAINT demo_name PRIMARY KEY (id))'
+# ---

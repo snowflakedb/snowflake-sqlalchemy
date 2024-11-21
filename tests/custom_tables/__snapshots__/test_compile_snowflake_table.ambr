@@ -1,0 +1,35 @@
+# serializer version: 1
+# name: test_compile_dynamic_table_orm_with_str_keys
+  'CREATE TABLE "SCHEMA_DB".test_snowflake_table_orm_2 (\tid INTEGER NOT NULL AUTOINCREMENT, \tname VARCHAR, \tPRIMARY KEY (id))\tCLUSTER BY (id, id > 100)\tAS SELECT * FROM table'
+# ---
+# name: test_compile_dynamic_table_with_foreign_key
+  'CREATE TABLE test_table_2 (\tid INTEGER NOT NULL, \tgeom VARCHAR, \tPRIMARY KEY (id), \tFOREIGN KEY(id) REFERENCES "table" (id))\tCLUSTER BY (id, id > 100)\tAS SELECT * FROM table'
+# ---
+# name: test_compile_dynamic_table_with_primary_key
+  'CREATE TABLE test_table_2 (\tid INTEGER NOT NULL AUTOINCREMENT, \tgeom VARCHAR, \tPRIMARY KEY (id))\tCLUSTER BY (id, id > 100)\tAS SELECT * FROM table'
+# ---
+# name: test_compile_snowflake_table
+  'CREATE TABLE test_table_1 (\tid INTEGER, \tgeom VARCHAR)\tCLUSTER BY (id, id > 100)\tAS SELECT * FROM table'
+# ---
+# name: test_compile_snowflake_table_orm_with_str_keys
+  'CREATE TABLE "SCHEMA_DB".test_snowflake_table_orm_2 (\tid INTEGER NOT NULL AUTOINCREMENT, \tname VARCHAR, \tPRIMARY KEY (id))\tCLUSTER BY (id, id > 100)\tAS SELECT * FROM table'
+# ---
+# name: test_compile_snowflake_table_with_explicit_options
+  'CREATE TABLE test_table_2 (\tid INTEGER, \tgeom VARCHAR)\tCLUSTER BY (id, id > 100)\tAS SELECT * FROM table'
+# ---
+# name: test_compile_snowflake_table_with_foreign_key
+  'CREATE TABLE test_table_2 (\tid INTEGER NOT NULL, \tgeom VARCHAR, \tPRIMARY KEY (id), \tFOREIGN KEY(id) REFERENCES "table" (id))\tCLUSTER BY (id, id > 100)\tAS SELECT * FROM table'
+# ---
+# name: test_compile_snowflake_table_with_primary_key
+  'CREATE TABLE test_table_2 (\tid INTEGER NOT NULL AUTOINCREMENT, \tgeom VARCHAR, \tPRIMARY KEY (id))\tCLUSTER BY (id, id > 100)\tAS SELECT * FROM table'
+# ---
+# name: test_compile_snowflake_table_with_selectable
+  'CREATE TABLE snowflake_test_table_1 (\tid INTEGER, \tgeom VARCHAR)\tAS SELECT test_table_1.id, test_table_1.geom FROM test_table_1 WHERE test_table_1.id = 23'
+# ---
+# name: test_compile_snowflake_table_with_wrong_option_types
+  '''
+  Invalid parameter type 'AsQueryOption' provided for 'cluster by'. Expected one of the following types: 'ClusterByOption', 'list'.
+  Invalid parameter type 'ClusterByOption' provided for 'as_query'. Expected one of the following types: 'AsQueryOption', 'str', 'Selectable'.
+  
+  '''
+# ---

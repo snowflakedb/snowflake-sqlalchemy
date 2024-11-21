@@ -53,6 +53,7 @@ development = [
   "pytz",
   "numpy",
   "mock",
+  "syrupy==4.6.1",
 ]
 pandas = ["snowflake-connector-python[pandas]"]
 
@@ -91,6 +92,7 @@ SQLACHEMY_WARN_20 = "1"
 check = "pre-commit run --all-files"
 test-dialect = "pytest -ra -vvv --tb=short --cov snowflake.sqlalchemy --cov-append --junitxml ./junit.xml --ignore=tests/sqlalchemy_test_suite tests/"
 test-dialect-compatibility = "pytest -ra -vvv --tb=short --cov snowflake.sqlalchemy --cov-append --junitxml ./junit.xml tests/sqlalchemy_test_suite"
+test-dialect-aws = "pytest -m \"aws\" -ra -vvv --tb=short --cov snowflake.sqlalchemy --cov-append --junitxml ./junit.xml --ignore=tests/sqlalchemy_test_suite tests/"
 gh-cache-sum = "python -VV | sha256sum | cut -d' ' -f1"
 check-import = "python -c 'import snowflake.sqlalchemy; print(snowflake.sqlalchemy.__version__)'"
 
@@ -109,6 +111,7 @@ line-length = 88
 line-length = 88
 
 [tool.pytest.ini_options]
+addopts = "-m 'not feature_max_lob_size and not aws and not requires_external_volume'"
 markers = [
   # Optional dependency groups markers
   "lambda: AWS lambda tests",
@@ -125,5 +128,7 @@ markers = [
   # Other markers
   "timeout: tests that need a timeout time",
   "internal: tests that could but should only run on our internal CI",
+  "requires_external_volume: tests that needs a external volume to be executed",
   "external: tests that could but should only run on our external CI",
+  "feature_max_lob_size: tests that could but should only run on our external CI",
 ]

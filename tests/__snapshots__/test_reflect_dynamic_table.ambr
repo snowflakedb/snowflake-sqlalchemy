@@ -1,0 +1,4 @@
+# serializer version: 1
+# name: test_compile_dynamic_table
+  "CREATE DYNAMIC TABLE test_dynamic_table (\tid INTEGER, \tgeom GEOMETRY)\tWAREHOUSE = warehouse\tTARGET_LAG = '10 seconds'\tAS SELECT * FROM table"
+# ---
