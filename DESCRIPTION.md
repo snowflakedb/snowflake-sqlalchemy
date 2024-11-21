@@ -9,6 +9,9 @@ Source code is also available at:
 
 # Release Notes
 
+- (Unreleased)
+  - Add support for partition by to copy into <location>
+
 - v1.7.0(November 22, 2024)
 
   - Add support for dynamic tables and required options

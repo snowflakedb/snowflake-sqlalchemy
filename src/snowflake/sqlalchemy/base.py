@@ -16,7 +16,8 @@ from sqlalchemy.orm.context import _MapperEntity
 from sqlalchemy.schema import Sequence, Table
 from sqlalchemy.sql import compiler, expression, functions
 from sqlalchemy.sql.base import CompileState
-from sqlalchemy.sql.elements import quoted_name
+from sqlalchemy.sql.elements import BindParameter, quoted_name
+from sqlalchemy.sql.expression import Executable
 from sqlalchemy.sql.selectable import Lateral, SelectState
 
 from snowflake.sqlalchemy._constants import DIALECT_NAME
@@ -563,9 +564,8 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             if isinstance(copy_into.into, Table)
             else copy_into.into._compiler_dispatch(self, **kw)
         )
-        from_ = None
         if isinstance(copy_into.from_, Table):
-            from_ = copy_into.from_
+            from_ = copy_into.from_.name
         # this is intended to catch AWSBucket and AzureContainer
         elif (
             isinstance(copy_into.from_, AWSBucket)
@@ -576,6 +576,21 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         # everything else (selects, etc.)
         else:
             from_ = f"({copy_into.from_._compiler_dispatch(self, **kw)})"
+
+        partition_by_value = None
+        if isinstance(copy_into.partition_by, (BindParameter, Executable)):
+            partition_by_value = copy_into.partition_by.compile(
+                compile_kwargs={"literal_binds": True}
+            )
+        elif copy_into.partition_by is not None:
+            partition_by_value = copy_into.partition_by
+
+        partition_by = (
+            f"PARTITION BY {partition_by_value}"
+            if partition_by_value is not None and partition_by_value != ""
+            else ""
+        )
+
         credentials, encryption = "", ""
         if isinstance(into, tuple):
             into, credentials, encryption = into
@@ -586,8 +601,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             options_list.sort(key=operator.itemgetter(0))
         options = (
             (
-                " "
-                + " ".join(
+                " ".join(
                     [
                         "{} = {}".format(
                             n,
@@ -608,7 +622,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             options += f" {credentials}"
         if encryption:
             options += f" {encryption}"
-        return f"COPY INTO {into} FROM {from_} {formatter}{options}"
+        return f"COPY INTO {into} FROM {' '.join([from_, partition_by, formatter, options])}"
 
     def visit_copy_formatter(self, formatter, **kw):
         options_list = list(formatter.options.items())
