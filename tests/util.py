@@ -29,6 +29,7 @@ from snowflake.sqlalchemy.custom_types import (
     ARRAY,
     GEOGRAPHY,
     GEOMETRY,
+    MAP,
     OBJECT,
     TIMESTAMP_LTZ,
     TIMESTAMP_NTZ,
@@ -72,6 +73,7 @@ ischema_names_baseline = {
     "ARRAY": ARRAY,
     "GEOGRAPHY": GEOGRAPHY,
     "GEOMETRY": GEOMETRY,
+    "MAP": MAP,
 }
 
 

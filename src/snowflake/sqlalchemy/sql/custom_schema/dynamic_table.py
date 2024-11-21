@@ -3,16 +3,20 @@
 #
 
 import typing
-from typing import Any
+from typing import Any, Union
 
-from sqlalchemy.exc import ArgumentError
 from sqlalchemy.sql.schema import MetaData, SchemaItem
 
-from snowflake.sqlalchemy.custom_commands import NoneType
-
 from .custom_table_prefix import CustomTablePrefix
-from .options.target_lag import TargetLag
-from .options.warehouse import Warehouse
+from .options import (
+    IdentifierOption,
+    IdentifierOptionType,
+    KeywordOptionType,
+    TableOptionKey,
+    TargetLagOption,
+    TargetLagOptionType,
+)
+from .options.keyword_option import KeywordOption
 from .table_from_query import TableFromQueryBase
 
 
@@ -26,29 +30,69 @@ class DynamicTable(TableFromQueryBase):
     While it does not support reflection at this time, it provides a flexible
     interface for creating dynamic tables and management.
 
+    For further information on this clause, please refer to: https://docs.snowflake.com/en/sql-reference/sql/create-dynamic-table
+
+    Example using option values:
+        DynamicTable(
+        "dynamic_test_table_1",
+        metadata,
+        Column("id", Integer),
+        Column("name", String),
+        target_lag=(1, TimeUnit.HOURS),
+        warehouse='warehouse_name',
+        refresh_mode=SnowflakeKeyword.AUTO
+        as_query="SELECT id, name from test_table_1;"
+    )
+
+    Example using explicit options:
+        DynamicTable(
+        "dynamic_test_table_1",
+        metadata,
+        Column("id", Integer),
+        Column("name", String),
+        target_lag=TargetLag(1, TimeUnit.HOURS),
+        warehouse=Identifier('warehouse_name'),
+        refresh_mode=KeywordOption(SnowflakeKeyword.AUTO)
+        as_query=AsQuery("SELECT id, name from test_table_1;")
+    )
     """
 
     __table_prefixes__ = [CustomTablePrefix.DYNAMIC]
-
     _support_primary_and_foreign_keys = False
+    _required_parameters = [
+        TableOptionKey.WAREHOUSE,
+        TableOptionKey.AS_QUERY,
+        TableOptionKey.TARGET_LAG,
+    ]
 
     @property
-    def warehouse(self) -> typing.Optional[Warehouse]:
-        return self._get_dialect_option(Warehouse.__option_name__)
+    def warehouse(self) -> typing.Optional[IdentifierOption]:
+        return self._get_dialect_option(TableOptionKey.WAREHOUSE)
 
     @property
-    def target_lag(self) -> typing.Optional[TargetLag]:
-        return self._get_dialect_option(TargetLag.__option_name__)
+    def target_lag(self) -> typing.Optional[TargetLagOption]:
+        return self._get_dialect_option(TableOptionKey.TARGET_LAG)
 
     def __init__(
         self,
         name: str,
         metadata: MetaData,
         *args: SchemaItem,
+        warehouse: IdentifierOptionType = None,
+        target_lag: Union[TargetLagOptionType, KeywordOptionType] = None,
+        refresh_mode: KeywordOptionType = None,
         **kw: Any,
     ) -> None:
         if kw.get("_no_init", True):
             return
+
+        options = [
+            IdentifierOption.create(TableOptionKey.WAREHOUSE, warehouse),
+            TargetLagOption.create(target_lag),
+            KeywordOption.create(TableOptionKey.REFRESH_MODE, refresh_mode),
+        ]
+
+        kw.update(self._as_dialect_options(options))
         super().__init__(name, metadata, *args, **kw)
 
     def _init(
@@ -58,22 +102,7 @@ class DynamicTable(TableFromQueryBase):
         *args: SchemaItem,
         **kw: Any,
     ) -> None:
-        super().__init__(name, metadata, *args, **kw)
-
-    def _validate_table(self):
-        missing_attributes = []
-        if self.target_lag is NoneType:
-            missing_attributes.append("TargetLag")
-        if self.warehouse is NoneType:
-            missing_attributes.append("Warehouse")
-        if self.as_query is NoneType:
-            missing_attributes.append("AsQuery")
-        if missing_attributes:
-            raise ArgumentError(
-                "DYNAMIC TABLE must have the following arguments: %s"
-                % ", ".join(missing_attributes)
-            )
-        super()._validate_table()
+        self.__init__(name, metadata, *args, _no_init=False, **kw)
 
     def __repr__(self) -> str:
         return "DynamicTable(%s)" % ", ".join(
@@ -82,6 +111,7 @@ class DynamicTable(TableFromQueryBase):
             + [repr(x) for x in self.columns]
             + [repr(self.target_lag)]
             + [repr(self.warehouse)]
+            + [repr(self.cluster_by)]
             + [repr(self.as_query)]
             + [f"{k}={repr(getattr(self, k))}" for k in ["schema"]]
         )

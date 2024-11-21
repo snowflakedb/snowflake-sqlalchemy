@@ -9,7 +9,7 @@ if sys.version_info < (3, 8):
 else:
     import importlib.metadata as importlib_metadata
 
-from sqlalchemy.types import (
+from sqlalchemy.types import (  # noqa
     BIGINT,
     BINARY,
     BOOLEAN,
@@ -27,8 +27,8 @@ from sqlalchemy.types import (
     VARCHAR,
 )
 
-from . import base, snowdialect
-from .custom_commands import (
+from . import base, snowdialect  # noqa
+from .custom_commands import (  # noqa
     AWSBucket,
     AzureContainer,
     CopyFormatter,
@@ -41,7 +41,7 @@ from .custom_commands import (
     MergeInto,
     PARQUETFormatter,
 )
-from .custom_types import (
+from .custom_types import (  # noqa
     ARRAY,
     BYTEINT,
     CHARACTER,
@@ -50,6 +50,7 @@ from .custom_types import (
     FIXED,
     GEOGRAPHY,
     GEOMETRY,
+    MAP,
     NUMBER,
     OBJECT,
     STRING,
@@ -61,15 +62,30 @@ from .custom_types import (
     VARBINARY,
     VARIANT,
 )
-from .sql.custom_schema import DynamicTable, HybridTable
-from .sql.custom_schema.options import AsQuery, TargetLag, TimeUnit, Warehouse
-from .util import _url as URL
+from .sql.custom_schema import (  # noqa
+    DynamicTable,
+    HybridTable,
+    IcebergTable,
+    SnowflakeTable,
+)
+from .sql.custom_schema.options import (  # noqa
+    AsQueryOption,
+    ClusterByOption,
+    IdentifierOption,
+    KeywordOption,
+    LiteralOption,
+    SnowflakeKeyword,
+    TableOptionKey,
+    TargetLagOption,
+    TimeUnit,
+)
+from .util import _url as URL  # noqa
 
 base.dialect = dialect = snowdialect.dialect
 
 __version__ = importlib_metadata.version("snowflake-sqlalchemy")
 
-__all__ = (
+_custom_types = (
     "BIGINT",
     "BINARY",
     "BOOLEAN",
@@ -104,6 +120,10 @@ __all__ = (
     "TINYINT",
     "VARBINARY",
     "VARIANT",
+    "MAP",
+)
+
+_custom_commands = (
     "MergeInto",
     "CSVFormatter",
     "JSONFormatter",
@@ -115,10 +135,28 @@ __all__ = (
     "ExternalStage",
     "CreateStage",
     "CreateFileFormat",
-    "DynamicTable",
-    "AsQuery",
-    "TargetLag",
+)
+
+_custom_tables = ("HybridTable", "DynamicTable", "IcebergTable", "SnowflakeTable")
+
+_custom_table_options = (
+    "AsQueryOption",
+    "TargetLagOption",
+    "LiteralOption",
+    "IdentifierOption",
+    "KeywordOption",
+    "ClusterByOption",
+)
+
+_enums = (
     "TimeUnit",
-    "Warehouse",
-    "HybridTable",
+    "TableOptionKey",
+    "SnowflakeKeyword",
+)
+__all__ = (
+    *_custom_types,
+    *_custom_commands,
+    *_custom_tables,
+    *_custom_table_options,
+    *_enums,
 )

@@ -5,6 +5,7 @@
 import itertools
 import operator
 import re
+from typing import List
 
 from sqlalchemy import exc as sa_exc
 from sqlalchemy import inspect, sql
@@ -26,8 +27,14 @@ from snowflake.sqlalchemy.custom_commands import (
     ExternalStage,
 )
 
+from ._constants import NOT_NULL
+from .exc import (
+    CustomOptionsAreOnlySupportedOnSnowflakeTables,
+    UnexpectedOptionTypeError,
+)
 from .functions import flatten
-from .sql.custom_schema.options.table_option_base import TableOptionBase
+from .sql.custom_schema.custom_table_base import CustomTableBase
+from .sql.custom_schema.options.table_option import TableOption
 from .util import (
     _find_left_clause_to_join_from,
     _set_connection_interpolate_empty_sequences,
@@ -902,7 +909,7 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
         ...     metadata,
         ...     sa.Column('id', sa.Integer, primary_key=True),
         ...     sa.Column('name', sa.String),
-        ...     snowflake_clusterby=['id', 'name']
+        ...     snowflake_clusterby=['id', 'name', text("id > 5")]
         ... )
         >>> print(CreateTable(user).compile(engine))
         <BLANKLINE>
@@ -910,7 +917,7 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
             id INTEGER NOT NULL AUTOINCREMENT,
             name VARCHAR,
             PRIMARY KEY (id)
-        ) CLUSTER BY (id, name)
+        ) CLUSTER BY (id, name, id > 5)
         <BLANKLINE>
         <BLANKLINE>
         """
@@ -919,22 +926,37 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
         cluster = info.get("clusterby")
         if cluster:
             text += " CLUSTER BY ({})".format(
-                ", ".join(self.denormalize_column_name(key) for key in cluster)
+                ", ".join(
+                    (
+                        self.denormalize_column_name(key)
+                        if isinstance(key, str)
+                        else str(key)
+                    )
+                    for key in cluster
+                )
             )
         return text
 
     def post_create_table(self, table):
         text = self.handle_cluster_by(table)
-        options = [
-            option
-            for _, option in table.dialect_options[DIALECT_NAME].items()
-            if isinstance(option, TableOptionBase)
-        ]
-        options.sort(
-            key=lambda x: (x.__priority__.value, x.__option_name__), reverse=True
-        )
-        for option in options:
-            text += "\t" + option.render_option(self)
+        options = []
+        invalid_options: List[str] = []
+
+        for key, option in table.dialect_options[DIALECT_NAME].items():
+            if isinstance(option, TableOption):
+                options.append(option)
+            elif key not in ["clusterby", "*"]:
+                invalid_options.append(key)
+
+        if len(invalid_options) > 0:
+            raise UnexpectedOptionTypeError(sorted(invalid_options))
+
+        if isinstance(table, CustomTableBase):
+            options.sort(key=lambda x: (x.priority.value, x.option_name), reverse=True)
+            for option in options:
+                text += "\t" + option.render_option(self)
+        elif len(options) > 0:
+            raise CustomOptionsAreOnlySupportedOnSnowflakeTables()
 
         return text
 
@@ -1049,6 +1071,12 @@ class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
 
     def visit_VARIANT(self, type_, **kw):
         return "VARIANT"
+
+    def visit_MAP(self, type_, **kw):
+        not_null = f" {NOT_NULL}" if type_.not_null else ""
+        return (
+            f"MAP({type_.key_type.compile()}, {type_.value_type.compile()}{not_null})"
+        )
 
     def visit_ARRAY(self, type_, **kw):
         return "ARRAY"

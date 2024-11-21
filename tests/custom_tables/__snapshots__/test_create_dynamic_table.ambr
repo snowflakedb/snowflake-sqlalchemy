@@ -1,0 +1,7 @@
+# serializer version: 1
+# name: test_create_dynamic_table_without_dynamictable_and_defined_options
+  CustomOptionsAreOnlySupportedOnSnowflakeTables('Identifier, Literal, TargetLag and other custom options are only supported on Snowflake tables.')
+# ---
+# name: test_create_dynamic_table_without_dynamictable_class
+  UnexpectedOptionTypeError('The following options are either unsupported or should be defined using a Snowflake table: as_query, warehouse.')
+# ---
