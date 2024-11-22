@@ -8,6 +8,11 @@
 
 Snowflake SQLAlchemy runs on the top of the Snowflake Connector for Python as a [dialect](http://docs.sqlalchemy.org/en/latest/dialects/) to bridge a Snowflake database and SQLAlchemy applications.
 
+
+| :exclamation:        | For production-affecting or urgent issues related to the connector, please [create a case with Snowflake Support](https://community.snowflake.com/s/article/How-To-Submit-a-Support-Case-in-Snowflake-Lodge). |
+|---------------|:--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+
+
 ## Prerequisites
 
 ### Snowflake Connector for Python
