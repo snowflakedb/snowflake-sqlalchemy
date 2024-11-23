@@ -148,7 +148,6 @@ class SnowflakeDialect(default.DefaultDialect):
 
     supports_identity_columns = True
 
-
     def __init__(
         self,
         force_div_is_floordiv: bool = True,

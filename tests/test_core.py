@@ -31,13 +31,15 @@ from sqlalchemy import (
     create_engine,
     dialects,
     exc,
+    func,
     insert,
     inspect,
     text,
 )
 from sqlalchemy.exc import DBAPIError, NoSuchTableError, OperationalError
-from sqlalchemy.sql import and_, not_, or_, select
+from sqlalchemy.sql import and_, literal, not_, or_, select
 from sqlalchemy.sql.ddl import CreateTable
+from sqlalchemy.testing.assertions import eq_
 
 import snowflake.connector.errors
 import snowflake.sqlalchemy.snowdialect
@@ -1864,3 +1866,86 @@ def test_snowflake_sqlalchemy_as_valid_client_type():
         snowflake.connector.connection.DEFAULT_CONFIGURATION[
             "internal_application_version"
         ] = origin_internal_app_version
+
+
+@pytest.mark.parametrize(
+    "operation",
+    [
+        [
+            literal(5),
+            literal(10),
+            0.5,
+        ],
+        [literal(5), func.sqrt(literal(10)), 1.5811388300841895],
+        [literal(4), literal(5), decimal.Decimal("0.800000")],
+        [literal(2), literal(2), 1.0],
+        [literal(3), literal(2), 1.5],
+        [literal(4), literal(1.5), 2.666667],
+        [literal(5.5), literal(10.7), 0.5140187],
+        [literal(5.5), literal(8), 0.6875],
+    ],
+)
+def test_true_division_operation(engine_testaccount, operation):
+    # expected_warning = "div_is_floordiv value will be changed to False in a future release. This will generate a behavior change on true and floor division. Please review https://docs.sqlalchemy.org/en/20/changelog/whatsnew_20.html#python-division-operator-performs-true-division-for-all-backends-added-floor-division"
+    # with pytest.warns(PendingDeprecationWarning, match=expected_warning):
+    with engine_testaccount.connect() as conn:
+        eq_(
+            conn.execute(select(operation[0] / operation[1])).fetchall(),
+            [((operation[2]),)],
+        )
+
+
+@pytest.mark.parametrize(
+    "operation",
+    [
+        [literal(5), literal(10), 0.5, 0.5],
+        [literal(5), func.sqrt(literal(10)), 1.5811388300841895, 1.0],
+        [
+            literal(4),
+            literal(5),
+            decimal.Decimal("0.800000"),
+            decimal.Decimal("0.800000"),
+        ],
+        [literal(2), literal(2), 1.0, 1.0],
+        [literal(3), literal(2), 1.5, 1.5],
+        [literal(4), literal(1.5), 2.666667, 2.0],
+        [literal(5.5), literal(10.7), 0.5140187, 0],
+        [literal(5.5), literal(8), 0.6875, 0.6875],
+    ],
+)
+@pytest.mark.feature_v20
+def test_division_force_div_is_floordiv_default(engine_testaccount, operation):
+    expected_warning = "div_is_floordiv value will be changed to False in a future release. This will generate a behavior change on true and floor division. Please review https://docs.sqlalchemy.org/en/20/changelog/whatsnew_20.html#python-division-operator-performs-true-division-for-all-backends-added-floor-division"
+    with pytest.warns(PendingDeprecationWarning, match=expected_warning):
+        with engine_testaccount.connect() as conn:
+            eq_(
+                conn.execute(
+                    select(operation[0] / operation[1], operation[0] // operation[1])
+                ).fetchall(),
+                [(operation[2], operation[3])],
+            )
+
+
+@pytest.mark.parametrize(
+    "operation",
+    [
+        [literal(5), literal(10), 0.5, 0],
+        [literal(5), func.sqrt(literal(10)), 1.5811388300841895, 1.0],
+        [literal(4), literal(5), decimal.Decimal("0.800000"), 0],
+        [literal(2), literal(2), 1.0, 1.0],
+        [literal(3), literal(2), 1.5, 1],
+        [literal(4), literal(1.5), 2.666667, 2.0],
+        [literal(5.5), literal(10.7), 0.5140187, 0],
+        [literal(5.5), literal(8), 0.6875, 0],
+    ],
+)
+@pytest.mark.feature_v20
+def test_division_force_div_is_floordiv_false(db_parameters, operation):
+    engine = create_engine(URL(**db_parameters), **{"force_div_is_floordiv": False})
+    with engine.connect() as conn:
+        eq_(
+            conn.execute(
+                select(operation[0] / operation[1], operation[0] // operation[1])
+            ).fetchall(),
+            [(operation[2], operation[3])],
+        )

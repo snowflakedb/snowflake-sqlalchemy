@@ -139,6 +139,7 @@ def test_outer_lateral_join():
     )
 
 
+@pytest.mark.feature_v20
 def test_division_operator_with_force_div_is_floordiv_false():
     col1 = column("col1", Integer)
     col2 = column("col2", Integer)
@@ -149,6 +150,7 @@ def test_division_operator_with_force_div_is_floordiv_false():
     )
 
 
+@pytest.mark.feature_v20
 def test_division_operator_with_denominator_expr_force_div_is_floordiv_false():
     col1 = column("col1", Integer)
     col2 = column("col2", Integer)
@@ -159,23 +161,20 @@ def test_division_operator_with_denominator_expr_force_div_is_floordiv_false():
     )
 
 
+@pytest.mark.feature_v20
 def test_division_operator_with_force_div_is_floordiv_default_true():
     col1 = column("col1", Integer)
     col2 = column("col2", Integer)
     stmt = col1 / col2
-    assert (
-        str(stmt.compile(dialect=SnowflakeDialect())) == "col1 / CAST(col2 AS NUMERIC)"
-    )
+    assert str(stmt.compile(dialect=SnowflakeDialect())) == "col1 / col2"
 
 
+@pytest.mark.feature_v20
 def test_division_operator_with_denominator_expr_force_div_is_floordiv_default_true():
     col1 = column("col1", Integer)
     col2 = column("col2", Integer)
     stmt = col1 / func.sqrt(col2)
-    assert (
-        str(stmt.compile(dialect=SnowflakeDialect()))
-        == "col1 / CAST(sqrt(col2) AS NUMERIC)"
-    )
+    assert str(stmt.compile(dialect=SnowflakeDialect())) == "col1 / sqrt(col2)"
 
 
 @pytest.mark.feature_v20
