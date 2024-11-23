@@ -124,6 +124,7 @@ def test_outer_lateral_join():
     )
 
 
+@pytest.mark.feature_v20
 def test_division_operator_with_force_div_is_floordiv_false():
     col1 = column("col1", Integer)
     col2 = column("col2", Integer)
@@ -134,6 +135,7 @@ def test_division_operator_with_force_div_is_floordiv_false():
     )
 
 
+@pytest.mark.feature_v20
 def test_division_operator_with_denominator_expr_force_div_is_floordiv_false():
     col1 = column("col1", Integer)
     col2 = column("col2", Integer)
@@ -144,6 +146,7 @@ def test_division_operator_with_denominator_expr_force_div_is_floordiv_false():
     )
 
 
+@pytest.mark.feature_v20
 def test_division_operator_with_force_div_is_floordiv_default_true():
     col1 = column("col1", Integer)
     col2 = column("col2", Integer)
@@ -153,6 +156,7 @@ def test_division_operator_with_force_div_is_floordiv_default_true():
     )
 
 
+@pytest.mark.feature_v20
 def test_division_operator_with_denominator_expr_force_div_is_floordiv_default_true():
     col1 = column("col1", Integer)
     col2 = column("col2", Integer)
