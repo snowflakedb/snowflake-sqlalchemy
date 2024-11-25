@@ -11,8 +11,12 @@ Source code is also available at:
 
 - (Unreleased)
   - Add support for partition by to copy into <location>
+  - Added `force_div_is_floordiv` flag to override `div_is_floordiv` new default value `False` in `SnowflakeDialect`.
+    - With the flag in `False`, the `/` division operator will be treated as a float division and `//` as a floor division.
+    - This flag is added to maintain backward compatibility with the previous behavior of Snowflake Dialect division.
+    - This flag will be removed in the future and Snowflake Dialect will use `div_is_floor_div` as `False`.
 
-- v1.7.0(November 22, 2024)
+- v1.7.0(November 21, 2024)
 
   - Add support for dynamic tables and required options
   - Add support for hybrid tables
