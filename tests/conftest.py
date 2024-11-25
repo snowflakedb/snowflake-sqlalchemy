@@ -46,21 +46,6 @@ snowflake.connector.connection.DEFAULT_CONFIGURATION[
 TEST_SCHEMA = f"sqlalchemy_tests_{str(uuid.uuid4()).replace('-', '_')}"
 
 
-def pytest_addoption(parser):
-    parser.addoption(
-        "--run_v20_sqlalchemy",
-        help="Use only 2.0 SQLAlchemy APIs, any legacy features (< 2.0) will not be supported."
-        "Turning on this option will set future flag to True on Engine and Session objects according to"
-        "the migration guide: https://docs.sqlalchemy.org/en/14/changelog/migration_20.html",
-        action="store_true",
-    )
-
-
-@pytest.fixture(scope="session")
-def run_v20_sqlalchemy(pytestconfig):
-    return pytestconfig.option.run_v20_sqlalchemy
-
-
 @pytest.fixture(scope="session")
 def on_travis():
     return os.getenv("TRAVIS", "").lower() == "true"
@@ -107,6 +92,36 @@ DEFAULT_PARAMETERS = {
 @pytest.fixture(scope="session")
 def db_parameters():
     yield get_db_parameters()
+
+
+@pytest.fixture(scope="session")
+def external_volume():
+    db_parameters = get_db_parameters()
+    if "external_volume" in db_parameters:
+        yield db_parameters["external_volume"]
+    else:
+        raise ValueError("External_volume is not set")
+
+
+@pytest.fixture(scope="session")
+def external_stage():
+    db_parameters = get_db_parameters()
+    if "external_stage" in db_parameters:
+        yield db_parameters["external_stage"]
+    else:
+        raise ValueError("External_stage is not set")
+
+
+@pytest.fixture(scope="function")
+def base_location(external_stage, engine_testaccount):
+    unique_id = str(uuid.uuid4())
+    base_location = "L" + unique_id.replace("-", "_")
+    yield base_location
+    remove_base_location = f"""
+    REMOVE @{external_stage} pattern='.*{base_location}.*';
+     """
+    with engine_testaccount.connect() as connection:
+        connection.exec_driver_sql(remove_base_location)
 
 
 def get_db_parameters() -> dict:
@@ -160,20 +175,21 @@ def url_factory(**kwargs) -> URL:
     return URL(**url_params)
 
 
-def get_engine(url: URL, run_v20_sqlalchemy=False, **engine_kwargs):
+def get_engine(url: URL, **engine_kwargs):
     engine_params = {
         "poolclass": NullPool,
-        "future": run_v20_sqlalchemy,
+        "future": True,
+        "echo": True,
     }
     engine_params.update(engine_kwargs)
-    engine = create_engine(url, **engine_kwargs)
+    engine = create_engine(url, **engine_params)
     return engine
 
 
 @pytest.fixture()
-def engine_testaccount(request, run_v20_sqlalchemy):
+def engine_testaccount(request):
     url = url_factory()
-    engine = get_engine(url, run_v20_sqlalchemy=run_v20_sqlalchemy)
+    engine = get_engine(url)
     request.addfinalizer(engine.dispose)
     yield engine
 
@@ -181,17 +197,17 @@ def engine_testaccount(request, run_v20_sqlalchemy):
 @pytest.fixture()
 def engine_testaccount_with_numpy(request):
     url = url_factory(numpy=True)
-    engine = get_engine(url, run_v20_sqlalchemy=run_v20_sqlalchemy)
+    engine = get_engine(url)
     request.addfinalizer(engine.dispose)
     yield engine
 
 
 @pytest.fixture()
-def engine_testaccount_with_qmark(request, run_v20_sqlalchemy):
+def engine_testaccount_with_qmark(request):
     snowflake.connector.paramstyle = "qmark"
 
     url = url_factory()
-    engine = get_engine(url, run_v20_sqlalchemy=run_v20_sqlalchemy)
+    engine = get_engine(url)
     request.addfinalizer(engine.dispose)
 
     yield engine

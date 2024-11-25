@@ -5,6 +5,7 @@
 import itertools
 import operator
 import re
+from typing import List
 
 from sqlalchemy import exc as sa_exc
 from sqlalchemy import inspect, sql
@@ -13,13 +14,28 @@ from sqlalchemy.engine import default
 from sqlalchemy.orm import context
 from sqlalchemy.orm.context import _MapperEntity
 from sqlalchemy.schema import Sequence, Table
-from sqlalchemy.sql import compiler, expression
+from sqlalchemy.sql import compiler, expression, functions
 from sqlalchemy.sql.base import CompileState
-from sqlalchemy.sql.elements import quoted_name
+from sqlalchemy.sql.elements import BindParameter, quoted_name
+from sqlalchemy.sql.expression import Executable
 from sqlalchemy.sql.selectable import Lateral, SelectState
-from sqlalchemy.util.compat import string_types
 
-from .custom_commands import AWSBucket, AzureContainer, ExternalStage
+from snowflake.sqlalchemy._constants import DIALECT_NAME
+from snowflake.sqlalchemy.compat import IS_VERSION_20, args_reducer, string_types
+from snowflake.sqlalchemy.custom_commands import (
+    AWSBucket,
+    AzureContainer,
+    ExternalStage,
+)
+
+from ._constants import NOT_NULL
+from .exc import (
+    CustomOptionsAreOnlySupportedOnSnowflakeTables,
+    UnexpectedOptionTypeError,
+)
+from .functions import flatten
+from .sql.custom_schema.custom_table_base import CustomTableBase
+from .sql.custom_schema.options.table_option import TableOption
 from .util import (
     _find_left_clause_to_join_from,
     _set_connection_interpolate_empty_sequences,
@@ -183,7 +199,6 @@ class SnowflakeSelectState(SelectState):
                     [element._from_objects for element in statement._where_criteria]
                 ),
             ):
-
                 potential[from_clause] = ()
 
             all_clauses = list(potential.keys())
@@ -324,17 +339,9 @@ class SnowflakeORMSelectCompileState(context.ORMSelectCompileState):
 
         return left, replace_from_obj_index, use_entity_index
 
+    @args_reducer(positions_to_drop=(6, 7))
     def _join_left_to_right(
-        self,
-        entities_collection,
-        left,
-        right,
-        onclause,
-        prop,
-        create_aliases,
-        aliased_generation,
-        outerjoin,
-        full,
+        self, entities_collection, left, right, onclause, prop, outerjoin, full
     ):
         """given raw "left", "right", "onclause" parameters consumed from
         a particular key within _join(), add a real ORMJoin object to
@@ -364,7 +371,7 @@ class SnowflakeORMSelectCompileState(context.ORMSelectCompileState):
                 use_entity_index,
             ) = self._join_place_explicit_left_side(entities_collection, left)
 
-        if left is right and not create_aliases:
+        if left is right:
             raise sa_exc.InvalidRequestError(
                 "Can't construct a join from %s to %s, they "
                 "are the same entity" % (left, right)
@@ -373,9 +380,15 @@ class SnowflakeORMSelectCompileState(context.ORMSelectCompileState):
         # the right side as given often needs to be adapted.  additionally
         # a lot of things can be wrong with it.  handle all that and
         # get back the new effective "right" side
-        r_info, right, onclause = self._join_check_and_adapt_right_side(
-            left, right, onclause, prop, create_aliases, aliased_generation
-        )
+
+        if IS_VERSION_20:
+            r_info, right, onclause = self._join_check_and_adapt_right_side(
+                left, right, onclause, prop
+            )
+        else:
+            r_info, right, onclause = self._join_check_and_adapt_right_side(
+                left, right, onclause, prop, False, False
+            )
 
         if not r_info.is_selectable:
             extra_criteria = self._get_extra_criteria(r_info)
@@ -551,9 +564,8 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             if isinstance(copy_into.into, Table)
             else copy_into.into._compiler_dispatch(self, **kw)
         )
-        from_ = None
         if isinstance(copy_into.from_, Table):
-            from_ = copy_into.from_
+            from_ = copy_into.from_.name
         # this is intended to catch AWSBucket and AzureContainer
         elif (
             isinstance(copy_into.from_, AWSBucket)
@@ -564,6 +576,21 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         # everything else (selects, etc.)
         else:
             from_ = f"({copy_into.from_._compiler_dispatch(self, **kw)})"
+
+        partition_by_value = None
+        if isinstance(copy_into.partition_by, (BindParameter, Executable)):
+            partition_by_value = copy_into.partition_by.compile(
+                compile_kwargs={"literal_binds": True}
+            )
+        elif copy_into.partition_by is not None:
+            partition_by_value = copy_into.partition_by
+
+        partition_by = (
+            f"PARTITION BY {partition_by_value}"
+            if partition_by_value is not None and partition_by_value != ""
+            else ""
+        )
+
         credentials, encryption = "", ""
         if isinstance(into, tuple):
             into, credentials, encryption = into
@@ -574,8 +601,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             options_list.sort(key=operator.itemgetter(0))
         options = (
             (
-                " "
-                + " ".join(
+                " ".join(
                     [
                         "{} = {}".format(
                             n,
@@ -596,7 +622,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             options += f" {credentials}"
         if encryption:
             options += f" {encryption}"
-        return f"COPY INTO {into} FROM {from_} {formatter}{options}"
+        return f"COPY INTO {into} FROM {' '.join([from_, partition_by, formatter, options])}"
 
     def visit_copy_formatter(self, formatter, **kw):
         options_list = list(formatter.options.items())
@@ -880,7 +906,7 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
 
         return " ".join(colspec)
 
-    def post_create_table(self, table):
+    def handle_cluster_by(self, table):
         """
         Handles snowflake-specific ``CREATE TABLE ... CLUSTER BY`` syntax.
 
@@ -897,7 +923,7 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
         ...     metadata,
         ...     sa.Column('id', sa.Integer, primary_key=True),
         ...     sa.Column('name', sa.String),
-        ...     snowflake_clusterby=['id', 'name']
+        ...     snowflake_clusterby=['id', 'name', text("id > 5")]
         ... )
         >>> print(CreateTable(user).compile(engine))
         <BLANKLINE>
@@ -905,17 +931,47 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
             id INTEGER NOT NULL AUTOINCREMENT,
             name VARCHAR,
             PRIMARY KEY (id)
-        ) CLUSTER BY (id, name)
+        ) CLUSTER BY (id, name, id > 5)
         <BLANKLINE>
         <BLANKLINE>
         """
         text = ""
-        info = table.dialect_options["snowflake"]
+        info = table.dialect_options[DIALECT_NAME]
         cluster = info.get("clusterby")
         if cluster:
             text += " CLUSTER BY ({})".format(
-                ", ".join(self.denormalize_column_name(key) for key in cluster)
+                ", ".join(
+                    (
+                        self.denormalize_column_name(key)
+                        if isinstance(key, str)
+                        else str(key)
+                    )
+                    for key in cluster
+                )
             )
+        return text
+
+    def post_create_table(self, table):
+        text = self.handle_cluster_by(table)
+        options = []
+        invalid_options: List[str] = []
+
+        for key, option in table.dialect_options[DIALECT_NAME].items():
+            if isinstance(option, TableOption):
+                options.append(option)
+            elif key not in ["clusterby", "*"]:
+                invalid_options.append(key)
+
+        if len(invalid_options) > 0:
+            raise UnexpectedOptionTypeError(sorted(invalid_options))
+
+        if isinstance(table, CustomTableBase):
+            options.sort(key=lambda x: (x.priority.value, x.option_name), reverse=True)
+            for option in options:
+                text += "\t" + option.render_option(self)
+        elif len(options) > 0:
+            raise CustomOptionsAreOnlySupportedOnSnowflakeTables()
+
         return text
 
     def visit_create_stage(self, create_stage, **kw):
@@ -979,24 +1035,23 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
     def get_identity_options(self, identity_options):
         text = []
         if identity_options.increment is not None:
-            text.append(f"INCREMENT BY {identity_options.increment:d}")
+            text.append("INCREMENT BY %d" % identity_options.increment)
         if identity_options.start is not None:
-            text.append(f"START WITH {identity_options.start:d}")
+            text.append("START WITH %d" % identity_options.start)
         if identity_options.minvalue is not None:
-            text.append(f"MINVALUE {identity_options.minvalue:d}")
+            text.append("MINVALUE %d" % identity_options.minvalue)
         if identity_options.maxvalue is not None:
-            text.append(f"MAXVALUE {identity_options.maxvalue:d}")
+            text.append("MAXVALUE %d" % identity_options.maxvalue)
         if identity_options.nominvalue is not None:
             text.append("NO MINVALUE")
         if identity_options.nomaxvalue is not None:
             text.append("NO MAXVALUE")
         if identity_options.cache is not None:
-            text.append(f"CACHE {identity_options.cache:d}")
+            text.append("CACHE %d" % identity_options.cache)
         if identity_options.cycle is not None:
             text.append("CYCLE" if identity_options.cycle else "NO CYCLE")
         if identity_options.order is not None:
             text.append("ORDER" if identity_options.order else "NOORDER")
-
         return " ".join(text)
 
 
@@ -1030,6 +1085,12 @@ class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
 
     def visit_VARIANT(self, type_, **kw):
         return "VARIANT"
+
+    def visit_MAP(self, type_, **kw):
+        not_null = f" {NOT_NULL}" if type_.not_null else ""
+        return (
+            f"MAP({type_.key_type.compile()}, {type_.value_type.compile()}{not_null})"
+        )
 
     def visit_ARRAY(self, type_, **kw):
         return "ARRAY"
@@ -1066,3 +1127,5 @@ class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
 
 
 construct_arguments = [(Table, {"clusterby": None})]
+
+functions.register_function("flatten", flatten, "snowflake")

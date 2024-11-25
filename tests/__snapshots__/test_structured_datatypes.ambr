@@ -1,0 +1,90 @@
+# serializer version: 1
+# name: test_compile_table_with_cluster_by_with_expression
+  'CREATE TABLE clustered_user (\t"Id" INTEGER NOT NULL AUTOINCREMENT, \tname MAP(DECIMAL, VARCHAR), \tPRIMARY KEY ("Id"))'
+# ---
+# name: test_compile_table_with_double_map
+  'CREATE TABLE clustered_user (\t"Id" INTEGER NOT NULL AUTOINCREMENT, \tname MAP(DECIMAL, MAP(DECIMAL, VARCHAR)), \tPRIMARY KEY ("Id"))'
+# ---
+# name: test_insert_map
+  list([
+    (1, '{\n  "100": "item1",\n  "200": "item2"\n}'),
+  ])
+# ---
+# name: test_insert_map_orm
+  '''
+  002014 (22000): SQL compilation error:
+  Invalid expression [CAST(OBJECT_CONSTRUCT('100', 'item1', '200', 'item2') AS MAP(NUMBER(10,0), VARCHAR(16777216)))] in VALUES clause
+  '''
+# ---
+# name: test_inspect_structured_data_types[structured_type0]
+  list([
+    dict({
+      'autoincrement': True,
+      'comment': None,
+      'default': None,
+      'identity': dict({
+        'increment': 1,
+        'start': 1,
+      }),
+      'name': 'id',
+      'nullable': False,
+      'primary_key': True,
+      'type': _CUSTOM_DECIMAL(precision=10, scale=0),
+    }),
+    dict({
+      'autoincrement': False,
+      'comment': None,
+      'default': None,
+      'name': 'map_id',
+      'nullable': True,
+      'primary_key': False,
+      'type': MAP(_CUSTOM_DECIMAL(precision=10, scale=0), VARCHAR(length=16777216)),
+    }),
+  ])
+# ---
+# name: test_inspect_structured_data_types[structured_type1]
+  list([
+    dict({
+      'autoincrement': True,
+      'comment': None,
+      'default': None,
+      'identity': dict({
+        'increment': 1,
+        'start': 1,
+      }),
+      'name': 'id',
+      'nullable': False,
+      'primary_key': True,
+      'type': _CUSTOM_DECIMAL(precision=10, scale=0),
+    }),
+    dict({
+      'autoincrement': False,
+      'comment': None,
+      'default': None,
+      'name': 'map_id',
+      'nullable': True,
+      'primary_key': False,
+      'type': MAP(_CUSTOM_DECIMAL(precision=10, scale=0), MAP(_CUSTOM_DECIMAL(precision=10, scale=0), VARCHAR(length=16777216))),
+    }),
+  ])
+# ---
+# name: test_reflect_structured_data_types[MAP(NUMBER(10, 0), MAP(NUMBER(10, 0), VARCHAR))]
+  "CREATE ICEBERG TABLE test_reflect_st_types (\tid DECIMAL(38, 0) NOT NULL, \tmap_id MAP(DECIMAL(10, 0), MAP(DECIMAL(10, 0), VARCHAR(16777216))), \tCONSTRAINT constraint_name PRIMARY KEY (id))\tCATALOG = 'SNOWFLAKE'"
+# ---
+# name: test_reflect_structured_data_types[MAP(NUMBER(10, 0), VARCHAR)]
+  "CREATE ICEBERG TABLE test_reflect_st_types (\tid DECIMAL(38, 0) NOT NULL, \tmap_id MAP(DECIMAL(10, 0), VARCHAR(16777216)), \tCONSTRAINT constraint_name PRIMARY KEY (id))\tCATALOG = 'SNOWFLAKE'"
+# ---
+# name: test_select_map_orm
+  list([
+    (1, '{\n  "100": "item1",\n  "200": "item2"\n}'),
+    (2, '{\n  "100": "item1",\n  "200": "item2"\n}'),
+  ])
+# ---
+# name: test_select_map_orm.1
+  list([
+  ])
+# ---
+# name: test_select_map_orm.2
+  list([
+  ])
+# ---

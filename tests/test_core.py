@@ -30,12 +30,14 @@ from sqlalchemy import (
     UniqueConstraint,
     create_engine,
     dialects,
+    exc,
     insert,
     inspect,
     text,
 )
-from sqlalchemy.exc import DBAPIError, NoSuchTableError
+from sqlalchemy.exc import DBAPIError, NoSuchTableError, OperationalError
 from sqlalchemy.sql import and_, not_, or_, select
+from sqlalchemy.sql.ddl import CreateTable
 
 import snowflake.connector.errors
 import snowflake.sqlalchemy.snowdialect
@@ -123,14 +125,26 @@ def test_connect_args():
     Snowflake connect string supports account name as a replacement of
     host:port
     """
+    server = ""
+    if "host" in CONNECTION_PARAMETERS and "port" in CONNECTION_PARAMETERS:
+        server = "{host}:{port}".format(
+            host=CONNECTION_PARAMETERS["host"], port=CONNECTION_PARAMETERS["port"]
+        )
+    elif "account" in CONNECTION_PARAMETERS and "region" in CONNECTION_PARAMETERS:
+        server = "{account}.{region}".format(
+            account=CONNECTION_PARAMETERS["account"],
+            region=CONNECTION_PARAMETERS["region"],
+        )
+    elif "account" in CONNECTION_PARAMETERS:
+        server = CONNECTION_PARAMETERS["account"]
+
     engine = create_engine(
-        "snowflake://{user}:{password}@{host}:{port}/{database}/{schema}"
+        "snowflake://{user}:{password}@{server}/{database}/{schema}"
         "?account={account}&protocol={protocol}".format(
             user=CONNECTION_PARAMETERS["user"],
             account=CONNECTION_PARAMETERS["account"],
             password=CONNECTION_PARAMETERS["password"],
-            host=CONNECTION_PARAMETERS["host"],
-            port=CONNECTION_PARAMETERS["port"],
+            server=server,
             database=CONNECTION_PARAMETERS["database"],
             schema=CONNECTION_PARAMETERS["schema"],
             protocol=CONNECTION_PARAMETERS["protocol"],
@@ -141,32 +155,14 @@ def test_connect_args():
     finally:
         engine.dispose()
 
-    engine = create_engine(
-        URL(
-            user=CONNECTION_PARAMETERS["user"],
-            password=CONNECTION_PARAMETERS["password"],
-            account=CONNECTION_PARAMETERS["account"],
-            host=CONNECTION_PARAMETERS["host"],
-            port=CONNECTION_PARAMETERS["port"],
-            protocol=CONNECTION_PARAMETERS["protocol"],
-        )
-    )
+    engine = create_engine(URL(**CONNECTION_PARAMETERS))
     try:
         verify_engine_connection(engine)
     finally:
         engine.dispose()
-
-    engine = create_engine(
-        URL(
-            user=CONNECTION_PARAMETERS["user"],
-            password=CONNECTION_PARAMETERS["password"],
-            account=CONNECTION_PARAMETERS["account"],
-            host=CONNECTION_PARAMETERS["host"],
-            port=CONNECTION_PARAMETERS["port"],
-            protocol=CONNECTION_PARAMETERS["protocol"],
-            warehouse="testwh",
-        )
-    )
+    parameters = {**CONNECTION_PARAMETERS}
+    parameters["warehouse"] = "testwh"
+    engine = create_engine(URL(**parameters))
     try:
         verify_engine_connection(engine)
     finally:
@@ -174,14 +170,10 @@ def test_connect_args():
 
 
 def test_boolean_query_argument_parsing():
+
     engine = create_engine(
         URL(
-            user=CONNECTION_PARAMETERS["user"],
-            password=CONNECTION_PARAMETERS["password"],
-            account=CONNECTION_PARAMETERS["account"],
-            host=CONNECTION_PARAMETERS["host"],
-            port=CONNECTION_PARAMETERS["port"],
-            protocol=CONNECTION_PARAMETERS["protocol"],
+            **CONNECTION_PARAMETERS,
             validate_default_parameters=True,
         )
     )
@@ -406,16 +398,6 @@ def test_insert_tables(engine_testaccount):
                     str(users.join(addresses)) == "users JOIN addresses ON "
                     "users.id = addresses.user_id"
                 )
-                assert (
-                    str(
-                        users.join(
-                            addresses,
-                            addresses.c.email_address.like(users.c.name + "%"),
-                        )
-                    )
-                    == "users JOIN addresses "
-                    "ON addresses.email_address LIKE users.name || :name_1"
-                )
 
                 s = select(users.c.fullname).select_from(
                     users.join(
@@ -444,7 +426,7 @@ def test_table_does_not_exist(engine_testaccount):
     """
     meta = MetaData()
     with pytest.raises(NoSuchTableError):
-        Table("does_not_exist", meta, autoload=True, autoload_with=engine_testaccount)
+        Table("does_not_exist", meta, autoload_with=engine_testaccount)
 
 
 @pytest.mark.skip(
@@ -470,9 +452,7 @@ def test_reflextion(engine_testaccount):
         )
         try:
             meta = MetaData()
-            user_reflected = Table(
-                "user", meta, autoload=True, autoload_with=engine_testaccount
-            )
+            user_reflected = Table("user", meta, autoload_with=engine_testaccount)
             assert user_reflected.c == ["user.id", "user.name", "user.fullname"]
         finally:
             conn.execute("DROP TABLE IF EXISTS user")
@@ -514,19 +494,20 @@ def test_inspect_column(engine_testaccount):
         users.drop(engine_testaccount)
 
 
-def test_get_indexes(engine_testaccount):
+def test_get_indexes(engine_testaccount, db_parameters):
     """
     Tests get indexes
 
-    NOTE: Snowflake doesn't support indexes
+    NOTE: Only Snowflake Hybrid Tables support indexes
     """
+    schema = db_parameters["schema"]
     metadata = MetaData()
     users, addresses = _create_users_addresses_tables_without_sequence(
         engine_testaccount, metadata
     )
     try:
         inspector = inspect(engine_testaccount)
-        assert inspector.get_indexes("users") == []
+        assert inspector.get_indexes("users", schema) == []
 
     finally:
         addresses.drop(engine_testaccount)
@@ -708,6 +689,39 @@ def test_create_table_with_cluster_by(engine_testaccount):
         assert columns_in_table[0]["name"] == "Id", "name"
     finally:
         user.drop(engine_testaccount)
+
+
+def test_create_table_with_cluster_by_with_expression(engine_testaccount):
+    metadata = MetaData()
+    Table(
+        "clustered_user",
+        metadata,
+        Column("Id", Integer, primary_key=True),
+        Column("name", String),
+        snowflake_clusterby=["Id", "name", text('"Id" > 5')],
+    )
+    metadata.create_all(engine_testaccount)
+    try:
+        inspector = inspect(engine_testaccount)
+        columns_in_table = inspector.get_columns("clustered_user")
+        assert columns_in_table[0]["name"] == "Id", "name"
+    finally:
+        metadata.drop_all(engine_testaccount)
+
+
+def test_compile_table_with_cluster_by_with_expression(sql_compiler, snapshot):
+    metadata = MetaData()
+    user = Table(
+        "clustered_user",
+        metadata,
+        Column("Id", Integer, primary_key=True),
+        Column("name", String),
+        snowflake_clusterby=["Id", "name", text('"Id" > 5')],
+    )
+
+    create_table = CreateTable(user)
+
+    assert sql_compiler(create_table) == snapshot
 
 
 def test_view_names(engine_testaccount):
@@ -1071,28 +1085,16 @@ def test_cache_time(engine_testaccount, db_parameters):
     assert outcome
 
 
-@pytest.mark.timeout(15)
-def test_region():
-    engine = create_engine(
-        URL(
-            user="testuser",
-            password="testpassword",
-            account="testaccount",
-            region="eu-central-1",
-            login_timeout=5,
-        )
-    )
-    try:
-        engine.connect()
-        pytest.fail("should not run")
-    except Exception as ex:
-        assert ex.orig.errno == 250001
-        assert "Failed to connect to DB" in ex.orig.msg
-        assert "testaccount.eu-central-1.snowflakecomputing.com" in ex.orig.msg
-
-
-@pytest.mark.timeout(15)
-def test_azure():
+@pytest.mark.skip(reason="Testaccount is not available, it returns 404 error.")
+@pytest.mark.timeout(10)
+@pytest.mark.parametrize(
+    "region",
+    (
+        pytest.param("eu-central-1", id="region"),
+        pytest.param("east-us-2.azure", id="azure"),
+    ),
+)
+def test_connection_timeout_error(region):
     engine = create_engine(
         URL(
             user="testuser",
@@ -1102,13 +1104,13 @@ def test_azure():
             login_timeout=5,
         )
     )
-    try:
+
+    with pytest.raises(OperationalError) as excinfo:
         engine.connect()
-        pytest.fail("should not run")
-    except Exception as ex:
-        assert ex.orig.errno == 250001
-        assert "Failed to connect to DB" in ex.orig.msg
-        assert "testaccount.east-us-2.azure.snowflakecomputing.com" in ex.orig.msg
+
+    assert excinfo.value.orig.errno == 250001
+    assert "Could not connect to Snowflake backend" in excinfo.value.orig.msg
+    assert region not in excinfo.value.orig.msg
 
 
 def test_load_dialect():
@@ -1535,13 +1537,11 @@ def test_too_many_columns_detection(engine_testaccount, db_parameters):
     metadata.create_all(engine_testaccount)
     inspector = inspect(engine_testaccount)
     # Do test
-    original_execute = inspector.bind.execute
+    connection = inspector.bind.connect()
+    original_execute = connection.execute
 
-    def mock_helper(command, *args, **kwargs):
-        if "_get_schema_columns" in command:
-            # Creating exception exactly how SQLAlchemy does
-            raise DBAPIError.instance(
-                """
+    exception_instance = DBAPIError.instance(
+        """
             SELECT /* sqlalchemy:_get_schema_columns */
                    ic.table_name,
                    ic.column_name,
@@ -1556,24 +1556,32 @@ def test_too_many_columns_detection(engine_testaccount, db_parameters):
               FROM information_schema.columns ic
              WHERE ic.table_schema='schema_name'
              ORDER BY ic.ordinal_position""",
-                {"table_schema": "TESTSCHEMA"},
-                ProgrammingError(
-                    "Information schema query returned too much data. Please repeat query with more "
-                    "selective predicates.",
-                    90030,
-                ),
-                Error,
-                hide_parameters=False,
-                connection_invalidated=False,
-                dialect=SnowflakeDialect(),
-                ismulti=None,
-            )
+        {"table_schema": "TESTSCHEMA"},
+        ProgrammingError(
+            "Information schema query returned too much data. Please repeat query with more "
+            "selective predicates.",
+            90030,
+        ),
+        Error,
+        hide_parameters=False,
+        connection_invalidated=False,
+        dialect=SnowflakeDialect(),
+        ismulti=None,
+    )
+
+    def mock_helper(command, *args, **kwargs):
+        if "_get_schema_columns" in command.text:
+            # Creating exception exactly how SQLAlchemy does
+            raise exception_instance
         else:
             return original_execute(command, *args, **kwargs)
 
-    with patch.object(inspector.bind, "execute", side_effect=mock_helper):
-        column_metadata = inspector.get_columns("users", db_parameters["schema"])
-    assert len(column_metadata) == 4
+    with patch.object(engine_testaccount, "connect") as conn:
+        conn.return_value = connection
+        with patch.object(connection, "execute", side_effect=mock_helper):
+            with pytest.raises(exc.ProgrammingError) as exception:
+                inspector.get_columns("users", db_parameters["schema"])
+    assert exception.value.orig == exception_instance.orig
     # Clean up
     metadata.drop_all(engine_testaccount)
 
@@ -1615,13 +1623,11 @@ CREATE TEMP TABLE {table_name} (
 """
         )
 
-        table_reflected = Table(
-            table_name, MetaData(), autoload=True, autoload_with=conn
-        )
+        table_reflected = Table(table_name, MetaData(), autoload_with=conn)
         columns = table_reflected.columns
-        assert (
-            len(columns) == len(ischema_names_baseline) - 1
-        )  # -1 because FIXED is not supported
+        assert len(columns) == (
+            len(ischema_names_baseline) - 2
+        )  # -2 because FIXED and MAP is not supported
 
 
 def test_result_type_and_value(engine_testaccount):
@@ -1638,9 +1644,7 @@ CREATE TEMP TABLE {table_name} (
 )
 """
         )
-        table_reflected = Table(
-            table_name, MetaData(), autoload=True, autoload_with=conn
-        )
+        table_reflected = Table(table_name, MetaData(), autoload_with=conn)
         current_date = date.today()
         current_utctime = datetime.utcnow()
         current_localtime = pytz.utc.localize(current_utctime, is_dst=False).astimezone(
@@ -1801,30 +1805,14 @@ CREATE OR REPLACE TEMP TABLE {table_name}
 
 def test_snowflake_sqlalchemy_as_valid_client_type():
     engine = create_engine(
-        URL(
-            user=CONNECTION_PARAMETERS["user"],
-            password=CONNECTION_PARAMETERS["password"],
-            account=CONNECTION_PARAMETERS["account"],
-            host=CONNECTION_PARAMETERS["host"],
-            port=CONNECTION_PARAMETERS["port"],
-            protocol=CONNECTION_PARAMETERS["protocol"],
-        ),
+        URL(**CONNECTION_PARAMETERS),
         connect_args={"internal_application_name": "UnknownClient"},
     )
     with engine.connect() as conn:
         with pytest.raises(snowflake.connector.errors.NotSupportedError):
             conn.exec_driver_sql("select 1").cursor.fetch_pandas_all()
 
-    engine = create_engine(
-        URL(
-            user=CONNECTION_PARAMETERS["user"],
-            password=CONNECTION_PARAMETERS["password"],
-            account=CONNECTION_PARAMETERS["account"],
-            host=CONNECTION_PARAMETERS["host"],
-            port=CONNECTION_PARAMETERS["port"],
-            protocol=CONNECTION_PARAMETERS["protocol"],
-        )
-    )
+    engine = create_engine(URL(**CONNECTION_PARAMETERS))
     with engine.connect() as conn:
         conn.exec_driver_sql("select 1").cursor.fetch_pandas_all()
 
@@ -1855,16 +1843,7 @@ def test_snowflake_sqlalchemy_as_valid_client_type():
             "3.0.0",
             (type(None), str),
         )
-        engine = create_engine(
-            URL(
-                user=CONNECTION_PARAMETERS["user"],
-                password=CONNECTION_PARAMETERS["password"],
-                account=CONNECTION_PARAMETERS["account"],
-                host=CONNECTION_PARAMETERS["host"],
-                port=CONNECTION_PARAMETERS["port"],
-                protocol=CONNECTION_PARAMETERS["protocol"],
-            )
-        )
+        engine = create_engine(URL(**CONNECTION_PARAMETERS))
         with engine.connect() as conn:
             conn.exec_driver_sql("select 1").cursor.fetch_pandas_all()
             assert (

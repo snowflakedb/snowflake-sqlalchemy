@@ -33,8 +33,8 @@ jobs:
           python-version: '3.8'
       - name: Upgrade and install tools
         run: |
-          python -m pip install -U pip
-          python -m pip install -U hatch
+          python -m pip install -U uv
+          python -m uv pip install -U hatch
           python -m hatch env create default
       - name: Set PY
         run: echo "PY=$(hatch run gh-cache-sum)" >> $GITHUB_ENV
@@ -49,6 +49,10 @@ jobs:
     name: Test package build and installation
     runs-on: ubuntu-latest
     needs: lint
+    strategy:
+      fail-fast: true
+      matrix:
+        hatch-env: [default, sa14]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -59,15 +63,14 @@ jobs:
           python-version: '3.8'
       - name: Upgrade and install tools
         run: |
-          python -m pip install -U pip
-          python -m pip install -U hatch
+          python -m pip install -U uv
+          python -m uv pip install -U hatch
       - name: Build package
         run: |
-          python -m hatch clean
-          python -m hatch build
+          python -m hatch -e ${{ matrix.hatch-env }} build --clean
       - name: Install and check import
         run: |
-          python -m pip install dist/snowflake_sqlalchemy-*.whl
+          python -m uv pip install dist/snowflake_sqlalchemy-*.whl
           python -c "import snowflake.sqlalchemy; print(snowflake.sqlalchemy.__version__)"
 
   test-dialect:
@@ -79,7 +82,7 @@ jobs:
       matrix:
         os: [
           ubuntu-latest,
-          macos-latest,
+          macos-13,
           windows-latest,
           ]
         python-version: ["3.8"]
@@ -98,8 +101,8 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Upgrade pip and prepare environment
         run: |
-          python -m pip install -U pip
-          python -m pip install -U hatch
+          python -m pip install -U uv
+          python -m uv pip install -U hatch
           python -m hatch env create default
       - name: Setup parameters file
         shell: bash
@@ -108,6 +111,9 @@ jobs:
         run: |
           gpg --quiet --batch --yes --decrypt --passphrase="$PARAMETERS_SECRET" \
           .github/workflows/parameters/parameters_${{ matrix.cloud-provider }}.py.gpg > tests/parameters.py
+      - name: Run test for AWS
+        run: hatch run test-dialect-aws
+        if: matrix.cloud-provider == 'aws'
       - name: Run tests
         run: hatch run test-dialect
       - uses: actions/upload-artifact@v4
@@ -125,7 +131,7 @@ jobs:
       matrix:
         os: [
           ubuntu-latest,
-          macos-latest,
+          macos-13,
           windows-latest,
           ]
         python-version: ["3.8"]
@@ -144,8 +150,8 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Upgrade pip and install hatch
         run: |
-          python -m pip install -U pip
-          python -m pip install -U hatch
+          python -m pip install -U uv
+          python -m uv pip install -U hatch
           python -m hatch env create default
       - name: Setup parameters file
         shell: bash
@@ -162,8 +168,8 @@ jobs:
           path: |
             ./coverage.xml
 
-  test-dialect-run-v20:
-    name: Test dialect run v20 ${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
+  test-dialect-v14:
+    name: Test dialect v14 ${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
     needs: [ lint, build-install ]
     runs-on: ${{ matrix.os }}
     strategy:
@@ -171,7 +177,7 @@ jobs:
       matrix:
         os: [
           ubuntu-latest,
-          macos-latest,
+          macos-13,
           windows-latest,
           ]
         python-version: ["3.8"]
@@ -197,21 +203,70 @@ jobs:
           .github/workflows/parameters/parameters_${{ matrix.cloud-provider }}.py.gpg > tests/parameters.py
       - name: Upgrade pip and install hatch
         run: |
-          python -m pip install -U pip
-          python -m pip install -U hatch
+          python -m pip install -U uv
+          python -m uv pip install -U hatch
           python -m hatch env create default
+      - name: Run test for AWS
+        run: hatch run sa14:test-dialect-aws
+        if: matrix.cloud-provider == 'aws'
       - name: Run tests
-        run: hatch run test-run_v20
+        run: hatch run sa14:test-dialect
       - uses: actions/upload-artifact@v4
         with:
-          name: coverage.xml_dialect-run-20-${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
+          name: coverage.xml_dialect-v14-${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
+          path: |
+            ./coverage.xml
+
+  test-dialect-compatibility-v14:
+    name: Test dialect v14 compatibility ${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
+    needs: lint
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [
+          ubuntu-latest,
+          macos-13,
+          windows-latest,
+          ]
+        python-version: ["3.8"]
+        cloud-provider: [
+          aws,
+          azure,
+          gcp,
+          ]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Upgrade pip and install hatch
+        run: |
+          python -m pip install -U uv
+          python -m uv pip install -U hatch
+          python -m hatch env create default
+      - name: Setup parameters file
+        shell: bash
+        env:
+          PARAMETERS_SECRET: ${{ secrets.PARAMETERS_SECRET }}
+        run: |
+          gpg --quiet --batch --yes --decrypt --passphrase="$PARAMETERS_SECRET" \
+          .github/workflows/parameters/parameters_${{ matrix.cloud-provider }}.py.gpg > tests/parameters.py
+      - name: Run tests
+        run: hatch run sa14:test-dialect-compatibility
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage.xml_dialect-v14-compatibility-${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
           path: |
             ./coverage.xml
 
   combine-coverage:
     name: Combine coverage
     if: ${{ success() || failure() }}
-    needs: [test-dialect, test-dialect-compatibility, test-dialect-run-v20]
+    needs: [test-dialect, test-dialect-compatibility, test-dialect-v14, test-dialect-compatibility-v14]
     runs-on: ubuntu-latest
     steps:
       - name: Set up Python
@@ -220,8 +275,8 @@ jobs:
           python-version: "3.8"
       - name: Prepare environment
         run: |
-          pip install -U pip
-          pip install -U hatch
+          python -m pip install -U uv
+          python -m uv pip install -U hatch
           hatch env create default
       - uses: actions/checkout@v4
         with:
@@ -233,22 +288,15 @@ jobs:
         run: |
           hatch run coverage combine -a artifacts/coverage.xml_*/coverage.xml
           hatch run coverage report -m
-          hatch run coverage xml -o combined_coverage.xml
-          hatch run coverage html -d htmlcov
       - name: Store coverage reports
         uses: actions/upload-artifact@v4
         with:
-          name: combined_coverage.xml
-          path: combined_coverage.xml
-      - name: Store htmlcov report
-        uses: actions/upload-artifact@v4
-        with:
-          name: combined_htmlcov
-          path: htmlcov
+          name: coverage.xml
+          path: coverage.xml
       - name: Uplaod to codecov
         uses: codecov/codecov-action@v4
         with:
-          file: combined_coverage.xml
+          file: coverage.xml
           env_vars: OS,PYTHON
           fail_ci_if_error: false
           flags: unittests

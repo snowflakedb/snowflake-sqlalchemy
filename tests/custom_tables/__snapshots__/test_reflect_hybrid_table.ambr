@@ -1,0 +1,4 @@
+# serializer version: 1
+# name: test_simple_reflection_hybrid_table_as_table
+  'CREATE TABLE test_hybrid_table_reflection (\tid DECIMAL(38, 0) NOT NULL, \tname VARCHAR(16777216), \tCONSTRAINT demo_name PRIMARY KEY (id))'
+# ---

@@ -9,6 +9,29 @@ Source code is also available at:
 
 # Release Notes
 
+- (Unreleased)
+  - Add support for partition by to copy into <location>
+
+- v1.7.0(November 22, 2024)
+
+  - Add support for dynamic tables and required options
+  - Add support for hybrid tables
+  - Fixed SAWarning when registering functions with existing name in default namespace
+  - Update options to be defined in key arguments instead of arguments.
+  - Add support for refresh_mode option in DynamicTable
+  - Add support for iceberg table with Snowflake Catalog
+  - Fix cluster by option to support explicit expressions
+  - Add support for MAP datatype
+
+- v1.6.1(July 9, 2024)
+
+  - Update internal project workflow with pypi publishing
+
+- v1.6.0(July 8, 2024)
+
+  - support for installing with SQLAlchemy 2.0.x
+  - use `hatch` & `uv` for managing project virtual environments
+
 - v1.5.4
 
   - Add ability to set ORDER / NOORDER sequence on columns with IDENTITY
@@ -24,7 +47,7 @@ Source code is also available at:
 
 - v1.5.1(November 03, 2023)
 
-  - Fixed a compatibility issue with Snowflake Behavioral Change 1057 on outer lateral join, for more details check https://docs.snowflake.com/en/release-notes/bcr-bundles/2023_04/bcr-1057.
+  - Fixed a compatibility issue with Snowflake Behavioral Change 1057 on outer lateral join, for more details check <https://docs.snowflake.com/en/release-notes/bcr-bundles/2023_04/bcr-1057>.
   - Fixed credentials with `externalbrowser` authentication not caching due to incorrect parsing of boolean query parameters.
     - This fixes other boolean parameter passing to driver as well.
 

@@ -10,7 +10,8 @@ from sqlalchemy.sql.ddl import DDLElement
 from sqlalchemy.sql.dml import UpdateBase
 from sqlalchemy.sql.elements import ClauseElement
 from sqlalchemy.sql.roles import FromClauseRole
-from sqlalchemy.util.compat import string_types
+
+from .compat import string_types
 
 NoneType = type(None)
 
@@ -114,18 +115,23 @@ class CopyInto(UpdateBase):
     __visit_name__ = "copy_into"
     _bind = None
 
-    def __init__(self, from_, into, formatter=None):
+    def __init__(self, from_, into, partition_by=None, formatter=None):
         self.from_ = from_
         self.into = into
         self.formatter = formatter
         self.copy_options = {}
+        self.partition_by = partition_by
 
     def __repr__(self):
         """
         repr for debugging / logging purposes only. For compilation logic, see
         the corresponding visitor in base.py
         """
-        return f"COPY INTO {self.into} FROM {repr(self.from_)} {repr(self.formatter)} ({self.copy_options})"
+        val = f"COPY INTO {self.into} FROM {repr(self.from_)}"
+        if self.partition_by is not None:
+            val += f" PARTITION BY {self.partition_by}"
+
+        return val + f" {repr(self.formatter)} ({self.copy_options})"
 
     def bind(self):
         return None

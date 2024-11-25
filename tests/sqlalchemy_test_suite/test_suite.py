@@ -69,6 +69,10 @@ class InsertBehaviorTest(_InsertBehaviorTest):
     def test_empty_insert_multiple(self, connection):
         pass
 
+    @pytest.mark.skip("Snowflake does not support returning in insert.")
+    def test_no_results_for_non_returning_insert(self, connection, style, executemany):
+        pass
+
 
 # 2. Patched Tests
 
