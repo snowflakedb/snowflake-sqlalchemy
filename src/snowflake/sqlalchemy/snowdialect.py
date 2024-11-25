@@ -40,6 +40,7 @@ from .custom_types import (
     _CUSTOM_Time,
 )
 from .parser.custom_type_parser import *  # noqa
+from .parser.custom_type_parser import _CUSTOM_DECIMAL  # noqa
 from .parser.custom_type_parser import ischema_names, parse_type
 from .sql.custom_schema.custom_table_prefix import CustomTablePrefix
 from .util import (

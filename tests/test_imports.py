@@ -23,4 +23,4 @@ def test_types_in_snowdialect():
         "snowflake.sqlalchemy.parser.custom_type_parser"
     )
     classes_b = get_classes_from_module("snowflake.sqlalchemy.snowdialect")
-    return classes_a.issubset(classes_b), classes_a - classes_b
+    assert classes_a.issubset(classes_b), str(classes_a - classes_b)
