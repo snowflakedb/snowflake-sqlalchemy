@@ -5,6 +5,8 @@
 import importlib
 import inspect
 
+import pytest
+
 
 def get_classes_from_module(module_name):
     """Returns a set of class names from a given module."""
@@ -24,3 +26,39 @@ def test_types_in_snowdialect():
     )
     classes_b = get_classes_from_module("snowflake.sqlalchemy.snowdialect")
     assert classes_a.issubset(classes_b), str(classes_a - classes_b)
+
+
+@pytest.mark.parametrize(
+    "type_class_name",
+    [
+        "BIGINT",
+        "BINARY",
+        "BOOLEAN",
+        "CHAR",
+        "DATE",
+        "DATETIME",
+        "DECIMAL",
+        "FLOAT",
+        "INTEGER",
+        "REAL",
+        "SMALLINT",
+        "TIME",
+        "TIMESTAMP",
+        "VARCHAR",
+        "NullType",
+        "_CUSTOM_DECIMAL",
+        "ARRAY",
+        "DOUBLE",
+        "GEOGRAPHY",
+        "GEOMETRY",
+        "MAP",
+        "OBJECT",
+        "TIMESTAMP_LTZ",
+        "TIMESTAMP_NTZ",
+        "TIMESTAMP_TZ",
+        "VARIANT",
+    ],
+)
+def test_snowflake_data_types_instance(type_class_name):
+    classes_b = get_classes_from_module("snowflake.sqlalchemy.snowdialect")
+    assert type_class_name in classes_b, type_class_name
