@@ -11,6 +11,7 @@ Source code is also available at:
 
 - (Unreleased)
   - Add support for partition by to copy into <location>
+  - Fix BOOLEAN type not found in snowdialect
 
 - v1.7.0(November 22, 2024)
 
