@@ -9,7 +9,11 @@ Source code is also available at:
 
 # Release Notes
 
-- (Unreleased)
+- v1.7.1(December 02, 2024)
+  - Add support for partition by to copy into <location>
+  - Fix BOOLEAN type not found in snowdialect
+
+- v1.7.0(November 21, 2024)
 
   - Fixed quoting of `_` as column name
   - Add support for dynamic tables and required options
@@ -17,6 +21,9 @@ Source code is also available at:
   - Fixed SAWarning when registering functions with existing name in default namespace
   - Update options to be defined in key arguments instead of arguments.
   - Add support for refresh_mode option in DynamicTable
+  - Add support for iceberg table with Snowflake Catalog
+  - Fix cluster by option to support explicit expressions
+  - Add support for MAP datatype
 
 - v1.6.1(July 9, 2024)
 

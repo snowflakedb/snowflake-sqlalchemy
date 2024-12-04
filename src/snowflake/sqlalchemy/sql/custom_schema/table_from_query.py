@@ -7,12 +7,12 @@ from typing import Any, Optional
 from sqlalchemy.sql import Selectable
 from sqlalchemy.sql.schema import Column, MetaData, SchemaItem
 
-from .custom_table_base import CustomTableBase
+from .clustered_table import ClusteredTableBase
 from .options.as_query_option import AsQueryOption, AsQueryOptionType
 from .options.table_option import TableOptionKey
 
 
-class TableFromQueryBase(CustomTableBase):
+class TableFromQueryBase(ClusteredTableBase):
 
     @property
     def as_query(self) -> Optional[AsQueryOption]:

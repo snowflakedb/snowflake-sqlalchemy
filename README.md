@@ -8,6 +8,11 @@
 
 Snowflake SQLAlchemy runs on the top of the Snowflake Connector for Python as a [dialect](http://docs.sqlalchemy.org/en/latest/dialects/) to bridge a Snowflake database and SQLAlchemy applications.
 
+
+| :exclamation:        | For production-affecting or urgent issues related to the connector, please [create a case with Snowflake Support](https://community.snowflake.com/s/article/How-To-Submit-a-Support-Case-in-Snowflake-Lodge). |
+|---------------|:--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+
+
 ## Prerequisites
 
 ### Snowflake Connector for Python
@@ -204,7 +209,7 @@ finally:
 
 # Best
 try:
-    with engine.connext() as connection:
+    with engine.connect() as connection:
         connection.execute(text(<SQL>))
         # or
         connection.exec_driver_sql(<SQL>)
@@ -225,11 +230,43 @@ t = Table('mytable', metadata,
 
 ### Object Name Case Handling
 
-Snowflake stores all case-insensitive object names in uppercase text. In contrast, SQLAlchemy considers all lowercase object names to be case-insensitive. Snowflake SQLAlchemy converts the object name case during schema-level communication, i.e. during table and index reflection. If you use uppercase object names, SQLAlchemy assumes they are case-sensitive and encloses the names with quotes. This behavior will cause mismatches agaisnt data dictionary data received from Snowflake, so unless identifier names have been truly created as case sensitive using quotes, e.g., `"TestDb"`, all lowercase names should be used on the SQLAlchemy side.
+Snowflake stores all case-insensitive object names in uppercase text. In contrast, SQLAlchemy considers all lowercase object names to be case-insensitive. Snowflake SQLAlchemy converts the object name case during schema-level communication, i.e. during table and index reflection. If you use uppercase object names, SQLAlchemy assumes they are case-sensitive and encloses the names with quotes. This behavior will cause mismatches against data dictionary data received from Snowflake, so unless identifier names have been truly created as case sensitive using quotes, e.g., `"TestDb"`, all lowercase names should be used on the SQLAlchemy side.
 
 ### Index Support
 
-Snowflake does not utilize indexes, so neither does Snowflake SQLAlchemy.
+Indexes are supported only for Hybrid Tables in Snowflake SQLAlchemy. For more details on limitations and use cases, refer to the [Create Index documentation](https://docs.snowflake.com/en/sql-reference/constraints-indexes.html). You can create an index using the following methods:
+
+#### Single Column Index
+
+You can create a single column index by setting the `index=True` parameter on the column or by explicitly defining an `Index` object.
+
+```python
+hybrid_test_table_1 = HybridTable(
+  "table_name",
+  metadata,
+  Column("column1", Integer, primary_key=True),
+  Column("column2", String, index=True),
+  Index("index_1", "column1", "column2")
+)
+
+metadata.create_all(engine_testaccount)
+```
+
+#### Multi-Column Index
+
+For multi-column indexes, you define the `Index` object specifying the columns that should be indexed.
+
+```python
+hybrid_test_table_1 = HybridTable(
+  "table_name",
+  metadata,
+  Column("column1", Integer, primary_key=True),
+  Column("column2", String),
+  Index("index_1", "column1", "column2")
+)
+
+metadata.create_all(engine_testaccount)
+```
 
 ### Numpy Data Type Support
 
@@ -340,7 +377,7 @@ This example shows how to create a table with two columns, `id` and `name`, as t
 t = Table('myuser', metadata,
     Column('id', Integer, primary_key=True),
     Column('name', String),
-    snowflake_clusterby=['id', 'name'], ...
+    snowflake_clusterby=['id', 'name', text('id > 5')], ...
 )
 metadata.create_all(engine)
 ```
@@ -455,6 +492,117 @@ copy_into = CopyIntoStorage(from_=users,
                             formatter=CSVFormatter().null_if(['null', 'Null']))
 connection.execute(copy_into)
 ```
+
+### Iceberg Table with Snowflake Catalog support
+
+Snowflake SQLAlchemy supports Iceberg Tables with the Snowflake Catalog, along with various related parameters. For detailed information about Iceberg Tables, refer to the Snowflake [CREATE ICEBERG](https://docs.snowflake.com/en/sql-reference/sql/create-iceberg-table-snowflake) documentation.
+
+To create an Iceberg Table using Snowflake SQLAlchemy, you can define the table using the SQLAlchemy Core syntax as follows:
+
+```python
+table = IcebergTable(
+    "myuser",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("name", String),
+    external_volume=external_volume_name,
+    base_location="my_iceberg_table",
+    as_query="SELECT * FROM table"
+)
+```
+
+Alternatively, you can define the table using a declarative approach:
+
+```python
+class MyUser(Base):
+    __tablename__ = "myuser"
+
+    @classmethod
+    def __table_cls__(cls, name, metadata, *arg, **kw):
+        return IcebergTable(name, metadata, *arg, **kw)
+
+    __table_args__ = {
+        "external_volume": "my_external_volume",
+        "base_location": "my_iceberg_table",
+        "as_query": "SELECT * FROM table",
+    }
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
+```
+
+### Hybrid Table support
+
+Snowflake SQLAlchemy supports Hybrid Tables with indexes. For detailed information, refer to the Snowflake [CREATE HYBRID TABLE](https://docs.snowflake.com/en/sql-reference/sql/create-hybrid-table) documentation.
+
+To create a Hybrid Table and add an index, you can use the SQLAlchemy Core syntax as follows:
+
+```python
+table = HybridTable(
+    "myuser",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("name", String),
+    Index("idx_name", "name")
+)
+```
+
+Alternatively, you can define the table using the declarative approach:
+
+```python
+class MyUser(Base):
+    __tablename__ = "myuser"
+
+    @classmethod
+    def __table_cls__(cls, name, metadata, *arg, **kw):
+        return HybridTable(name, metadata, *arg, **kw)
+
+    __table_args__ = (
+        Index("idx_name", "name"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
+```
+
+### Dynamic Tables support
+
+Snowflake SQLAlchemy supports Dynamic Tables. For detailed information, refer to the Snowflake [CREATE DYNAMIC TABLE](https://docs.snowflake.com/en/sql-reference/sql/create-dynamic-table) documentation.
+
+To create a Dynamic Table, you can use the SQLAlchemy Core syntax as follows:
+
+```python
+dynamic_test_table_1 = DynamicTable(
+    "dynamic_MyUser",
+    metadata,
+    Column("id", Integer),
+    Column("name", String),
+    target_lag=(1, TimeUnit.HOURS),  # Additionally, you can use SnowflakeKeyword.DOWNSTREAM
+    warehouse='test_wh',
+    refresh_mode=SnowflakeKeyword.FULL,
+    as_query="SELECT id, name from MyUser;"
+)
+```
+
+Alternatively, you can define a table without columns using the SQLAlchemy `select()` construct:
+
+```python
+dynamic_test_table_1 = DynamicTable(
+    "dynamic_MyUser",
+    metadata,
+    target_lag=(1, TimeUnit.HOURS),
+    warehouse='test_wh',
+    refresh_mode=SnowflakeKeyword.FULL,
+    as_query=select(MyUser.id, MyUser.name)
+)
+```
+
+### Notes
+
+- Defining a primary key in a Dynamic Table is not supported, meaning declarative tables don’t support Dynamic Tables.
+- When using the `as_query` parameter with a string, you must explicitly define the columns. However, if you use the SQLAlchemy `select()` construct, you don’t need to explicitly define the columns.
+- Direct data insertion into Dynamic Tables is not supported.
+
 
 ## Support
 
