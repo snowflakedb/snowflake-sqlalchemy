@@ -14,7 +14,6 @@ from sqlalchemy import event as sa_vnt
 from sqlalchemy import exc as sa_exc
 from sqlalchemy import util as sa_util
 from sqlalchemy.engine import URL, default, reflection
-from sqlalchemy.engine.interfaces import IsolationLevel
 from sqlalchemy.schema import Table
 from sqlalchemy.sql import text
 from sqlalchemy.sql.elements import quoted_name
@@ -148,9 +147,7 @@ class SnowflakeDialect(default.DefaultDialect):
 
     def __init__(
         self,
-        isolation_level: Optional[
-            IsolationLevel
-        ] = SnowflakeIsolationLevel.READ_COMMITTED.value,
+        isolation_level: Optional[str] = SnowflakeIsolationLevel.READ_COMMITTED.value,
         **kwargs: Any,
     ):
         super().__init__(isolation_level=isolation_level, **kwargs)
