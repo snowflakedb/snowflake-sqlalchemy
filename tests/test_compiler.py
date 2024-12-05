@@ -2,7 +2,7 @@
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
 
-from sqlalchemy import Integer, String, and_, func, select
+from sqlalchemy import Integer, String, and_, func, insert, select
 from sqlalchemy.schema import DropColumnComment, DropTableComment
 from sqlalchemy.sql import column, quoted_name, table
 from sqlalchemy.testing.assertions import AssertsCompiledSQL
@@ -30,6 +30,21 @@ class TestSnowflakeCompiler(AssertsCompiledSQL):
         self.assert_compile(
             statement,
             "SELECT CURRENT_TIMESTAMP AS now_1",
+            dialect="snowflake",
+        )
+
+    def test_underscore_as_valid_identifier(self):
+        _table = table(
+            "table_1745924",
+            column("ca", Integer),
+            column("cb", String),
+            column("_", String),
+        )
+
+        stmt = insert(_table).values(ca=1, cb="test", _="test_")
+        self.assert_compile(
+            stmt,
+            'INSERT INTO table_1745924 (ca, cb, "_") VALUES (%(ca)s, %(cb)s, %(_)s)',
             dialect="snowflake",
         )
 

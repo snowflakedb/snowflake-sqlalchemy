@@ -5,6 +5,7 @@
 import itertools
 import operator
 import re
+import string
 from typing import List
 
 from sqlalchemy import exc as sa_exc
@@ -114,7 +115,8 @@ RESERVED_WORDS = frozenset(
 AUTOCOMMIT_REGEXP = re.compile(
     r"\s*(?:UPDATE|INSERT|DELETE|MERGE|COPY)", re.I | re.UNICODE
 )
-
+# used for quoting identifiers ie. table names, column names, etc.
+ILLEGAL_INITIAL_CHARACTERS = frozenset({d for d in string.digits}.union({"_", "$"}))
 
 """
 Overwrite methods to handle Snowflake BCR change:
@@ -439,6 +441,7 @@ class SnowflakeORMSelectCompileState(context.ORMSelectCompileState):
 
 class SnowflakeIdentifierPreparer(compiler.IdentifierPreparer):
     reserved_words = {x.lower() for x in RESERVED_WORDS}
+    illegal_initial_characters = ILLEGAL_INITIAL_CHARACTERS
 
     def __init__(self, dialect, **kw):
         quote = '"'

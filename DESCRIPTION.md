@@ -15,6 +15,7 @@ Source code is also available at:
 
 - v1.7.0(November 21, 2024)
 
+  - Fixed quoting of `_` as column name
   - Add support for dynamic tables and required options
   - Add support for hybrid tables
   - Fixed SAWarning when registering functions with existing name in default namespace
