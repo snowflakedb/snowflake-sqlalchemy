@@ -6,7 +6,7 @@ import operator
 import re
 from collections import defaultdict
 from functools import reduce
-from typing import Any
+from typing import Any, Collection, Optional
 from urllib.parse import unquote_plus
 
 import sqlalchemy.types as sqltypes
@@ -41,7 +41,7 @@ from .custom_types import (
 )
 from .parser.custom_type_parser import *  # noqa
 from .parser.custom_type_parser import _CUSTOM_DECIMAL  # noqa
-from .parser.custom_type_parser import ischema_names, parse_type
+from .parser.custom_type_parser import ischema_names, parse_index_columns, parse_type
 from .sql.custom_schema.custom_table_prefix import CustomTablePrefix
 from .util import (
     _update_connection_application_name,
@@ -674,27 +674,46 @@ class SnowflakeDialect(default.DefaultDialect):
             raise sa_exc.NoSuchTableError()
         return schema_columns[normalized_table_name]
 
+    def get_prefixes_from_data(self, n2i, row, **kw):
+        prefixes_found = []
+        for valid_prefix in CustomTablePrefix:
+            key = f"is_{valid_prefix.name.lower()}"
+            if key in n2i and row[n2i[key]] == "Y":
+                prefixes_found.append(valid_prefix.name)
+        return prefixes_found
+
+    @reflection.cache
+    def _get_schema_tables_info(self, connection, schema=None, **kw):
+        """
+        Gets all table names.
+        """
+
+        schema = schema or self.default_schema_name
+        _, default_schema = self._current_database_schema(connection, **kw)
+        schema = schema or default_schema
+        result = connection.execute(
+            text(
+                f"SHOW /* sqlalchemy:get_schema_tables_info */ TABLES IN SCHEMA {self._denormalize_quote_join(schema)}"
+            )
+        )
+
+        n2i = self._map_name_to_idx(result)
+        tables = {}
+        for row in result.cursor.fetchall():
+            table_name = self.normalize_name(str(row[n2i["name"]]))
+            table_prefixes = self.get_prefixes_from_data(n2i, row)
+            tables[table_name] = {"prefixes": table_prefixes}
+
+        return tables
+
     @reflection.cache
     def get_table_names(self, connection, schema=None, **kw):
         """
         Gets all table names.
         """
-        schema = schema or self.default_schema_name
-        current_schema = schema
-        if schema:
-            cursor = connection.execute(
-                text(
-                    f"SHOW /* sqlalchemy:get_table_names */ TABLES IN {self._denormalize_quote_join(schema)}"
-                )
-            )
-        else:
-            cursor = connection.execute(
-                text("SHOW /* sqlalchemy:get_table_names */ TABLES")
-            )
-            _, current_schema = self._current_database_schema(connection)
-
-        ret = [self.normalize_name(row[1]) for row in cursor]
-
+        ret = self._get_schema_tables_info(
+            connection, schema, info_cache=kw.get("info_cache", None)
+        ).keys()
         return ret
 
     @reflection.cache
@@ -747,18 +766,15 @@ class SnowflakeDialect(default.DefaultDialect):
         return None
 
     def get_temp_table_names(self, connection, schema=None, **kw):
-        schema = schema or self.default_schema_name
-        if schema:
-            cursor = connection.execute(
-                text(
-                    f"SHOW /* sqlalchemy:get_temp_table_names */ TABLES \
-                    IN {self._denormalize_quote_join(schema)}"
-                )
+        _, default_schema = self._current_database_schema(connection, **kw)
+
+        schema = schema or default_schema
+        cursor = connection.execute(
+            text(
+                f"SHOW /* sqlalchemy:get_temp_table_names */ TABLES \
+                IN {self._denormalize_quote_join(schema)}"
             )
-        else:
-            cursor = connection.execute(
-                text("SHOW /* sqlalchemy:get_temp_table_names */ TABLES")
-            )
+        )
 
         ret = []
         n2i = self.__class__._map_name_to_idx(cursor)
@@ -839,62 +855,81 @@ class SnowflakeDialect(default.DefaultDialect):
             )
         }
 
-    def get_multi_indexes(
+    @reflection.cache
+    def get_table_names_with_prefix(
         self,
         connection,
         *,
         schema,
-        filter_names,
+        prefix,
+        **kw,
+    ):
+        tables_data = self._get_schema_tables_info(connection, schema, **kw)
+        table_names = []
+        for table_name, tables_data_value in tables_data.items():
+            if prefix in tables_data_value["prefixes"]:
+                table_names.append(table_name)
+        return table_names
+
+    def get_multi_indexes(
+        self,
+        connection,
+        *,
+        schema: Optional[str] = None,
+        filter_names: Optional[Collection[str]] = None,
         **kw,
     ):
         """
         Gets the indexes definition
         """
-
-        table_prefixes = self.get_multi_prefixes(
-            connection, schema, filter_prefix=CustomTablePrefix.HYBRID.name
+        _, default_schema = self._current_database_schema(connection, **kw)
+        schema = schema or default_schema
+        hybrid_table_names = self.get_table_names_with_prefix(
+            connection,
+            schema=schema,
+            prefix=CustomTablePrefix.HYBRID.name,
+            info_cache=kw.get("info_cache", None),
         )
-        if len(table_prefixes) == 0:
+        if len(hybrid_table_names) == 0:
             return []
-        schema = schema or self.default_schema_name
-        if not schema:
-            result = connection.execute(
-                text("SHOW /* sqlalchemy:get_multi_indexes */ INDEXES")
-            )
-        else:
-            result = connection.execute(
-                text(
-                    f"SHOW /* sqlalchemy:get_multi_indexes */ INDEXES IN SCHEMA {self._denormalize_quote_join(schema)}"
-                )
-            )
 
-        n2i = self.__class__._map_name_to_idx(result)
+        result = connection.execute(
+            text(
+                f"SHOW /* sqlalchemy:get_multi_indexes */ INDEXES IN SCHEMA {self._denormalize_quote_join(schema)}"
+            )
+        )
+
+        n2i = self._map_name_to_idx(result)
         indexes = {}
 
         for row in result.cursor.fetchall():
-            table = self.normalize_name(str(row[n2i["table"]]))
+            table_name = self.normalize_name(str(row[n2i["table"]]))
             if (
                 row[n2i["name"]] == f'SYS_INDEX_{row[n2i["table"]]}_PRIMARY'
-                or table not in filter_names
-                or (schema, table) not in table_prefixes
-                or (
-                    (schema, table) in table_prefixes
-                    and CustomTablePrefix.HYBRID.name
-                    not in table_prefixes[(schema, table)]
-                )
+                or table_name not in filter_names
+                or table_name not in hybrid_table_names
             ):
                 continue
             index = {
                 "name": row[n2i["name"]],
                 "unique": row[n2i["is_unique"]] == "Y",
-                "column_names": row[n2i["columns"]],
-                "include_columns": row[n2i["included_columns"]],
+                "column_names": [
+                    self.normalize_name(column)
+                    for column in parse_index_columns(row[n2i["columns"]])
+                ],
+                "include_columns": [
+                    self.normalize_name(column)
+                    for column in parse_index_columns(row[n2i["included_columns"]])
+                ],
                 "dialect_options": {},
             }
-            if (schema, table) in indexes:
-                indexes[(schema, table)] = indexes[(schema, table)].append(index)
+
+            if (schema, table_name) in indexes:
+                indexes[(schema, table_name)] = indexes[(schema, table_name)].append(
+                    index
+                )
             else:
-                indexes[(schema, table)] = [index]
+                indexes[(schema, table_name)] = [index]
 
         return list(indexes.items())
 
@@ -905,50 +940,6 @@ class SnowflakeDialect(default.DefaultDialect):
             return dic_data[(schema, table)]
         else:
             return []
-
-    def get_prefixes_from_data(self, n2i, row, **kw):
-        prefixes_found = []
-        for valid_prefix in CustomTablePrefix:
-            key = f"is_{valid_prefix.name.lower()}"
-            if key in n2i and row[n2i[key]] == "Y":
-                prefixes_found.append(valid_prefix.name)
-        return prefixes_found
-
-    @reflection.cache
-    def get_multi_prefixes(
-        self, connection, schema, table_name=None, filter_prefix=None, **kw
-    ):
-        """
-        Gets all table prefixes
-        """
-        schema = schema or self.default_schema_name
-        filter = f"LIKE '{table_name}'" if table_name else ""
-        if schema:
-            result = connection.execute(
-                text(
-                    f"SHOW /* sqlalchemy:get_multi_prefixes */ {filter} TABLES IN SCHEMA {schema}"
-                )
-            )
-        else:
-            result = connection.execute(
-                text(
-                    f"SHOW /* sqlalchemy:get_multi_prefixes */ {filter} TABLES LIKE '{table_name}'"
-                )
-            )
-
-        n2i = self.__class__._map_name_to_idx(result)
-        tables_prefixes = {}
-        for row in result.cursor.fetchall():
-            table = self.normalize_name(str(row[n2i["name"]]))
-            table_prefixes = self.get_prefixes_from_data(n2i, row)
-            if filter_prefix and filter_prefix not in table_prefixes:
-                continue
-            if (schema, table) in tables_prefixes:
-                tables_prefixes[(schema, table)].append(table_prefixes)
-            else:
-                tables_prefixes[(schema, table)] = table_prefixes
-
-        return tables_prefixes
 
     @reflection.cache
     def get_indexes(self, connection, tablename, schema, **kw):
