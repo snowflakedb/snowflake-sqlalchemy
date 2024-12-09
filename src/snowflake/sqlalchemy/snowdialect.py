@@ -767,7 +767,7 @@ class SnowflakeDialect(default.DefaultDialect):
         cursor = connection.execute(
             text(
                 f"SHOW /* sqlalchemy:get_temp_table_names */ TABLES \
-                IN {self._denormalize_quote_join(schema)}"
+                IN SCHEMA {self._denormalize_quote_join(schema)}"
             )
         )
 
