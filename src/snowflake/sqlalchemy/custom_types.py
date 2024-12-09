@@ -2,8 +2,11 @@
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
 
+from typing import Tuple, Union
+
 import sqlalchemy.types as sqltypes
 import sqlalchemy.util as util
+from sqlalchemy.types import TypeEngine
 
 TEXT = sqltypes.VARCHAR
 CHARACTER = sqltypes.CHAR
@@ -54,6 +57,14 @@ class MAP(StructuredType):
         self.key_type = key_type
         self.value_type = value_type
         self.not_null = not_null
+        super().__init__()
+
+
+class OBJECT_STRUCTURED(StructuredType):
+    __visit_name__ = "OBJECT_STRUCTURED"
+
+    def __init__(self, **items_types: Union[TypeEngine, Tuple[TypeEngine, bool]]):
+        self.items_types = items_types
         super().__init__()
 
 

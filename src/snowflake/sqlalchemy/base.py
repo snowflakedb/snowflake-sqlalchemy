@@ -1098,8 +1098,16 @@ class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
     def visit_ARRAY(self, type_, **kw):
         return "ARRAY"
 
-    def visit_OBJECT(self, type_, **kw):
+    def visit_OBJECT(self, type_, **kw):  # TODO?
         return "OBJECT"
+
+    def visit_OBJECT_STRUCTURED(self, type_, **kw):
+        contents = []
+        for key in type_.items_types:
+            contents.append(
+                f"{key} {type_.items_types[key][0].compile()} {'NOT NULL' if type_.items_types[key][1] else ''}"
+            )
+        return "OBJECT" if contents == [] else f"OBJECT({', '.join(contents)})"
 
     def visit_BLOB(self, type_, **kw):
         return "BINARY"

@@ -19,7 +19,7 @@ from sqlalchemy.sql import select
 from sqlalchemy.sql.ddl import CreateTable
 
 from snowflake.sqlalchemy import NUMBER, IcebergTable, SnowflakeTable
-from snowflake.sqlalchemy.custom_types import MAP, TEXT
+from snowflake.sqlalchemy.custom_types import MAP, OBJECT_STRUCTURED, TEXT
 from snowflake.sqlalchemy.exc import StructuredTypeNotSupportedInTableColumnsError
 
 
@@ -42,12 +42,15 @@ def test_create_table_structured_datatypes(
     engine_testaccount, external_volume, base_location
 ):
     metadata = MetaData()
-    table_name = "test_map0"
+    table_name = "test_structured0"
     test_map = IcebergTable(
         table_name,
         metadata,
         Column("id", Integer, primary_key=True),
         Column("map_id", MAP(NUMBER(10, 0), TEXT())),
+        Column(
+            "object_col", OBJECT_STRUCTURED(key1=(TEXT(), False), key2=(NUMBER(), True))
+        ),
         external_volume=external_volume,
         base_location=base_location,
     )
@@ -92,11 +95,53 @@ def test_insert_map(engine_testaccount, external_volume, base_location, snapshot
 
 
 @pytest.mark.requires_external_volume
+def test_insert_structured_object(
+    engine_testaccount, external_volume, base_location, snapshot
+):
+    metadata = MetaData()
+    table_name = "test_insert_structured_object"
+    test_map = IcebergTable(
+        table_name,
+        metadata,
+        Column("id", Integer, primary_key=True),
+        Column(
+            "object_col", OBJECT_STRUCTURED(key1=(TEXT(), False), key2=(NUMBER(), True))
+        ),
+        external_volume=external_volume,
+        base_location=base_location,
+    )
+    metadata.create_all(engine_testaccount)
+
+    try:
+        with engine_testaccount.connect() as conn:
+            slt = select(
+                1,
+                cast(
+                    text("{'key1':('item1', false), 'key2': (15, true)}"),
+                    OBJECT_STRUCTURED(key1=(TEXT(), False), key2=(NUMBER(), True)),
+                ),
+            )
+            ins = test_map.insert().from_select(["id", "map_id"], slt)
+            conn.execute(ins)
+
+            results = conn.execute(test_map.select())
+            data = results.fetchmany()
+            results.close()
+            snapshot.assert_match(data)
+    finally:
+        test_map.drop(engine_testaccount)
+
+
+@pytest.mark.requires_external_volume
 @pytest.mark.parametrize(
     "structured_type",
     [
-        MAP(NUMBER(10, 0), TEXT()),
-        MAP(NUMBER(10, 0), MAP(NUMBER(10, 0), TEXT())),
+        (MAP(NUMBER(10, 0), TEXT()), MAP),
+        (MAP(NUMBER(10, 0), MAP(NUMBER(10, 0), TEXT())), MAP),
+        (
+            OBJECT_STRUCTURED(key1=(TEXT(), False), key2=(NUMBER(), True)),
+            OBJECT_STRUCTURED,
+        ),
     ],
 )
 def test_inspect_structured_data_types(
@@ -108,7 +153,7 @@ def test_inspect_structured_data_types(
         table_name,
         metadata,
         Column("id", Integer, primary_key=True),
-        Column("map_id", structured_type),
+        Column("structured_type_col", structured_type[0]),
         external_volume=external_volume,
         base_location=base_location,
     )
@@ -119,7 +164,7 @@ def test_inspect_structured_data_types(
         columns = inspecter.get_columns(table_name)
 
         assert isinstance(columns[0]["type"], NUMBER)
-        assert isinstance(columns[1]["type"], MAP)
+        assert isinstance(columns[1]["type"], structured_type[1])
         assert columns == snapshot
 
     finally:
@@ -132,6 +177,7 @@ def test_inspect_structured_data_types(
     [
         "MAP(NUMBER(10, 0), VARCHAR)",
         "MAP(NUMBER(10, 0), MAP(NUMBER(10, 0), VARCHAR))",
+        "OBJECT(key1 VARCHAR, key2 NUMBER NOT NULL)",
     ],
 )
 def test_reflect_structured_data_types(
@@ -147,7 +193,7 @@ def test_reflect_structured_data_types(
     create_table_sql = f"""
 CREATE OR REPLACE ICEBERG TABLE {table_name} (
        id number(38,0) primary key,
-       map_id {structured_type})
+       structured_type_col {structured_type})
 CATALOG = 'SNOWFLAKE'
 EXTERNAL_VOLUME = '{external_volume}'
 BASE_LOCATION = '{base_location}';
@@ -224,6 +270,10 @@ def test_snowflake_tables_with_structured_types(sql_compiler):
             metadata,
             Column("Id", Integer, primary_key=True),
             Column("name", MAP(NUMBER(10, 0), TEXT())),
+            Column(
+                "object_col",
+                OBJECT_STRUCTURED(key1=(TEXT(), False), key2=(NUMBER(), True)),
+            ),
         )
     assert programming_error is not None
 
