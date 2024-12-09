@@ -674,11 +674,11 @@ class SnowflakeDialect(default.DefaultDialect):
             raise sa_exc.NoSuchTableError()
         return schema_columns[normalized_table_name]
 
-    def get_prefixes_from_data(self, n2i, row, **kw):
+    def get_prefixes_from_data(self, name_to_index_map, row, **kw):
         prefixes_found = []
         for valid_prefix in CustomTablePrefix:
             key = f"is_{valid_prefix.name.lower()}"
-            if key in n2i and row[n2i[key]] == "Y":
+            if key in name_to_index_map and row[name_to_index_map[key]] == "Y":
                 prefixes_found.append(valid_prefix.name)
         return prefixes_found
 
@@ -695,11 +695,11 @@ class SnowflakeDialect(default.DefaultDialect):
             )
         )
 
-        n2i = self._map_name_to_idx(result)
+        name_to_index_map = self._map_name_to_idx(result)
         tables = {}
         for row in result.cursor.fetchall():
-            table_name = self.normalize_name(str(row[n2i["name"]]))
-            table_prefixes = self.get_prefixes_from_data(n2i, row)
+            table_name = self.normalize_name(str(row[name_to_index_map["name"]]))
+            table_prefixes = self.get_prefixes_from_data(name_to_index_map, row)
             tables[table_name] = {"prefixes": table_prefixes}
 
         return tables
