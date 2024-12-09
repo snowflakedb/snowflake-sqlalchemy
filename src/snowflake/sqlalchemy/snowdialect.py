@@ -685,12 +685,10 @@ class SnowflakeDialect(default.DefaultDialect):
     @reflection.cache
     def _get_schema_tables_info(self, connection, schema=None, **kw):
         """
-        Gets all table names.
+        Retrieves information about all tables in the specified schema.
         """
 
         schema = schema or self.default_schema_name
-        _, default_schema = self._current_database_schema(connection, **kw)
-        schema = schema or default_schema
         result = connection.execute(
             text(
                 f"SHOW /* sqlalchemy:get_schema_tables_info */ TABLES IN SCHEMA {self._denormalize_quote_join(schema)}"
@@ -706,7 +704,6 @@ class SnowflakeDialect(default.DefaultDialect):
 
         return tables
 
-    @reflection.cache
     def get_table_names(self, connection, schema=None, **kw):
         """
         Gets all table names.
@@ -766,9 +763,7 @@ class SnowflakeDialect(default.DefaultDialect):
         return None
 
     def get_temp_table_names(self, connection, schema=None, **kw):
-        _, default_schema = self._current_database_schema(connection, **kw)
-
-        schema = schema or default_schema
+        schema = schema or self.default_schema_name
         cursor = connection.execute(
             text(
                 f"SHOW /* sqlalchemy:get_temp_table_names */ TABLES \
@@ -855,7 +850,6 @@ class SnowflakeDialect(default.DefaultDialect):
             )
         }
 
-    @reflection.cache
     def get_table_names_with_prefix(
         self,
         connection,
@@ -882,8 +876,7 @@ class SnowflakeDialect(default.DefaultDialect):
         """
         Gets the indexes definition
         """
-        _, default_schema = self._current_database_schema(connection, **kw)
-        schema = schema or default_schema
+        schema = schema or self.default_schema_name
         hybrid_table_names = self.get_table_names_with_prefix(
             connection,
             schema=schema,
