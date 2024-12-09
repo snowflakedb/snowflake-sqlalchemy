@@ -3,6 +3,7 @@
 #
 from __future__ import annotations
 
+import logging.handlers
 import os
 import sys
 import time
@@ -192,6 +193,32 @@ def engine_testaccount(request):
     engine = get_engine(url)
     request.addfinalizer(engine.dispose)
     yield engine
+
+
+@pytest.fixture()
+def assert_text_in_buf():
+    buf = logging.handlers.BufferingHandler(100)
+    for log in [
+        logging.getLogger("sqlalchemy.engine"),
+    ]:
+        log.addHandler(buf)
+
+    def go(expected, occurrences=1):
+        assert buf.buffer
+        buflines = [rec.getMessage() for rec in buf.buffer]
+
+        ocurrences_found = buflines.count(expected)
+        assert occurrences == ocurrences_found, (
+            f"Expected {occurrences} of {expected}, got {ocurrences_found} "
+            f"occurrences in {buflines}."
+        )
+        buf.flush()
+
+    yield go
+    for log in [
+        logging.getLogger("sqlalchemy.engine"),
+    ]:
+        log.removeHandler(buf)
 
 
 @pytest.fixture()
