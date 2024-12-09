@@ -1,5 +1,6 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
+import re
 
 import sqlalchemy.types as sqltypes
 from sqlalchemy.sql.type_api import TypeEngine
@@ -48,7 +49,7 @@ ischema_names = {
     "DECIMAL": DECIMAL,
     "DOUBLE": DOUBLE,
     "FIXED": DECIMAL,
-    "FLOAT": FLOAT,  # Snowflake FLOAT datatype doesn't has parameters
+    "FLOAT": FLOAT,  # Snowflake FLOAT datatype doesn't have parameters
     "INT": INTEGER,
     "INTEGER": INTEGER,
     "NUMBER": _CUSTOM_DECIMAL,
@@ -107,6 +108,14 @@ def extract_parameters(text: str) -> list:
     return output_parameters
 
 
+def split_ignore_parentheses(text):
+    # This regex matches sequences of non-whitespace characters or
+    # entire groups of text within parentheses, ignoring spaces.
+    pattern = r"\s*(\([^)]*\)|[^\s()]+)\s*"
+    result = re.findall(pattern, text)
+    return [item for item in result if item]  # Filter out empty strings
+
+
 def parse_type(type_text: str) -> TypeEngine:
     """
     Parses a type definition string and returns the corresponding SQLAlchemy type.
@@ -130,6 +139,7 @@ def parse_type(type_text: str) -> TypeEngine:
 
     col_type_class = ischema_names.get(type_name, None)
     col_type_kw = {}
+
     if col_type_class is None:
         col_type_class = NullType
     else:
@@ -139,11 +149,30 @@ def parse_type(type_text: str) -> TypeEngine:
             col_type_kw = __parse_type_with_length_parameters(parameters)
         elif issubclass(col_type_class, MAP):
             col_type_kw = __parse_map_type_parameters(parameters)
+        elif issubclass(col_type_class, OBJECT):
+            col_type_kw = __parse_object_type_parameters(parameters)
         if col_type_kw is None:
             col_type_class = NullType
             col_type_kw = {}
 
     return col_type_class(**col_type_kw)
+
+
+def __parse_object_type_parameters(parameters):
+    # Example of object type: OBJECT(key1 VARCHAR, key2 NUMBER NOT NULL)
+    # Parameters: [key1 VARCHAR, key2 NUMBER NOT NULL]
+
+    object_rows = []
+    for parameter in parameters:
+        parameter_parts = split_ignore_parentheses(parameter)
+        if len(parameter_parts) >= 2:
+            key = parameter_parts[0]
+            value_type = parse_type(parameter_parts[1])
+            if isinstance(value_type, NullType):
+                return None
+            not_null = len(parameter_parts) == 3 and "NOT NULL" in parameter_parts[2]
+            object_rows.append((key, (value_type, not_null)))
+    return {"items_types": dict(object_rows)}
 
 
 def __parse_map_type_parameters(parameters):
