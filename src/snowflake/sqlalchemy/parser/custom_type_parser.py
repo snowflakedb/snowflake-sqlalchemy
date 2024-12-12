@@ -1,5 +1,6 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
+from typing import List
 
 import sqlalchemy.types as sqltypes
 from sqlalchemy.sql.type_api import TypeEngine
@@ -105,6 +106,21 @@ def extract_parameters(text: str) -> list:
     if parameter != "":
         output_parameters.append(parameter.strip(" "))
     return output_parameters
+
+
+def parse_index_columns(columns: str) -> List[str]:
+    """
+    Parses a string with a list of columns for an index.
+
+    :param columns: A string with a list of columns for an index, which may include parentheses.
+    :param compiler: A SQLAlchemy compiler.
+
+    :return: A list of columns as strings.
+
+    :example:
+        For input `"[A, B, C]"`, the output is `['A', 'B', 'C']`.
+    """
+    return [column.strip() for column in columns.strip("[]").split(",")]
 
 
 def parse_type(type_text: str) -> TypeEngine:
