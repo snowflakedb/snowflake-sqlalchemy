@@ -409,6 +409,7 @@ BASE_LOCATION = '{base_location}';
         metadata.drop_all(engine_testaccount)
 
 
+@pytest.mark.requires_external_volume
 def test_create_table_structured_datatypes(
     engine_testaccount, external_volume, base_location
 ):
