@@ -1,9 +1,11 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
+from typing import Tuple, Union
 
 import sqlalchemy.types as sqltypes
 import sqlalchemy.util as util
+from sqlalchemy.types import TypeEngine
 
 TEXT = sqltypes.VARCHAR
 CHARACTER = sqltypes.CHAR
@@ -57,8 +59,22 @@ class MAP(StructuredType):
         super().__init__()
 
 
-class OBJECT(SnowflakeType):
+class OBJECT(StructuredType):
     __visit_name__ = "OBJECT"
+
+    def __init__(self, **items_types: Union[TypeEngine, Tuple[TypeEngine, bool]]):
+        self.items_types = items_types
+        self.is_semi_structured = len(items_types) == 0
+        super().__init__()
+
+    def __repr__(self):
+        quote_char = "'"
+        return "OBJECT(%s)" % ", ".join(
+            [
+                f"{repr(key).strip(quote_char)}={repr(value)}"
+                for key, value in self.items_types.items()
+            ]
+        )
 
 
 class ARRAY(SnowflakeType):

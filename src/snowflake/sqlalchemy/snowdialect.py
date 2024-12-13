@@ -1,7 +1,6 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
-
 import operator
 import re
 from collections import defaultdict
@@ -9,7 +8,7 @@ from functools import reduce
 from typing import Any, Collection, Optional
 from urllib.parse import unquote_plus
 
-import sqlalchemy.types as sqltypes
+import sqlalchemy.sql.sqltypes as sqltypes
 from sqlalchemy import event as sa_vnt
 from sqlalchemy import exc as sa_exc
 from sqlalchemy import util as sa_util
@@ -17,7 +16,8 @@ from sqlalchemy.engine import URL, default, reflection
 from sqlalchemy.schema import Table
 from sqlalchemy.sql import text
 from sqlalchemy.sql.elements import quoted_name
-from sqlalchemy.types import FLOAT, Date, DateTime, Float, NullType, Time
+from sqlalchemy.sql.sqltypes import NullType
+from sqlalchemy.types import FLOAT, Date, DateTime, Float, Time
 
 from snowflake.connector import errors as sf_errors
 from snowflake.connector.connection import DEFAULT_CONFIGURATION
@@ -33,7 +33,7 @@ from .base import (
     SnowflakeTypeCompiler,
 )
 from .custom_types import (
-    MAP,
+    StructuredType,
     _CUSTOM_Date,
     _CUSTOM_DateTime,
     _CUSTOM_Float,
@@ -466,6 +466,14 @@ class SnowflakeDialect(default.DefaultDialect):
                 connection, full_schema_name, **kw
             )
             schema_name = self.denormalize_name(schema)
+
+            iceberg_table_names = self.get_table_names_with_prefix(
+                connection,
+                schema=schema_name,
+                prefix=CustomTablePrefix.ICEBERG.name,
+                info_cache=kw.get("info_cache", None),
+            )
+
             result = connection.execute(
                 text(
                     """
@@ -526,7 +534,10 @@ class SnowflakeDialect(default.DefaultDialect):
                     col_type_kw["scale"] = numeric_scale
                 elif issubclass(col_type, (sqltypes.String, sqltypes.BINARY)):
                     col_type_kw["length"] = character_maximum_length
-                elif issubclass(col_type, MAP):
+                elif (
+                    issubclass(col_type, StructuredType)
+                    and table_name in iceberg_table_names
+                ):
                     if (schema_name, table_name) not in full_columns_descriptions:
                         full_columns_descriptions[(schema_name, table_name)] = (
                             self.table_columns_as_dict(

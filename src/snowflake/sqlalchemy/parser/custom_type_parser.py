@@ -49,11 +49,10 @@ ischema_names = {
     "DECIMAL": DECIMAL,
     "DOUBLE": DOUBLE,
     "FIXED": DECIMAL,
-    "FLOAT": FLOAT,  # Snowflake FLOAT datatype doesn't has parameters
+    "FLOAT": FLOAT,  # Snowflake FLOAT datatype doesn't have parameters
     "INT": INTEGER,
     "INTEGER": INTEGER,
     "NUMBER": _CUSTOM_DECIMAL,
-    # 'OBJECT': ?
     "REAL": REAL,
     "BYTEINT": SMALLINT,
     "SMALLINT": SMALLINT,
@@ -76,18 +75,19 @@ ischema_names = {
 }
 
 
-def extract_parameters(text: str) -> list:
+def tokenize_parameters(text: str, character_for_strip=",") -> list:
     """
     Extracts parameters from a comma-separated string, handling parentheses.
 
     :param text: A string with comma-separated parameters, which may include parentheses.
+
+    :param character_for_strip: A character to strip the text.
 
     :return: A list of parameters as strings.
 
     :example:
         For input `"a, (b, c), d"`, the output is `['a', '(b, c)', 'd']`.
     """
-
     output_parameters = []
     parameter = ""
     open_parenthesis = 0
@@ -98,9 +98,9 @@ def extract_parameters(text: str) -> list:
         elif c == ")":
             open_parenthesis -= 1
 
-        if open_parenthesis > 0 or c != ",":
+        if open_parenthesis > 0 or c != character_for_strip:
             parameter += c
-        elif c == ",":
+        elif c == character_for_strip:
             output_parameters.append(parameter.strip(" "))
             parameter = ""
     if parameter != "":
@@ -138,14 +138,17 @@ def parse_type(type_text: str) -> TypeEngine:
         parse_type("VARCHAR(255)")
         String(length=255)
     """
+
     index = type_text.find("(")
     type_name = type_text[:index] if index != -1 else type_text
+
     parameters = (
-        extract_parameters(type_text[index + 1 : -1]) if type_name != type_text else []
+        tokenize_parameters(type_text[index + 1 : -1]) if type_name != type_text else []
     )
 
     col_type_class = ischema_names.get(type_name, None)
     col_type_kw = {}
+
     if col_type_class is None:
         col_type_class = NullType
     else:
@@ -155,11 +158,31 @@ def parse_type(type_text: str) -> TypeEngine:
             col_type_kw = __parse_type_with_length_parameters(parameters)
         elif issubclass(col_type_class, MAP):
             col_type_kw = __parse_map_type_parameters(parameters)
+        elif issubclass(col_type_class, OBJECT):
+            col_type_kw = __parse_object_type_parameters(parameters)
         if col_type_kw is None:
             col_type_class = NullType
             col_type_kw = {}
 
     return col_type_class(**col_type_kw)
+
+
+def __parse_object_type_parameters(parameters):
+    object_rows = {}
+    for parameter in parameters:
+        parameter_parts = tokenize_parameters(parameter, " ")
+        if len(parameter_parts) >= 2:
+            key = parameter_parts[0]
+            value_type = parse_type(parameter_parts[1])
+            if isinstance(value_type, NullType):
+                return None
+            not_null = (
+                len(parameter_parts) == 4
+                and parameter_parts[2] == "NOT"
+                and parameter_parts[3] == "NULL"
+            )
+            object_rows[key] = (value_type, not_null)
+    return object_rows
 
 
 def __parse_map_type_parameters(parameters):
