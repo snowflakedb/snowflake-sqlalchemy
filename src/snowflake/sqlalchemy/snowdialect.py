@@ -4,6 +4,7 @@
 import operator
 import re
 from collections import defaultdict
+from enum import Enum
 from functools import reduce
 from typing import Any, Collection, Optional
 from urllib.parse import unquote_plus
@@ -57,6 +58,11 @@ colspecs = {
 }
 
 _ENABLE_SQLALCHEMY_AS_APPLICATION_NAME = True
+
+
+class SnowflakeIsolationLevel(Enum):
+    READ_COMMITTED = "READ COMMITTED"
+    AUTOCOMMIT = "AUTOCOMMIT"
 
 
 class SnowflakeDialect(default.DefaultDialect):
@@ -139,6 +145,13 @@ class SnowflakeDialect(default.DefaultDialect):
 
     supports_identity_columns = True
 
+    def __init__(
+        self,
+        isolation_level: Optional[str] = SnowflakeIsolationLevel.READ_COMMITTED.value,
+        **kwargs: Any,
+    ):
+        super().__init__(isolation_level=isolation_level, **kwargs)
+
     @classmethod
     def dbapi(cls):
         return cls.import_dbapi()
@@ -215,6 +228,27 @@ class SnowflakeDialect(default.DefaultDialect):
         Checks if the table exists
         """
         return self._has_object(connection, "TABLE", table_name, schema)
+
+    def get_isolation_level_values(self, dbapi_connection):
+        return [
+            SnowflakeIsolationLevel.READ_COMMITTED.value,
+            SnowflakeIsolationLevel.AUTOCOMMIT.value,
+        ]
+
+    def do_rollback(self, dbapi_connection):
+        dbapi_connection.rollback()
+
+    def do_commit(self, dbapi_connection):
+        dbapi_connection.commit()
+
+    def get_default_isolation_level(self, dbapi_conn):
+        return SnowflakeIsolationLevel.READ_COMMITTED.value
+
+    def set_isolation_level(self, dbapi_connection, level):
+        if level == SnowflakeIsolationLevel.AUTOCOMMIT.value:
+            dbapi_connection.autocommit(True)
+        else:
+            dbapi_connection.autocommit(False)
 
     @reflection.cache
     def has_sequence(self, connection, sequence_name, schema=None, **kw):

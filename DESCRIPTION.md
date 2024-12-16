@@ -19,6 +19,7 @@ Source code is also available at:
 - v1.7.1(December 02, 2024)
   - Add support for partition by to copy into <location>
   - Fix BOOLEAN type not found in snowdialect
+  - Add support for autocommit Isolation Level
 
 - v1.7.0(November 21, 2024)
   - Add support for dynamic tables and required options
