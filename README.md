@@ -367,6 +367,79 @@ data_object  = json.loads(row[1])
 data_array   = json.loads(row[2])
 ```
 
+### Structured Data Types Support
+
+This module defines custom SQLAlchemy types for Snowflake structured data, specifically for **Iceberg tables**.
+The types —**MAP**, **OBJECT**, and **ARRAY**— allow you to store complex data structures in your SQLAlchemy models.
+For detailed information, refer to the Snowflake [Structured data types](https://docs.snowflake.com/en/sql-reference/data-types-structured) documentation.
+
+---
+
+#### MAP
+
+The `MAP` type represents a collection of key-value pairs, where each key and value can have different types.
+
+- **Key Type**: The type of the keys (e.g., `TEXT`, `NUMBER`).
+- **Value Type**: The type of the values (e.g., `TEXT`, `NUMBER`).
+- **Not Null**: Whether `NULL` values are allowed (default is `False`).
+
+*Example Usage*
+
+```python
+IcebergTable(
+    table_name,
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("map_col", MAP(NUMBER(10, 0), TEXT(16777216))),
+    external_volume="external_volume",
+    base_location="base_location",
+)
+```
+
+#### OBJECT
+
+The `OBJECT` type represents a semi-structured object with named fields. Each field can have a specific type, and you can also specify whether each field is nullable.
+
+- **Items Types**: A dictionary of field names and their types. The type can optionally include a nullable flag (`True` for not nullable, `False` for nullable, default is `False`).
+
+*Example Usage*
+
+```python
+IcebergTable(
+    table_name,
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column(
+        "object_col",
+        OBJECT(key1=(TEXT(16777216), False), key2=(NUMBER(10, 0), False)),
+        OBJECT(key1=TEXT(16777216), key2=NUMBER(10, 0)), # Without nullable flag
+    ),
+    external_volume="external_volume",
+    base_location="base_location",
+)
+```
+
+#### ARRAY
+
+The `ARRAY` type represents an ordered list of values, where each element has the same type. The type of the elements is defined when creating the array.
+
+- **Value Type**: The type of the elements in the array (e.g., `TEXT`, `NUMBER`).
+- **Not Null**: Whether `NULL` values are allowed (default is `False`).
+
+*Example Usage*
+
+```python
+IcebergTable(
+    table_name,
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("array_col", ARRAY(TEXT(16777216))),
+    external_volume="external_volume",
+    base_location="base_location",
+)
+```
+
+
 ### CLUSTER BY Support
 
 Snowflake SQLAchemy supports the `CLUSTER BY` parameter for tables. For information about the parameter, see :doc:`/sql-reference/sql/create-table`.

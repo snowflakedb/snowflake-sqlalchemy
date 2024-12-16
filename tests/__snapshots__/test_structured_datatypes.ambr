@@ -14,6 +14,20 @@
 # name: test_compile_table_with_structured_data_type[structured_type2]
   'CREATE TABLE clustered_user (\t"Id" INTEGER NOT NULL AUTOINCREMENT, \tname OBJECT(key1 VARCHAR(16777216), key2 DECIMAL(10, 0)), \tPRIMARY KEY ("Id"))'
 # ---
+# name: test_compile_table_with_structured_data_type[structured_type3]
+  'CREATE TABLE clustered_user (\t"Id" INTEGER NOT NULL AUTOINCREMENT, \tname ARRAY(MAP(DECIMAL(10, 0), VARCHAR(16777216))), \tPRIMARY KEY ("Id"))'
+# ---
+# name: test_insert_array
+  list([
+    (1, '[\n  "item1",\n  "item2"\n]'),
+  ])
+# ---
+# name: test_insert_array_orm
+  '''
+  002014 (22000): SQL compilation error:
+  Invalid expression [CAST(ARRAY_CONSTRUCT('item1', 'item2') AS ARRAY(VARCHAR(16777216)))] in VALUES clause
+  '''
+# ---
 # name: test_insert_map
   list([
     (1, '{\n  "100": "item1",\n  "200": "item2"\n}'),
@@ -166,6 +180,35 @@
     }),
   ])
 # ---
+# name: test_inspect_structured_data_types[structured_type3-ARRAY]
+  list([
+    dict({
+      'autoincrement': True,
+      'comment': None,
+      'default': None,
+      'identity': dict({
+        'increment': 1,
+        'start': 1,
+      }),
+      'name': 'id',
+      'nullable': False,
+      'primary_key': True,
+      'type': _CUSTOM_DECIMAL(precision=10, scale=0),
+    }),
+    dict({
+      'autoincrement': False,
+      'comment': None,
+      'default': None,
+      'name': 'structured_type_col',
+      'nullable': True,
+      'primary_key': False,
+      'type': ARRAY(value_type=VARCHAR(length=16777216)),
+    }),
+  ])
+# ---
+# name: test_reflect_structured_data_types[ARRAY(MAP(NUMBER(10, 0), VARCHAR))]
+  "CREATE ICEBERG TABLE test_reflect_st_types (\tid DECIMAL(38, 0) NOT NULL, \tstructured_type_col ARRAY(MAP(DECIMAL(10, 0), VARCHAR(16777216))), \tCONSTRAINT constraint_name PRIMARY KEY (id))\tCATALOG = 'SNOWFLAKE'"
+# ---
 # name: test_reflect_structured_data_types[MAP(NUMBER(10, 0), MAP(NUMBER(10, 0), VARCHAR))]
   "CREATE ICEBERG TABLE test_reflect_st_types (\tid DECIMAL(38, 0) NOT NULL, \tstructured_type_col MAP(DECIMAL(10, 0), MAP(DECIMAL(10, 0), VARCHAR(16777216))), \tCONSTRAINT constraint_name PRIMARY KEY (id))\tCATALOG = 'SNOWFLAKE'"
 # ---
@@ -174,6 +217,12 @@
 # ---
 # name: test_reflect_structured_data_types[OBJECT(key1 VARCHAR, key2 NUMBER(10, 0))]
   "CREATE ICEBERG TABLE test_reflect_st_types (\tid DECIMAL(38, 0) NOT NULL, \tstructured_type_col OBJECT(key1 VARCHAR(16777216), key2 DECIMAL(10, 0)), \tCONSTRAINT constraint_name PRIMARY KEY (id))\tCATALOG = 'SNOWFLAKE'"
+# ---
+# name: test_select_array_orm
+  list([
+    (1, '[\n  "item3",\n  "item4"\n]'),
+    (2, '[\n  "item1",\n  "item2"\n]'),
+  ])
 # ---
 # name: test_select_map_orm
   list([

@@ -74,6 +74,8 @@ ischema_names = {
     "GEOMETRY": GEOMETRY,
 }
 
+NOT_NULL_STR = "NOT NULL"
+
 
 def tokenize_parameters(text: str, character_for_strip=",") -> list:
     """
@@ -160,6 +162,8 @@ def parse_type(type_text: str) -> TypeEngine:
             col_type_kw = __parse_map_type_parameters(parameters)
         elif issubclass(col_type_class, OBJECT):
             col_type_kw = __parse_object_type_parameters(parameters)
+        elif issubclass(col_type_class, ARRAY):
+            col_type_kw = __parse_nullable_parameter(parameters)
         if col_type_kw is None:
             col_type_class = NullType
             col_type_kw = {}
@@ -169,6 +173,7 @@ def parse_type(type_text: str) -> TypeEngine:
 
 def __parse_object_type_parameters(parameters):
     object_rows = {}
+    not_null_parts = NOT_NULL_STR.split(" ")
     for parameter in parameters:
         parameter_parts = tokenize_parameters(parameter, " ")
         if len(parameter_parts) >= 2:
@@ -178,11 +183,35 @@ def __parse_object_type_parameters(parameters):
                 return None
             not_null = (
                 len(parameter_parts) == 4
-                and parameter_parts[2] == "NOT"
-                and parameter_parts[3] == "NULL"
+                and parameter_parts[2] == not_null_parts[0]
+                and parameter_parts[3] == not_null_parts[1]
             )
             object_rows[key] = (value_type, not_null)
     return object_rows
+
+
+def __parse_nullable_parameter(parameters):
+    if len(parameters) < 1:
+        return {}
+    elif len(parameters) > 1:
+        return None
+    parameter_str = parameters[0]
+    is_not_null = False
+    if (
+        len(parameter_str) >= len(NOT_NULL_STR)
+        and parameter_str[-len(NOT_NULL_STR) :] == NOT_NULL_STR
+    ):
+        is_not_null = True
+        parameter_str = parameter_str[: -len(NOT_NULL_STR) - 1]
+
+    value_type: TypeEngine = parse_type(parameter_str)
+    if isinstance(value_type, NullType):
+        return None
+
+    return {
+        "value_type": value_type,
+        "not_null": is_not_null,
+    }
 
 
 def __parse_map_type_parameters(parameters):
@@ -191,25 +220,12 @@ def __parse_map_type_parameters(parameters):
 
     key_type_str = parameters[0]
     value_type_str = parameters[1]
-    not_null_str = "NOT NULL"
-    not_null = False
-    if (
-        len(value_type_str) >= len(not_null_str)
-        and value_type_str[-len(not_null_str) :] == not_null_str
-    ):
-        not_null = True
-        value_type_str = value_type_str[: -len(not_null_str) - 1]
-
     key_type: TypeEngine = parse_type(key_type_str)
-    value_type: TypeEngine = parse_type(value_type_str)
-    if isinstance(key_type, NullType) or isinstance(value_type, NullType):
+    value_type = __parse_nullable_parameter([value_type_str])
+    if isinstance(value_type, NullType) or isinstance(key_type, NullType):
         return None
 
-    return {
-        "key_type": key_type,
-        "value_type": value_type,
-        "not_null": not_null,
-    }
+    return {"key_type": key_type, **value_type}
 
 
 def __parse_type_with_length_parameters(parameters):
