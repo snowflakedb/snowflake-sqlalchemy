@@ -1,7 +1,7 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
-from typing import Tuple, Union
+from typing import Optional, Tuple, Union
 
 import sqlalchemy.types as sqltypes
 import sqlalchemy.util as util
@@ -40,7 +40,8 @@ class VARIANT(SnowflakeType):
 
 
 class StructuredType(SnowflakeType):
-    def __init__(self):
+    def __init__(self, is_semi_structured: bool = False):
+        self.is_semi_structured = is_semi_structured
         super().__init__()
 
 
@@ -81,8 +82,17 @@ class OBJECT(StructuredType):
         )
 
 
-class ARRAY(SnowflakeType):
+class ARRAY(StructuredType):
     __visit_name__ = "ARRAY"
+
+    def __init__(
+        self,
+        value_type: Optional[sqltypes.TypeEngine] = None,
+        not_null: bool = False,
+    ):
+        self.value_type = value_type
+        self.not_null = not_null
+        super().__init__(is_semi_structured=value_type is None)
 
 
 class TIMESTAMP_TZ(SnowflakeType):

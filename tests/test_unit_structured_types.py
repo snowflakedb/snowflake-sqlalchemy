@@ -69,6 +69,10 @@ def test_extract_parameters():
             "OBJECT(a DECIMAL(10, 0) NOT NULL, b DECIMAL(10, 0), c VARCHAR NOT NULL)",
         ),
         ("ARRAY", "ARRAY"),
+        (
+            "ARRAY(MAP(DECIMAL(10, 0), VARCHAR NOT NULL))",
+            "ARRAY(MAP(DECIMAL(10, 0), VARCHAR NOT NULL))",
+        ),
         ("GEOGRAPHY", "GEOGRAPHY"),
         ("GEOMETRY", "GEOMETRY"),
     ],
