@@ -13,6 +13,7 @@ Source code is also available at:
   - Fix quoting of `_` as column name
   - Fix index columns was not being reflected
   - Fix index reflection cache not working
+  - Add support for structured OBJECT datatype
 
 - v1.7.1(December 02, 2024)
   - Add support for partition by to copy into <location>

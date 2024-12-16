@@ -6,8 +6,8 @@ import pytest
 from snowflake.sqlalchemy import NUMBER
 from snowflake.sqlalchemy.custom_types import MAP, TEXT
 from src.snowflake.sqlalchemy.parser.custom_type_parser import (
-    extract_parameters,
     parse_type,
+    tokenize_parameters,
 )
 
 
@@ -18,7 +18,7 @@ def test_compile_map_with_not_null(snapshot):
 
 def test_extract_parameters():
     example = "a, b(c, d, f), d"
-    assert extract_parameters(example) == ["a", "b(c, d, f)", "d"]
+    assert tokenize_parameters(example) == ["a", "b(c, d, f)", "d"]
 
 
 @pytest.mark.parametrize(
@@ -64,6 +64,10 @@ def test_extract_parameters():
         ),
         ("MAP(DECIMAL(10, 0), VARIANT)", "MAP(DECIMAL(10, 0), VARIANT)"),
         ("OBJECT", "OBJECT"),
+        (
+            "OBJECT(a DECIMAL(10, 0) NOT NULL, b DECIMAL(10, 0), c VARCHAR NOT NULL)",
+            "OBJECT(a DECIMAL(10, 0) NOT NULL, b DECIMAL(10, 0), c VARCHAR NOT NULL)",
+        ),
         ("ARRAY", "ARRAY"),
         ("GEOGRAPHY", "GEOGRAPHY"),
         ("GEOMETRY", "GEOMETRY"),
