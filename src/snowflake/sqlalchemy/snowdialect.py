@@ -151,7 +151,6 @@ class SnowflakeDialect(default.DefaultDialect):
         **kwargs: Any,
     ):
         super().__init__(isolation_level=isolation_level, **kwargs)
-        self._cache_column_metadata = False
 
     @classmethod
     def dbapi(cls):
