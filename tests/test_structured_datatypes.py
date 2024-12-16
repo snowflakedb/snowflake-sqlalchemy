@@ -27,6 +27,7 @@ from snowflake.sqlalchemy.exc import StructuredTypeNotSupportedInTableColumnsErr
     [
         MAP(NUMBER(10, 0), MAP(NUMBER(10, 0), TEXT(16777216))),
         OBJECT(key1=(TEXT(16777216), False), key2=(NUMBER(10, 0), False)),
+        OBJECT(key1=TEXT(16777216), key2=NUMBER(10, 0)),
     ],
 )
 def test_compile_table_with_structured_data_type(

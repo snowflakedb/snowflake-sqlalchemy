@@ -11,6 +11,9 @@
 # name: test_compile_table_with_structured_data_type[structured_type1]
   'CREATE TABLE clustered_user (\t"Id" INTEGER NOT NULL AUTOINCREMENT, \tname OBJECT(key1 VARCHAR(16777216), key2 DECIMAL(10, 0)), \tPRIMARY KEY ("Id"))'
 # ---
+# name: test_compile_table_with_structured_data_type[structured_type2]
+  'CREATE TABLE clustered_user (\t"Id" INTEGER NOT NULL AUTOINCREMENT, \tname OBJECT(key1 VARCHAR(16777216), key2 DECIMAL(10, 0)), \tPRIMARY KEY ("Id"))'
+# ---
 # name: test_insert_map
   list([
     (1, '{\n  "100": "item1",\n  "200": "item2"\n}'),
