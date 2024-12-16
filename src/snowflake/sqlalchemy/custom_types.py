@@ -63,6 +63,10 @@ class OBJECT(StructuredType):
     __visit_name__ = "OBJECT"
 
     def __init__(self, **items_types: Union[TypeEngine, Tuple[TypeEngine, bool]]):
+        for key, value in items_types.items():
+            if not isinstance(value, tuple):
+                items_types[key] = (value, False)
+
         self.items_types = items_types
         self.is_semi_structured = len(items_types) == 0
         super().__init__()
