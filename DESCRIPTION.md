@@ -9,7 +9,7 @@ Source code is also available at:
 
 # Release Notes
 
-- (Unreleased)
+- v1.7.2(December 18, 2024)
   - Fix quoting of `_` as column name
   - Fix index columns was not being reflected
   - Fix index reflection cache not working
