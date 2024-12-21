@@ -8,6 +8,8 @@ Source code is also available at:
 <https://github.com/snowflakedb/snowflake-sqlalchemy>
 
 # Release Notes
+- (Unreleased)
+  - Fix return value of snowflake get_table_names
 
 - v1.7.2(December 18, 2024)
   - Fix quoting of `_` as column name
