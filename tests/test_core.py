@@ -469,6 +469,7 @@ def test_inspect_column(engine_testaccount):
     try:
         inspector = inspect(engine_testaccount)
         all_table_names = inspector.get_table_names()
+        assert isinstance(all_table_names, list)
         assert "users" in all_table_names
         assert "addresses" in all_table_names
 
