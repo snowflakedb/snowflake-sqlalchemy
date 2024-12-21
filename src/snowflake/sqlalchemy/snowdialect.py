@@ -756,7 +756,7 @@ class SnowflakeDialect(default.DefaultDialect):
         ret = self._get_schema_tables_info(
             connection, schema, info_cache=kw.get("info_cache", None)
         ).keys()
-        return ret
+        return list(ret)
 
     @reflection.cache
     def get_view_names(self, connection, schema=None, **kw):
