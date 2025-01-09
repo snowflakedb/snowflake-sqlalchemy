@@ -6,6 +6,7 @@ import itertools
 import operator
 import re
 import string
+import warnings
 from typing import List
 
 from sqlalchemy import exc as sa_exc
@@ -801,6 +802,26 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             # TODO: likely need asfrom=True here?
             + join.onclause._compiler_dispatch(self, from_linter=from_linter, **kwargs)
         )
+
+    def visit_truediv_binary(self, binary, operator, **kw):
+        if self.dialect.div_is_floordiv:
+            warnings.warn(
+                "div_is_floordiv value will be changed to False in a future release. This will generate a behavior change on true and floor division. Please review https://docs.sqlalchemy.org/en/20/changelog/whatsnew_20.html#python-division-operator-performs-true-division-for-all-backends-added-floor-division",
+                PendingDeprecationWarning,
+                stacklevel=2,
+            )
+        return (
+            self.process(binary.left, **kw) + " / " + self.process(binary.right, **kw)
+        )
+
+    def visit_floordiv_binary(self, binary, operator, **kw):
+        if self.dialect.div_is_floordiv and IS_VERSION_20:
+            warnings.warn(
+                "div_is_floordiv value will be changed to False in a future release. This will generate a behavior change on true and floor division. Please review https://docs.sqlalchemy.org/en/20/changelog/whatsnew_20.html#python-division-operator-performs-true-division-for-all-backends-added-floor-division",
+                PendingDeprecationWarning,
+                stacklevel=2,
+            )
+        return super().visit_floordiv_binary(binary, operator, **kw)
 
     def render_literal_value(self, value, type_):
         # escape backslash

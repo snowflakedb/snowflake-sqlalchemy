@@ -47,6 +47,26 @@ snowflake.connector.connection.DEFAULT_CONFIGURATION[
 TEST_SCHEMA = f"sqlalchemy_tests_{str(uuid.uuid4()).replace('-', '_')}"
 
 
+def pytest_addoption(parser):
+    parser.addoption(
+        "--ignore_v20_test",
+        action="store_true",
+        default=False,
+        help="skip sqlalchemy 2.0 exclusive tests",
+    )
+
+
+def pytest_collection_modifyitems(config, items):
+    if config.getoption("--ignore_v20_test"):
+        # --ignore_v20_test given in cli: skip sqlalchemy 2.0 tests
+        skip_feature_v2 = pytest.mark.skip(
+            reason="need remove --ignore_v20_test option to run"
+        )
+        for item in items:
+            if "feature_v20" in item.keywords:
+                item.add_marker(skip_feature_v2)
+
+
 @pytest.fixture(scope="session")
 def on_travis():
     return os.getenv("TRAVIS", "").lower() == "true"

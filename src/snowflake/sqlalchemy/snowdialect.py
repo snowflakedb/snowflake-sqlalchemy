@@ -79,6 +79,9 @@ class SnowflakeDialect(default.DefaultDialect):
     colspecs = colspecs
     ischema_names = ischema_names
 
+    # target database treats the / division operator as “floor division”
+    div_is_floordiv = False
+
     # all str types must be converted in Unicode
     convert_unicode = True
 
@@ -147,10 +150,17 @@ class SnowflakeDialect(default.DefaultDialect):
 
     def __init__(
         self,
+        force_div_is_floordiv: bool = True,
         isolation_level: Optional[str] = SnowflakeIsolationLevel.READ_COMMITTED.value,
         **kwargs: Any,
     ):
         super().__init__(isolation_level=isolation_level, **kwargs)
+        self.force_div_is_floordiv = force_div_is_floordiv
+        self.div_is_floordiv = force_div_is_floordiv
+
+    def initialize(self, connection):
+        super().initialize(connection)
+        self.div_is_floordiv = self.force_div_is_floordiv
 
     @classmethod
     def dbapi(cls):
