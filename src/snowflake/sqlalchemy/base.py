@@ -117,7 +117,11 @@ AUTOCOMMIT_REGEXP = re.compile(
     r"\s*(?:UPDATE|INSERT|DELETE|MERGE|COPY)", re.I | re.UNICODE
 )
 # used for quoting identifiers ie. table names, column names, etc.
-ILLEGAL_INITIAL_CHARACTERS = frozenset({d for d in string.digits}.union({"_", "$"}))
+ILLEGAL_INITIAL_CHARACTERS = frozenset({d for d in string.digits}.union({"$"}))
+
+
+# used for quoting identifiers ie. table names, column names, etc.
+ILLEGAL_IDENTIFIERS = frozenset({d for d in string.digits}.union({"_"}))
 
 """
 Overwrite methods to handle Snowflake BCR change:
@@ -443,6 +447,7 @@ class SnowflakeORMSelectCompileState(context.ORMSelectCompileState):
 class SnowflakeIdentifierPreparer(compiler.IdentifierPreparer):
     reserved_words = {x.lower() for x in RESERVED_WORDS}
     illegal_initial_characters = ILLEGAL_INITIAL_CHARACTERS
+    illegal_identifiers = ILLEGAL_IDENTIFIERS
 
     def __init__(self, dialect, **kw):
         quote = '"'
@@ -470,6 +475,17 @@ class SnowflakeIdentifierPreparer(compiler.IdentifierPreparer):
             return self.quote(s)
 
         return self.quote_identifier(s) if n.quote else s
+
+    def _requires_quotes(self, value: str) -> bool:
+        """Return True if the given identifier requires quoting."""
+        lc_value = value.lower()
+        return (
+            lc_value in self.reserved_words
+            or lc_value in self.illegal_identifiers
+            or value[0] in self.illegal_initial_characters
+            or not self.legal_characters.match(str(value))
+            or (lc_value != value)
+        )
 
     def _split_schema_by_dot(self, schema):
         ret = []

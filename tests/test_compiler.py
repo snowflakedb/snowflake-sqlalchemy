@@ -50,6 +50,21 @@ class TestSnowflakeCompiler(AssertsCompiledSQL):
             dialect="snowflake",
         )
 
+    def test_underscore_as_initial_character_as_non_quoted_identifier(self):
+        _table = table(
+            "table_1745924",
+            column("ca", Integer),
+            column("cb", String),
+            column("_identifier", String),
+        )
+
+        stmt = insert(_table).values(ca=1, cb="test", _identifier="test_")
+        self.assert_compile(
+            stmt,
+            "INSERT INTO table_1745924 (ca, cb, _identifier) VALUES (%(ca)s, %(cb)s, %(_identifier)s)",
+            dialect="snowflake",
+        )
+
     def test_multi_table_delete(self):
         statement = table1.delete().where(table1.c.id == table2.c.id)
         self.assert_compile(
