@@ -83,7 +83,7 @@ class OBJECT(StructuredType):
 
 
 class ARRAY(StructuredType):
-    __visit_name__ = "ARRAY"
+    __visit_name__ = "SNOWFLAKE_ARRAY"
 
     def __init__(
         self,

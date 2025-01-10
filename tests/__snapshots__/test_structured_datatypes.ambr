@@ -5,6 +5,9 @@
 # name: test_compile_table_with_double_map
   'CREATE TABLE clustered_user (\t"Id" INTEGER NOT NULL AUTOINCREMENT, \tname MAP(DECIMAL, MAP(DECIMAL, VARCHAR)), \tPRIMARY KEY ("Id"))'
 # ---
+# name: test_compile_table_with_sqlalchemy_array
+  'CREATE TABLE clustered_user (\t"Id" INTEGER NOT NULL AUTOINCREMENT, \tname ARRAY, \tPRIMARY KEY ("Id"))'
+# ---
 # name: test_compile_table_with_structured_data_type[structured_type0]
   'CREATE TABLE clustered_user (\t"Id" INTEGER NOT NULL AUTOINCREMENT, \tname MAP(DECIMAL(10, 0), MAP(DECIMAL(10, 0), VARCHAR(16777216))), \tPRIMARY KEY ("Id"))'
 # ---
