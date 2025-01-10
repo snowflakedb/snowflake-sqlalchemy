@@ -1133,6 +1133,9 @@ class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
         )
 
     def visit_ARRAY(self, type_, **kw):
+        return "ARRAY"
+
+    def visit_SNOWFLAKE_ARRAY(self, type_, **kw):
         if type_.is_semi_structured:
             return "ARRAY"
         not_null = f" {NOT_NULL}" if type_.not_null else ""

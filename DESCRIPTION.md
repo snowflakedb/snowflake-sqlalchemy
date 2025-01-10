@@ -9,6 +9,7 @@ Source code is also available at:
 
 # Release Notes
 - (Unreleased)
+  - Fix support for SqlAlchemy ARRAY.
   - Fix return value of snowflake get_table_names.
   - Fix incorrect quoting of identifiers with `_` as initial character.
   - Added `force_div_is_floordiv` flag to override `div_is_floordiv` new default value `False` in `SnowflakeDialect`.

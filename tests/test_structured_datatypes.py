@@ -2,6 +2,7 @@
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
 import pytest
+import sqlalchemy as sa
 from sqlalchemy import (
     Column,
     Integer,
@@ -40,6 +41,20 @@ def test_compile_table_with_structured_data_type(
         metadata,
         Column("Id", Integer, primary_key=True),
         Column("name", structured_type),
+    )
+
+    create_table = CreateTable(user_table)
+
+    assert sql_compiler(create_table) == snapshot
+
+
+def test_compile_table_with_sqlalchemy_array(sql_compiler, snapshot):
+    metadata = MetaData()
+    user_table = Table(
+        "clustered_user",
+        metadata,
+        Column("Id", Integer, primary_key=True),
+        Column("name", sa.ARRAY(sa.String)),
     )
 
     create_table = CreateTable(user_table)
