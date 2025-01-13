@@ -8,12 +8,12 @@ Source code is also available at:
 <https://github.com/snowflakedb/snowflake-sqlalchemy>
 
 # Release Notes
-- (Unreleased)
+- v1.7.3(January 15, 2025)
   - Fix support for SqlAlchemy ARRAY.
   - Fix return value of snowflake get_table_names.
   - Fix incorrect quoting of identifiers with `_` as initial character.
   - Fix ARRAY type not supported in HYBRID tables.
-  - Added `force_div_is_floordiv` flag to override `div_is_floordiv` new default value `False` in `SnowflakeDialect`.
+  - Add `force_div_is_floordiv` flag to override `div_is_floordiv` new default value `False` in `SnowflakeDialect`.
     - With the flag in `False`, the `/` division operator will be treated as a float division and `//` as a floor division.
     - This flag is added to maintain backward compatibility with the previous behavior of Snowflake Dialect division.
     - This flag will be removed in the future and Snowflake Dialect will use `div_is_floor_div` as `False`.
