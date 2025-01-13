@@ -32,6 +32,7 @@ class HybridTable(CustomTableBase):
 
     __table_prefixes__ = [CustomTablePrefix.HYBRID]
     _enforce_primary_keys: bool = True
+    _support_structured_types = True
 
     def __init__(
         self,
