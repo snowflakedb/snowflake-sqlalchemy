@@ -1,15 +1,14 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
-import pytest
+
 from sqlalchemy import Column, Integer, MetaData, String
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.sql.ddl import CreateTable
 
-from snowflake.sqlalchemy import GEOMETRY, HybridTable
+from snowflake.sqlalchemy import ARRAY, GEOMETRY, HybridTable
 
 
-@pytest.mark.aws
 def test_compile_hybrid_table(sql_compiler, snapshot):
     metadata = MetaData()
     table_name = "test_hybrid_table"
@@ -28,7 +27,25 @@ def test_compile_hybrid_table(sql_compiler, snapshot):
     assert actual == snapshot
 
 
-@pytest.mark.aws
+def test_compile_hybrid_table_with_array(sql_compiler, snapshot):
+    metadata = MetaData()
+    table_name = "test_hybrid_table"
+    test_geometry = HybridTable(
+        table_name,
+        metadata,
+        Column("id", Integer, primary_key=True),
+        Column("name", String),
+        Column("geom", GEOMETRY),
+        Column("array", ARRAY),
+    )
+
+    value = CreateTable(test_geometry)
+
+    actual = sql_compiler(value)
+
+    assert actual == snapshot
+
+
 def test_compile_hybrid_table_orm(sql_compiler, snapshot):
     Base = declarative_base()
 
