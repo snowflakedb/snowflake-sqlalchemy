@@ -677,6 +677,28 @@ dynamic_test_table_1 = DynamicTable(
 - Direct data insertion into Dynamic Tables is not supported.
 
 
+## Verifying Package Signatures
+
+To ensure the authenticity and integrity of the Python package, follow the steps below to verify the package signature using `cosign`.
+
+**Steps to verify the signature:**
+- Install cosign:
+  - This example is using golang installation: [installing-cosign-with-go](https://edu.chainguard.dev/open-source/sigstore/cosign/how-to-install-cosign/#installing-cosign-with-go)
+- Download the file from the repository like pypi:
+  - https://pypi.org/project/snowflake-sqlalchemy/#files
+- Download the signature files from the release tag, replace the version number with the version you are verifying:
+  - https://github.com/snowflakedb/snowflake-sqlalchemy/releases/tag/v1.7.3
+- Verify signature:
+  ````bash
+  # replace the version number with the version you are verifying
+  ./cosign verify-blob snowflake_sqlalchemy-1.7.3-py3-none-any.whl  \
+  --certificate snowflake_sqlalchemy-1.7.3-py3-none-any.whl.crt \
+  --certificate-identity https://github.com/snowflakedb/snowflake-sqlalchemy/.github/workflows/python-publish.yml@refs/tags/v1.7.3 \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --signature snowflake_sqlalchemy-1.7.3-py3-none-any.whl.sig
+  Verified OK
+  ````
+
 ## Support
 
 Feel free to file an issue or submit a PR here for general cases. For official support, contact Snowflake support at:

@@ -6,6 +6,8 @@ Snowflake Documentation is available at:
 
 Source code is also available at:
 <https://github.com/snowflakedb/snowflake-sqlalchemy>
+# Unreleased Notes
+  - Update README.md to include instructions on how to verify package signatures using cosign.
 
 # Release Notes
 - v1.7.3(January 15, 2025)
