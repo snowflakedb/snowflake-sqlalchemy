@@ -1,5 +1,5 @@
 This package includes the Snowflake SQLAlchemy, which supports Snowsql dialects for SQLAlchemy
-<http://www.sqlalchemy.org/>
+<http://www.sqlalchemy.org/>.
 
 Snowflake Documentation is available at:
 <https://docs.snowflake.net/>
