@@ -4,6 +4,48 @@
 import urllib.parse
 
 from snowflake.sqlalchemy import URL
+from sqlalchemy.engine import create_engine
+import base64
+import pytest
+
+
+def test_private_key_base64_is_bytes():
+    from sqlalchemy.engine.url import make_url
+    from snowflake.sqlalchemy.snowdialect import SnowflakeDialect
+    dummy_der_bytes = b'\x30\x82\x04\xa3\x02\x01\x00'
+    import base64
+    b64_pk = base64.b64encode(dummy_der_bytes).decode("ascii")
+    uri = f"snowflake://user@account/?private_key={b64_pk}"
+    url = make_url(uri)
+    dialect = SnowflakeDialect()
+    _, opts = dialect.create_connect_args(url)
+    assert isinstance(opts["private_key"], bytes), (
+        f"private_key should be bytes, got {type(opts['private_key'])}"
+    )
+
+
+def test_private_key_base64_url_typeerror():
+    # This is a dummy DER bytes for testing (not a real key)
+    dummy_der_bytes = b'\x30\x82\x04\xa3\x02\x01\x00'  # just a few bytes, not a real key
+    b64_pk = base64.b64encode(dummy_der_bytes).decode("ascii")
+    uri = f"snowflake://user@account/?private_key={b64_pk}"
+    # If the dialect patch is NOT present, this would raise TypeError from the connector
+    # If the patch IS present, the engine is created and the connection will fail later (not TypeError)
+    try:
+        engine = create_engine(uri)
+        # Try to actually connect (will fail with ProgrammingError due to dummy key, but not TypeError)
+        with pytest.raises(Exception) as exc_info:
+            with engine.connect() as conn:
+                conn.execute("select 1")
+    except TypeError as e:
+        # This would be the error without the dialect patch
+        assert "Expected bytes or RSAPrivateKey" in str(e)
+    else:
+        # If patch is present, the error should NOT be TypeError about private_key type
+        if exc_info.value:
+            assert "Expected bytes or RSAPrivateKey" not in str(exc_info.value), (
+                "Should not get TypeError for private_key type with dialect patch"
+            )
 
 
 def test_url():

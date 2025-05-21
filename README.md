@@ -508,7 +508,41 @@ engine = create_engine(URL(
 
 Where `PRIVATE_KEY_PASSPHRASE` is a passphrase to decrypt the private key file, `rsa_key.p8`.
 
-Currently a private key parameter is not accepted by the `snowflake.sqlalchemy.URL` method.
+## Not signed key pair authentication with url
+
+You can login with a snowflake url and key pair as long as it not a signed key pair. The following example shows how to create a table with two columns, `id` and `name`, as the clustering keys:
+
+```python
+from sqlalchemy import create_engine
+
+import base64
+import urllib.parse
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.asymmetric import dsa
+from cryptography.hazmat.primitives import serialization
+
+with open("rsa_key.p8", "rb") as key_file:
+    key_data = key_file.read()
+
+private_key = serialization.load_pem_private_key(
+    key_data, password=None, backend=default_backend()
+)
+
+der_bytes = private_key.private_bytes(
+    encoding=serialization.Encoding.DER,
+    format=serialization.PrivateFormat.PKCS8,
+    encryption_algorithm=serialization.NoEncryption(),
+)
+
+# Encode DER bytes as base64 string, then URL-encode for safety
+b64_pk = base64.b64encode(der_bytes).decode("ascii")
+encoded_pk = urllib.parse.quote(b64_pk)
+
+uri = f"snowflake://user@account/?private_key={encoded_pk}"
+engine = create_engine(uri)
+```
+
 
 ### Merge Command Support
 
