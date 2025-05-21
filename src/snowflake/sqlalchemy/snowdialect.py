@@ -230,6 +230,16 @@ class SnowflakeDialect(default.DefaultDialect):
         for name, value in query.items():
             opts[name] = self.parse_query_param_type(name, value)
 
+        # Support for private_key as a string (from URL)
+        if "private_key" in opts and isinstance(opts["private_key"], str):
+            import base64
+            try:
+                # Try to decode as base64 (recommended way for binary keys)
+                opts["private_key"] = base64.b64decode(opts["private_key"])
+            except Exception:
+                # Fallback: encode as utf-8 (legacy, not robust for binary)
+                opts["private_key"] = opts["private_key"].encode("utf-8")
+
         return ([], opts)
 
     @reflection.cache
