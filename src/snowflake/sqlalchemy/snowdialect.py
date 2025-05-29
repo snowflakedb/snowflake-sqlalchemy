@@ -654,21 +654,13 @@ class SnowflakeDialect(default.DefaultDialect):
                 f" TABLE {table_schema}.{table_name} TYPE = COLUMNS"
             )
         )
-        for (
-            column_name,
-            coltype,
-            _kind,
-            is_nullable,
-            column_default,
-            primary_key,
-            _unique_key,
-            _check,
-            _expression,
-            comment,
-            _policy_name,
-            _privacy_domain,
-            _name_mapping,
-        ) in result:
+        for desc_data in result:
+            column_name = desc_data[0]
+            coltype = desc_data[1]
+            is_nullable = desc_data[3]
+            column_default = desc_data[4]
+            primary_key = desc_data[5]
+            comment = desc_data[9]
 
             column_name = self.normalize_name(column_name)
             if column_name.startswith("sys_clustering_column"):
