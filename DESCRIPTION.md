@@ -10,6 +10,8 @@ Source code is also available at:
   - Update README.md to include instructions on how to verify package signatures using cosign.
 
 # Release Notes
+- v1.7.4(May 30, 2025)
+  - Fix dependency on DESCRIBE TABLE columns quantity (differences in columns caused by Snowflake parameters)
 - v1.7.3(January 15, 2025)
   - Fix support for SqlAlchemy ARRAY.
   - Fix return value of snowflake get_table_names.
