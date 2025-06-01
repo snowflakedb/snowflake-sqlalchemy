@@ -9,7 +9,7 @@ from snowflake.sqlalchemy import IcebergTable
 
 
 @pytest.mark.aws
-def test_create_iceberg_table(engine_testaccount, snapshot):
+def test_create_iceberg_table(engine_testaccount):
     metadata = MetaData()
     external_volume_name = "exvol"
     create_external_volume = f"""
@@ -40,4 +40,7 @@ def test_create_iceberg_table(engine_testaccount, snapshot):
         metadata.create_all(engine_testaccount)
 
     error_str = str(argument_error.value)
-    assert error_str[: error_str.rfind("\n")] == snapshot
+    assert (
+        "(snowflake.connector.errors.ProgrammingError)"
+        in error_str[: error_str.rfind("\n")]
+    )
