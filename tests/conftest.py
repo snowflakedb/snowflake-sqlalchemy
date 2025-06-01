@@ -203,6 +203,11 @@ def get_engine(url: URL, **engine_kwargs):
         "echo": True,
     }
     engine_params.update(engine_kwargs)
+
+    connect_args = engine_params.get("connect_args", {}).copy()
+    connect_args["disable_ocsp_checks"] = True
+    engine_params["connect_args"] = connect_args
+
     engine = create_engine(url, **engine_params)
     return engine
 
