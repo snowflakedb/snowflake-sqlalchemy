@@ -269,9 +269,6 @@ def test_pandas_writeback(engine_testaccount):
         assert results.equals(sf_connector_version_df)
 
 
-@pytest.mark.skip(
-    reason="Is failing on CI, but not locally. Needs investigation."
-)  # TODO: Fix test
 @pytest.mark.parametrize("chunk_size", [5, 1])
 @pytest.mark.parametrize(
     "compression",
