@@ -511,13 +511,6 @@ class SnowflakeDialect(default.DefaultDialect):
             )
             schema_name = self.denormalize_name(schema)
 
-            iceberg_table_names = self.get_table_names_with_prefix(
-                connection,
-                schema=schema_name,
-                prefix=CustomTablePrefix.ICEBERG.name,
-                info_cache=kw.get("info_cache", None),
-            )
-
             result = connection.execute(
                 text(
                     """
@@ -578,10 +571,7 @@ class SnowflakeDialect(default.DefaultDialect):
                     col_type_kw["scale"] = numeric_scale
                 elif issubclass(col_type, (sqltypes.String, sqltypes.BINARY)):
                     col_type_kw["length"] = character_maximum_length
-                elif (
-                    issubclass(col_type, StructuredType)
-                    and table_name in iceberg_table_names
-                ):
+                elif issubclass(col_type, StructuredType):
                     if (schema_name, table_name) not in full_columns_descriptions:
                         full_columns_descriptions[(schema_name, table_name)] = (
                             self.table_columns_as_dict(
