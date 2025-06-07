@@ -5,13 +5,12 @@ from __future__ import annotations
 import functools
 from typing import Callable
 
-from sqlalchemy import __version__ as SA_VERSION
-from sqlalchemy import util
+from sqlalchemy import __version__, util
 
 string_types = (str,)
 returns_unicode = util.symbol("RETURNS_UNICODE")
 
-IS_VERSION_20 = tuple(int(v) for v in SA_VERSION.split(".")) >= (2, 0, 0)
+IS_VERSION_20 = int(__version__.split(".")[0]) >= 2
 
 
 def args_reducer(positions_to_drop: tuple):

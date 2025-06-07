@@ -208,6 +208,12 @@ def get_engine(url: URL, **engine_kwargs):
 
 
 @pytest.fixture()
+def engine_url():
+    url = url_factory()
+    yield url
+
+
+@pytest.fixture()
 def engine_testaccount(request):
     url = url_factory()
     engine = get_engine(url)

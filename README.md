@@ -9,7 +9,7 @@
 Snowflake SQLAlchemy runs on the top of the Snowflake Connector for Python as a [dialect](http://docs.sqlalchemy.org/en/latest/dialects/) to bridge a Snowflake database and SQLAlchemy applications.
 
 
-| :exclamation:        | For production-affecting or urgent issues related to the connector, please [create a case with Snowflake Support](https://community.snowflake.com/s/article/How-To-Submit-a-Support-Case-in-Snowflake-Lodge). |
+| :exclamation: | Effective May 8th, 2025, Snowflake SQLAlchemy will transition to maintenance mode and will cease active development. Support will be limited to addressing critical bugs and security vulnerabilities. To report such issues, please [create a case with Snowflake Support](https://community.snowflake.com/s/article/How-To-Submit-a-Support-Case-in-Snowflake-Lodge). for individual evaluation. Please note that pull requests from external contributors may not receive action from Snowflake. |
 |---------------|:--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 
 
@@ -676,6 +676,28 @@ dynamic_test_table_1 = DynamicTable(
 - When using the `as_query` parameter with a string, you must explicitly define the columns. However, if you use the SQLAlchemy `select()` construct, you don’t need to explicitly define the columns.
 - Direct data insertion into Dynamic Tables is not supported.
 
+
+## Verifying Package Signatures
+
+To ensure the authenticity and integrity of the Python package, follow the steps below to verify the package signature using `cosign`.
+
+**Steps to verify the signature:**
+- Install cosign:
+  - This example is using golang installation: [installing-cosign-with-go](https://edu.chainguard.dev/open-source/sigstore/cosign/how-to-install-cosign/#installing-cosign-with-go)
+- Download the file from the repository like pypi:
+  - https://pypi.org/project/snowflake-sqlalchemy/#files
+- Download the signature files from the release tag, replace the version number with the version you are verifying:
+  - https://github.com/snowflakedb/snowflake-sqlalchemy/releases/tag/v1.7.3
+- Verify signature:
+  ````bash
+  # replace the version number with the version you are verifying
+  ./cosign verify-blob snowflake_sqlalchemy-1.7.3-py3-none-any.whl  \
+  --certificate snowflake_sqlalchemy-1.7.3-py3-none-any.whl.crt \
+  --certificate-identity https://github.com/snowflakedb/snowflake-sqlalchemy/.github/workflows/python-publish.yml@refs/tags/v1.7.3 \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --signature snowflake_sqlalchemy-1.7.3-py3-none-any.whl.sig
+  Verified OK
+  ````
 
 ## Support
 
