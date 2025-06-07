@@ -10,7 +10,8 @@ Source code is also available at:
 
 # Release Notes
 - v1.7.4(June 2, 2025)
-  - Fix dependency on DESCRIBE TABLE columns quantity (differences in columns caused by Snowflake parameters)
+  - Fix dependency on DESCRIBE TABLE columns quantity (differences in columns caused by Snowflake parameters).
+  - Fix unnecessary condition was causing issues when parsing StructuredTypes columns.
   - Update README.md to include instructions on how to verify package signatures using cosign.
 
 - v1.7.3(January 15, 2025)
