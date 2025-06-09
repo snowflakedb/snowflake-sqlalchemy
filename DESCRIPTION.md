@@ -11,6 +11,7 @@ Source code is also available at:
 # Release Notes
 - v1.7.3(June 2, 2025)
   - Fix dependency on DESCRIBE TABLE columns quantity (differences in columns caused by Snowflake parameters)
+  - Fix Iceberg Table columns parsing is failing on unnecessary condition.
   - Update README.md to include instructions on how to verify package signatures using cosign.
 
 - v1.7.3(January 15, 2025)
