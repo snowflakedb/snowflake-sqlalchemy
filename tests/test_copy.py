@@ -261,7 +261,7 @@ def test_copy_into_storage_csv_extended(sql_compiler):
     # check that the result is as expected
     result = sql_compiler(copy_into)
     expected = (
-        r"COPY INTO TEST_IMPORT "
+        r'COPY INTO "TEST_IMPORT" '
         r"FROM @ML_POC.PUBLIC.AZURE_STAGE/testdata  "
         r"FILE_FORMAT=(TYPE=csv COMPRESSION='auto' DATE_FORMAT='AUTO' "
         r"ERROR_ON_COLUMN_COUNT_MISMATCH=True ESCAPE=None "
@@ -317,7 +317,7 @@ def test_copy_into_storage_parquet_named_format(sql_compiler):
     # compile and check the result
     result = sql_compiler(copy_into)
     expected = (
-        "COPY INTO TEST_IMPORT "
+        'COPY INTO "TEST_IMPORT" '
         "FROM (SELECT $1:COL1::number, $1:COL2::varchar "
         "FROM @ML_POC.PUBLIC.AZURE_STAGE/testdata/out.parquet)  "
         "FILE_FORMAT=(format_name = parquet_file_format) force = TRUE"
@@ -378,7 +378,7 @@ def test_copy_into_storage_parquet_files(sql_compiler):
     # compile and check the result
     result = sql_compiler(copy_into)
     expected = (
-        "COPY INTO TEST_IMPORT "
+        'COPY INTO "TEST_IMPORT" '
         "FROM (SELECT $1:COL1::number, $1:COL2::varchar "
         "FROM @ML_POC.PUBLIC.AZURE_STAGE/testdata/out.parquet "
         "(file_format => parquet_file_format))   FILES = ('foo.txt','bar.txt') "
@@ -440,7 +440,7 @@ def test_copy_into_storage_parquet_pattern(sql_compiler):
     # compile and check the result
     result = sql_compiler(copy_into)
     expected = (
-        "COPY INTO TEST_IMPORT "
+        'COPY INTO "TEST_IMPORT" '
         "FROM (SELECT $1:COL1::number, $1:COL2::varchar "
         "FROM @ML_POC.PUBLIC.AZURE_STAGE/testdata/out.parquet "
         "(file_format => parquet_file_format))   FORCE = true PATTERN = '.*csv'"

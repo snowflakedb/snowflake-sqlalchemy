@@ -530,9 +530,11 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         clauses = " ".join(
             clause._compiler_dispatch(self, **kw) for clause in merge_into.clauses
         )
-        return (
-            f"MERGE INTO {merge_into.target} USING {merge_into.source} ON {merge_into.on}"
-            + (" " + clauses if clauses else "")
+        target = merge_into.target._compiler_dispatch(self, asfrom=True, **kw)
+        source = merge_into.source._compiler_dispatch(self, asfrom=True, **kw)
+        on = merge_into.on._compiler_dispatch(self, **kw)
+        return f"MERGE INTO {target} USING {source} ON {on}" + (
+            " " + clauses if clauses else ""
         )
 
     def visit_merge_into_clause(self, merge_into_clause, **kw):
@@ -579,11 +581,8 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             formatter = copy_into.formatter._compiler_dispatch(self, **kw)
         else:
             formatter = ""
-        into = (
-            copy_into.into
-            if isinstance(copy_into.into, Table)
-            else copy_into.into._compiler_dispatch(self, **kw)
-        )
+        into = copy_into.into._compiler_dispatch(self, asfrom=True, **kw)
+        from_ = None
         if isinstance(copy_into.from_, Table):
             from_ = copy_into.from_.name
         # this is intended to catch AWSBucket and AzureContainer
