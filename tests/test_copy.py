@@ -261,13 +261,13 @@ def test_copy_into_storage_csv_extended(sql_compiler):
     # check that the result is as expected
     result = sql_compiler(copy_into)
     expected = (
-        r'COPY INTO "TEST_IMPORT" '
+        r'XCOPY INTO "TEST_IMPORT" '
         r"FROM @ML_POC.PUBLIC.AZURE_STAGE/testdata  "
-        r"FILE_FORMAT=(TYPE=csv COMPRESSION=\'auto\' DATE_FORMAT=\'AUTO\' "
+        r"FILE_FORMAT=(TYPE=csv COMPRESSION=\\'auto\\' DATE_FORMAT=\\'AUTO\\' "
         r"ERROR_ON_COLUMN_COUNT_MISMATCH=True ESCAPE=None "
-        r"ESCAPE_UNENCLOSED_FIELD=\'\\134\' FIELD_DELIMITER=\',\' "
-        r"FIELD_OPTIONALLY_ENCLOSED_BY=None NULL_IF=(\'\\N\') RECORD_DELIMITER=\'\\n\' "
-        r"SKIP_HEADER=1 TRIM_SPACE=False) force = TRUE pattern = \'.*csv\'"
+        r"ESCAPE_UNENCLOSED_FIELD='\\\\134' FIELD_DELIMITER=\\',\\' "
+        r"FIELD_OPTIONALLY_ENCLOSED_BY=None NULL_IF=(\\'\\\\N\\') RECORD_DELIMITER=\\'\\\\n\\' "
+        r"SKIP_HEADER=1 TRIM_SPACE=False) force = TRUE pattern = \\'.*csv\\'"
     )
     assert result == expected
 
