@@ -10,6 +10,9 @@ Source code is also available at:
 - Compiling Merge and Copy Into
 
 # Release Notes
+- v1.7.5(June 20, 2025)
+  - Fix compilation of Merge and Copy Into was not working
+
 - v1.7.4(June 10, 2025)
   - Fix dependency on DESCRIBE TABLE columns quantity (differences in columns caused by Snowflake parameters).
   - Fix unnecessary condition was causing issues when parsing StructuredTypes columns.
