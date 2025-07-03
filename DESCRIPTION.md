@@ -7,7 +7,7 @@ Snowflake Documentation is available at:
 Source code is also available at:
 <https://github.com/snowflakedb/snowflake-sqlalchemy>
 # Unreleased Notes
-- Compiling Merge and Copy Into
+- Fix get_multi_indexes issue, wrong assign of returned indexes when processing multiple indexes in a table
 
 # Release Notes
 - v1.7.5(June 20, 2025)
