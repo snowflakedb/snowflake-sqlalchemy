@@ -955,9 +955,7 @@ class SnowflakeDialect(default.DefaultDialect):
             }
 
             if (schema, table_name) in indexes:
-                indexes[(schema, table_name)] = indexes[(schema, table_name)].append(
-                    index
-                )
+                indexes[(schema, table_name)].append(index)
             else:
                 indexes[(schema, table_name)] = [index]
 
