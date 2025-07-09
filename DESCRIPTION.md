@@ -9,7 +9,7 @@ Source code is also available at:
 # Unreleased Notes
 
 # Release Notes
-- v1.7.6(July 07, 2025)
+- v1.7.6(July 10, 2025)
   - Fix get_multi_indexes issue, wrong assign of returned indexes when processing multiple indexes in a table
 
 - v1.7.5(June 20, 2025)
