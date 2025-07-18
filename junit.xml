@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="1" time="4.775" timestamp="2025-07-18T14:56:49.960659+00:00" hostname="V9P2792XJ5"><testcase classname="tests.E2E.test_select_decfloat_type" name="test_select_decfloat_native_connector" time="4.279"><failure message="AssertionError: Return type is &lt;class 'str'&gt; 3.16.0&#10;assert False&#10; +  where False = isinstance('123456789.12345678', Decimal)">tests/E2E/test_select_decfloat_type.py:39: in test_select_decfloat_native_connector
+    assert isinstance(ret[0], Decimal), f"Return type is {type(ret[0])} {snowflake.connector.__version__}"
+E   AssertionError: Return type is &lt;class 'str'&gt; 3.16.0
+E   assert False
+E    +  where False = isinstance('123456789.12345678', Decimal)</failure></testcase></testsuite></testsuites>
