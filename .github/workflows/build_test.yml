@@ -30,7 +30,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.8'
+          python-version: '3.9'
       - name: Upgrade and install tools
         run: |
           python -m pip install -U uv
@@ -60,7 +60,7 @@ jobs:
       - name: Setup up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.8'
+          python-version: '3.9'
       - name: Upgrade and install tools
         run: |
           python -m pip install -U uv
@@ -85,7 +85,7 @@ jobs:
           macos-13,
           windows-latest,
           ]
-        python-version: ["3.8"]
+        python-version: ["3.9"]
         cloud-provider: [
           aws,
           azure,
@@ -134,7 +134,7 @@ jobs:
           macos-13,
           windows-latest,
           ]
-        python-version: ["3.8"]
+        python-version: ["3.9"]
         cloud-provider: [
           aws,
           azure,
@@ -180,7 +180,7 @@ jobs:
           macos-13,
           windows-latest,
           ]
-        python-version: ["3.8"]
+        python-version: ["3.9"]
         cloud-provider: [
           aws,
           azure,
@@ -229,7 +229,7 @@ jobs:
           macos-13,
           windows-latest,
           ]
-        python-version: ["3.8"]
+        python-version: ["3.9"]
         cloud-provider: [
           aws,
           azure,
@@ -272,7 +272,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.8"
+          python-version: "3.9"
       - name: Prepare environment
         run: |
           python -m pip install -U uv
