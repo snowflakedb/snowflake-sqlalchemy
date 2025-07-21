@@ -5,7 +5,7 @@ from typing import Optional, Tuple, Union
 
 import sqlalchemy.types as sqltypes
 import sqlalchemy.util as util
-from sqlalchemy.types import Numeric, TypeEngine
+from sqlalchemy.types import TypeEngine
 
 TEXT = sqltypes.VARCHAR
 CHARACTER = sqltypes.CHAR
@@ -13,7 +13,6 @@ DEC = sqltypes.DECIMAL
 DOUBLE = sqltypes.FLOAT
 FIXED = sqltypes.DECIMAL
 NUMBER = sqltypes.DECIMAL
-DECFLOAT = sqltypes.DECIMAL
 BYTEINT = sqltypes.SMALLINT
 STRING = sqltypes.VARCHAR
 TINYINT = sqltypes.SMALLINT
@@ -116,7 +115,7 @@ class GEOMETRY(SnowflakeType):
     __visit_name__ = "GEOMETRY"
 
 
-class DECFLOAT(sqltypes.DECIMAL, SnowflakeType):
+class DECFLOAT(SnowflakeType, sqltypes.DECIMAL):
     __visit_name__ = "DECFLOAT"
 
 
