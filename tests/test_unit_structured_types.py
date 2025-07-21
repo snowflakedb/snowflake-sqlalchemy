@@ -33,6 +33,8 @@ def test_extract_parameters():
         ("DATETIME(3)", "DATETIME"),
         ("DECIMAL(10, 2)", "DECIMAL(10, 2)"),
         ("DEC(10, 2)", "DECIMAL(10, 2)"),
+        ("DECFLOAT(38)", "DECFLOAT(38)"),
+        ("DECFLOAT", "DECFLOAT"),
         ("DOUBLE", "FLOAT"),
         ("FLOAT", "FLOAT"),
         ("FIXED(10, 2)", "DECIMAL(10, 2)"),

@@ -44,7 +44,7 @@ from sqlalchemy.testing.assertions import eq_
 import snowflake.connector.errors
 import snowflake.sqlalchemy.snowdialect
 from snowflake.connector import Error, ProgrammingError, connect
-from snowflake.sqlalchemy import URL, MergeInto, dialect
+from snowflake.sqlalchemy import DECFLOAT, URL, MergeInto, dialect, snowdialect
 from snowflake.sqlalchemy._constants import (
     APPLICATION_NAME,
     SNOWFLAKE_SQLALCHEMY_VERSION,
@@ -1804,6 +1804,40 @@ CREATE OR REPLACE TEMP TABLE {table_name}
             and columns[0]["name"] == "col"
             and columns[1]["name"] == ""
         )
+
+
+def test_create_table_with_decfloat_without_precision(snapshot):
+    metadata = MetaData()
+
+    mock_table = Table(
+        "mock_table",
+        metadata,
+        Column("id", DECFLOAT),
+    )
+
+    compiled_sql = str(CreateTable(mock_table).compile(dialect=snowdialect.dialect()))
+
+    column = mock_table.c.id
+    assert isinstance(column.type, DECFLOAT)
+    assert column.type.precision is None
+    assert compiled_sql == snapshot
+
+
+def test_create_table_with_decfloat(snapshot):
+    metadata = MetaData()
+
+    mock_table = Table(
+        "mock_table",
+        metadata,
+        Column("id", DECFLOAT(38)),
+    )
+
+    compiled_sql = str(CreateTable(mock_table).compile(dialect=snowdialect.dialect()))
+
+    column = mock_table.c.id
+    assert isinstance(column.type, DECFLOAT)
+    assert column.type.precision == 38
+    assert compiled_sql == snapshot
 
 
 def test_snowflake_sqlalchemy_as_valid_client_type():

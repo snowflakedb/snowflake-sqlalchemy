@@ -9,6 +9,10 @@ Source code is also available at:
 # Unreleased Notes
 
 # Release Notes
+- v1.8.0(TBD)
+  - Add support for `DECFLOAT`
+  - BREAKING CHANGE: The minimum supported version for the `snowflake-python-connector` has been increased to v3.14.1
+
 - v1.7.6(July 10, 2025)
   - Fix get_multi_indexes issue, wrong assign of returned indexes when processing multiple indexes in a table
 

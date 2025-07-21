@@ -46,6 +46,7 @@ from .custom_types import (  # noqa
     BYTEINT,
     CHARACTER,
     DEC,
+    DECFLOAT,
     DOUBLE,
     FIXED,
     GEOGRAPHY,
@@ -121,6 +122,7 @@ _custom_types = (
     "VARBINARY",
     "VARIANT",
     "MAP",
+    "DECFLOAT",
 )
 
 _custom_commands = (

@@ -1,0 +1,28 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+	],
+	"settings": {
+			"python.defaultInterpreterPath": ".venv/bin/python",
+			"python.testing.unittestEnabled": false,
+			"python.testing.pytestEnabled": true,
+			"debugpy.debugJustMyCode": false,
+			"python.testing.pytestArgs": [
+			"tests",
+			"-ra",
+			"-vvv",
+			"--tb=short",
+			"--junitxml=./junit.xml",
+			"--ignore=tests/sqlalchemy_test_suite"
+		]
+		},
+	"extensions": {
+    "recommendations": [
+      "ms-python.python",
+      "ms-python.vscode-pylance",
+	  "ms-python.debugpy",
+    ]
+  }
+}
