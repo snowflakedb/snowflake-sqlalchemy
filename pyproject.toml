@@ -8,7 +8,7 @@ dynamic = ["version"]
 description = "Snowflake SQLAlchemy Dialect"
 readme = "README.md"
 license = "Apache-2.0"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 authors = [
   { name = "Snowflake Inc.", email = "triage-snowpark-python-api-dl@snowflake.com" },
 ]
@@ -25,7 +25,6 @@ classifiers = [
   "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3 :: Only",
-  "Programming Language :: Python :: 3.8",
   "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
@@ -38,7 +37,7 @@ classifiers = [
   "Topic :: Software Development :: Libraries :: Application Frameworks",
   "Topic :: Software Development :: Libraries :: Python Modules",
 ]
-dependencies = ["SQLAlchemy>=1.4.19", "snowflake-connector-python<4.0.0"]
+dependencies = ["SQLAlchemy>=1.4.19", "snowflake-connector-python>=3.14.1,<4.0.0"]
 
 [tool.hatch.version]
 path = "src/snowflake/sqlalchemy/version.py"
@@ -79,13 +78,13 @@ path = ".venv"
 type = "virtual"
 extra-dependencies = ["SQLAlchemy>=1.4.19,<2.1.0"]
 features = ["development", "pandas"]
-python = "3.8"
+python = "3.9"
 installer = "uv"
 
 [tool.hatch.envs.sa14]
 extra-dependencies = ["SQLAlchemy>=1.4.19,<2.0.0"]
 features = ["development", "pandas"]
-python = "3.8"
+python = "3.9"
 
 [tool.hatch.envs.sa14.scripts]
 test-dialect = "pytest --ignore_v20_test -ra -vvv --tb=short --cov snowflake.sqlalchemy --cov-append --junitxml ./junit.xml --ignore=tests/sqlalchemy_test_suite tests/"
@@ -105,7 +104,7 @@ gh-cache-sum = "python -VV | sha256sum | cut -d' ' -f1"
 check-import = "python -c 'import snowflake.sqlalchemy; print(snowflake.sqlalchemy.__version__)'"
 
 [[tool.hatch.envs.release.matrix]]
-python = ["3.8", "3.9", "3.10", "3.11", "3.12"]
+python = ["3.9", "3.10", "3.11", "3.12"]
 features = ["development", "pandas"]
 
 [tool.hatch.envs.release.scripts]

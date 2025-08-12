@@ -115,6 +115,10 @@ class GEOMETRY(SnowflakeType):
     __visit_name__ = "GEOMETRY"
 
 
+class DECFLOAT(SnowflakeType, sqltypes.DECIMAL):
+    __visit_name__ = "DECFLOAT"
+
+
 class _CUSTOM_Date(SnowflakeType, sqltypes.Date):
     def literal_processor(self, dialect):
         def process(value):

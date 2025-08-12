@@ -7,10 +7,11 @@ import operator
 import re
 import string
 import warnings
-from typing import List
+from typing import Any, List
 
 from sqlalchemy import exc as sa_exc
 from sqlalchemy import inspect, sql
+from sqlalchemy import types as sqltypes
 from sqlalchemy import util as sa_util
 from sqlalchemy.engine import default
 from sqlalchemy.orm import context
@@ -1180,6 +1181,12 @@ class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
 
     def visit_GEOMETRY(self, type_, **kw):
         return "GEOMETRY"
+
+    def visit_DECFLOAT(self, type_: sqltypes.DECIMAL[Any], **kw: Any) -> str:
+        if type_.precision is None:
+            return "DECFLOAT"
+        else:
+            return f"DECFLOAT({type_.precision})"
 
 
 construct_arguments = [(Table, {"clusterby": None})]
