@@ -32,7 +32,7 @@ class _StructuredTypeInfoManager:
 
     def get_column_info(
         self, schema_name: str, table_name: str, column_name: str
-    ) -> dict | None:
+    ) -> dict:
         self._load_structured_type_info(schema_name, table_name)
         if (
             (schema_name, table_name) in self.full_columns_descriptions
