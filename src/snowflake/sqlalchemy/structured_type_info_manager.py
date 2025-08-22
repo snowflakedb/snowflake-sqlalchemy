@@ -31,9 +31,9 @@ class _StructuredTypeInfoManager:
         self.default_schema = default_schema
 
     def get_column_info(
-        self, schema_name: str, table_name: str, column_name: str
+        self, schema_name: str, table_name: str, column_name: str, **kw
     ) -> dict:
-        self._load_structured_type_info(schema_name, table_name)
+        self._load_structured_type_info(schema_name, table_name, **kw)
         if (
             (schema_name, table_name) in self.full_columns_descriptions
             and column_name in self.full_columns_descriptions[(schema_name, table_name)]
@@ -43,11 +43,13 @@ class _StructuredTypeInfoManager:
             ]
         return None
 
-    def _load_structured_type_info(self, schema_name: str, table_name: str) -> bool:
+    def _load_structured_type_info(
+        self, schema_name: str, table_name: str, **kw
+    ) -> bool:
         """Get column information for a structured type"""
         if (schema_name, table_name) not in self.full_columns_descriptions:
 
-            column_definitions = self._get_table_columns(table_name, schema_name)
+            column_definitions = self._get_table_columns(table_name, schema_name, **kw)
             if not column_definitions:
                 self.full_columns_descriptions[(schema_name, table_name)] = {}
                 return False

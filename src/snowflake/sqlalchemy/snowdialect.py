@@ -555,7 +555,7 @@ class SnowflakeDialect(default.DefaultDialect):
                     col_type_kw["length"] = character_maximum_length
                 elif issubclass(col_type, StructuredType):
                     column_info = structured_type_info_manager.get_column_info(
-                        schema_name, table_name, column_name
+                        schema_name, table_name, column_name, **kw
                     )
                     if column_info:
                         ans[table_name].append(column_info)
