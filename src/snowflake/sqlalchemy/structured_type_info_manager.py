@@ -57,16 +57,14 @@ class _StructuredTypeInfoManager:
             )
         return True
 
-    def _table_columns_as_dict(self, columns: list[dict]) -> dict:
+    def _table_columns_as_dict(self, columns: list) -> dict:
         result = {}
         for column in columns:
             result[column["name"]] = column
         return result
 
     @reflection.cache
-    def _get_table_columns(
-        self, table_name: str, schema: str = None, **kw
-    ) -> list[dict]:
+    def _get_table_columns(self, table_name: str, schema: str = None, **kw) -> list:
         """Get all columns in a table in a schema"""
         ans = []
 
