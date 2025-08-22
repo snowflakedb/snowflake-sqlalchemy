@@ -3,7 +3,6 @@
 
 import re
 
-from sqlalchemy import exc as sa_exc
 from sqlalchemy import util as sa_util
 from sqlalchemy.engine import reflection
 from sqlalchemy.sql import text
@@ -25,13 +24,15 @@ class _StructuredTypeInfoManager:
         default_schema (str): The default schema to use when none is specified
     """
 
-    def __init__(self, connection, name_utils: _NameUtils, default_schema: str):
+    def __init__(self, connection, name_utils: _NameUtils, default_schema: str) -> None:
         self.connection = connection
         self.full_columns_descriptions = {}
         self.name_utils = name_utils
         self.default_schema = default_schema
 
-    def get_column_info(self, schema_name, table_name, column_name):
+    def get_column_info(
+        self, schema_name: str, table_name: str, column_name: str
+    ) -> dict | None:
         self._load_structured_type_info(schema_name, table_name)
         if (
             (schema_name, table_name) in self.full_columns_descriptions
@@ -42,7 +43,7 @@ class _StructuredTypeInfoManager:
             ]
         return None
 
-    def _load_structured_type_info(self, schema_name, table_name):
+    def _load_structured_type_info(self, schema_name: str, table_name: str) -> bool:
         """Get column information for a structured type"""
         if (schema_name, table_name) not in self.full_columns_descriptions:
 
@@ -56,14 +57,16 @@ class _StructuredTypeInfoManager:
             )
         return True
 
-    def _table_columns_as_dict(self, columns):
+    def _table_columns_as_dict(self, columns: list[dict]) -> dict:
         result = {}
         for column in columns:
             result[column["name"]] = column
         return result
 
     @reflection.cache
-    def _get_table_columns(self, table_name, schema=None, **kw):
+    def _get_table_columns(
+        self, table_name: str, schema: str = None, **kw
+    ) -> list[dict]:
         """Get all columns in a table in a schema"""
         ans = []
 
@@ -122,7 +125,7 @@ class _StructuredTypeInfoManager:
 
         # If we didn't find any columns for the table, the table doesn't exist.
         if len(ans) == 0:
-            raise sa_exc.NoSuchTableError()
+            return []
         return ans
 
     def _execute_desc(self, table_schema: str, table_name: str):
@@ -137,4 +140,7 @@ class _StructuredTypeInfoManager:
                 )
             )
         except Exception:
-            return None
+            sa_util.warn(
+                f"Failed to reflect '{table_schema}' .'{table_name}' table using sqlalchemy:_get_schema_columns"
+            )
+        return None

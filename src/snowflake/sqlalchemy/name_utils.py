@@ -7,7 +7,7 @@ from sqlalchemy.sql.elements import quoted_name
 
 class _NameUtils:
 
-    def __init__(self, identifier_preparer: IdentifierPreparer):
+    def __init__(self, identifier_preparer: IdentifierPreparer) -> None:
         self.identifier_preparer = identifier_preparer
 
     def normalize_name(self, name):
