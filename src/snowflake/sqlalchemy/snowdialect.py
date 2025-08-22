@@ -2,7 +2,6 @@
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
 import operator
-import re
 from collections import defaultdict
 from enum import Enum
 from functools import reduce
@@ -16,7 +15,6 @@ from sqlalchemy import util as sa_util
 from sqlalchemy.engine import URL, default, reflection
 from sqlalchemy.schema import Table
 from sqlalchemy.sql import text
-from sqlalchemy.sql.elements import quoted_name
 from sqlalchemy.sql.sqltypes import NullType
 from sqlalchemy.types import FLOAT, Date, DateTime, Float, Time
 
@@ -24,6 +22,8 @@ from snowflake.connector import errors as sf_errors
 from snowflake.connector.connection import DEFAULT_CONFIGURATION
 from snowflake.connector.constants import UTF8
 from snowflake.sqlalchemy.compat import returns_unicode
+from snowflake.sqlalchemy.name_utils import _NameUtils
+from snowflake.sqlalchemy.structured_type_info_manager import _StructuredTypeInfoManager
 
 from ._constants import DIALECT_NAME
 from .base import (
@@ -42,7 +42,7 @@ from .custom_types import (
 )
 from .parser.custom_type_parser import *  # noqa
 from .parser.custom_type_parser import _CUSTOM_DECIMAL  # noqa
-from .parser.custom_type_parser import ischema_names, parse_index_columns, parse_type
+from .parser.custom_type_parser import ischema_names, parse_index_columns
 from .sql.custom_schema.custom_table_prefix import CustomTablePrefix
 from .util import (
     _update_connection_application_name,
@@ -157,6 +157,7 @@ class SnowflakeDialect(default.DefaultDialect):
         super().__init__(isolation_level=isolation_level, **kwargs)
         self.force_div_is_floordiv = force_div_is_floordiv
         self.div_is_floordiv = force_div_is_floordiv
+        self.name_utils = _NameUtils(self.identifier_preparer)
 
     def initialize(self, connection):
         super().initialize(connection)
@@ -282,29 +283,10 @@ class SnowflakeDialect(default.DefaultDialect):
             raise
 
     def normalize_name(self, name):
-        if name is None:
-            return None
-        if name == "":
-            return ""
-        if name.upper() == name and not self.identifier_preparer._requires_quotes(
-            name.lower()
-        ):
-            return name.lower()
-        elif name.lower() == name:
-            return quoted_name(name, quote=True)
-        else:
-            return name
+        return self.name_utils.normalize_name(name)
 
     def denormalize_name(self, name):
-        if name is None:
-            return None
-        if name == "":
-            return ""
-        elif name.lower() == name and not self.identifier_preparer._requires_quotes(
-            name.lower()
-        ):
-            name = name.upper()
-        return name
+        return self.name_utils.denormalize_name(name)
 
     def _denormalize_quote_join(self, *idents):
         ip = self.identifier_preparer
@@ -491,20 +473,20 @@ class SnowflakeDialect(default.DefaultDialect):
         )
         return foreign_key_map.get(table_name, [])
 
-    def table_columns_as_dict(self, columns):
-        result = {}
-        for column in columns:
-            result[column["name"]] = column
-        return result
-
     @reflection.cache
     def _get_schema_columns(self, connection, schema, **kw):
         """Get all columns in the schema, if we hit 'Information schema query returned too much data' problem return
         None, as it is cacheable and is an unexpected return type for this function"""
         ans = {}
-        current_database, _ = self._current_database_schema(connection, **kw)
+        current_database, default_schema = self._current_database_schema(
+            connection, **kw
+        )
         full_schema_name = self._denormalize_quote_join(current_database, schema)
-        full_columns_descriptions = {}
+
+        structured_type_info_manager = _StructuredTypeInfoManager(
+            connection, self.name_utils, default_schema
+        )
+
         try:
             schema_primary_keys = self._get_schema_primary_keys(
                 connection, full_schema_name, **kw
@@ -572,25 +554,11 @@ class SnowflakeDialect(default.DefaultDialect):
                 elif issubclass(col_type, (sqltypes.String, sqltypes.BINARY)):
                     col_type_kw["length"] = character_maximum_length
                 elif issubclass(col_type, StructuredType):
-                    if (schema_name, table_name) not in full_columns_descriptions:
-                        full_columns_descriptions[(schema_name, table_name)] = (
-                            self.table_columns_as_dict(
-                                self._get_table_columns(
-                                    connection, table_name, schema_name
-                                )
-                            )
-                        )
-
-                    if (
-                        (schema_name, table_name) in full_columns_descriptions
-                        and column_name
-                        in full_columns_descriptions[(schema_name, table_name)]
-                    ):
-                        ans[table_name].append(
-                            full_columns_descriptions[(schema_name, table_name)][
-                                column_name
-                            ]
-                        )
+                    column_info = structured_type_info_manager.get_column_info(
+                        schema_name, table_name, column_name
+                    )
+                    if column_info:
+                        ans[table_name].append(column_info)
                         continue
                     else:
                         col_type = NullType
@@ -626,72 +594,6 @@ class SnowflakeDialect(default.DefaultDialect):
                     "start": identity_start,
                     "increment": identity_increment,
                 }
-        return ans
-
-    @reflection.cache
-    def _get_table_columns(self, connection, table_name, schema=None, **kw):
-        """Get all columns in a table in a schema"""
-        ans = []
-        current_database, default_schema = self._current_database_schema(
-            connection, **kw
-        )
-        schema = schema if schema else default_schema
-        table_schema = self.denormalize_name(schema)
-        table_name = self.denormalize_name(table_name)
-        result = connection.execute(
-            text(
-                "DESC /* sqlalchemy:_get_schema_columns */"
-                f" TABLE {table_schema}.{table_name} TYPE = COLUMNS"
-            )
-        )
-        for desc_data in result:
-            column_name = desc_data[0]
-            coltype = desc_data[1]
-            is_nullable = desc_data[3]
-            column_default = desc_data[4]
-            primary_key = desc_data[5]
-            comment = desc_data[9]
-
-            column_name = self.normalize_name(column_name)
-            if column_name.startswith("sys_clustering_column"):
-                continue  # ignoring clustering column
-            type_instance = parse_type(coltype)
-            if isinstance(type_instance, NullType):
-                sa_util.warn(
-                    f"Did not recognize type '{coltype}' of column '{column_name}'"
-                )
-
-            identity = None
-            match = re.match(
-                r"IDENTITY START (?P<start>\d+) INCREMENT (?P<increment>\d+) (?P<order_type>ORDER|NOORDER)",
-                column_default if column_default else "",
-            )
-            if match:
-                identity = {
-                    "start": int(match.group("start")),
-                    "increment": int(match.group("increment")),
-                    "order_type": match.group("order_type"),
-                }
-            is_identity = identity is not None
-
-            ans.append(
-                {
-                    "name": column_name,
-                    "type": type_instance,
-                    "nullable": is_nullable == "Y",
-                    "default": None if is_identity else column_default,
-                    "autoincrement": is_identity,
-                    "comment": comment if comment != "" else None,
-                    "primary_key": primary_key == "Y",
-                }
-            )
-
-            if is_identity:
-                ans[-1]["identity"] = identity
-
-        # If we didn't find any columns for the table, the table doesn't exist.
-        if len(ans) == 0:
-            raise sa_exc.NoSuchTableError()
         return ans
 
     def get_columns(self, connection, table_name, schema=None, **kw):
