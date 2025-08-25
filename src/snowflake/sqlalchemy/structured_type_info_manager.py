@@ -24,7 +24,7 @@ class _StructuredTypeInfoManager:
         default_schema (str): The default schema to use when none is specified
     """
 
-    def __init__(self, connection, name_utils: _NameUtils, default_schema: str) -> None:
+    def __init__(self, connection, name_utils: _NameUtils, default_schema: str):
         self.connection = connection
         self.full_columns_descriptions = {}
         self.name_utils = name_utils
@@ -32,7 +32,7 @@ class _StructuredTypeInfoManager:
 
     def get_column_info(
         self, schema_name: str, table_name: str, column_name: str, **kw
-    ) -> dict:
+    ):
         self._load_structured_type_info(schema_name, table_name, **kw)
         if (
             (schema_name, table_name) in self.full_columns_descriptions
@@ -43,9 +43,7 @@ class _StructuredTypeInfoManager:
             ]
         return None
 
-    def _load_structured_type_info(
-        self, schema_name: str, table_name: str, **kw
-    ) -> bool:
+    def _load_structured_type_info(self, schema_name: str, table_name: str, **kw):
         """Get column information for a structured type"""
         if (schema_name, table_name) not in self.full_columns_descriptions:
 
@@ -59,14 +57,14 @@ class _StructuredTypeInfoManager:
             )
         return True
 
-    def _table_columns_as_dict(self, columns: list) -> dict:
+    def _table_columns_as_dict(self, columns: list):
         result = {}
         for column in columns:
             result[column["name"]] = column
         return result
 
     @reflection.cache
-    def _get_table_columns(self, table_name: str, schema: str = None, **kw) -> list:
+    def _get_table_columns(self, table_name: str, schema: str = None, **kw):
         """Get all columns in a table in a schema"""
         ans = []
 
