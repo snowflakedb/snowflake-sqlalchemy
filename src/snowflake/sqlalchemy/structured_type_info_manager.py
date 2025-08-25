@@ -4,7 +4,6 @@
 import re
 
 from sqlalchemy import util as sa_util
-from sqlalchemy.engine import reflection
 from sqlalchemy.sql import text
 
 from snowflake.sqlalchemy.name_utils import _NameUtils
@@ -63,7 +62,6 @@ class _StructuredTypeInfoManager:
             result[column["name"]] = column
         return result
 
-    @reflection.cache
     def _get_table_columns(self, table_name: str, schema: str = None, **kw):
         """Get all columns in a table in a schema"""
         ans = []
