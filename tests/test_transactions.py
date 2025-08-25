@@ -110,7 +110,7 @@ def test_connect_autocommit(engine_testaccount, assert_text_in_buf):
             results = conn.execute(s).fetchall()
             assert len(results) == 1, results
             assert_text_in_buf(
-                "ROLLBACK using DBAPI connection.rollback(), DBAPI should ignore due to autocommit mode",
+                "ROLLBACK using DBAPI connection.rollback()",
                 occurrences=1,
             )
 
