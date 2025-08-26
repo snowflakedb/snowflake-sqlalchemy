@@ -601,7 +601,7 @@ class SnowflakeDialect(default.DefaultDialect):
         return prefixes_found
 
     @reflection.cache
-    def _query_all_columns_info(connection, schema_name, **kw):
+    def _query_all_columns_info(self, connection, schema_name, **kw):
         try:
             return connection.execute(
                 text(
