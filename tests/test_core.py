@@ -1576,7 +1576,7 @@ def test_too_many_columns_detection(engine_testaccount, db_parameters):
     with patch.object(engine_testaccount, "connect") as conn:
         conn.return_value = connection
         with patch.object(
-            inspector.dialect, "_get_all_columns_info", side_effect=mock_helper
+            inspector.dialect, "_query_all_columns_info", side_effect=mock_helper
         ):
             with pytest.raises(Exception) as exception:
                 print(exception)

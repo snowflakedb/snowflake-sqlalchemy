@@ -481,7 +481,7 @@ class SnowflakeDialect(default.DefaultDialect):
 
         schema_name = self.denormalize_name(schema)
 
-        result = self._get_all_columns_info(connection, schema_name)
+        result = self._query_all_columns_info(connection, schema_name)
 
         current_database, default_schema = self._current_database_schema(
             connection, **kw
@@ -600,7 +600,7 @@ class SnowflakeDialect(default.DefaultDialect):
                 prefixes_found.append(valid_prefix.name)
         return prefixes_found
 
-    def _get_all_columns_info(connection, schema_name):
+    def _query_all_columns_info(connection, schema_name):
         try:
             return connection.execute(
                 text(
