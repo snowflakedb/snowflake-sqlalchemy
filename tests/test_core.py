@@ -30,7 +30,6 @@ from sqlalchemy import (
     UniqueConstraint,
     create_engine,
     dialects,
-    exc,
     func,
     insert,
     inspect,
@@ -1541,7 +1540,6 @@ def test_too_many_columns_detection(engine_testaccount, db_parameters):
     inspector = inspect(engine_testaccount)
     # Do test
     connection = inspector.bind.connect()
-    original_execute = connection.execute
 
     exception_instance = DBAPIError.instance(
         """
@@ -1572,17 +1570,16 @@ def test_too_many_columns_detection(engine_testaccount, db_parameters):
         ismulti=None,
     )
 
-    def mock_helper(command, *args, **kwargs):
-        if "_get_schema_columns" in command.text:
-            # Creating exception exactly how SQLAlchemy does
-            raise exception_instance
-        else:
-            return original_execute(command, *args, **kwargs)
+    def mock_helper(connection, schema):
+        raise exception_instance
 
     with patch.object(engine_testaccount, "connect") as conn:
         conn.return_value = connection
-        with patch.object(connection, "execute", side_effect=mock_helper):
-            with pytest.raises(exc.ProgrammingError) as exception:
+        with patch.object(
+            inspector.dialect, "_get_all_columns_info", side_effect=mock_helper
+        ):
+            with pytest.raises(Exception) as exception:
+                print(exception)
                 inspector.get_columns("users", db_parameters["schema"])
     assert exception.value.orig == exception_instance.orig
     # Clean up

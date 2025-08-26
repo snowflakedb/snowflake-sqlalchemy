@@ -478,48 +478,24 @@ class SnowflakeDialect(default.DefaultDialect):
         """Get all columns in the schema, if we hit 'Information schema query returned too much data' problem return
         None, as it is cacheable and is an unexpected return type for this function"""
         ans = {}
+
+        schema_name = self.denormalize_name(schema)
+
+        result = self._get_all_columns_info(connection, schema_name)
+
         current_database, default_schema = self._current_database_schema(
             connection, **kw
         )
         full_schema_name = self._denormalize_quote_join(current_database, schema)
 
+        schema_primary_keys = self._get_schema_primary_keys(
+            connection, full_schema_name, **kw
+        )
+
         structured_type_info_manager = _StructuredTypeInfoManager(
             connection, self.name_utils, default_schema
         )
 
-        try:
-            schema_primary_keys = self._get_schema_primary_keys(
-                connection, full_schema_name, **kw
-            )
-            schema_name = self.denormalize_name(schema)
-
-            result = connection.execute(
-                text(
-                    """
-            SELECT /* sqlalchemy:_get_schema_columns */
-                   ic.table_name,
-                   ic.column_name,
-                   ic.data_type,
-                   ic.character_maximum_length,
-                   ic.numeric_precision,
-                   ic.numeric_scale,
-                   ic.is_nullable,
-                   ic.column_default,
-                   ic.is_identity,
-                   ic.comment,
-                   ic.identity_start,
-                   ic.identity_increment
-              FROM information_schema.columns ic
-             WHERE ic.table_schema=:table_schema
-             ORDER BY ic.ordinal_position"""
-                ),
-                {"table_schema": schema_name},
-            )
-        except sa_exc.ProgrammingError as pe:
-            if pe.orig.errno == 90030:
-                # This means that there are too many tables in the schema, we need to go more granular
-                return None  # None triggers _get_table_columns while staying cacheable
-            raise
         for (
             table_name,
             column_name,
@@ -606,8 +582,11 @@ class SnowflakeDialect(default.DefaultDialect):
 
         schema_columns = self._get_schema_columns(connection, schema, **kw)
         if schema_columns is None:
+            column_info_manager = _StructuredTypeInfoManager(
+                connection, self.name_utils, self.default_schema_name
+            )
             # Too many results, fall back to only query about single table
-            return self._get_table_columns(connection, table_name, schema, **kw)
+            return column_info_manager.get_table_columns(table_name, schema)
         normalized_table_name = self.normalize_name(table_name)
         if normalized_table_name not in schema_columns:
             raise sa_exc.NoSuchTableError()
@@ -620,6 +599,36 @@ class SnowflakeDialect(default.DefaultDialect):
             if key in name_to_index_map and row[name_to_index_map[key]] == "Y":
                 prefixes_found.append(valid_prefix.name)
         return prefixes_found
+
+    def _get_all_columns_info(connection, schema_name):
+        try:
+            return connection.execute(
+                text(
+                    """
+            SELECT /* sqlalchemy:_get_schema_columns */
+                   ic.table_name,
+                   ic.column_name,
+                   ic.data_type,
+                   ic.character_maximum_length,
+                   ic.numeric_precision,
+                   ic.numeric_scale,
+                   ic.is_nullable,
+                   ic.column_default,
+                   ic.is_identity,
+                   ic.comment,
+                   ic.identity_start,
+                   ic.identity_increment
+              FROM information_schema.columns ic
+             WHERE ic.table_schema=:table_schema
+             ORDER BY ic.ordinal_position"""
+                ),
+                {"table_schema": schema_name},
+            )
+        except sa_exc.ProgrammingError as pe:
+            if pe.orig.errno == 90030:
+                # This means that there are too many tables in the schema, we need to go more granular
+                return None  # None triggers get_table_columns while staying cacheable
+            raise
 
     @reflection.cache
     def _get_schema_tables_info(self, connection, schema=None, **kw):
