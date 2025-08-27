@@ -190,15 +190,23 @@ class CompositeKeyReflectionTest(_CompositeKeyReflectionTest):
 
 class BizarroCharacterTest(_BizarroCharacterTest):
 
-    @testing.combinations(
-        ("id",), ("(3)",), ("col%p",), ("[brack]",), argnames="columnname"
-    )
+    def column_names():
+        return testing.combinations(
+            ("id",),
+            ("(3)",),
+            ("col%p",),
+            ("[brack]",),
+            argnames="columnname",
+        )
+
+    def table_names():
+        return testing.combinations(
+            ("plain",),
+            ("(2)",),
+            ("[brackets]",),
+            argnames="tablename",
+        )
+
     @testing.variation("use_composite", [True, False])
-    @testing.combinations(
-        ("plain",),
-        ("(2)",),
-        ("[brackets]",),
-        argnames="tablename",
-    )
     def test_fk_ref(self, connection, metadata, use_composite, tablename, columnname):
         super().test_fk_ref(connection, metadata, use_composite, tablename, columnname)
