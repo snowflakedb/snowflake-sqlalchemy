@@ -213,3 +213,15 @@ class BizarroCharacterTest(_BizarroCharacterTest):
     @testing.requires.foreign_key_constraint_reflection
     def test_fk_ref(self, connection, metadata, use_composite, tablename, columnname):
         super().test_fk_ref(connection, metadata, use_composite, tablename, columnname)
+
+    @column_names()
+    @table_names()
+    @testing.requires.identity_columns
+    def test_reflect_identity(self, connection, metadata, tablename, columnname):
+        super().test_reflect_identity(connection, metadata, tablename, columnname)
+
+    @column_names()
+    @table_names()
+    @testing.requires.comment_reflection
+    def test_reflect_comments(self, connection, metadata, tablename, columnname):
+        super().test_reflect_comments(connection, metadata, tablename, columnname)
