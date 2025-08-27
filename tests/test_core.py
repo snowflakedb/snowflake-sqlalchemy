@@ -1524,18 +1524,11 @@ def test_get_too_many_columns(engine_testaccount, db_parameters):
         assert outcome
 
 
-def test_too_many_columns_detection(engine_testaccount, db_parameters):
+def test_for_exception_in_query_all_columns(engine_testaccount, db_parameters):
     """This tests whether a too many column error actually triggers the more granular table version"""
     # Set up a single table
     metadata = MetaData()
-    Table(
-        "users",
-        metadata,
-        Column("id", Integer, Sequence("user_id_seq"), primary_key=True),
-        Column("name", String),
-        Column("fullname", String),
-        Column("password", String),
-    )
+
     metadata.create_all(engine_testaccount)
     inspector = inspect(engine_testaccount)
     # Do test
@@ -1570,18 +1563,45 @@ def test_too_many_columns_detection(engine_testaccount, db_parameters):
         ismulti=None,
     )
 
-    def mock_helper(connection, schema):
+    def mock_helper(connection, schema, **args):
         raise exception_instance
+
+    with patch.object(engine_testaccount, "connect") as conn:
+        conn.return_value = connection
+        with patch.object(connection, "execute", side_effect=mock_helper):
+            assert inspector.dialect._query_all_columns_info(connection, "X") is None
+
+    # Clean up
+    metadata.drop_all(engine_testaccount)
+
+
+def test_too_many_columns_detection(engine_testaccount, db_parameters):
+    """This tests whether a too many column error actually triggers the more granular table version"""
+    # Set up a single table
+    metadata = MetaData()
+    Table(
+        "users",
+        metadata,
+        Column("id", Integer, Sequence("user_id_seq"), primary_key=True),
+        Column("name", String),
+        Column("fullname", String),
+        Column("password", String),
+    )
+    metadata.create_all(engine_testaccount)
+    inspector = inspect(engine_testaccount)
+    # Do test
+    connection = inspector.bind.connect()
+
+    def mock_helper(connection, schema, **args):
+        return None
 
     with patch.object(engine_testaccount, "connect") as conn:
         conn.return_value = connection
         with patch.object(
             inspector.dialect, "_query_all_columns_info", side_effect=mock_helper
         ):
-            with pytest.raises(Exception) as exception:
-                print(exception)
-                inspector.get_columns("users", db_parameters["schema"])
-    assert exception.value.orig == exception_instance.orig
+            columns = inspector.get_columns("users", db_parameters["schema"])
+    assert columns is not None and len(columns) == 4
     # Clean up
     metadata.drop_all(engine_testaccount)
 

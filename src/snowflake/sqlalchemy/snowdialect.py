@@ -482,6 +482,8 @@ class SnowflakeDialect(default.DefaultDialect):
         schema_name = self.denormalize_name(schema)
 
         result = self._query_all_columns_info(connection, schema_name, **kw)
+        if result is None:
+            return None
 
         current_database, default_schema = self._current_database_schema(
             connection, **kw
