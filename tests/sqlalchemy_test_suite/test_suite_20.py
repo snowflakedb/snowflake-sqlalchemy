@@ -6,9 +6,7 @@ from sqlalchemy import Integer, testing
 from sqlalchemy.schema import Column, Sequence, Table
 from sqlalchemy.testing import config
 from sqlalchemy.testing.assertions import eq_
-from sqlalchemy.testing.suite import (
-    BizarroCharacterFKResolutionTest as _BizarroCharacterFKResolutionTest,
-)
+from sqlalchemy.testing.suite import BizarroCharacterTest as _BizarroCharacterTest
 from sqlalchemy.testing.suite import (
     CompositeKeyReflectionTest as _CompositeKeyReflectionTest,
 )
@@ -190,7 +188,8 @@ class CompositeKeyReflectionTest(_CompositeKeyReflectionTest):
         super().test_pk_column_order()
 
 
-class BizarroCharacterFKResolutionTest(_BizarroCharacterFKResolutionTest):
+class BizarroCharacterTest(_BizarroCharacterTest):
+
     @testing.combinations(
         ("id",), ("(3)",), ("col%p",), ("[brack]",), argnames="columnname"
     )
