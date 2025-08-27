@@ -190,6 +190,14 @@ class CompositeKeyReflectionTest(_CompositeKeyReflectionTest):
 
 class BizarroCharacterTest(_BizarroCharacterTest):
 
+    def column_names_without_id():
+        return testing.combinations(
+            ("(3)",),
+            ("col%p",),
+            ("[brack]",),
+            argnames="columnname",
+        )
+
     def column_names():
         return testing.combinations(
             ("id",),
@@ -220,7 +228,7 @@ class BizarroCharacterTest(_BizarroCharacterTest):
     def test_reflect_identity(self, tablename, columnname, connection, metadata):
         super().test_reflect_identity(tablename, columnname, connection, metadata)
 
-    @column_names()
+    @column_names_without_id()
     @table_names()
     @testing.requires.comment_reflection
     def test_reflect_comments(self, tablename, columnname, connection, metadata):
