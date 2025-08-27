@@ -217,11 +217,11 @@ class BizarroCharacterTest(_BizarroCharacterTest):
     @column_names()
     @table_names()
     @testing.requires.identity_columns
-    def test_reflect_identity(self, connection, metadata, tablename, columnname):
-        super().test_reflect_identity(connection, metadata, tablename, columnname)
+    def test_reflect_identity(self, tablename, columnname, connection, metadata):
+        super().test_reflect_identity(tablename, columnname, connection, metadata)
 
     @column_names()
     @table_names()
     @testing.requires.comment_reflection
-    def test_reflect_comments(self, connection, metadata, tablename, columnname):
-        super().test_reflect_comments(connection, metadata, tablename, columnname)
+    def test_reflect_comments(self, tablename, columnname, connection, metadata):
+        super().test_reflect_comments(tablename, columnname, connection, metadata)
