@@ -208,5 +208,8 @@ class BizarroCharacterTest(_BizarroCharacterTest):
         )
 
     @testing.variation("use_composite", [True, False])
+    @column_names()
+    @table_names()
+    @testing.requires.foreign_key_constraint_reflection
     def test_fk_ref(self, connection, metadata, use_composite, tablename, columnname):
         super().test_fk_ref(connection, metadata, use_composite, tablename, columnname)
