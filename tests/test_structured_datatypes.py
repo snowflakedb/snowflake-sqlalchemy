@@ -1,9 +1,12 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
+from unittest.mock import patch
+
 import pytest
 import sqlalchemy as sa
 from sqlalchemy import (
+    VARCHAR,
     Column,
     Integer,
     MetaData,
@@ -21,6 +24,8 @@ from sqlalchemy.sql.ddl import CreateTable
 from snowflake.sqlalchemy import NUMBER, IcebergTable, SnowflakeTable
 from snowflake.sqlalchemy.custom_types import ARRAY, MAP, OBJECT, TEXT
 from snowflake.sqlalchemy.exc import StructuredTypeNotSupportedInTableColumnsError
+from snowflake.sqlalchemy.name_utils import _NameUtils
+from snowflake.sqlalchemy.structured_type_info_manager import _StructuredTypeInfoManager
 
 
 @pytest.mark.parametrize(
@@ -595,3 +600,51 @@ def test_structured_type_not_supported_in_table_columns_error(
             structured_type_col,
         )
     assert programming_error is not None
+
+
+@patch.object(_StructuredTypeInfoManager, "_execute_desc")
+@patch.object(_NameUtils, "denormalize_name")
+def test_structured_type_on_dropped_table(
+    mocked_execute_desc_method, mocked_denormalize_name_method
+):
+    mocked_execute_desc_method.return_value = None
+    mocked_denormalize_name_method.side_effect = lambda self, v: v
+    structured_type_info = _StructuredTypeInfoManager(
+        None, _NameUtils(None), "mySchema"
+    )
+    result = structured_type_info.get_column_info(
+        "mySchema", "dropped_table", "structured_type_col"
+    )
+    assert result is None
+
+
+@patch.object(_StructuredTypeInfoManager, "_execute_desc")
+@patch.object(_NameUtils, "denormalize_name")
+def test_structured_type_on_table_with_map(
+    mocked_execute_desc_method, mocked_denormalize_name_method
+):
+    mocked_execute_desc_method.return_value = [
+        [
+            "myCol",
+            "MAP(VARCHAR(16777216), VARCHAR(16777216))",
+            None,
+            "Y",
+            None,
+            False,
+            None,
+            None,
+            None,
+            "MapColumn",
+        ]
+    ]
+    mocked_denormalize_name_method.side_effect = lambda self, v: v
+    structured_type_info = _StructuredTypeInfoManager(
+        None, _NameUtils(None), "mySchema"
+    )
+    result = structured_type_info.get_column_info("mySchema", "dropped_table", "myCol")
+    assert result is not None
+    assert result["name"] == "myCol"
+    assert isinstance(result["type"], MAP)
+    map_type: MAP = result["type"]
+    assert isinstance(map_type.key_type, VARCHAR)
+    assert isinstance(map_type.value_type, VARCHAR)

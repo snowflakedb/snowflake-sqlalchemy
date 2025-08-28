@@ -3,11 +3,13 @@
 #
 import pytest
 from sqlalchemy import Integer, testing
+from sqlalchemy import types as sql_types
 from sqlalchemy.schema import Column, Sequence, Table
 from sqlalchemy.testing import config
 from sqlalchemy.testing.assertions import eq_
+from sqlalchemy.testing.suite import BizarroCharacterTest as _BizarroCharacterTest
 from sqlalchemy.testing.suite import (
-    BizarroCharacterFKResolutionTest as _BizarroCharacterFKResolutionTest,
+    ComponentReflectionTestExtra as _ComponentReflectionTestExtra,
 )
 from sqlalchemy.testing.suite import (
     CompositeKeyReflectionTest as _CompositeKeyReflectionTest,
@@ -190,16 +192,74 @@ class CompositeKeyReflectionTest(_CompositeKeyReflectionTest):
         super().test_pk_column_order()
 
 
-class BizarroCharacterFKResolutionTest(_BizarroCharacterFKResolutionTest):
-    @testing.combinations(
-        ("id",), ("(3)",), ("col%p",), ("[brack]",), argnames="columnname"
-    )
+class BizarroCharacterTest(_BizarroCharacterTest):
+
+    def column_names_without_id():
+        return testing.combinations(
+            ("(3)",),
+            ("col%p",),
+            ("[brack]",),
+            argnames="columnname",
+        )
+
+    def column_names():
+        return testing.combinations(
+            ("id",),
+            ("(3)",),
+            ("col%p",),
+            ("[brack]",),
+            argnames="columnname",
+        )
+
+    def table_names():
+        return testing.combinations(
+            ("plain",),
+            ("(2)",),
+            ("[brackets]",),
+            argnames="tablename",
+        )
+
     @testing.variation("use_composite", [True, False])
-    @testing.combinations(
-        ("plain",),
-        ("(2)",),
-        ("[brackets]",),
-        argnames="tablename",
-    )
+    @column_names()
+    @table_names()
+    @testing.requires.foreign_key_constraint_reflection
     def test_fk_ref(self, connection, metadata, use_composite, tablename, columnname):
         super().test_fk_ref(connection, metadata, use_composite, tablename, columnname)
+
+    @column_names()
+    @table_names()
+    @testing.requires.identity_columns
+    def test_reflect_identity(self, tablename, columnname, connection, metadata):
+        super().test_reflect_identity(tablename, columnname, connection, metadata)
+
+    @column_names_without_id()
+    @table_names()
+    @testing.requires.comment_reflection
+    def test_reflect_comments(self, tablename, columnname, connection, metadata):
+        super().test_reflect_comments(tablename, columnname, connection, metadata)
+
+
+class ComponentReflectionTestExtra(_ComponentReflectionTestExtra):
+
+    @testing.requires.table_reflection
+    @testing.combinations(
+        sql_types.String,
+        sql_types.VARCHAR,
+        sql_types.CHAR,
+        (sql_types.NVARCHAR, testing.requires.nvarchar_types),
+        (sql_types.NCHAR, testing.requires.nvarchar_types),
+        argnames="type_",
+    )
+    def test_string_length_reflection(self, connection, metadata, type_):
+        typ = self._type_round_trip(connection, metadata, type_(52))[0]
+        if issubclass(type_, sql_types.VARCHAR):
+            assert isinstance(typ, sql_types.VARCHAR)
+        elif issubclass(
+            type_, sql_types.CHAR
+        ):  # char is not supported then mapped to VARCHAR
+            assert isinstance(typ, sql_types.VARCHAR)
+        else:
+            assert isinstance(typ, sql_types.String)
+
+        eq_(typ.length, 52)
+        assert isinstance(typ.length, int)

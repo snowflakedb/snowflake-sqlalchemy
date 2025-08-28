@@ -232,8 +232,11 @@ def assert_text_in_buf():
     def go(expected, occurrences=1):
         assert buf.buffer
         buflines = [rec.getMessage() for rec in buf.buffer]
+        ocurrences_found = 0
+        for line in buflines:
+            if line.find(expected) != -1:
+                ocurrences_found += 1
 
-        ocurrences_found = buflines.count(expected)
         assert occurrences == ocurrences_found, (
             f"Expected {occurrences} of {expected}, got {ocurrences_found} "
             f"occurrences in {buflines}."

@@ -2,9 +2,8 @@
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 from typing import List
 
-import sqlalchemy.types as sqltypes
-from sqlalchemy.sql.type_api import TypeEngine
-from sqlalchemy.types import (
+import sqlalchemy.sql.sqltypes as sqltypes
+from sqlalchemy.sql.sqltypes import (
     BIGINT,
     BINARY,
     BOOLEAN,
@@ -21,6 +20,7 @@ from sqlalchemy.types import (
     VARCHAR,
     NullType,
 )
+from sqlalchemy.sql.type_api import TypeEngine
 
 from ..custom_types import (
     _CUSTOM_DECIMAL,
