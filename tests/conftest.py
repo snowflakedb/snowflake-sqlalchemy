@@ -239,7 +239,7 @@ def assert_text_in_buf():
 
         assert occurrences == ocurrences_found, (
             f"Expected {occurrences} of {expected}, got {ocurrences_found} "
-            f"occurrences in {ocurrences_found}."
+            f"occurrences in {buflines}."
         )
         buf.flush()
 
