@@ -6,9 +6,15 @@ Snowflake Documentation is available at:
 
 Source code is also available at:
 <https://github.com/snowflakedb/snowflake-sqlalchemy>
-# Unreleased Notes
-- Fix exception for structured type columns dropped while collecting meetadata
+
 # Release Notes
+- v1.8.0(TBD)
+  - Drop support for python 3.8
+  - Add support for python 3.13
+
+- v1.7.7(July 10, 2025)
+  - Fix exception for structured type columns dropped while collecting meetadata
+
 - v1.7.6(July 10, 2025)
   - Fix get_multi_indexes issue, wrong assign of returned indexes when processing multiple indexes in a table
 
