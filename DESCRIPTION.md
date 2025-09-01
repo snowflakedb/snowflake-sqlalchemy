@@ -9,7 +9,7 @@ Source code is also available at:
 # Unreleased Notes
 
 # Release Notes
-- v1.7.7(July 10, 2025)
+- v1.7.7(September 2, 2025)
   - Fix exception for structured type columns dropped while collecting meetadata
 
 - v1.7.6(July 10, 2025)
