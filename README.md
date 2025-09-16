@@ -8,11 +8,6 @@
 
 Snowflake SQLAlchemy runs on the top of the Snowflake Connector for Python as a [dialect](http://docs.sqlalchemy.org/en/latest/dialects/) to bridge a Snowflake database and SQLAlchemy applications.
 
-
-| :exclamation: | Effective May 8th, 2025, Snowflake SQLAlchemy will transition to maintenance mode and will cease active development. Support will be limited to addressing critical bugs and security vulnerabilities. To report such issues, please [create a case with Snowflake Support](https://community.snowflake.com/s/article/How-To-Submit-a-Support-Case-in-Snowflake-Lodge). for individual evaluation. Please note that pull requests from external contributors may not receive action from Snowflake. |
-|---------------|:--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-
-
 ## Prerequisites
 
 ### Snowflake Connector for Python
