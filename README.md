@@ -334,8 +334,6 @@ engine = create_engine(URL(
 ))
 ```
 
-Note that this flag has been deprecated, as our caching now uses the built-in SQLAlchemy reflection cache, the flag has been removed, but caching has been improved and if possible extra data will be fetched and cached.
-
 ### VARIANT, ARRAY and OBJECT Support
 
 Snowflake SQLAlchemy supports fetching `VARIANT`, `ARRAY` and `OBJECT` data types. All types are converted into `str` in Python so that you can convert them to native data types using `json.loads`.
