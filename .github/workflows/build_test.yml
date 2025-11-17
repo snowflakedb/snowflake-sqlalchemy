@@ -1,24 +1,23 @@
 name: Build and Test
 
 on:
-    push:
-        branches:
-            - main
-        tags:
-            - v*
-    pull_request:
-        branches:
-            - main
-            - prep-**
-    workflow_dispatch:
-        inputs:
-          logLevel:
-
-            default: warning
-            description: "Log level"
-            required: true
-          tags:
-            description: "Test scenario tags"
+  push:
+    branches:
+      - main
+    tags:
+      - v*
+  pull_request:
+    branches:
+      - main
+      - prep-**
+  workflow_dispatch:
+    inputs:
+      logLevel:
+        default: warning
+        description: "Log level"
+        required: true
+      tags:
+        description: "Test scenario tags"
 jobs:
   lint:
     name: Check linting
@@ -30,7 +29,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.8'
+          python-version: "3.8"
       - name: Upgrade and install tools
         run: |
           python -m pip install -U uv
@@ -60,7 +59,7 @@ jobs:
       - name: Setup up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.8'
+          python-version: "3.8"
       - name: Upgrade and install tools
         run: |
           python -m pip install -U uv
@@ -75,22 +74,14 @@ jobs:
 
   test-dialect:
     name: Test dialect ${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
-    needs: [ lint, build-install ]
+    needs: [lint, build-install]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [
-          ubuntu-latest,
-          macos-13,
-          windows-latest,
-          ]
+        os: [ubuntu-latest, macos-13, windows-latest]
         python-version: ["3.8"]
-        cloud-provider: [
-          aws,
-          azure,
-          gcp,
-          ]
+        cloud-provider: [aws, azure, gcp]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -109,8 +100,13 @@ jobs:
         env:
           PARAMETERS_SECRET: ${{ secrets.PARAMETERS_SECRET }}
         run: |
-          gpg --quiet --batch --yes --decrypt --passphrase="$PARAMETERS_SECRET" \
-          .github/workflows/parameters/parameters_${{ matrix.cloud-provider }}.py.gpg > tests/parameters.py
+          gpg --version
+          printf "%s" "$PARAMETERS_SECRET" | gpg --quiet --batch --yes \
+            --decrypt \
+            --passphrase-fd 0 \
+            --pinentry-mode loopback \
+            --output tests/parameters.py \
+            .github/workflows/parameters/parameters_${{ matrix.cloud-provider }}.py.gpg
       - name: Run test for AWS
         run: hatch run test-dialect-aws
         if: matrix.cloud-provider == 'aws'
@@ -124,22 +120,14 @@ jobs:
 
   test-dialect-compatibility:
     name: Test dialect compatibility ${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
-    needs: [ lint, build-install ]
+    needs: [lint, build-install]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [
-          ubuntu-latest,
-          macos-13,
-          windows-latest,
-          ]
+        os: [ubuntu-latest, macos-13, windows-latest]
         python-version: ["3.8"]
-        cloud-provider: [
-          aws,
-          azure,
-          gcp,
-          ]
+        cloud-provider: [aws, azure, gcp]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -170,22 +158,14 @@ jobs:
 
   test-dialect-v14:
     name: Test dialect v14 ${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
-    needs: [ lint, build-install ]
+    needs: [lint, build-install]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [
-          ubuntu-latest,
-          macos-13,
-          windows-latest,
-          ]
+        os: [ubuntu-latest, macos-13, windows-latest]
         python-version: ["3.8"]
-        cloud-provider: [
-          aws,
-          azure,
-          gcp,
-          ]
+        cloud-provider: [aws, azure, gcp]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -224,17 +204,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [
-          ubuntu-latest,
-          macos-13,
-          windows-latest,
-          ]
+        os: [ubuntu-latest, macos-13, windows-latest]
         python-version: ["3.8"]
-        cloud-provider: [
-          aws,
-          azure,
-          gcp,
-          ]
+        cloud-provider: [aws, azure, gcp]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -266,7 +238,13 @@ jobs:
   combine-coverage:
     name: Combine coverage
     if: ${{ success() || failure() }}
-    needs: [test-dialect, test-dialect-compatibility, test-dialect-v14, test-dialect-compatibility-v14]
+    needs:
+      [
+        test-dialect,
+        test-dialect-compatibility,
+        test-dialect-v14,
+        test-dialect-compatibility-v14,
+      ]
     runs-on: ubuntu-latest
     steps:
       - name: Set up Python
