@@ -8,6 +8,7 @@ Source code is also available at:
 <https://github.com/snowflakedb/snowflake-sqlalchemy>
 # Unreleased Notes
 - v1.8.0
+  - Add Python 3.13 & 3.14
   - Bump snowflake-connector-python to v4
 
 # Release Notes
