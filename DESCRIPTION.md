@@ -7,6 +7,8 @@ Snowflake Documentation is available at:
 Source code is also available at:
 <https://github.com/snowflakedb/snowflake-sqlalchemy>
 # Unreleased Notes
+- v1.8.0
+  - Bump snowflake-connector-python to v4
 
 # Release Notes
 - v1.7.7(September 3, 2025)
