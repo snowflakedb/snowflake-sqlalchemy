@@ -2,6 +2,7 @@
 #
 # Test Snowflake SQLAlchemy
 #
+echo "[Debug] Test Snowflake SQLA"
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 SQLALCHEMY_DIR="$( dirname "${THIS_DIR}")"
 PARAMETERS_DIR="${SQLALCHEMY_DIR}/.github/workflows/parameters"
