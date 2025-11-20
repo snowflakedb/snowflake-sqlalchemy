@@ -5,7 +5,9 @@ import operator
 from collections import defaultdict
 from enum import Enum
 from functools import reduce
-from typing import Any, Collection, Optional
+from logging import getLogger
+from time import time as time_in_seconds
+from typing import Any, Collection, Optional, cast
 from urllib.parse import unquote_plus
 
 import sqlalchemy.sql.sqltypes as sqltypes
@@ -19,8 +21,10 @@ from sqlalchemy.sql.sqltypes import NullType
 from sqlalchemy.types import FLOAT, Date, DateTime, Float, Time
 
 from snowflake.connector import errors as sf_errors
-from snowflake.connector.connection import DEFAULT_CONFIGURATION
+from snowflake.connector.connection import DEFAULT_CONFIGURATION, SnowflakeConnection
 from snowflake.connector.constants import UTF8
+from snowflake.connector.network import SnowflakeRestful
+from snowflake.connector.telemetry import TelemetryClient, TelemetryData, TelemetryField
 from snowflake.sqlalchemy.compat import returns_unicode
 from snowflake.sqlalchemy.name_utils import _NameUtils
 from snowflake.sqlalchemy.structured_type_info_manager import _StructuredTypeInfoManager
@@ -49,6 +53,7 @@ from .util import (
     parse_url_boolean,
     parse_url_integer,
 )
+from .version import VERSION
 
 colspecs = {
     Date: _CUSTOM_Date,
@@ -58,6 +63,8 @@ colspecs = {
 }
 
 _ENABLE_SQLALCHEMY_AS_APPLICATION_NAME = True
+
+logger = getLogger(__name__)
 
 
 class SnowflakeIsolationLevel(Enum):
@@ -896,18 +903,37 @@ class SnowflakeDialect(default.DefaultDialect):
         return self._value_or_default(data, table_name, schema)
 
     def connect(self, *cargs, **cparams):
-        return (
-            super().connect(
-                *cargs,
-                **(
-                    _update_connection_application_name(**cparams)
-                    if _ENABLE_SQLALCHEMY_AS_APPLICATION_NAME
-                    else cparams
-                ),
+        if _ENABLE_SQLALCHEMY_AS_APPLICATION_NAME:
+            cparams = _update_connection_application_name(**cparams)
+
+        connection = super().connect(*cargs, **cparams)
+
+        try:
+            snowflake_connection = cast(SnowflakeConnection, cast(object, connection))
+            snowflake_rest_client = SnowflakeRestful(
+                host=snowflake_connection.host,
+                port=snowflake_connection.port,
+                protocol="https",
+                connection=snowflake_connection,
             )
-            if _ENABLE_SQLALCHEMY_AS_APPLICATION_NAME
-            else super().connect(*cargs, **cparams)
-        )
+            snowflake_telemetry_client = TelemetryClient(rest=snowflake_rest_client)
+            snowflake_telemetry_client.add_log_to_batch(
+                TelemetryData.from_telemetry_data_dict(
+                    from_dict={
+                        TelemetryField.KEY_TYPE.value: "sqlalchemy_version",
+                        TelemetryField.KEY_VALUE.value: VERSION,
+                    },
+                    timestamp=int(time_in_seconds() * 1000),
+                    connection=snowflake_connection,
+                )
+            )
+            snowflake_telemetry_client.send_batch()
+        except Exception as e:
+            logger.debug(
+                "Failed to send telemetry data: %s: %s", type(e).__name__, str(e)
+            )
+
+        return connection
 
 
 @sa_vnt.listens_for(Table, "before_create")
