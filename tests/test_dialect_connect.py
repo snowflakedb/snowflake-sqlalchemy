@@ -1,7 +1,6 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
-
-"""Tests for telemetry behavior during SnowflakeDialect.connect()."""
+#
 
 from types import SimpleNamespace
 from unittest.mock import MagicMock
