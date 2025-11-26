@@ -11,6 +11,7 @@ from typing import Any, Collection, Optional, cast
 from urllib.parse import unquote_plus
 
 import sqlalchemy.sql.sqltypes as sqltypes
+from sqlalchemy import __version__ as SQLALCHEMY_VERSION
 from sqlalchemy import event as sa_vnt
 from sqlalchemy import exc as sa_exc
 from sqlalchemy import util as sa_util
@@ -53,7 +54,6 @@ from .util import (
     parse_url_boolean,
     parse_url_integer,
 )
-from .version import VERSION
 
 colspecs = {
     Date: _CUSTOM_Date,
@@ -907,7 +907,11 @@ class SnowflakeDialect(default.DefaultDialect):
             cparams = _update_connection_application_name(**cparams)
 
         connection = super().connect(*cargs, **cparams)
+        self._log_sql_alchemy_version(connection)
 
+        return connection
+
+    def _log_sql_alchemy_version(self, connection):
         try:
             snowflake_connection = cast(SnowflakeConnection, cast(object, connection))
             snowflake_rest_client = SnowflakeRestful(
@@ -921,7 +925,7 @@ class SnowflakeDialect(default.DefaultDialect):
                 TelemetryData.from_telemetry_data_dict(
                     from_dict={
                         TelemetryField.KEY_TYPE.value: "sqlalchemy_version",
-                        TelemetryField.KEY_VALUE.value: VERSION,
+                        TelemetryField.KEY_VALUE.value: SQLALCHEMY_VERSION,
                     },
                     timestamp=int(time_in_seconds() * 1000),
                     connection=snowflake_connection,
@@ -932,8 +936,6 @@ class SnowflakeDialect(default.DefaultDialect):
             logger.debug(
                 "Failed to send telemetry data: %s: %s", type(e).__name__, str(e)
             )
-
-        return connection
 
 
 @sa_vnt.listens_for(Table, "before_create")
