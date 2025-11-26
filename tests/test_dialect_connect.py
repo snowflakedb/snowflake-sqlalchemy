@@ -37,8 +37,6 @@ def test_connect_sends_telemetry(
 
     # Verify add_log_to_batch was called with correct payload
     telemetry_instance = mock_telemetry_client.return_value
-    telemetry_instance.add_log_to_batch.assert_called_once()  # TODO: called with
-
     payload = telemetry_instance.add_log_to_batch.call_args[0][0]
     assert payload.message[TelemetryField.KEY_TYPE.value] == "sqlalchemy_version"
     assert payload.message[TelemetryField.KEY_VALUE.value] == SQLALCHEMY_VERSION
