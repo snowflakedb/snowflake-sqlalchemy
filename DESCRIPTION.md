@@ -10,7 +10,7 @@ Source code is also available at:
 - v1.7.8
     - Add logging of SQLAlchemy version
     - Bump `snowflake-connector-python<5.0.0`
-    - Add python 3.13 and 3.
+    - Add python 3.13
 
 # Release Notes
 - v1.7.7(September 3, 2025)
