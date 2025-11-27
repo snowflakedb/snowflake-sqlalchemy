@@ -30,6 +30,8 @@ classifiers = [
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
   "Programming Language :: SQL",
   "Topic :: Database",
   "Topic :: Scientific/Engineering :: Information Analysis",
@@ -38,7 +40,7 @@ classifiers = [
   "Topic :: Software Development :: Libraries :: Application Frameworks",
   "Topic :: Software Development :: Libraries :: Python Modules",
 ]
-dependencies = ["SQLAlchemy>=1.4.19", "snowflake-connector-python<4.0.0"]
+dependencies = ["SQLAlchemy>=1.4.19", "snowflake-connector-python<5.0.0"]
 
 [tool.hatch.version]
 path = "src/snowflake/sqlalchemy/version.py"
@@ -75,8 +77,6 @@ exclude = ["/.github"]
 packages = ["src/snowflake"]
 
 [tool.hatch.envs.default]
-path = ".venv"
-type = "virtual"
 extra-dependencies = ["SQLAlchemy>=1.4.19,<2.1.0"]
 features = ["development", "pandas"]
 python = "3.8"
