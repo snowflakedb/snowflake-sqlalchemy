@@ -31,7 +31,6 @@ classifiers = [
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
-  "Programming Language :: Python :: 3.14",
   "Programming Language :: SQL",
   "Topic :: Database",
   "Topic :: Scientific/Engineering :: Information Analysis",
@@ -79,13 +78,15 @@ packages = ["src/snowflake"]
 [tool.hatch.envs.default]
 extra-dependencies = ["SQLAlchemy>=1.4.19,<2.1.0"]
 features = ["development", "pandas"]
-python = "3.8"
+python = "3.13"
 installer = "uv"
 
 [tool.hatch.envs.sa14]
+installer = "uv"
+builder = true
 extra-dependencies = ["SQLAlchemy>=1.4.19,<2.0.0"]
 features = ["development", "pandas"]
-python = "3.8"
+python = "3.13"
 
 [tool.hatch.envs.sa14.scripts]
 test-dialect = "pytest --ignore_v20_test -ra -vvv --tb=short --cov snowflake.sqlalchemy --cov-append --junitxml ./junit.xml --ignore=tests/sqlalchemy_test_suite tests/"
@@ -105,7 +106,7 @@ gh-cache-sum = "python -VV | sha256sum | cut -d' ' -f1"
 check-import = "python -c 'import snowflake.sqlalchemy; print(snowflake.sqlalchemy.__version__)'"
 
 [[tool.hatch.envs.release.matrix]]
-python = ["3.8", "3.9", "3.10", "3.11", "3.12"]
+python = ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13"]
 features = ["development", "pandas"]
 
 [tool.hatch.envs.release.scripts]
