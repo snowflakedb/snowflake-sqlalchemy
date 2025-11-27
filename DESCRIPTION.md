@@ -7,10 +7,12 @@ Snowflake Documentation is available at:
 Source code is also available at:
 <https://github.com/snowflakedb/snowflake-sqlalchemy>
 # Unreleased Notes
+- v1.7.8
+    - Add logging of SQLAlchemy version
 
 # Release Notes
 - v1.7.7(September 3, 2025)
-  - Fix exception for structured type columns dropped while collecting meetadata
+  - Fix exception for structured type columns dropped while collecting metadata
 
 - v1.7.6(July 10, 2025)
   - Fix get_multi_indexes issue, wrong assign of returned indexes when processing multiple indexes in a table
