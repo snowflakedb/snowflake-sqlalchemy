@@ -51,7 +51,11 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        hatch-env: [default, sa14]
+        include:
+          - hatch-env: default
+            python-version: "3.14"
+          - hatch-env: sa14
+            python-version: "3.12"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -59,7 +63,7 @@ jobs:
       - name: Setup up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
       - name: Upgrade and install tools
         run: |
           python -m pip install -U uv
@@ -73,15 +77,15 @@ jobs:
           python -c "import snowflake.sqlalchemy; print(snowflake.sqlalchemy.__version__)"
 
   test-dialect:
-    name: Test dialect ${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
+    name: Test dialect ${{ matrix.os }}-${{ fromJson('{"default":"3.14","sa14":"3.12"}')[matrix.hatch-env] }}-${{ matrix.cloud-provider }}-${{ matrix.hatch-env }}
     needs: [lint, build-install]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-13, windows-latest]
-        python-version: ["3.12"]
         cloud-provider: [aws, azure, gcp]
+        hatch-env: [default, sa14]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -89,12 +93,12 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: ${{ fromJson('{"default":"3.14","sa14":"3.12"}')[matrix.hatch-env] }}
       - name: Upgrade pip and prepare environment
         run: |
           python -m pip install -U uv
           python -m uv pip install -U hatch
-          python -m hatch env create default
+          python -m hatch env create ${{ matrix.hatch-env }}
       - name: Setup parameters file
         shell: bash
         env:
@@ -106,27 +110,34 @@ jobs:
             --pinentry-mode loopback \
             --output tests/parameters.py \
             .github/workflows/parameters/parameters_${{ matrix.cloud-provider }}.py.gpg
-      - name: Run test for AWS
+      - name: Run test for AWS (default)
+        if: matrix.cloud-provider == 'aws' && matrix.hatch-env == 'default'
         run: hatch run test-dialect-aws
-        if: matrix.cloud-provider == 'aws'
-      - name: Run tests
+      - name: Run test for AWS (sa14)
+        if: matrix.cloud-provider == 'aws' && matrix.hatch-env == 'sa14'
+        run: hatch run sa14:test-dialect-aws
+      - name: Run tests (default)
+        if: matrix.hatch-env == 'default'
         run: hatch run test-dialect
+      - name: Run tests (sa14)
+        if: matrix.hatch-env == 'sa14'
+        run: hatch run sa14:test-dialect
       - uses: actions/upload-artifact@v4
         with:
-          name: coverage.xml_dialect-${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
+          name: coverage.xml_dialect-${{ matrix.os }}-${{ fromJson('{"default":"3.14","sa14":"3.12"}')[matrix.hatch-env] }}-${{ matrix.cloud-provider }}-${{ matrix.hatch-env }}
           path: |
             ./coverage.xml
 
   test-dialect-compatibility:
-    name: Test dialect compatibility ${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
+    name: Test dialect compatibility ${{ matrix.os }}-${{ fromJson('{"default":"3.14","sa14":"3.12"}')[matrix.hatch-env] }}-${{ matrix.cloud-provider }}-${{ matrix.hatch-env }}
     needs: [lint, build-install]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-13, windows-latest]
-        python-version: ["3.12"]
         cloud-provider: [aws, azure, gcp]
+        hatch-env: [default, sa14]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -134,12 +145,12 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: ${{ fromJson('{"default":"3.14","sa14":"3.12"}')[matrix.hatch-env] }}
       - name: Upgrade pip and install hatch
         run: |
           python -m pip install -U uv
           python -m uv pip install -U hatch
-          python -m hatch env create default
+          python -m hatch env create ${{ matrix.hatch-env }}
       - name: Setup parameters file
         shell: bash
         env:
@@ -151,11 +162,15 @@ jobs:
             --pinentry-mode loopback \
             --output tests/parameters.py \
             .github/workflows/parameters/parameters_${{ matrix.cloud-provider }}.py.gpg
-      - name: Run tests
+      - name: Run tests (default)
+        if: matrix.hatch-env == 'default'
         run: hatch run test-dialect-compatibility
+      - name: Run tests (sa14)
+        if: matrix.hatch-env == 'sa14'
+        run: hatch run sa14:test-dialect-compatibility
       - uses: actions/upload-artifact@v4
         with:
-          name: coverage.xml_dialect-compatibility-${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
+          name: coverage.xml_dialect-compatibility-${{ matrix.os }}-${{ fromJson('{"default":"3.14","sa14":"3.12"}')[matrix.hatch-env] }}-${{ matrix.cloud-provider }}-${{ matrix.hatch-env }}
           path: |
             ./coverage.xml
 
