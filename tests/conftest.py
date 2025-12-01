@@ -9,6 +9,7 @@ import sys
 import time
 import uuid
 from logging import getLogger
+from typing import Literal
 
 import pytest
 from sqlalchemy import create_engine
@@ -98,6 +99,9 @@ CONNECTION_PARAMETERS = {
 
 logger = getLogger(__name__)
 
+TZ_ENV_VAR: Literal["TZ"] = "TZ"
+DEFAULT_TZ_VALUE: Literal["UTC"] = "UTC"
+
 DEFAULT_PARAMETERS = {
     "account": "<account_name>",
     "user": "<user_name>",
@@ -150,9 +154,12 @@ def get_db_parameters() -> dict:
     Sets the db connection parameters
     """
     ret = {}
-    os.environ["TZ"] = "UTC"
-    if not IS_WINDOWS:
-        time.tzset()
+    os.environ[TZ_ENV_VAR] = DEFAULT_TZ_VALUE
+    if hasattr(time, "tzset"):
+        if not IS_WINDOWS:
+            time.tzset()
+    else:
+        logger.warning("time.tzset is unavailable on this platform")
 
     ret.update(DEFAULT_PARAMETERS)
     ret.update(CONNECTION_PARAMETERS)
