@@ -67,6 +67,10 @@ _ENABLE_SQLALCHEMY_AS_APPLICATION_NAME = True
 logger = getLogger(__name__)
 
 
+class TelemetryEvents(Enum):
+    NEW_CONNECTION = "sqlalchemy_new_connection"
+
+
 class SnowflakeIsolationLevel(Enum):
     READ_COMMITTED = "READ COMMITTED"
     AUTOCOMMIT = "AUTOCOMMIT"
@@ -907,11 +911,11 @@ class SnowflakeDialect(default.DefaultDialect):
             cparams = _update_connection_application_name(**cparams)
 
         connection = super().connect(*cargs, **cparams)
-        self._log_sql_alchemy_version(connection)
+        self._log_new_connection_event(connection)
 
         return connection
 
-    def _log_sql_alchemy_version(self, connection):
+    def _log_new_connection_event(self, connection):
         try:
             snowflake_connection = cast(SnowflakeConnection, cast(object, connection))
             snowflake_rest_client = SnowflakeRestful(
@@ -921,11 +925,22 @@ class SnowflakeDialect(default.DefaultDialect):
                 connection=snowflake_connection,
             )
             snowflake_telemetry_client = TelemetryClient(rest=snowflake_rest_client)
+
+            telemetry_value = {
+                "SQLAlchemy": SQLALCHEMY_VERSION,
+            }
+            try:
+                from pandas import __version__ as PANDAS_VERSION
+
+                telemetry_value["pandas"] = PANDAS_VERSION
+            except ImportError:
+                pass
+
             snowflake_telemetry_client.add_log_to_batch(
                 TelemetryData.from_telemetry_data_dict(
                     from_dict={
-                        TelemetryField.KEY_TYPE.value: "sqlalchemy_version",
-                        TelemetryField.KEY_VALUE.value: SQLALCHEMY_VERSION,
+                        TelemetryField.KEY_TYPE.value: TelemetryEvents.NEW_CONNECTION.value,
+                        TelemetryField.KEY_VALUE.value: str(telemetry_value),
                     },
                     timestamp=int(time_in_seconds() * 1000),
                     connection=snowflake_connection,
@@ -934,7 +949,10 @@ class SnowflakeDialect(default.DefaultDialect):
             snowflake_telemetry_client.send_batch()
         except Exception as e:
             logger.debug(
-                "Failed to send telemetry data: %s: %s", type(e).__name__, str(e)
+                "Failed to send telemetry data for %s event: %s: %s",
+                TelemetryEvents.NEW_CONNECTION.value,
+                type(e).__name__,
+                str(e),
             )
 
 

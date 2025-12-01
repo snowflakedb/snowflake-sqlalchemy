@@ -8,7 +8,7 @@ Source code is also available at:
 <https://github.com/snowflakedb/snowflake-sqlalchemy>
 # Unreleased Notes
 - v1.7.8
-    - Add logging of SQLAlchemy version
+    - Add logging of SQLAlchemy version and pandas (if used)
 
 # Release Notes
 - v1.7.7(September 3, 2025)
