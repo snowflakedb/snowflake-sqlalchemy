@@ -11,18 +11,26 @@ class _NameUtils:
         self.identifier_preparer = identifier_preparer
 
     def normalize_name(self, name):
-        if name is None:
-            return None
-        if name == "":
-            return ""
-        if name.upper() == name and not self.identifier_preparer._requires_quotes(
-            name.lower()
-        ):
-            return name.lower()
-        elif name.lower() == name:
-            return quoted_name(name, quote=True)
-        else:
+        if name in (None, ""):
             return name
+
+        if isinstance(name, quoted_name) and name.quote:
+            return name
+
+        coerced_name = str(name)
+        has_lowercase = any(char.islower() for char in coerced_name)
+
+        requires_quotes = has_lowercase
+        if self.identifier_preparer is not None:
+            requires_quotes = (
+                requires_quotes
+                or self.identifier_preparer._requires_quotes(coerced_name.lower())
+            )
+
+        if requires_quotes:
+            return quoted_name(coerced_name, quote=True)
+
+        return name
 
     def denormalize_name(self, name):
         if name is None:
