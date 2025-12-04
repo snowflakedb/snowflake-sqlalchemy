@@ -442,7 +442,7 @@ def test_ilike_support(engine_testaccount):
     metadata.create_all(engine_testaccount)
 
     cases = [
-        # query pattern, escape, negate, expected query result
+        # (query_pattern, escape, negate, expected_query_result)
         ("casesens%", None, False, ["CaseSensitive", "casesensitive"]),
         ("casesens%", None, True, ["pattern_test", "pattern_%", "patternstest"]),
         ("pattern_%", None, False, ["pattern_test", "pattern_%", "patternstest"]),
