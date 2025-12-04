@@ -2,6 +2,8 @@
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
 
+from unittest import mock
+
 from sqlalchemy.engine.url import URL
 
 from snowflake.sqlalchemy import base
@@ -167,3 +169,47 @@ def test_denormalize_quote_join():
     ]
     for ts in test_data:
         assert sfdialect._denormalize_quote_join(*ts[0]) == ts[1]
+
+
+def test_get_server_version_info_parses_simple_version():
+    sfdialect = base.dialect()
+
+    connection = mock.Mock()
+    cursor_result = mock.Mock()
+    cursor_result.fetchone.return_value = ("8.10.2",)
+    connection.execute.return_value = cursor_result
+
+    assert sfdialect._get_server_version_info(connection) == (8, 10, 2)
+
+
+def test_get_server_version_info_handles_additional_suffix():
+    sfdialect = base.dialect()
+
+    connection = mock.Mock()
+    cursor_result = mock.Mock()
+    cursor_result.fetchone.return_value = ("9.11.3 20241110",)
+    connection.execute.return_value = cursor_result
+
+    assert sfdialect._get_server_version_info(connection) == (9, 11, 3)
+
+
+def test_get_server_version_info_handles_additional_whitespace():
+    sfdialect = base.dialect()
+
+    connection = mock.Mock()
+    cursor_result = mock.Mock()
+    cursor_result.fetchone.return_value = ("   9.11.3   20241110  ",)
+    connection.execute.return_value = cursor_result
+
+    assert sfdialect._get_server_version_info(connection) == (9, 11, 3)
+
+
+def test_get_server_version_info_returns_none_when_no_row():
+    sfdialect = base.dialect()
+
+    connection = mock.Mock()
+    cursor_result = mock.Mock()
+    cursor_result.fetchone.return_value = None
+    connection.execute.return_value = cursor_result
+
+    assert sfdialect._get_server_version_info(connection) is None
