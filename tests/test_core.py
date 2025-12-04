@@ -182,7 +182,6 @@ def test_get_server_version_info(engine_testaccount):
 
 
 def test_boolean_query_argument_parsing():
-
     engine = create_engine(
         URL(
             **CONNECTION_PARAMETERS,
@@ -1396,12 +1395,12 @@ def test_special_schema_character(db_parameters, on_public_ci):
     with connect(**options) as sf_conn:
         sf_connection = (
             sf_conn.cursor()
-            .execute("select current_database(), " "current_schema();")
+            .execute("select current_database(), current_schema();")
             .fetchall()
         )
     with create_engine(URL(**options)).connect() as sa_conn:
         sa_connection = sa_conn.execute(
-            text("select current_database(), " "current_schema();")
+            text("select current_database(), current_schema();")
         ).fetchall()
     # Teardown
     with connect(**options) as conn:
@@ -1834,6 +1833,7 @@ CREATE OR REPLACE TEMP TABLE {table_name}
         )
 
 
+@pytest.mark.pandas
 def test_snowflake_sqlalchemy_as_valid_client_type():
     engine = create_engine(
         URL(**CONNECTION_PARAMETERS),
