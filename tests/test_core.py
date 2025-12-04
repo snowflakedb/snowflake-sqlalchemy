@@ -441,6 +441,14 @@ def test_ilike_support(engine_testaccount):
     )
     metadata.create_all(engine_testaccount)
 
+    cases = [
+        ("casesens%", None, False, ["CaseSensitive", "casesensitive"]),
+        ("casesens%", None, True, ["pattern_test", "pattern_%", "patternstest"]),
+        ("pattern_%", None, False, ["pattern_test", "pattern_%", "patternstest"]),
+        ("pattern\\_%", "\\", False, ["pattern_test", "pattern_%"]),
+        ("pattern\\_\\%", "\\", False, ["pattern_%"]),
+    ]
+
     try:
         with engine_testaccount.begin() as conn:
             conn.execute(
@@ -453,24 +461,6 @@ def test_ilike_support(engine_testaccount):
                     {"id": 5, "value": "patternstest"},
                 ],
             )
-
-            cases = [
-                ("casesens%", None, False, ["CaseSensitive", "casesensitive"]),
-                (
-                    "casesens%",
-                    None,
-                    True,
-                    ["pattern_test", "pattern_%", "patternstest"],
-                ),
-                (
-                    "pattern_%",
-                    None,
-                    False,
-                    ["pattern_test", "pattern_%", "patternstest"],
-                ),
-                ("pattern\\_%", "\\", False, ["pattern_test", "pattern_%"]),
-                ("pattern\\_\\%", "\\", False, ["pattern_%"]),
-            ]
 
             for pattern, escape, negate, expected in cases:
                 clause = table.c.value.ilike(pattern, escape=escape)
