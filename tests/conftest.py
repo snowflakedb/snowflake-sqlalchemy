@@ -107,6 +107,11 @@ def external_stage():
         raise ValueError("External_stage is not set")
 
 
+@pytest.fixture(scope="session")
+def on_public_ci():
+    return running_on_public_ci()
+
+
 @pytest.fixture(scope="function")
 def base_location(external_stage, engine_testaccount):
     unique_id = str(uuid.uuid4())
