@@ -100,6 +100,21 @@ class TestSnowflakeCompiler(AssertsCompiledSQL):
             "WHERE table1.id = test.table2.name",
         )
 
+    def test_ilike_compilation(self):
+        statement = select(table1.c.name).where(table1.c.name.ilike("%Ann%"))
+        self.assert_compile(
+            statement,
+            "SELECT table1.name FROM table1 WHERE table1.name ILIKE %(name_1)s",
+        )
+
+        statement = select(table1.c.name).where(
+            ~table1.c.name.ilike("foo\\_%", escape="\\")
+        )
+        self.assert_compile(
+            statement,
+            "SELECT table1.name FROM table1 WHERE table1.name NOT ILIKE %(name_1)s ESCAPE '\\\\'",
+        )
+
     def test_drop_table_comment(self):
         self.assert_compile(DropTableComment(table1), "COMMENT ON TABLE table1 IS ''")
         self.assert_compile(
