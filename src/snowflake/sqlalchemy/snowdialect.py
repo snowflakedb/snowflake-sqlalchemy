@@ -11,7 +11,6 @@ from typing import Any, Collection, Optional, cast
 from urllib.parse import unquote_plus
 
 import sqlalchemy.sql.sqltypes as sqltypes
-from sqlalchemy import Connection
 from sqlalchemy import __version__ as SQLALCHEMY_VERSION
 from sqlalchemy import event as sa_vnt
 from sqlalchemy import exc as sa_exc
@@ -318,7 +317,7 @@ class SnowflakeDialect(default.DefaultDialect):
             self.normalize_name(res[1]),
         )
 
-    def _get_server_version_info(self, connection: Connection):
+    def _get_server_version_info(self, connection):
         """Query and parse the Snowflake server version."""
         result = connection.execute(text("SELECT CURRENT_VERSION()"))
         version_row = result.fetchone()
