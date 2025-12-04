@@ -322,7 +322,7 @@ class SnowflakeDialect(default.DefaultDialect):
         """Query and parse the Snowflake server version."""
         result = connection.execute(text("SELECT CURRENT_VERSION()"))
         version_row = result.fetchone()
-        if version_row is None:
+        if version_row is None or len(version_row) != 1:
             return None
         # Split in case <internal identifier> documented in http://docs.snowflake.com/en/sql-reference/functions/current_version is added
         version = version_row[0].split()[0]

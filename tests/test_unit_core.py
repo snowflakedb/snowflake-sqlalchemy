@@ -213,3 +213,25 @@ def test_get_server_version_info_returns_none_when_no_row():
     connection.execute.return_value = cursor_result
 
     assert sfdialect._get_server_version_info(connection) is None
+
+
+def test_get_server_version_info_returns_none_when_no_column():
+    sfdialect = base.dialect()
+
+    connection = mock.Mock()
+    cursor_result = mock.Mock()
+    cursor_result.fetchone.return_value = ()
+    connection.execute.return_value = cursor_result
+
+    assert sfdialect._get_server_version_info(connection) is None
+
+
+def test_get_server_version_info_returns_none_when_too_many_columns():
+    sfdialect = base.dialect()
+
+    connection = mock.Mock()
+    cursor_result = mock.Mock()
+    cursor_result.fetchone.return_value = ("9.11.3", "123")
+    connection.execute.return_value = cursor_result
+
+    assert sfdialect._get_server_version_info(connection) is None
