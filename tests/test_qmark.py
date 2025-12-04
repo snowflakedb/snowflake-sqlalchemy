@@ -5,8 +5,10 @@
 import os
 import sys
 
-import pandas as pd
 import pytest
+
+pytest.importorskip("pandas")
+import pandas as pd
 from sqlalchemy import text
 
 THIS_DIR = os.path.dirname(os.path.realpath(__file__))

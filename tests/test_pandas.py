@@ -10,8 +10,10 @@ import textwrap
 import uuid
 
 import numpy as np
-import pandas as pd
 import pytest
+
+pytest.importorskip("pandas")
+import pandas as pd
 import sqlalchemy
 from sqlalchemy import (
     Column,

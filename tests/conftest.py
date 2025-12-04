@@ -59,42 +59,12 @@ def pytest_addoption(parser):
 
 def pytest_collection_modifyitems(config, items):
     if config.getoption("--ignore_v20_test"):
-        # --ignore_v20_test given in cli: skip sqlalchemy 2.0 tests
         skip_feature_v2 = pytest.mark.skip(
             reason="need remove --ignore_v20_test option to run"
         )
         for item in items:
             if "feature_v20" in item.keywords:
                 item.add_marker(skip_feature_v2)
-
-
-@pytest.fixture(scope="session")
-def on_travis():
-    return os.getenv("TRAVIS", "").lower() == "true"
-
-
-@pytest.fixture(scope="session")
-def on_appveyor():
-    return os.getenv("APPVEYOR", "").lower() == "true"
-
-
-@pytest.fixture(scope="session")
-def on_public_ci(on_travis, on_appveyor):
-    return on_travis or on_appveyor
-
-
-def help():
-    print(
-        """Connection parameter must be specified in parameters.py,
-    for example:
-CONNECTION_PARAMETERS = {
-    'account': 'testaccount',
-    'user': 'user1',
-    'password': 'test',
-    'database': 'testdb',
-    'schema': 'public',
-}"""
-    )
 
 
 logger = getLogger(__name__)
@@ -135,6 +105,11 @@ def external_stage():
         yield db_parameters["external_stage"]
     else:
         raise ValueError("External_stage is not set")
+
+
+@pytest.fixture(scope="session")
+def on_public_ci():
+    return running_on_public_ci()
 
 
 @pytest.fixture(scope="function")
@@ -325,6 +300,7 @@ def running_on_public_ci() -> bool:
 
 def pytest_runtest_setup(item) -> None:
     """Ran before calling each test, used to decide whether a test should be skipped."""
+    _ensure_optional_dependencies(item)
     test_tags = [mark.name for mark in item.iter_markers()]
 
     # Get what cloud providers the test is marked for if any
@@ -342,3 +318,9 @@ def pytest_runtest_setup(item) -> None:
         pytest.skip("cannot run this test on external CI")
     elif INTERNAL_SKIP_TAGS.intersection(test_tags) and not running_on_public_ci():
         pytest.skip("cannot run this test on internal CI")
+
+
+def _ensure_optional_dependencies(item):
+    """Skip optional-dependency tests when the dependency is unavailable."""
+    if "pandas" in item.keywords:
+        pytest.importorskip("pandas")
