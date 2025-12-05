@@ -9,6 +9,9 @@ Source code is also available at:
 
 # Unreleased Notes
 
+vX.X.X
+  - Add server_version_info support
+
 # Release Notes
 
 - v1.8.1

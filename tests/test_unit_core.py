@@ -2,6 +2,9 @@
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
 
+from unittest import mock
+
+import pytest
 from sqlalchemy.engine.url import URL
 
 from snowflake.sqlalchemy import base
@@ -167,3 +170,31 @@ def test_denormalize_quote_join():
     ]
     for ts in test_data:
         assert sfdialect._denormalize_quote_join(*ts[0]) == ts[1]
+
+
+@pytest.mark.parametrize(
+    "raw_value, expected",
+    [
+        pytest.param(("8.10.2",), (8, 10, 2), id="simple"),
+        pytest.param(("9.11.3 20241110",), (9, 11, 3), id="with_additional_parts"),
+        pytest.param(
+            ("   9.11.3   20241110  ",), (9, 11, 3), id="with_additional_whitespace"
+        ),
+        pytest.param(("1.2.3", "4.5.6"), (1, 2, 3), id="multiple_columns"),
+        pytest.param(None, None, id="no_row"),
+        pytest.param((), None, id="empty_result"),
+    ],
+)
+def test_get_server_version_info_parsing(raw_value, expected):
+    sfdialect = base.dialect()
+
+    connection = mock.Mock()
+    cursor_result = mock.Mock()
+    cursor_result.fetchone.return_value = raw_value
+    connection.execute.return_value = cursor_result
+
+    result = sfdialect._get_server_version_info(connection)
+    if expected is None:
+        assert result is None
+    else:
+        assert result == expected
