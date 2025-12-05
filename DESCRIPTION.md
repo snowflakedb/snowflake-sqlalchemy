@@ -11,6 +11,9 @@ Source code is also available at:
 
 # Release Notes
 
+- v1.8.1
+  - Add python 3.14 to project metadata
+
 - v1.8.0(December 5, 2025)
   - Add logging of SQLAlchemy version
   - Bump `snowflake-connector-python<5.0.0`
