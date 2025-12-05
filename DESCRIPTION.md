@@ -9,6 +9,9 @@ Source code is also available at:
 
 # Unreleased Notes
 
+- vX.X.X
+    - Add support for ILIKE in queries
+
 # Release Notes
 
 - v1.8.1

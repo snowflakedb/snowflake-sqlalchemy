@@ -16,7 +16,7 @@ from sqlalchemy.engine import default
 from sqlalchemy.orm import context
 from sqlalchemy.orm.context import _MapperEntity
 from sqlalchemy.schema import Sequence, Table
-from sqlalchemy.sql import compiler, expression, functions
+from sqlalchemy.sql import compiler, expression, functions, sqltypes
 from sqlalchemy.sql.base import CompileState
 from sqlalchemy.sql.elements import BindParameter, quoted_name
 from sqlalchemy.sql.expression import Executable
@@ -778,6 +778,24 @@ class SnowflakeCompiler(compiler.SQLCompiler):
 
     def visit_not_regexp_match_op_binary(self, binary, operator, **kw):
         return f"NOT {self.visit_regexp_match_op_binary(binary, operator, **kw)}"
+
+    def visit_ilike_op_binary(self, binary, operator, **kw):
+        return self._render_ilike(binary, negate=False, **kw)
+
+    def visit_not_ilike_op_binary(self, binary, operator, **kw):
+        return self._render_ilike(binary, negate=True, **kw)
+
+    def _render_ilike(self, binary, negate=False, **kw):
+        left = binary.left._compiler_dispatch(self, **kw)
+        right = binary.right._compiler_dispatch(self, **kw)
+        escape = binary.modifiers.get("escape")
+        escape_clause = (
+            " ESCAPE " + self.render_literal_value(escape, sqltypes.STRINGTYPE)
+            if escape is not None
+            else ""
+        )
+        operator = "NOT ILIKE" if negate else "ILIKE"
+        return f"{left} {operator} {right}{escape_clause}"
 
     def visit_join(self, join, asfrom=False, from_linter=None, **kwargs):
         if from_linter:
