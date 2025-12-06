@@ -4,6 +4,9 @@ about: Something isn't working as expected? Here is the right place to report.
 labels: bug, needs triage
 ---
 
+:exclamation: If you need **urgent assistance** then [file a case with Snowflake Support](https://community.snowflake.com/s/article/How-To-Submit-a-Support-Case-in-Snowflake-Lodge).
+Otherwise continue here.
+
 Please answer these questions before submitting your issue. Thanks!
 
 1. What version of Python are you using?
@@ -41,7 +44,3 @@ Please answer these questions before submitting your issue. Thanks!
       ch.setFormatter(logging.Formatter('%(asctime)s - %(threadName)s %(filename)s:%(lineno)d - %(funcName)s() - %(levelname)s - %(message)s'))
       logger.addHandler(ch)
    ```
-
-<!--
-If you need urgent assistance reach out to support for escalated issue processing https://community.snowflake.com/s/article/How-To-Submit-a-Support-Case-in-Snowflake-Lodge
--->
