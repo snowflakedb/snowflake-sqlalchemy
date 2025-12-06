@@ -44,7 +44,7 @@ jobs:
               summary: $issuetitle,
               description: $issuebody,
               customfield_11401: { id: "14723" },
-              assignee: { id: "712020:e527ae71-55cc-4e02-9217-1ca4ca8028a2" },
+              assignee: { id: "712020:1f89d667-6a78-48d8-9661-59d56a7ebc73" },
               components: [{"id":"16161"},{"id":"16403"}],
               labels: ["oss"],
               priority: { id: "10001" }
