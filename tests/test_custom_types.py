@@ -35,7 +35,7 @@ def test_string_conversions():
     ] + sf_custom_types
 
     for type_ in sf_types:
-        # Since vector type doesn't have any default params, it has to be instantiated and asserted differently
+        # Since vector data type has required parameters, it has to be instantiated and asserted differently
         if type_ == "VECTOR":
             sample = getattr(custom_types, type_)("FLOAT", 2)
         else:
