@@ -39,6 +39,68 @@ class VARIANT(SnowflakeType):
     __visit_name__ = "VARIANT"
 
 
+class VECTOR(SnowflakeType):
+    __visit_name__ = "VECTOR"
+
+    _VALID_ELEMENT_TYPES = {"INT", "FLOAT"}
+
+    def __init__(
+        self, element_type: Union[str, sqltypes.Integer, sqltypes.Float], dimension: int
+    ):
+        self.element_type = self._normalize_element_type(element_type)
+        self.dimension = self._normalize_dimension(dimension)
+        super().__init__()
+
+    @classmethod
+    def _normalize_element_type(
+        cls, element_type: Union[str, sqltypes.Integer, sqltypes.Float]
+    ):
+        if not isinstance(element_type, (str, sqltypes.Integer, sqltypes.Float)):
+            raise TypeError(
+                f"VECTOR element type must be a string, SQLAlchemy INT or FLOAT type, got {type(element_type).__name__}."
+            )
+
+        normalized_element_type = ""
+        if isinstance(element_type, str):
+            normalized_element_type = element_type.strip().upper()
+            if normalized_element_type not in cls._VALID_ELEMENT_TYPES:
+                raise ValueError(
+                    f"Unsupported VECTOR element type '{element_type}'. "
+                    f"Snowflake only supports {cls._VALID_ELEMENT_TYPES} element types."
+                )
+        elif isinstance(element_type, (sqltypes.Integer, sqltypes.Float)):
+            normalized_element_type = cls._map_sqlalchemy_type(element_type)
+
+        return normalized_element_type
+
+    @classmethod
+    def _map_sqlalchemy_type(
+        cls, element_type: Union[sqltypes.Integer, sqltypes.Float]
+    ) -> str:
+        if isinstance(element_type, sqltypes.Integer):
+            return "INT"
+        if isinstance(element_type, sqltypes.Float):
+            return "FLOAT"
+        raise ValueError(
+            "SQLAlchemy type must be an Integer or Float for VECTOR element."
+        )
+
+    @classmethod
+    def _normalize_dimension(cls, dimension: int) -> int:
+        if not isinstance(dimension, int):
+            raise TypeError(
+                f"VECTOR dimension must be an integer, got {type(dimension).__name__}."
+            )
+        if dimension <= 0:
+            raise ValueError(
+                f"VECTOR dimension must be a positive integer, got {dimension}."
+            )
+        return dimension
+
+    def __repr__(self):
+        return f"VECTOR({self.element_type}, {self.dimension})"
+
+
 class StructuredType(SnowflakeType):
     def __init__(self, is_semi_structured: bool = False):
         self.is_semi_structured = is_semi_structured

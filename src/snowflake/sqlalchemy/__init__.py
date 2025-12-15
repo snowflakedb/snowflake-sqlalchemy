@@ -61,6 +61,7 @@ from .custom_types import (  # noqa
     TINYINT,
     VARBINARY,
     VARIANT,
+    VECTOR,
 )
 from .sql.custom_schema import (  # noqa
     DynamicTable,
@@ -120,6 +121,7 @@ _custom_types = (
     "TINYINT",
     "VARBINARY",
     "VARIANT",
+    "VECTOR",
     "MAP",
 )
 

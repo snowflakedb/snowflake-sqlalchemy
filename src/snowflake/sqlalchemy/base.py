@@ -1181,6 +1181,9 @@ class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
     def visit_GEOMETRY(self, type_, **kw):
         return "GEOMETRY"
 
+    def visit_VECTOR(self, type_, **kw):
+        return f"VECTOR({type_.element_type}, {type_.dimension})"
+
 
 construct_arguments = [(Table, {"clusterby": None})]
 

@@ -22,7 +22,7 @@ from sqlalchemy.sql import select
 from sqlalchemy.sql.ddl import CreateTable
 
 from snowflake.sqlalchemy import NUMBER, IcebergTable, SnowflakeTable
-from snowflake.sqlalchemy.custom_types import ARRAY, MAP, OBJECT, TEXT
+from snowflake.sqlalchemy.custom_types import ARRAY, MAP, OBJECT, TEXT, VECTOR
 from snowflake.sqlalchemy.exc import StructuredTypeNotSupportedInTableColumnsError
 from snowflake.sqlalchemy.name_utils import _NameUtils
 from snowflake.sqlalchemy.structured_type_info_manager import _StructuredTypeInfoManager
@@ -51,6 +51,23 @@ def test_compile_table_with_structured_data_type(
     create_table = CreateTable(user_table)
 
     assert sql_compiler(create_table) == snapshot
+
+
+def test_compile_table_with_vector_type(sql_compiler):
+    metadata = MetaData()
+    user_table = Table(
+        "vector_table",
+        metadata,
+        Column("Id", Integer, primary_key=True),
+        Column("embedding", VECTOR("FLOAT", 3)),
+    )
+
+    create_table = CreateTable(user_table)
+
+    assert sql_compiler(create_table) == (
+        'CREATE TABLE vector_table (\t"Id" INTEGER NOT NULL AUTOINCREMENT, '
+        '\tembedding VECTOR(FLOAT, 3), \tPRIMARY KEY ("Id"))'
+    )
 
 
 def test_compile_table_with_sqlalchemy_array(sql_compiler, snapshot):

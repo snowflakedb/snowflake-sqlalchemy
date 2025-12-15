@@ -34,6 +34,7 @@ from ..custom_types import (
     TIMESTAMP_NTZ,
     TIMESTAMP_TZ,
     VARIANT,
+    VECTOR,
 )
 
 ischema_names = {
@@ -72,6 +73,7 @@ ischema_names = {
     "ARRAY": ARRAY,
     "GEOGRAPHY": GEOGRAPHY,
     "GEOMETRY": GEOMETRY,
+    "VECTOR": VECTOR,
 }
 
 NOT_NULL_STR = "NOT NULL"
@@ -164,6 +166,8 @@ def parse_type(type_text: str) -> TypeEngine:
             col_type_kw = __parse_object_type_parameters(parameters)
         elif issubclass(col_type_class, ARRAY):
             col_type_kw = __parse_nullable_parameter(parameters)
+        elif issubclass(col_type_class, VECTOR):
+            col_type_kw = __parse_vector_type_parameters(parameters)
         if col_type_kw is None:
             col_type_class = NullType
             col_type_kw = {}
@@ -226,6 +230,21 @@ def __parse_map_type_parameters(parameters):
         return None
 
     return {"key_type": key_type, **value_type}
+
+
+def __parse_vector_type_parameters(parameters):
+    if len(parameters) != 2:
+        return None
+
+    element_type = parameters[0].strip()
+    dimension_str = parameters[1].strip()
+    if not dimension_str.isdigit():
+        return None
+
+    return {
+        "element_type": element_type,
+        "dimension": int(dimension_str),
+    }
 
 
 def __parse_type_with_length_parameters(parameters):
