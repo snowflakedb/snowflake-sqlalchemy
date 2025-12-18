@@ -166,8 +166,6 @@ def parse_type(type_text: str) -> TypeEngine:
             col_type_kw = __parse_object_type_parameters(parameters)
         elif issubclass(col_type_class, ARRAY):
             col_type_kw = __parse_nullable_parameter(parameters)
-        elif issubclass(col_type_class, DECFLOAT):
-            col_type_kw = __parse_decfloat_type_parameters(parameters)
         if col_type_kw is None:
             col_type_class = NullType
             col_type_kw = {}
@@ -246,12 +244,4 @@ def __parse_numeric_type_parameters(parameters):
         result["precision"] = int(parameters[0])
     if len(parameters) == 2 and str.isdigit(parameters[1]):
         result["scale"] = int(parameters[1])
-    return result
-
-
-def __parse_decfloat_type_parameters(parameters):
-    """Parse DECFLOAT type parameters - only precision is supported."""
-    result = {}
-    if len(parameters) == 1 and str.isdigit(parameters[0]):
-        result["precision"] = int(parameters[0])
     return result

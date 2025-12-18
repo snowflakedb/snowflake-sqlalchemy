@@ -116,34 +116,19 @@ class GEOMETRY(SnowflakeType):
 
 
 class DECFLOAT(SnowflakeType):
-    """Snowflake DECFLOAT type - decimal floating-point with up to 38 significant digits.
+    """Snowflake DECFLOAT type - decimal floating-point with 38 significant digits.
 
     DECFLOAT supports a wider range of values than FLOAT with higher precision.
     It can represent values with exponents from approximately -6000 to +6000.
 
-    Note: DECFLOAT has restrictions - it cannot be stored in VARIANT, OBJECT,
-    or ARRAY, and is not supported in Iceberg or Hybrid tables.
+    Note: DECFLOAT has restrictions:
+    - Precision is fixed at 38 digits (cannot be customized)
+    - Cannot be stored in VARIANT, OBJECT, or ARRAY
+    - Not supported in Iceberg or Hybrid tables
+    - Does NOT support special values (inf, -inf, NaN) unlike FLOAT
     """
 
     __visit_name__ = "DECFLOAT"
-
-    def __init__(self, precision: int = 38):
-        self.precision = precision
-        super().__init__()
-
-    def bind_processor(self, dialect):
-        """Convert Python value to DB format - handle special float values."""
-
-        def process(value):
-            if value == float("inf"):
-                return "inf"
-            elif value == float("-inf"):
-                return "-inf"
-            elif value is not None and value != value:  # NaN check
-                return "NaN"
-            return value
-
-        return process
 
 
 class _CUSTOM_Date(SnowflakeType, sqltypes.Date):

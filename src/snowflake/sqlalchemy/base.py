@@ -1182,8 +1182,6 @@ class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
         return "GEOMETRY"
 
     def visit_DECFLOAT(self, type_, **kw):
-        if type_.precision is not None and type_.precision != 38:
-            return f"DECFLOAT({type_.precision})"
         return "DECFLOAT"
 
 
