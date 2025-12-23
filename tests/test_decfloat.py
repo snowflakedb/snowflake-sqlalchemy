@@ -25,6 +25,15 @@ def _normalize_ddl(ddl: str) -> str:
 class TestDECFLOATType:
     """Tests for DECFLOAT type support."""
 
+    @pytest.fixture(autouse=True)
+    def reset_decfloat_state(self):
+        """Reset DECFLOAT warning flag and decimal precision before/after each test."""
+        original_prec = decimal.getcontext().prec
+        DECFLOAT._warned_precision = False
+        yield
+        decimal.getcontext().prec = original_prec
+        DECFLOAT._warned_precision = False
+
     def test_decfloat_type(self):
         """Test DECFLOAT type instantiation."""
         decfloat_type = DECFLOAT()
@@ -32,76 +41,68 @@ class TestDECFLOATType:
 
     def test_decfloat_warns_on_low_precision_context(self):
         """Test that DECFLOAT warns when decimal context precision is too low."""
-        # Reset warning flag for clean test
-        DECFLOAT._warned_precision = False
-        original_prec = decimal.getcontext().prec
+        decimal.getcontext().prec = 28
 
-        try:
-            # Set precision below 38
-            decimal.getcontext().prec = 28
+        decfloat_type = DECFLOAT()
+        processor = decfloat_type.result_processor(None, None)
 
-            decfloat_type = DECFLOAT()
-            processor = decfloat_type.result_processor(None, None)
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            processor(Decimal("123.456"))  # First call - should warn
+            processor(Decimal("789.012"))  # Second call - should not warn again
 
-            with warnings.catch_warnings(record=True) as w:
-                warnings.simplefilter("always")
-                processor(Decimal("123.456"))
-
-                assert len(w) == 1
-                assert "decimal context precision (28)" in str(w[0].message)
-                assert "DECFLOAT precision (38)" in str(w[0].message)
-
-            # Verify warning is only emitted once
-            DECFLOAT._warned_precision = False  # Reset for next assertion
-        finally:
-            decimal.getcontext().prec = original_prec
-            DECFLOAT._warned_precision = False
+            assert len(w) == 1, "Warning should only be emitted once"
+            assert "decimal context precision (28)" in str(w[0].message)
+            assert "DECFLOAT precision (38)" in str(w[0].message)
 
     def test_decfloat_no_warning_when_precision_sufficient(self):
         """Test that DECFLOAT does not warn when precision is >= 38."""
-        DECFLOAT._warned_precision = False
-        original_prec = decimal.getcontext().prec
+        decimal.getcontext().prec = 38
 
-        try:
-            decimal.getcontext().prec = 38
+        decfloat_type = DECFLOAT()
+        processor = decfloat_type.result_processor(None, None)
 
-            decfloat_type = DECFLOAT()
-            processor = decfloat_type.result_processor(None, None)
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            processor(Decimal("123.456"))
 
-            with warnings.catch_warnings(record=True) as w:
-                warnings.simplefilter("always")
-                processor(Decimal("123.456"))
+            assert len(w) == 0
 
-                assert len(w) == 0
-        finally:
-            decimal.getcontext().prec = original_prec
-            DECFLOAT._warned_precision = False
+    def test_decfloat_no_warning_when_precision_above_38(self):
+        """Test that DECFLOAT does not warn when precision is above 38.
+
+        When decimal context precision > 38, there's no risk of truncation.
+        Python can hold all 38 DECFLOAT digits without loss.
+        """
+        decimal.getcontext().prec = 50  # Above DECFLOAT's 38
+
+        decfloat_type = DECFLOAT()
+        processor = decfloat_type.result_processor(None, None)
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            processor(Decimal("123.456"))
+
+            assert len(w) == 0
 
     def test_decfloat_no_warning_when_dialect_has_decfloat_enabled(self):
         """Test that DECFLOAT does not warn when dialect has enable_decfloat set."""
-        DECFLOAT._warned_precision = False
-        original_prec = decimal.getcontext().prec
+        # Set low precision that would normally trigger warning
+        decimal.getcontext().prec = 28
 
-        try:
-            # Set low precision that would normally trigger warning
-            decimal.getcontext().prec = 28
+        # Create mock dialect with _enable_decfloat set
+        class MockDialect:
+            _enable_decfloat = True
 
-            # Create mock dialect with _enable_decfloat set
-            class MockDialect:
-                _enable_decfloat = True
+        decfloat_type = DECFLOAT()
+        processor = decfloat_type.result_processor(MockDialect(), None)
 
-            decfloat_type = DECFLOAT()
-            processor = decfloat_type.result_processor(MockDialect(), None)
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            processor(Decimal("123.456"))
 
-            with warnings.catch_warnings(record=True) as w:
-                warnings.simplefilter("always")
-                processor(Decimal("123.456"))
-
-                # No warning because dialect has DECFLOAT support enabled
-                assert len(w) == 0
-        finally:
-            decimal.getcontext().prec = original_prec
-            DECFLOAT._warned_precision = False
+            # No warning because dialect has DECFLOAT support enabled
+            assert len(w) == 0
 
     def test_decfloat_visit_name(self):
         """Test DECFLOAT has correct visit name."""
@@ -263,7 +264,14 @@ class TestDECFLOATIntegration:
         )
         metadata.create_all(engine_testaccount)
         try:
-            assert test_table is not None
+            inspector = inspect(engine_testaccount)
+            assert inspector.has_table(
+                table_name
+            ), f"Table {table_name} was not created"
+
+            columns = inspector.get_columns(table_name)
+            value_col = next(c for c in columns if c["name"].lower() == "value")
+            assert isinstance(value_col["type"], DECFLOAT)
         finally:
             test_table.drop(engine_testaccount)
 
