@@ -326,6 +326,16 @@ class SnowflakeDialect(default.DefaultDialect):
             self.normalize_name(res[1]),
         )
 
+    def _get_server_version_info(self, connection):
+        """Query and parse the Snowflake server version."""
+        result = connection.execute(text("SELECT CURRENT_VERSION()"))
+        version_row = result.fetchone()
+        if version_row is None or len(version_row) == 0:
+            return None
+        # Split in case <internal identifier> documented in http://docs.snowflake.com/en/sql-reference/functions/current_version is added
+        version = version_row[0].split()[0]
+        return tuple(int(x) for x in version.split("."))
+
     def _get_default_schema_name(self, connection):
         # NOTE: no cache object is passed here
         _, current_schema = self._current_database_schema(connection)

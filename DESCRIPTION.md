@@ -10,6 +10,7 @@ Source code is also available at:
 # Unreleased Notes
 
 - Add support for DECFLOAT data type
+- Add server_version_info support
 
 # Release Notes
 

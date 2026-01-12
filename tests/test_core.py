@@ -170,6 +170,17 @@ def test_connect_args():
         engine.dispose()
 
 
+def test_get_server_version_info(engine_testaccount):
+    with engine_testaccount.connect() as conn:
+        direct_version = conn.execute(text("SELECT CURRENT_VERSION()")).scalar()
+        version_info = engine_testaccount.dialect._get_server_version_info(conn)
+
+    assert direct_version is not None
+    assert version_info == tuple(
+        int(part) for part in direct_version.split()[0].split(".")
+    )
+
+
 def test_boolean_query_argument_parsing():
     engine = create_engine(
         URL(
