@@ -9,10 +9,17 @@ Source code is also available at:
 
 # Unreleased Notes
 
-vX.X.X
-  - Add server_version_info support
+- Add support for DECFLOAT data type
+- Add server_version_info support
 
 # Release Notes
+
+- v1.8.2 (December 9, 2025)
+  - Updated supported max python version to 3.13
+  - Version 1.8.1 yanked due to max python version supported by `snowflake-connector-python`
+
+- v1.8.1 (December 9, 2025)
+  - Add python 3.14 to project metadata
 
 - v1.8.0(December 5, 2025)
   - Add logging of SQLAlchemy version

@@ -1,6 +1,7 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
+import decimal
 import operator
 from collections import defaultdict
 from enum import Enum
@@ -39,6 +40,7 @@ from .base import (
     SnowflakeTypeCompiler,
 )
 from .custom_types import (
+    DECFLOAT_PRECISION,
     StructuredType,
     _CUSTOM_Date,
     _CUSTOM_DateTime,
@@ -163,12 +165,14 @@ class SnowflakeDialect(default.DefaultDialect):
         self,
         force_div_is_floordiv: bool = True,
         isolation_level: Optional[str] = SnowflakeIsolationLevel.READ_COMMITTED.value,
+        enable_decfloat: bool = False,
         **kwargs: Any,
     ):
         super().__init__(isolation_level=isolation_level, **kwargs)
         self.force_div_is_floordiv = force_div_is_floordiv
         self.div_is_floordiv = force_div_is_floordiv
         self.name_utils = _NameUtils(self.identifier_preparer)
+        self._enable_decfloat = enable_decfloat
 
     def initialize(self, connection):
         super().initialize(connection)
@@ -237,6 +241,11 @@ class SnowflakeDialect(default.DefaultDialect):
         self._cache_column_metadata = (
             parse_url_boolean(cache_column_metadata) if cache_column_metadata else False
         )
+
+        # Handle enable_decfloat URL parameter
+        enable_decfloat = query.pop("enable_decfloat", None)
+        if enable_decfloat is not None:
+            self._enable_decfloat = parse_url_boolean(enable_decfloat)
 
         # URL sets the query parameter values as strings, we need to cast to expected types when necessary
         for name, value in query.items():
@@ -919,6 +928,10 @@ class SnowflakeDialect(default.DefaultDialect):
     def connect(self, *cargs, **cparams):
         if _ENABLE_SQLALCHEMY_AS_APPLICATION_NAME:
             cparams = _update_connection_application_name(**cparams)
+
+        # Set decimal precision for full DECFLOAT support (38 digits)
+        if self._enable_decfloat:
+            decimal.getcontext().prec = DECFLOAT_PRECISION
 
         connection = super().connect(*cargs, **cparams)
         self._log_new_connection_event(connection)

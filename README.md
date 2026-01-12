@@ -303,6 +303,57 @@ The following `NumPy` data types are supported:
 - numpy.float64
 - numpy.datatime64
 
+### DECFLOAT Data Type Support
+
+Snowflake SQLAlchemy supports the `DECFLOAT` data type, which provides decimal floating-point with up to 38 significant digits. For more information, see the [Snowflake DECFLOAT documentation](https://docs.snowflake.com/en/sql-reference/data-types-numeric#decfloat).
+
+```python
+from sqlalchemy import Column, Integer, MetaData, Table
+from snowflake.sqlalchemy import DECFLOAT
+
+metadata = MetaData()
+t = Table('my_table', metadata,
+    Column('id', Integer, primary_key=True),
+    Column('value', DECFLOAT()),
+)
+metadata.create_all(engine)
+```
+
+#### DECFLOAT Precision
+
+The Snowflake Python connector uses Python's `decimal` module context when converting `DECFLOAT` values to Python `Decimal` objects. Python's default decimal context precision is 28 digits, which can truncate `DECFLOAT` values that use up to 38 digits.
+
+To preserve full 38-digit precision, add `enable_decfloat=True` to the connection URL:
+
+```python
+from sqlalchemy import create_engine
+
+engine = create_engine(
+    'snowflake://testuser1:0123456@abc123/testdb/public?warehouse=testwh&enable_decfloat=True'
+)
+```
+
+Or using the `snowflake.sqlalchemy.URL` helper:
+
+```python
+from snowflake.sqlalchemy import URL
+from sqlalchemy import create_engine
+
+engine = create_engine(URL(
+    account = 'abc123',
+    user = 'testuser1',
+    password = '0123456',
+    database = 'testdb',
+    schema = 'public',
+    warehouse = 'testwh',
+    enable_decfloat = True,
+))
+```
+
+**Note**: `DECFLOAT` does not support special values (`inf`, `-inf`, `NaN`) unlike `FLOAT`.
+
+**Why is `enable_decfloat` not enabled by default?** Enabling it sets `decimal.getcontext().prec = 38`, which modifies Python's thread-local decimal context and affects all `Decimal` operations in that thread, not just database queries. To avoid unexpected side effects on application code, the dialect emits a warning when `DECFLOAT` values are retrieved without full precision enabled, guiding users to opt-in explicitly.
+
 ### Cache Column Metadata
 
 SQLAlchemy provides [the runtime inspection API](http://docs.sqlalchemy.org/en/latest/core/inspection.html) to get the runtime information about the various objects. One of the common use case is get all tables and their column metadata in a schema in order to construct a schema catalog. For example, [alembic](http://alembic.zzzcomputing.com/) on top of SQLAlchemy manages database schema migrations. A pseudo code flow is as follows:

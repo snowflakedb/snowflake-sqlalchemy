@@ -1181,6 +1181,9 @@ class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
     def visit_GEOMETRY(self, type_, **kw):
         return "GEOMETRY"
 
+    def visit_DECFLOAT(self, type_, **kw):
+        return "DECFLOAT"
+
 
 construct_arguments = [(Table, {"clusterby": None})]
 
