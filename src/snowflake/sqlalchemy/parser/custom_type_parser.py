@@ -25,6 +25,7 @@ from sqlalchemy.sql.type_api import TypeEngine
 from ..custom_types import (
     _CUSTOM_DECIMAL,
     ARRAY,
+    DECFLOAT,
     DOUBLE,
     GEOGRAPHY,
     GEOMETRY,
@@ -47,6 +48,7 @@ ischema_names = {
     "DATETIME": DATETIME,
     "DEC": DECIMAL,
     "DECIMAL": DECIMAL,
+    "DECFLOAT": DECFLOAT,
     "DOUBLE": DOUBLE,
     "FIXED": DECIMAL,
     "FLOAT": FLOAT,  # Snowflake FLOAT datatype doesn't have parameters

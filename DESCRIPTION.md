@@ -9,6 +9,8 @@ Source code is also available at:
 
 # Unreleased Notes
 
+- Add support for DECFLOAT data type
+
 # Release Notes
 
 - v1.8.2 (December 9, 2025)
