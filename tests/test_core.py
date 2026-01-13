@@ -431,6 +431,49 @@ def test_insert_tables(engine_testaccount):
             users.drop(engine_testaccount)
 
 
+def test_ilike_support(engine_testaccount):
+    metadata = MetaData()
+    table = Table(
+        f"ilike_test_{random_string(5)}",
+        metadata,
+        Column("id", Integer, primary_key=True),
+        Column("value", String),
+    )
+    metadata.create_all(engine_testaccount)
+
+    cases = [
+        # (query_pattern, escape, negate, expected_query_result)
+        ("casesens%", None, False, ["CaseSensitive", "casesensitive"]),
+        ("casesens%", None, True, ["pattern_test", "pattern_%", "patternstest"]),
+        ("pattern_%", None, False, ["pattern_test", "pattern_%", "patternstest"]),
+        ("pattern\\_%", "\\", False, ["pattern_test", "pattern_%"]),
+        ("pattern\\_\\%", "\\", False, ["pattern_%"]),
+    ]
+
+    try:
+        with engine_testaccount.begin() as conn:
+            conn.execute(
+                table.insert(),
+                [
+                    {"id": 1, "value": "CaseSensitive"},
+                    {"id": 2, "value": "casesensitive"},
+                    {"id": 3, "value": "pattern_test"},
+                    {"id": 4, "value": "pattern_%"},
+                    {"id": 5, "value": "patternstest"},
+                ],
+            )
+
+            for pattern, escape, negate, expected in cases:
+                clause = table.c.value.ilike(pattern, escape=escape)
+                if negate:
+                    clause = ~clause
+
+                rows = conn.execute(select(table.c.value).where(clause)).scalars().all()
+                assert sorted(rows) == sorted(expected)
+    finally:
+        metadata.drop_all(engine_testaccount)
+
+
 def test_table_does_not_exist(engine_testaccount):
     """
     Tests Correct Exception Thrown When Table Does Not Exist
@@ -1546,20 +1589,20 @@ def test_for_exception_in_query_all_columns(engine_testaccount, db_parameters):
 
     exception_instance = DBAPIError.instance(
         """
-            SELECT /* sqlalchemy:_get_schema_columns */
-                   ic.table_name,
-                   ic.column_name,
-                   ic.data_type,
-                   ic.character_maximum_length,
-                   ic.numeric_precision,
-                   ic.numeric_scale,
-                   ic.is_nullable,
-                   ic.column_default,
-                   ic.is_identity,
-                   ic.comment
-              FROM information_schema.columns ic
-             WHERE ic.table_schema='schema_name'
-             ORDER BY ic.ordinal_position""",
+        SELECT /* sqlalchemy:_get_schema_columns */
+            ic.table_name,
+            ic.column_name,
+            ic.data_type,
+            ic.character_maximum_length,
+            ic.numeric_precision,
+            ic.numeric_scale,
+            ic.is_nullable,
+            ic.column_default,
+            ic.is_identity,
+            ic.comment
+        FROM information_schema.columns ic
+        WHERE ic.table_schema = 'schema_name'
+        ORDER BY ic.ordinal_position""",
         {"table_schema": "TESTSCHEMA"},
         ProgrammingError(
             "Information schema query returned too much data. Please repeat query with more "

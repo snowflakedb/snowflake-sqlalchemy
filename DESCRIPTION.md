@@ -11,6 +11,7 @@ Source code is also available at:
 
 - Add support for DECFLOAT data type
 - Add server_version_info support
+- Add support for ILIKE in queries
 
 # Release Notes
 
