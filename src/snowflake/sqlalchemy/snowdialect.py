@@ -25,7 +25,6 @@ from sqlalchemy.types import FLOAT, Date, DateTime, Float, Time
 from snowflake.connector import errors as sf_errors
 from snowflake.connector.connection import DEFAULT_CONFIGURATION, SnowflakeConnection
 from snowflake.connector.constants import UTF8
-from snowflake.connector.network import SnowflakeRestful
 from snowflake.connector.telemetry import TelemetryClient, TelemetryData, TelemetryField
 from snowflake.sqlalchemy.compat import returns_unicode
 from snowflake.sqlalchemy.name_utils import _NameUtils
@@ -941,13 +940,7 @@ class SnowflakeDialect(default.DefaultDialect):
     def _log_new_connection_event(self, connection):
         try:
             snowflake_connection = cast(SnowflakeConnection, cast(object, connection))
-            snowflake_rest_client = SnowflakeRestful(
-                host=snowflake_connection.host,
-                port=snowflake_connection.port,
-                protocol="https",
-                connection=snowflake_connection,
-            )
-            snowflake_telemetry_client = TelemetryClient(rest=snowflake_rest_client)
+            snowflake_telemetry_client = TelemetryClient(rest=snowflake_connection.rest)
 
             telemetry_value = {
                 "SQLAlchemy": SQLALCHEMY_VERSION,
