@@ -36,6 +36,7 @@ from snowflake.sqlalchemy.custom_types import (
     TIMESTAMP_NTZ,
     TIMESTAMP_TZ,
     VARIANT,
+    VECTOR,
 )
 
 ischema_names_baseline = {
@@ -71,6 +72,7 @@ ischema_names_baseline = {
     "VARBINARY": BINARY,
     "VARCHAR": VARCHAR,
     "VARIANT": VARIANT,
+    "VECTOR": VECTOR,
     "OBJECT": OBJECT,
     "ARRAY": ARRAY,
     "GEOGRAPHY": GEOGRAPHY,

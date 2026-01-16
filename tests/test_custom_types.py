@@ -14,6 +14,7 @@ def test_string_conversions():
         "VARIANT",
         "OBJECT",
         "ARRAY",
+        "DECFLOAT",
         "TIMESTAMP_TZ",
         "TIMESTAMP_LTZ",
         "TIMESTAMP_NTZ",

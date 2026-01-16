@@ -44,6 +44,14 @@ class VARIANT(SnowflakeType):
 
 
 class VECTOR(SnowflakeType):
+    """
+    VECTOR supports the Snowflake vector data type (https://docs.snowflake.com/en/sql-reference/data-types-vector).
+
+    Attributes:
+        element_type (Union[str, sqltypes.Integer, sqltypes.Float]): can be either Integer or Float. It can be specified with "INT" or "FLOAT" string literals or using SQLAlchemy sqltypes.Integer and sqltypes.Float.
+        dimension (int): length of the vector (must be a positive number).
+    """
+
     __visit_name__ = "VECTOR"
 
     _VALID_ELEMENT_TYPES = {"INT", "FLOAT"}
