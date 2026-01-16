@@ -52,10 +52,11 @@ development = [
   "pytest-cov",
   "pytest-timeout",
   "pytest-rerunfailures",
+  "pytest-xdist",
   "pytz",
   "numpy",
   "mock",
-  "syrupy==4.6.1",
+  "syrupy",
 ]
 pandas = ["snowflake-connector-python[pandas]"]
 

@@ -170,6 +170,17 @@ def test_connect_args():
         engine.dispose()
 
 
+def test_get_server_version_info(engine_testaccount):
+    with engine_testaccount.connect() as conn:
+        direct_version = conn.execute(text("SELECT CURRENT_VERSION()")).scalar()
+        version_info = engine_testaccount.dialect._get_server_version_info(conn)
+
+    assert direct_version is not None
+    assert version_info == tuple(
+        int(part) for part in direct_version.split()[0].split(".")
+    )
+
+
 def test_boolean_query_argument_parsing():
     engine = create_engine(
         URL(
@@ -418,6 +429,49 @@ def test_insert_tables(engine_testaccount):
             # drop tables
             addresses.drop(engine_testaccount)
             users.drop(engine_testaccount)
+
+
+def test_ilike_support(engine_testaccount):
+    metadata = MetaData()
+    table = Table(
+        f"ilike_test_{random_string(5)}",
+        metadata,
+        Column("id", Integer, primary_key=True),
+        Column("value", String),
+    )
+    metadata.create_all(engine_testaccount)
+
+    cases = [
+        # (query_pattern, escape, negate, expected_query_result)
+        ("casesens%", None, False, ["CaseSensitive", "casesensitive"]),
+        ("casesens%", None, True, ["pattern_test", "pattern_%", "patternstest"]),
+        ("pattern_%", None, False, ["pattern_test", "pattern_%", "patternstest"]),
+        ("pattern\\_%", "\\", False, ["pattern_test", "pattern_%"]),
+        ("pattern\\_\\%", "\\", False, ["pattern_%"]),
+    ]
+
+    try:
+        with engine_testaccount.begin() as conn:
+            conn.execute(
+                table.insert(),
+                [
+                    {"id": 1, "value": "CaseSensitive"},
+                    {"id": 2, "value": "casesensitive"},
+                    {"id": 3, "value": "pattern_test"},
+                    {"id": 4, "value": "pattern_%"},
+                    {"id": 5, "value": "patternstest"},
+                ],
+            )
+
+            for pattern, escape, negate, expected in cases:
+                clause = table.c.value.ilike(pattern, escape=escape)
+                if negate:
+                    clause = ~clause
+
+                rows = conn.execute(select(table.c.value).where(clause)).scalars().all()
+                assert sorted(rows) == sorted(expected)
+    finally:
+        metadata.drop_all(engine_testaccount)
 
 
 def test_table_does_not_exist(engine_testaccount):
@@ -1535,20 +1589,20 @@ def test_for_exception_in_query_all_columns(engine_testaccount, db_parameters):
 
     exception_instance = DBAPIError.instance(
         """
-            SELECT /* sqlalchemy:_get_schema_columns */
-                   ic.table_name,
-                   ic.column_name,
-                   ic.data_type,
-                   ic.character_maximum_length,
-                   ic.numeric_precision,
-                   ic.numeric_scale,
-                   ic.is_nullable,
-                   ic.column_default,
-                   ic.is_identity,
-                   ic.comment
-              FROM information_schema.columns ic
-             WHERE ic.table_schema='schema_name'
-             ORDER BY ic.ordinal_position""",
+        SELECT /* sqlalchemy:_get_schema_columns */
+            ic.table_name,
+            ic.column_name,
+            ic.data_type,
+            ic.character_maximum_length,
+            ic.numeric_precision,
+            ic.numeric_scale,
+            ic.is_nullable,
+            ic.column_default,
+            ic.is_identity,
+            ic.comment
+        FROM information_schema.columns ic
+        WHERE ic.table_schema = 'schema_name'
+        ORDER BY ic.ordinal_position""",
         {"table_schema": "TESTSCHEMA"},
         ProgrammingError(
             "Information schema query returned too much data. Please repeat query with more "
@@ -1634,10 +1688,10 @@ def test_column_type_schema(engine_testaccount):
             f"""\
 CREATE TEMP TABLE {table_name} (
     C1 BIGINT, C2 BINARY, C3 BOOLEAN, C4 CHAR, C5 CHARACTER, C6 DATE, C7 DATETIME, C8 DEC,
-    C9 DECIMAL, C10 DOUBLE, C11 FLOAT, C12 INT, C13 INTEGER, C14 NUMBER, C15 REAL, C16 BYTEINT,
-    C17 SMALLINT, C18 STRING, C19 TEXT, C20 TIME, C21 TIMESTAMP, C22 TIMESTAMP_TZ, C23 TIMESTAMP_LTZ,
-    C24 TIMESTAMP_NTZ, C25 TINYINT, C26 VARBINARY, C27 VARCHAR, C28 VARIANT, C29 OBJECT, C30 ARRAY, C31 GEOGRAPHY,
-    C32 GEOMETRY
+    C9 DECIMAL, C10 DECFLOAT, C11 DOUBLE, C12 FLOAT, C13 INT, C14 INTEGER, C15 NUMBER, C16 REAL,
+    C17 BYTEINT, C18 SMALLINT, C19 STRING, C20 TEXT, C21 TIME, C22 TIMESTAMP, C23 TIMESTAMP_TZ,
+    C24 TIMESTAMP_LTZ, C25 TIMESTAMP_NTZ, C26 TINYINT, C27 VARBINARY, C28 VARCHAR, C29 VARIANT,
+    C30 OBJECT, C31 ARRAY, C32 GEOGRAPHY, C33 GEOMETRY
 )
 """
         )

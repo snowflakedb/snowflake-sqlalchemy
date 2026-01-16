@@ -27,6 +27,7 @@ from sqlalchemy.types import (
 
 from snowflake.sqlalchemy.custom_types import (
     ARRAY,
+    DECFLOAT,
     GEOGRAPHY,
     GEOMETRY,
     MAP,
@@ -48,6 +49,7 @@ ischema_names_baseline = {
     "DATETIME": DATETIME,
     "DEC": DECIMAL,
     "DECIMAL": DECIMAL,
+    "DECFLOAT": DECFLOAT,
     "DOUBLE": FLOAT,
     "FIXED": DECIMAL,
     "FLOAT": FLOAT,

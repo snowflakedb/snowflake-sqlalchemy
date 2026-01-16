@@ -1,11 +1,15 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
+import decimal
+import warnings
 from typing import Optional, Tuple, Union
 
 import sqlalchemy.types as sqltypes
 import sqlalchemy.util as util
 from sqlalchemy.types import TypeEngine
+
+DECFLOAT_PRECISION = 38
 
 TEXT = sqltypes.VARCHAR
 CHARACTER = sqltypes.CHAR
@@ -175,6 +179,60 @@ class GEOGRAPHY(SnowflakeType):
 
 class GEOMETRY(SnowflakeType):
     __visit_name__ = "GEOMETRY"
+
+
+class DECFLOAT(SnowflakeType):
+    """Snowflake DECFLOAT type - decimal floating-point with 38 significant digits.
+
+    DECFLOAT supports a wider range of values than FLOAT with higher precision.
+    It can represent values with exponents from approximately -6000 to +6000.
+
+    Note: DECFLOAT has restrictions:
+    - Precision is fixed at 38 digits (cannot be customized)
+    - Cannot be stored in VARIANT, OBJECT, or ARRAY
+    - Not supported in Iceberg or Hybrid tables
+    - Does NOT support special values (inf, -inf, NaN) unlike FLOAT
+
+    Precision: The Snowflake Python connector uses Python's decimal context
+    when converting DECFLOAT to Decimal. Default context precision is 28 digits,
+    which truncates values. For full 38-digit precision, use the dialect parameter::
+
+        engine = create_engine('snowflake://...?enable_decfloat=True')
+
+    Or set manually::
+
+        import decimal
+        decimal.getcontext().prec = 38
+    """
+
+    __visit_name__ = "DECFLOAT"
+    _warned_precision = False
+
+    def result_processor(self, dialect, coltype):
+        """Check decimal context precision and warn if it may truncate DECFLOAT values."""
+        # Check if dialect has enable_decfloat configured
+        decfloat_enabled = getattr(dialect, "_enable_decfloat", False)
+
+        def process(value):
+            if value is not None and not DECFLOAT._warned_precision:
+                # Skip warning if dialect has DECFLOAT support enabled
+                if decfloat_enabled:
+                    return value
+
+                current_prec = decimal.getcontext().prec
+                if current_prec < DECFLOAT_PRECISION:
+                    warnings.warn(
+                        f"Python decimal context precision ({current_prec}) is less than "
+                        f"DECFLOAT precision ({DECFLOAT_PRECISION}). Values may be truncated. "
+                        f"Set enable_decfloat=True in connection URL or "
+                        f"decimal.getcontext().prec = {DECFLOAT_PRECISION} for full precision.",
+                        UserWarning,
+                        stacklevel=2,
+                    )
+                    DECFLOAT._warned_precision = True
+            return value
+
+        return process
 
 
 class _CUSTOM_Date(SnowflakeType, sqltypes.Date):
