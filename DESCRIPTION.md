@@ -9,7 +9,7 @@ Source code is also available at:
 
 # Unreleased Notes
 
-- Add support for DECFLOAT data type
+- Add support for DECFLOAT and VECTOR data types
 - Add server_version_info support
 - Add support for ILIKE in queries
 

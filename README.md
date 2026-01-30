@@ -354,6 +354,24 @@ engine = create_engine(URL(
 
 **Why is `enable_decfloat` not enabled by default?** Enabling it sets `decimal.getcontext().prec = 38`, which modifies Python's thread-local decimal context and affects all `Decimal` operations in that thread, not just database queries. To avoid unexpected side effects on application code, the dialect emits a warning when `DECFLOAT` values are retrieved without full precision enabled, guiding users to opt-in explicitly.
 
+### VECTOR Data Type Support
+
+Snowflake SQLAlchemy supports the `VECTOR` data type with varying element type and dimension.
+For more information, see the [Snowflake documentation](https://docs.snowflake.com/en/sql-reference/data-types-vector).
+
+```python
+from sqlalchemy import Column, Integer, Float, MetaData, Table
+from snowflake.sqlalchemy import VECTOR
+
+metadata = MetaData()
+t = Table('my_table', metadata,
+    Column('id', Integer, primary_key=True),
+    Column('int_vec', VECTOR(Integer, 20)),
+    Column('float_vec', VECTOR(Float, 40)),
+)
+metadata.create_all(engine)
+```
+
 ### Cache Column Metadata
 
 SQLAlchemy provides [the runtime inspection API](http://docs.sqlalchemy.org/en/latest/core/inspection.html) to get the runtime information about the various objects. One of the common use case is get all tables and their column metadata in a schema in order to construct a schema catalog. For example, [alembic](http://alembic.zzzcomputing.com/) on top of SQLAlchemy manages database schema migrations. A pseudo code flow is as follows:
