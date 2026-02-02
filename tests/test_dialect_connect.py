@@ -28,15 +28,13 @@ def fake_connection():
 
 @mock.patch.object(sqla_default.DefaultDialect, "connect")
 @mock.patch("snowflake.sqlalchemy.snowdialect.TelemetryClient")
-@mock.patch("snowflake.sqlalchemy.snowdialect.SnowflakeRestful")
-def test_connect_sends_telemetry(
-    mock_restful, mock_telemetry_client, mock_connect, fake_connection
-):
+def test_connect_sends_telemetry(mock_telemetry_client, mock_connect, fake_connection):
     """Ensure telemetry is sent with the expected payload on connect."""
     mock_connect.return_value = fake_connection
 
     # Mock out pandas to ensure deterministic behavior
     with mock.patch.dict(modules, {"pandas": None}):
+        fake_connection.rest = mock.MagicMock()
         dialect = SnowflakeDialect()
         result = dialect.connect()
 
@@ -44,6 +42,7 @@ def test_connect_sends_telemetry(
 
     # Verify add_log_to_batch was called with correct payload
     telemetry_instance = mock_telemetry_client.return_value
+
     payload = telemetry_instance.add_log_to_batch.call_args[0][0]
     assert (
         payload.message[TelemetryField.KEY_TYPE.value]
@@ -60,9 +59,8 @@ def test_connect_sends_telemetry(
 
 @mock.patch.object(sqla_default.DefaultDialect, "connect")
 @mock.patch("snowflake.sqlalchemy.snowdialect.TelemetryClient")
-@mock.patch("snowflake.sqlalchemy.snowdialect.SnowflakeRestful")
 def test_connect_telemetry_includes_pandas_when_available(
-    mock_restful, mock_telemetry_client, mock_connect, fake_connection
+    mock_telemetry_client, mock_connect, fake_connection
 ):
     """Ensure telemetry includes pandas version when pandas is installed."""
     mock_connect.return_value = fake_connection
@@ -72,6 +70,7 @@ def test_connect_telemetry_includes_pandas_when_available(
     mock_pandas.__version__ = "2.1.0"
 
     with mock.patch.dict(modules, {"pandas": mock_pandas}):
+        fake_connection.rest = mock.MagicMock()
         dialect = SnowflakeDialect()
         dialect.connect()
 
@@ -84,15 +83,15 @@ def test_connect_telemetry_includes_pandas_when_available(
 
 @mock.patch.object(sqla_default.DefaultDialect, "connect")
 @mock.patch("snowflake.sqlalchemy.snowdialect.TelemetryClient")
-@mock.patch("snowflake.sqlalchemy.snowdialect.SnowflakeRestful")
 def test_connect_telemetry_excludes_pandas_when_not_available(
-    mock_restful, mock_telemetry_client, mock_connect, fake_connection
+    mock_telemetry_client, mock_connect, fake_connection
 ):
     """Ensure telemetry does not include pandas when it is not installed."""
     mock_connect.return_value = fake_connection
 
     # Simulate pandas not being installed
     with mock.patch.dict(modules, {"pandas": None}):
+        fake_connection.rest = mock.MagicMock()
         dialect = SnowflakeDialect()
         dialect.connect()
 
@@ -105,9 +104,8 @@ def test_connect_telemetry_excludes_pandas_when_not_available(
 
 @mock.patch.object(sqla_default.DefaultDialect, "connect")
 @mock.patch("snowflake.sqlalchemy.snowdialect.TelemetryClient")
-@mock.patch("snowflake.sqlalchemy.snowdialect.SnowflakeRestful")
 def test_connect_logs_when_telemetry_fails(
-    mock_restful, mock_telemetry_client, mock_connect, caplog, fake_connection
+    mock_telemetry_client, mock_connect, caplog, fake_connection
 ):
     """Ensure failures in telemetry do not break connect and are logged."""
     mock_connect.return_value = fake_connection
@@ -115,6 +113,7 @@ def test_connect_logs_when_telemetry_fails(
 
     caplog.set_level("DEBUG", logger="snowflake.sqlalchemy.snowdialect")
 
+    fake_connection.rest = mock.MagicMock()
     dialect = SnowflakeDialect()
     result = dialect.connect()
 
