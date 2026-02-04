@@ -60,7 +60,7 @@ class TestVectorTypeUnit:
 
     def test_vector_rejects_invalid_sqlalchemy_type_mapping_bad_path(self):
         with pytest.raises(ValueError):
-            VECTOR._map_sqlalchemy_type(SAText())  # type: ignore[arg-type]
+            VECTOR._map_sqlalchemy_type()  # type: ignore[arg-type]
 
     def test_compile_create_table_with_vector(self):
         metadata = MetaData()

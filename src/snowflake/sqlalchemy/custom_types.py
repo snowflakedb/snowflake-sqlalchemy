@@ -63,9 +63,8 @@ class VECTOR(SnowflakeType):
         self.dimension = self._normalize_dimension(dimension)
         super().__init__()
 
-    @staticmethod
     def _normalize_element_type(
-        element_type: Union[str, sqltypes.Integer, sqltypes.Float]
+        self, element_type: Union[str, sqltypes.Integer, sqltypes.Float]
     ):
         if not isinstance(element_type, (str, sqltypes.Integer, sqltypes.Float)):
             raise TypeError(
@@ -75,13 +74,13 @@ class VECTOR(SnowflakeType):
         normalized_element_type = ""
         if isinstance(element_type, str):
             normalized_element_type = element_type.strip().upper()
-            if normalized_element_type not in VECTOR._VALID_ELEMENT_TYPES:
+            if normalized_element_type not in self._VALID_ELEMENT_TYPES:
                 raise ValueError(
                     f"Unsupported VECTOR element type '{element_type}'. "
-                    f"Snowflake only supports {VECTOR._VALID_ELEMENT_TYPES} element types."
+                    f"Snowflake only supports {self._VALID_ELEMENT_TYPES} element types."
                 )
         elif isinstance(element_type, (sqltypes.Integer, sqltypes.Float)):
-            normalized_element_type = VECTOR._map_sqlalchemy_type(element_type)
+            normalized_element_type = self._map_sqlalchemy_type(element_type)
 
         return normalized_element_type
 
