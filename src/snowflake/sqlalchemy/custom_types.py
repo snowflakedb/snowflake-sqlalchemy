@@ -63,9 +63,9 @@ class VECTOR(SnowflakeType):
         self.dimension = self._normalize_dimension(dimension)
         super().__init__()
 
-    @classmethod
+    @staticmethod
     def _normalize_element_type(
-        cls, element_type: Union[str, sqltypes.Integer, sqltypes.Float]
+        element_type: Union[str, sqltypes.Integer, sqltypes.Float]
     ):
         if not isinstance(element_type, (str, sqltypes.Integer, sqltypes.Float)):
             raise TypeError(
@@ -75,19 +75,19 @@ class VECTOR(SnowflakeType):
         normalized_element_type = ""
         if isinstance(element_type, str):
             normalized_element_type = element_type.strip().upper()
-            if normalized_element_type not in cls._VALID_ELEMENT_TYPES:
+            if normalized_element_type not in VECTOR._VALID_ELEMENT_TYPES:
                 raise ValueError(
                     f"Unsupported VECTOR element type '{element_type}'. "
-                    f"Snowflake only supports {cls._VALID_ELEMENT_TYPES} element types."
+                    f"Snowflake only supports {VECTOR._VALID_ELEMENT_TYPES} element types."
                 )
         elif isinstance(element_type, (sqltypes.Integer, sqltypes.Float)):
-            normalized_element_type = cls._map_sqlalchemy_type(element_type)
+            normalized_element_type = VECTOR._map_sqlalchemy_type(element_type)
 
         return normalized_element_type
 
-    @classmethod
+    @staticmethod
     def _map_sqlalchemy_type(
-        cls, element_type: Union[sqltypes.Integer, sqltypes.Float]
+        element_type: Union[sqltypes.Integer, sqltypes.Float]
     ) -> str:
         if isinstance(element_type, sqltypes.Integer):
             return "INT"
@@ -97,8 +97,8 @@ class VECTOR(SnowflakeType):
             "SQLAlchemy type must be an Integer or Float for VECTOR element."
         )
 
-    @classmethod
-    def _normalize_dimension(cls, dimension: int) -> int:
+    @staticmethod
+    def _normalize_dimension(dimension: int) -> int:
         if not isinstance(dimension, int):
             raise TypeError(
                 f"VECTOR dimension must be an integer, got {type(dimension).__name__}."

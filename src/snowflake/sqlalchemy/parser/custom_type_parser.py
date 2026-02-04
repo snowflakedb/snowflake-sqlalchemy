@@ -70,12 +70,12 @@ ischema_names = {
     "VARBINARY": BINARY,
     "VARCHAR": VARCHAR,
     "VARIANT": VARIANT,
+    "VECTOR": VECTOR,
     "MAP": MAP,
     "OBJECT": OBJECT,
     "ARRAY": ARRAY,
     "GEOGRAPHY": GEOGRAPHY,
     "GEOMETRY": GEOMETRY,
-    "VECTOR": VECTOR,
 }
 
 NOT_NULL_STR = "NOT NULL"
