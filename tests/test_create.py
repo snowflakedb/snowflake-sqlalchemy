@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2012-2022 Snowflake Computing Inc. All rights reserved.
+# Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
 
 from snowflake.sqlalchemy import (
@@ -49,6 +49,16 @@ def test_create_stage(sql_compiler):
     actual = sql_compiler(create_stage_replace)
     expected = (
         "CREATE OR REPLACE STAGE MY_DB.MY_SCHEMA.AZURE_STAGE "
+        "URL='azure://myaccount.blob.core.windows.net/my-container' "
+        "CREDENTIALS=(AZURE_SAS_TOKEN='saas_token')"
+    )
+    assert actual == expected
+
+    create_stage = CreateStage(stage=stage, container=container, temporary=True)
+    # validate that the resulting SQL is as expected
+    actual = sql_compiler(create_stage)
+    expected = (
+        "CREATE TEMPORARY STAGE MY_DB.MY_SCHEMA.AZURE_STAGE "
         "URL='azure://myaccount.blob.core.windows.net/my-container' "
         "CREDENTIALS=(AZURE_SAS_TOKEN='saas_token')"
     )

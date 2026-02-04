@@ -1,0 +1,2 @@
+SQLAlchemy>=1.4.19
+snowflake-connector-python<5.0.0

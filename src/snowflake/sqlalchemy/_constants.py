@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2012-2022 Snowflake Computing Inc. All rights reserved.
+# Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
 from .version import VERSION
 
@@ -9,4 +9,6 @@ PARAM_INTERNAL_APPLICATION_NAME = "internal_application_name"
 PARAM_INTERNAL_APPLICATION_VERSION = "internal_application_version"
 
 APPLICATION_NAME = "SnowflakeSQLAlchemy"
-SNOWFLAKE_SQLALCHEMY_VERSION = ".".join([str(v) for v in VERSION if v is not None])
+SNOWFLAKE_SQLALCHEMY_VERSION = VERSION
+DIALECT_NAME = "snowflake"
+NOT_NULL = "NOT NULL"

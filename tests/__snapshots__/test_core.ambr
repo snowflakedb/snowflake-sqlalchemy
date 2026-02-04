@@ -1,0 +1,4 @@
+# serializer version: 1
+# name: test_compile_table_with_cluster_by_with_expression
+  'CREATE TABLE clustered_user (\t"Id" INTEGER NOT NULL AUTOINCREMENT, \tname VARCHAR, \tPRIMARY KEY ("Id")) CLUSTER BY ("Id", name, "Id" > 5)'
+# ---

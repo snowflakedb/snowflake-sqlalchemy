@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2012-2022 Snowflake Computing Inc. All rights reserved.
+# Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
 
 from collections.abc import Sequence
@@ -10,7 +10,8 @@ from sqlalchemy.sql.ddl import DDLElement
 from sqlalchemy.sql.dml import UpdateBase
 from sqlalchemy.sql.elements import ClauseElement
 from sqlalchemy.sql.roles import FromClauseRole
-from sqlalchemy.util.compat import string_types
+
+from .compat import string_types
 
 NoneType = type(None)
 
@@ -114,18 +115,23 @@ class CopyInto(UpdateBase):
     __visit_name__ = "copy_into"
     _bind = None
 
-    def __init__(self, from_, into, formatter=None):
+    def __init__(self, from_, into, partition_by=None, formatter=None):
         self.from_ = from_
         self.into = into
         self.formatter = formatter
         self.copy_options = {}
+        self.partition_by = partition_by
 
     def __repr__(self):
         """
         repr for debugging / logging purposes only. For compilation logic, see
         the corresponding visitor in base.py
         """
-        return f"COPY INTO {self.into} FROM {repr(self.from_)} {repr(self.formatter)} ({self.copy_options})"
+        val = f"COPY INTO {self.into} FROM {repr(self.from_)}"
+        if self.partition_by is not None:
+            val += f" PARTITION BY {self.partition_by}"
+
+        return val + f" {repr(self.formatter)} ({self.copy_options})"
 
     def bind(self):
         return None
@@ -259,7 +265,8 @@ class CSVFormatter(CopyFormatter):
 
     def file_extension(self, ext):
         """String that specifies the extension for files unloaded to a stage. Accepts any extension. The user is
-        responsible for specifying a valid file extension that can be read by the desired software or service."""
+        responsible for specifying a valid file extension that can be read by the desired software or service.
+        """
         if not isinstance(ext, (NoneType, string_types)):
             raise TypeError("File extension should be a string")
         self.options["FILE_EXTENSION"] = ext
@@ -386,7 +393,8 @@ class JSONFormatter(CopyFormatter):
 
     def file_extension(self, ext):
         """String that specifies the extension for files unloaded to a stage. Accepts any extension. The user is
-        responsible for specifying a valid file extension that can be read by the desired software or service."""
+        responsible for specifying a valid file extension that can be read by the desired software or service.
+        """
         if not isinstance(ext, (NoneType, string_types)):
             raise TypeError("File extension should be a string")
         self.options["FILE_EXTENSION"] = ext
@@ -482,9 +490,10 @@ class CreateStage(DDLElement):
 
     __visit_name__ = "create_stage"
 
-    def __init__(self, container, stage, replace_if_exists=False):
+    def __init__(self, container, stage, replace_if_exists=False, *, temporary=False):
         super().__init__()
         self.container = container
+        self.temporary = temporary
         self.stage = stage
         self.replace_if_exists = replace_if_exists
 

@@ -8,6 +8,8 @@
 
 Snowflake SQLAlchemy runs on the top of the Snowflake Connector for Python as a [dialect](http://docs.sqlalchemy.org/en/latest/dialects/) to bridge a Snowflake database and SQLAlchemy applications.
 
+
+
 ## Prerequisites
 
 ### Snowflake Connector for Python
@@ -101,6 +103,7 @@ containing special characters need to be URL encoded to be parsed correctly. Thi
 characters could lead to authentication failure.
 
 The encoding for the password can be generated using `urllib.parse`:
+
 ```python
 import urllib.parse
 urllib.parse.quote("kx@% jj5/g")
@@ -111,6 +114,7 @@ urllib.parse.quote("kx@% jj5/g")
 
 To create an engine with the proper encodings, either manually constructing the url string by formatting
 or taking advantage of the `snowflake.sqlalchemy.URL` helper method:
+
 ```python
 import urllib.parse
 from snowflake.sqlalchemy import URL
@@ -191,13 +195,22 @@ engine = create_engine(...)
 engine.execute(<SQL>)
 engine.dispose()
 
-# Do this.
+# Better.
 engine = create_engine(...)
 connection = engine.connect()
 try:
-    connection.execute(<SQL>)
+  connection.execute(text(<SQL>))
 finally:
     connection.close()
+    engine.dispose()
+
+# Best
+try:
+    with engine.connect() as connection:
+        connection.execute(text(<SQL>))
+        # or
+        connection.exec_driver_sql(<SQL>)
+finally:
     engine.dispose()
 ```
 
@@ -214,11 +227,43 @@ t = Table('mytable', metadata,
 
 ### Object Name Case Handling
 
-Snowflake stores all case-insensitive object names in uppercase text. In contrast, SQLAlchemy considers all lowercase object names to be case-insensitive. Snowflake SQLAlchemy converts the object name case during schema-level communication, i.e. during table and index reflection. If you use uppercase object names, SQLAlchemy assumes they are case-sensitive and encloses the names with quotes. This behavior will cause mismatches agaisnt data dictionary data received from Snowflake, so unless identifier names have been truly created as case sensitive using quotes, e.g., `"TestDb"`, all lowercase names should be used on the SQLAlchemy side.
+Snowflake stores all case-insensitive object names in uppercase text. In contrast, SQLAlchemy considers all lowercase object names to be case-insensitive. Snowflake SQLAlchemy converts the object name case during schema-level communication, i.e. during table and index reflection. If you use uppercase object names, SQLAlchemy assumes they are case-sensitive and encloses the names with quotes. This behavior will cause mismatches against data dictionary data received from Snowflake, so unless identifier names have been truly created as case sensitive using quotes, e.g., `"TestDb"`, all lowercase names should be used on the SQLAlchemy side.
 
 ### Index Support
 
-Snowflake does not utilize indexes, so neither does Snowflake SQLAlchemy.
+Indexes are supported only for Hybrid Tables in Snowflake SQLAlchemy. For more details on limitations and use cases, refer to the [Create Index documentation](https://docs.snowflake.com/en/sql-reference/constraints-indexes.html). You can create an index using the following methods:
+
+#### Single Column Index
+
+You can create a single column index by setting the `index=True` parameter on the column or by explicitly defining an `Index` object.
+
+```python
+hybrid_test_table_1 = HybridTable(
+  "table_name",
+  metadata,
+  Column("column1", Integer, primary_key=True),
+  Column("column2", String, index=True),
+  Index("index_1", "column1", "column2")
+)
+
+metadata.create_all(engine_testaccount)
+```
+
+#### Multi-Column Index
+
+For multi-column indexes, you define the `Index` object specifying the columns that should be indexed.
+
+```python
+hybrid_test_table_1 = HybridTable(
+  "table_name",
+  metadata,
+  Column("column1", Integer, primary_key=True),
+  Column("column2", String),
+  Index("index_1", "column1", "column2")
+)
+
+metadata.create_all(engine_testaccount)
+```
 
 ### Numpy Data Type Support
 
@@ -242,14 +287,14 @@ engine = create_engine(URL(
 
 specific_date = np.datetime64('2016-03-04T12:03:05.123456789Z')
 
-connection = engine.connect()
-connection.execute(
-    "CREATE OR REPLACE TABLE ts_tbl(c1 TIMESTAMP_NTZ)")
-connection.execute(
-    "INSERT INTO ts_tbl(c1) values(%s)", (specific_date,)
-)
-df = pd.read_sql_query("SELECT * FROM ts_tbl", engine)
-assert df.c1.values[0] == specific_date
+with engine.connect() as connection:
+    connection.exec_driver_sql(
+        "CREATE OR REPLACE TABLE ts_tbl(c1 TIMESTAMP_NTZ)")
+    connection.exec_driver_sql(
+        "INSERT INTO ts_tbl(c1) values(%s)", (specific_date,)
+    )
+    df = pd.read_sql_query("SELECT * FROM ts_tbl", connection)
+    assert df.c1.values[0] == specific_date
 ```
 
 The following `NumPy` data types are supported:
@@ -257,6 +302,57 @@ The following `NumPy` data types are supported:
 - numpy.int64
 - numpy.float64
 - numpy.datatime64
+
+### DECFLOAT Data Type Support
+
+Snowflake SQLAlchemy supports the `DECFLOAT` data type, which provides decimal floating-point with up to 38 significant digits. For more information, see the [Snowflake DECFLOAT documentation](https://docs.snowflake.com/en/sql-reference/data-types-numeric#decfloat).
+
+```python
+from sqlalchemy import Column, Integer, MetaData, Table
+from snowflake.sqlalchemy import DECFLOAT
+
+metadata = MetaData()
+t = Table('my_table', metadata,
+    Column('id', Integer, primary_key=True),
+    Column('value', DECFLOAT()),
+)
+metadata.create_all(engine)
+```
+
+#### DECFLOAT Precision
+
+The Snowflake Python connector uses Python's `decimal` module context when converting `DECFLOAT` values to Python `Decimal` objects. Python's default decimal context precision is 28 digits, which can truncate `DECFLOAT` values that use up to 38 digits.
+
+To preserve full 38-digit precision, add `enable_decfloat=True` to the connection URL:
+
+```python
+from sqlalchemy import create_engine
+
+engine = create_engine(
+    'snowflake://testuser1:0123456@abc123/testdb/public?warehouse=testwh&enable_decfloat=True'
+)
+```
+
+Or using the `snowflake.sqlalchemy.URL` helper:
+
+```python
+from snowflake.sqlalchemy import URL
+from sqlalchemy import create_engine
+
+engine = create_engine(URL(
+    account = 'abc123',
+    user = 'testuser1',
+    password = '0123456',
+    database = 'testdb',
+    schema = 'public',
+    warehouse = 'testwh',
+    enable_decfloat = True,
+))
+```
+
+**Note**: `DECFLOAT` does not support special values (`inf`, `-inf`, `NaN`) unlike `FLOAT`.
+
+**Why is `enable_decfloat` not enabled by default?** Enabling it sets `decimal.getcontext().prec = 38`, which modifies Python's thread-local decimal context and affects all `Decimal` operations in that thread, not just database queries. To avoid unexpected side effects on application code, the dialect emits a warning when `DECFLOAT` values are retrieved without full precision enabled, guiding users to opt-in explicitly.
 
 ### Cache Column Metadata
 
@@ -319,6 +415,79 @@ data_object  = json.loads(row[1])
 data_array   = json.loads(row[2])
 ```
 
+### Structured Data Types Support
+
+This module defines custom SQLAlchemy types for Snowflake structured data, specifically for **Iceberg tables**.
+The types —**MAP**, **OBJECT**, and **ARRAY**— allow you to store complex data structures in your SQLAlchemy models.
+For detailed information, refer to the Snowflake [Structured data types](https://docs.snowflake.com/en/sql-reference/data-types-structured) documentation.
+
+---
+
+#### MAP
+
+The `MAP` type represents a collection of key-value pairs, where each key and value can have different types.
+
+- **Key Type**: The type of the keys (e.g., `TEXT`, `NUMBER`).
+- **Value Type**: The type of the values (e.g., `TEXT`, `NUMBER`).
+- **Not Null**: Whether `NULL` values are allowed (default is `False`).
+
+*Example Usage*
+
+```python
+IcebergTable(
+    table_name,
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("map_col", MAP(NUMBER(10, 0), TEXT(16777216))),
+    external_volume="external_volume",
+    base_location="base_location",
+)
+```
+
+#### OBJECT
+
+The `OBJECT` type represents a semi-structured object with named fields. Each field can have a specific type, and you can also specify whether each field is nullable.
+
+- **Items Types**: A dictionary of field names and their types. The type can optionally include a nullable flag (`True` for not nullable, `False` for nullable, default is `False`).
+
+*Example Usage*
+
+```python
+IcebergTable(
+    table_name,
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column(
+        "object_col",
+        OBJECT(key1=(TEXT(16777216), False), key2=(NUMBER(10, 0), False)),
+        OBJECT(key1=TEXT(16777216), key2=NUMBER(10, 0)), # Without nullable flag
+    ),
+    external_volume="external_volume",
+    base_location="base_location",
+)
+```
+
+#### ARRAY
+
+The `ARRAY` type represents an ordered list of values, where each element has the same type. The type of the elements is defined when creating the array.
+
+- **Value Type**: The type of the elements in the array (e.g., `TEXT`, `NUMBER`).
+- **Not Null**: Whether `NULL` values are allowed (default is `False`).
+
+*Example Usage*
+
+```python
+IcebergTable(
+    table_name,
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("array_col", ARRAY(TEXT(16777216))),
+    external_volume="external_volume",
+    base_location="base_location",
+)
+```
+
+
 ### CLUSTER BY Support
 
 Snowflake SQLAchemy supports the `CLUSTER BY` parameter for tables. For information about the parameter, see :doc:`/sql-reference/sql/create-table`.
@@ -329,7 +498,7 @@ This example shows how to create a table with two columns, `id` and `name`, as t
 t = Table('myuser', metadata,
     Column('id', Integer, primary_key=True),
     Column('name', String),
-    snowflake_clusterby=['id', 'name'], ...
+    snowflake_clusterby=['id', 'name', text('id > 5')], ...
 )
 metadata.create_all(engine)
 ```
@@ -444,6 +613,139 @@ copy_into = CopyIntoStorage(from_=users,
                             formatter=CSVFormatter().null_if(['null', 'Null']))
 connection.execute(copy_into)
 ```
+
+### Iceberg Table with Snowflake Catalog support
+
+Snowflake SQLAlchemy supports Iceberg Tables with the Snowflake Catalog, along with various related parameters. For detailed information about Iceberg Tables, refer to the Snowflake [CREATE ICEBERG](https://docs.snowflake.com/en/sql-reference/sql/create-iceberg-table-snowflake) documentation.
+
+To create an Iceberg Table using Snowflake SQLAlchemy, you can define the table using the SQLAlchemy Core syntax as follows:
+
+```python
+table = IcebergTable(
+    "myuser",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("name", String),
+    external_volume=external_volume_name,
+    base_location="my_iceberg_table",
+    as_query="SELECT * FROM table"
+)
+```
+
+Alternatively, you can define the table using a declarative approach:
+
+```python
+class MyUser(Base):
+    __tablename__ = "myuser"
+
+    @classmethod
+    def __table_cls__(cls, name, metadata, *arg, **kw):
+        return IcebergTable(name, metadata, *arg, **kw)
+
+    __table_args__ = {
+        "external_volume": "my_external_volume",
+        "base_location": "my_iceberg_table",
+        "as_query": "SELECT * FROM table",
+    }
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
+```
+
+### Hybrid Table support
+
+Snowflake SQLAlchemy supports Hybrid Tables with indexes. For detailed information, refer to the Snowflake [CREATE HYBRID TABLE](https://docs.snowflake.com/en/sql-reference/sql/create-hybrid-table) documentation.
+
+To create a Hybrid Table and add an index, you can use the SQLAlchemy Core syntax as follows:
+
+```python
+table = HybridTable(
+    "myuser",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("name", String),
+    Index("idx_name", "name")
+)
+```
+
+Alternatively, you can define the table using the declarative approach:
+
+```python
+class MyUser(Base):
+    __tablename__ = "myuser"
+
+    @classmethod
+    def __table_cls__(cls, name, metadata, *arg, **kw):
+        return HybridTable(name, metadata, *arg, **kw)
+
+    __table_args__ = (
+        Index("idx_name", "name"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
+```
+
+### Dynamic Tables support
+
+Snowflake SQLAlchemy supports Dynamic Tables. For detailed information, refer to the Snowflake [CREATE DYNAMIC TABLE](https://docs.snowflake.com/en/sql-reference/sql/create-dynamic-table) documentation.
+
+To create a Dynamic Table, you can use the SQLAlchemy Core syntax as follows:
+
+```python
+dynamic_test_table_1 = DynamicTable(
+    "dynamic_MyUser",
+    metadata,
+    Column("id", Integer),
+    Column("name", String),
+    target_lag=(1, TimeUnit.HOURS),  # Additionally, you can use SnowflakeKeyword.DOWNSTREAM
+    warehouse='test_wh',
+    refresh_mode=SnowflakeKeyword.FULL,
+    as_query="SELECT id, name from MyUser;"
+)
+```
+
+Alternatively, you can define a table without columns using the SQLAlchemy `select()` construct:
+
+```python
+dynamic_test_table_1 = DynamicTable(
+    "dynamic_MyUser",
+    metadata,
+    target_lag=(1, TimeUnit.HOURS),
+    warehouse='test_wh',
+    refresh_mode=SnowflakeKeyword.FULL,
+    as_query=select(MyUser.id, MyUser.name)
+)
+```
+
+### Notes
+
+- Defining a primary key in a Dynamic Table is not supported, meaning declarative tables don’t support Dynamic Tables.
+- When using the `as_query` parameter with a string, you must explicitly define the columns. However, if you use the SQLAlchemy `select()` construct, you don’t need to explicitly define the columns.
+- Direct data insertion into Dynamic Tables is not supported.
+
+
+## Verifying Package Signatures
+
+To ensure the authenticity and integrity of the Python package, follow the steps below to verify the package signature using `cosign`.
+
+**Steps to verify the signature:**
+- Install cosign:
+  - This example is using golang installation: [installing-cosign-with-go](https://edu.chainguard.dev/open-source/sigstore/cosign/how-to-install-cosign/#installing-cosign-with-go)
+- Download the file from the repository like pypi:
+  - https://pypi.org/project/snowflake-sqlalchemy/#files
+- Download the signature files from the release tag, replace the version number with the version you are verifying:
+  - https://github.com/snowflakedb/snowflake-sqlalchemy/releases/tag/v1.7.3
+- Verify signature:
+  ````bash
+  # replace the version number with the version you are verifying
+  ./cosign verify-blob snowflake_sqlalchemy-1.7.3-py3-none-any.whl  \
+  --certificate snowflake_sqlalchemy-1.7.3-py3-none-any.whl.crt \
+  --certificate-identity https://github.com/snowflakedb/snowflake-sqlalchemy/.github/workflows/python-publish.yml@refs/tags/v1.7.3 \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --signature snowflake_sqlalchemy-1.7.3-py3-none-any.whl.sig
+  Verified OK
+  ````
 
 ## Support
 

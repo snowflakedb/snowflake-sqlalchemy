@@ -1,10 +1,10 @@
 #
-# Copyright (c) 2012-2022 Snowflake Computing Inc. All rights reserved.
+# Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
 
 import pytest
 from sqlalchemy import Column, Integer, MetaData, Sequence, String, Table
-from sqlalchemy.sql import select, text
+from sqlalchemy.sql import functions, select, text
 
 from snowflake.sqlalchemy import (
     AWSBucket,
@@ -58,8 +58,8 @@ def test_copy_into_location(engine_testaccount, sql_compiler):
     )
     assert (
         sql_compiler(copy_stmt_1)
-        == "COPY INTO 's3://backup' FROM python_tests_foods FILE_FORMAT=(TYPE=csv "
-        "ESCAPE=None NULL_IF=('null', 'Null') RECORD_DELIMITER='|') ENCRYPTION="
+        == "COPY INTO 's3://backup' FROM python_tests_foods  FILE_FORMAT=(TYPE=csv "
+        "ESCAPE=None NULL_IF=('null', 'Null') RECORD_DELIMITER='|')  ENCRYPTION="
         "(KMS_KEY_ID='1234abcd-12ab-34cd-56ef-1234567890ab' TYPE='AWS_SSE_KMS')"
     )
     copy_stmt_2 = CopyIntoStorage(
@@ -73,8 +73,8 @@ def test_copy_into_location(engine_testaccount, sql_compiler):
         sql_compiler(copy_stmt_2)
         == "COPY INTO 's3://backup' FROM (SELECT python_tests_foods.id, "
         "python_tests_foods.name, python_tests_foods.quantity FROM python_tests_foods "
-        "WHERE python_tests_foods.id = 1) FILE_FORMAT=(TYPE=json COMPRESSION='zstd' "
-        "FILE_EXTENSION='json') CREDENTIALS=(AWS_ROLE='some_iam_role') "
+        "WHERE python_tests_foods.id = 1)  FILE_FORMAT=(TYPE=json COMPRESSION='zstd' "
+        "FILE_EXTENSION='json')  CREDENTIALS=(AWS_ROLE='some_iam_role') "
         "ENCRYPTION=(TYPE='AWS_SSE_S3')"
     )
     copy_stmt_3 = CopyIntoStorage(
@@ -87,7 +87,7 @@ def test_copy_into_location(engine_testaccount, sql_compiler):
     assert (
         sql_compiler(copy_stmt_3)
         == "COPY INTO 'azure://snowflake.blob.core.windows.net/snowpile/backup' "
-        "FROM python_tests_foods FILE_FORMAT=(TYPE=parquet SNAPPY_COMPRESSION=true) "
+        "FROM python_tests_foods  FILE_FORMAT=(TYPE=parquet SNAPPY_COMPRESSION=true)  "
         "CREDENTIALS=(AZURE_SAS_TOKEN='token')"
     )
 
@@ -95,7 +95,7 @@ def test_copy_into_location(engine_testaccount, sql_compiler):
     assert (
         sql_compiler(copy_stmt_3)
         == "COPY INTO 'azure://snowflake.blob.core.windows.net/snowpile/backup' "
-        "FROM python_tests_foods FILE_FORMAT=(TYPE=parquet SNAPPY_COMPRESSION=true) "
+        "FROM python_tests_foods  FILE_FORMAT=(TYPE=parquet SNAPPY_COMPRESSION=true) "
         "MAX_FILE_SIZE = 50000000 "
         "CREDENTIALS=(AZURE_SAS_TOKEN='token')"
     )
@@ -112,8 +112,8 @@ def test_copy_into_location(engine_testaccount, sql_compiler):
     )
     assert (
         sql_compiler(copy_stmt_4)
-        == "COPY INTO python_tests_foods FROM 's3://backup' FILE_FORMAT=(TYPE=csv "
-        "ESCAPE=None NULL_IF=('null', 'Null') RECORD_DELIMITER='|') ENCRYPTION="
+        == "COPY INTO python_tests_foods FROM 's3://backup'  FILE_FORMAT=(TYPE=csv "
+        "ESCAPE=None NULL_IF=('null', 'Null') RECORD_DELIMITER='|')  ENCRYPTION="
         "(KMS_KEY_ID='1234abcd-12ab-34cd-56ef-1234567890ab' TYPE='AWS_SSE_KMS')"
     )
 
@@ -126,8 +126,8 @@ def test_copy_into_location(engine_testaccount, sql_compiler):
     )
     assert (
         sql_compiler(copy_stmt_5)
-        == "COPY INTO python_tests_foods FROM 's3://backup' FILE_FORMAT=(TYPE=csv "
-        "FIELD_DELIMITER=',') ENCRYPTION="
+        == "COPY INTO python_tests_foods FROM 's3://backup'  FILE_FORMAT=(TYPE=csv "
+        "FIELD_DELIMITER=',')  ENCRYPTION="
         "(KMS_KEY_ID='1234abcd-12ab-34cd-56ef-1234567890ab' TYPE='AWS_SSE_KMS')"
     )
 
@@ -138,7 +138,7 @@ def test_copy_into_location(engine_testaccount, sql_compiler):
     )
     assert (
         sql_compiler(copy_stmt_6)
-        == "COPY INTO @stage_name FROM python_tests_foods FILE_FORMAT=(TYPE=csv)"
+        == "COPY INTO @stage_name FROM python_tests_foods  FILE_FORMAT=(TYPE=csv) "
     )
 
     copy_stmt_7 = CopyIntoStorage(
@@ -148,7 +148,38 @@ def test_copy_into_location(engine_testaccount, sql_compiler):
     )
     assert (
         sql_compiler(copy_stmt_7)
-        == "COPY INTO @name.stage_name/prefix/file FROM python_tests_foods FILE_FORMAT=(TYPE=csv)"
+        == "COPY INTO @name.stage_name/prefix/file FROM python_tests_foods  FILE_FORMAT=(TYPE=csv) "
+    )
+
+    copy_stmt_8 = CopyIntoStorage(
+        from_=food_items,
+        into=ExternalStage(name="stage_name"),
+        partition_by=text("('YEAR=' || year)"),
+    )
+    assert (
+        sql_compiler(copy_stmt_8)
+        == "COPY INTO @stage_name FROM python_tests_foods PARTITION BY ('YEAR=' || year)  "
+    )
+
+    copy_stmt_9 = CopyIntoStorage(
+        from_=food_items,
+        into=ExternalStage(name="stage_name"),
+        partition_by=functions.concat(
+            text("'YEAR='"), text(food_items.columns["name"].name)
+        ),
+    )
+    assert (
+        sql_compiler(copy_stmt_9)
+        == "COPY INTO @stage_name FROM python_tests_foods PARTITION BY concat('YEAR=', name)  "
+    )
+
+    copy_stmt_10 = CopyIntoStorage(
+        from_=food_items,
+        into=ExternalStage(name="stage_name"),
+        partition_by="",
+    )
+    assert (
+        sql_compiler(copy_stmt_10) == "COPY INTO @stage_name FROM python_tests_foods   "
     )
 
     # NOTE Other than expect known compiled text, submit it to RegressionTests environment and expect them to fail, but
@@ -230,8 +261,8 @@ def test_copy_into_storage_csv_extended(sql_compiler):
     # check that the result is as expected
     result = sql_compiler(copy_into)
     expected = (
-        r"COPY INTO TEST_IMPORT "
-        r"FROM @ML_POC.PUBLIC.AZURE_STAGE/testdata "
+        r'COPY INTO "TEST_IMPORT" '
+        r"FROM @ML_POC.PUBLIC.AZURE_STAGE/testdata  "
         r"FILE_FORMAT=(TYPE=csv COMPRESSION='auto' DATE_FORMAT='AUTO' "
         r"ERROR_ON_COLUMN_COUNT_MISMATCH=True ESCAPE=None "
         r"ESCAPE_UNENCLOSED_FIELD='\134' FIELD_DELIMITER=',' "
@@ -286,9 +317,9 @@ def test_copy_into_storage_parquet_named_format(sql_compiler):
     # compile and check the result
     result = sql_compiler(copy_into)
     expected = (
-        "COPY INTO TEST_IMPORT "
+        'COPY INTO "TEST_IMPORT" '
         "FROM (SELECT $1:COL1::number, $1:COL2::varchar "
-        "FROM @ML_POC.PUBLIC.AZURE_STAGE/testdata/out.parquet) "
+        "FROM @ML_POC.PUBLIC.AZURE_STAGE/testdata/out.parquet)  "
         "FILE_FORMAT=(format_name = parquet_file_format) force = TRUE"
     )
     assert result == expected
@@ -347,10 +378,10 @@ def test_copy_into_storage_parquet_files(sql_compiler):
     # compile and check the result
     result = sql_compiler(copy_into)
     expected = (
-        "COPY INTO TEST_IMPORT "
+        'COPY INTO "TEST_IMPORT" '
         "FROM (SELECT $1:COL1::number, $1:COL2::varchar "
         "FROM @ML_POC.PUBLIC.AZURE_STAGE/testdata/out.parquet "
-        "(file_format => parquet_file_format))  FILES = ('foo.txt','bar.txt') "
+        "(file_format => parquet_file_format))   FILES = ('foo.txt','bar.txt') "
         "FORCE = true"
     )
     assert result == expected
@@ -409,9 +440,9 @@ def test_copy_into_storage_parquet_pattern(sql_compiler):
     # compile and check the result
     result = sql_compiler(copy_into)
     expected = (
-        "COPY INTO TEST_IMPORT "
+        'COPY INTO "TEST_IMPORT" '
         "FROM (SELECT $1:COL1::number, $1:COL2::varchar "
         "FROM @ML_POC.PUBLIC.AZURE_STAGE/testdata/out.parquet "
-        "(file_format => parquet_file_format))  FORCE = true PATTERN = '.*csv'"
+        "(file_format => parquet_file_format))   FORCE = true PATTERN = '.*csv'"
     )
     assert result == expected

@@ -1,0 +1,7 @@
+# serializer version: 1
+# name: test_create_hybrid_table
+  "[(1, 'test')]"
+# ---
+# name: test_create_hybrid_table_with_multiple_index
+  ProgrammingError("(snowflake.connector.errors.ProgrammingError) 391480 (0A000): Another index is being built on table 'TEST_HYBRID_TABLE_WITH_MULTIPLE_INDEX'. Only one index can be built at a time. Either cancel the other index creation or wait until it is complete.")
+# ---

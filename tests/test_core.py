@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2012-2022 Snowflake Computing Inc. All rights reserved.
+# Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
 import decimal
 import json
@@ -28,13 +28,17 @@ from sqlalchemy import (
     String,
     Table,
     UniqueConstraint,
+    create_engine,
     dialects,
+    func,
+    insert,
     inspect,
     text,
 )
-from sqlalchemy.exc import DBAPIError, NoSuchTableError
-from sqlalchemy.pool import NullPool
-from sqlalchemy.sql import and_, not_, or_, select
+from sqlalchemy.exc import DBAPIError, NoSuchTableError, OperationalError
+from sqlalchemy.sql import and_, literal, not_, or_, select
+from sqlalchemy.sql.ddl import CreateTable
+from sqlalchemy.testing.assertions import eq_
 
 import snowflake.connector.errors
 import snowflake.sqlalchemy.snowdialect
@@ -46,8 +50,7 @@ from snowflake.sqlalchemy._constants import (
 )
 from snowflake.sqlalchemy.snowdialect import SnowflakeDialect
 
-from .conftest import create_engine_with_future_flag as create_engine
-from .conftest import get_engine
+from .conftest import get_engine, url_factory
 from .parameters import CONNECTION_PARAMETERS
 from .util import ischema_names_baseline, random_string
 
@@ -123,14 +126,26 @@ def test_connect_args():
     Snowflake connect string supports account name as a replacement of
     host:port
     """
+    server = ""
+    if "host" in CONNECTION_PARAMETERS and "port" in CONNECTION_PARAMETERS:
+        server = "{host}:{port}".format(
+            host=CONNECTION_PARAMETERS["host"], port=CONNECTION_PARAMETERS["port"]
+        )
+    elif "account" in CONNECTION_PARAMETERS and "region" in CONNECTION_PARAMETERS:
+        server = "{account}.{region}".format(
+            account=CONNECTION_PARAMETERS["account"],
+            region=CONNECTION_PARAMETERS["region"],
+        )
+    elif "account" in CONNECTION_PARAMETERS:
+        server = CONNECTION_PARAMETERS["account"]
+
     engine = create_engine(
-        "snowflake://{user}:{password}@{host}:{port}/{database}/{schema}"
+        "snowflake://{user}:{password}@{server}/{database}/{schema}"
         "?account={account}&protocol={protocol}".format(
             user=CONNECTION_PARAMETERS["user"],
             account=CONNECTION_PARAMETERS["account"],
             password=CONNECTION_PARAMETERS["password"],
-            host=CONNECTION_PARAMETERS["host"],
-            port=CONNECTION_PARAMETERS["port"],
+            server=server,
             database=CONNECTION_PARAMETERS["database"],
             schema=CONNECTION_PARAMETERS["schema"],
             protocol=CONNECTION_PARAMETERS["protocol"],
@@ -141,35 +156,44 @@ def test_connect_args():
     finally:
         engine.dispose()
 
-    engine = create_engine(
-        URL(
-            user=CONNECTION_PARAMETERS["user"],
-            password=CONNECTION_PARAMETERS["password"],
-            account=CONNECTION_PARAMETERS["account"],
-            host=CONNECTION_PARAMETERS["host"],
-            port=CONNECTION_PARAMETERS["port"],
-            protocol=CONNECTION_PARAMETERS["protocol"],
-        )
-    )
+    engine = create_engine(URL(**CONNECTION_PARAMETERS))
+    try:
+        verify_engine_connection(engine)
+    finally:
+        engine.dispose()
+    parameters = {**CONNECTION_PARAMETERS}
+    parameters["warehouse"] = "testwh"
+    engine = create_engine(URL(**parameters))
     try:
         verify_engine_connection(engine)
     finally:
         engine.dispose()
 
+
+def test_get_server_version_info(engine_testaccount):
+    with engine_testaccount.connect() as conn:
+        direct_version = conn.execute(text("SELECT CURRENT_VERSION()")).scalar()
+        version_info = engine_testaccount.dialect._get_server_version_info(conn)
+
+    assert direct_version is not None
+    assert version_info == tuple(
+        int(part) for part in direct_version.split()[0].split(".")
+    )
+
+
+def test_boolean_query_argument_parsing():
     engine = create_engine(
         URL(
-            user=CONNECTION_PARAMETERS["user"],
-            password=CONNECTION_PARAMETERS["password"],
-            account=CONNECTION_PARAMETERS["account"],
-            host=CONNECTION_PARAMETERS["host"],
-            port=CONNECTION_PARAMETERS["port"],
-            protocol=CONNECTION_PARAMETERS["protocol"],
-            warehouse="testwh",
+            **CONNECTION_PARAMETERS,
+            validate_default_parameters=True,
         )
     )
     try:
         verify_engine_connection(engine)
+        connection = engine.raw_connection()
+        assert connection.validate_default_parameters is True
     finally:
+        connection.close()
         engine.dispose()
 
 
@@ -385,16 +409,6 @@ def test_insert_tables(engine_testaccount):
                     str(users.join(addresses)) == "users JOIN addresses ON "
                     "users.id = addresses.user_id"
                 )
-                assert (
-                    str(
-                        users.join(
-                            addresses,
-                            addresses.c.email_address.like(users.c.name + "%"),
-                        )
-                    )
-                    == "users JOIN addresses "
-                    "ON addresses.email_address LIKE users.name || :name_1"
-                )
 
                 s = select(users.c.fullname).select_from(
                     users.join(
@@ -417,13 +431,56 @@ def test_insert_tables(engine_testaccount):
             users.drop(engine_testaccount)
 
 
+def test_ilike_support(engine_testaccount):
+    metadata = MetaData()
+    table = Table(
+        f"ilike_test_{random_string(5)}",
+        metadata,
+        Column("id", Integer, primary_key=True),
+        Column("value", String),
+    )
+    metadata.create_all(engine_testaccount)
+
+    cases = [
+        # (query_pattern, escape, negate, expected_query_result)
+        ("casesens%", None, False, ["CaseSensitive", "casesensitive"]),
+        ("casesens%", None, True, ["pattern_test", "pattern_%", "patternstest"]),
+        ("pattern_%", None, False, ["pattern_test", "pattern_%", "patternstest"]),
+        ("pattern\\_%", "\\", False, ["pattern_test", "pattern_%"]),
+        ("pattern\\_\\%", "\\", False, ["pattern_%"]),
+    ]
+
+    try:
+        with engine_testaccount.begin() as conn:
+            conn.execute(
+                table.insert(),
+                [
+                    {"id": 1, "value": "CaseSensitive"},
+                    {"id": 2, "value": "casesensitive"},
+                    {"id": 3, "value": "pattern_test"},
+                    {"id": 4, "value": "pattern_%"},
+                    {"id": 5, "value": "patternstest"},
+                ],
+            )
+
+            for pattern, escape, negate, expected in cases:
+                clause = table.c.value.ilike(pattern, escape=escape)
+                if negate:
+                    clause = ~clause
+
+                rows = conn.execute(select(table.c.value).where(clause)).scalars().all()
+                assert sorted(rows) == sorted(expected)
+    finally:
+        metadata.drop_all(engine_testaccount)
+
+
 def test_table_does_not_exist(engine_testaccount):
     """
     Tests Correct Exception Thrown When Table Does Not Exist
     """
     meta = MetaData()
     with pytest.raises(NoSuchTableError):
-        Table("does_not_exist", meta, autoload=True, autoload_with=engine_testaccount)
+        Table("does_not_exist", meta, autoload_with=engine_testaccount)
 
 
 @pytest.mark.skip(
@@ -449,9 +506,7 @@ def test_reflextion(engine_testaccount):
         )
         try:
             meta = MetaData()
-            user_reflected = Table(
-                "user", meta, autoload=True, autoload_with=engine_testaccount
-            )
+            user_reflected = Table("user", meta, autoload_with=engine_testaccount)
             assert user_reflected.c == ["user.id", "user.name", "user.fullname"]
         finally:
             conn.execute("DROP TABLE IF EXISTS user")
@@ -468,6 +523,7 @@ def test_inspect_column(engine_testaccount):
     try:
         inspector = inspect(engine_testaccount)
         all_table_names = inspector.get_table_names()
+        assert isinstance(all_table_names, list)
         assert "users" in all_table_names
         assert "addresses" in all_table_names
 
@@ -493,19 +549,20 @@ def test_inspect_column(engine_testaccount):
         users.drop(engine_testaccount)
 
 
-def test_get_indexes(engine_testaccount):
+def test_get_indexes(engine_testaccount, db_parameters):
     """
     Tests get indexes
 
-    NOTE: Snowflake doesn't support indexes
+    NOTE: Only Snowflake Hybrid Tables support indexes
     """
+    schema = db_parameters["schema"]
     metadata = MetaData()
     users, addresses = _create_users_addresses_tables_without_sequence(
         engine_testaccount, metadata
     )
     try:
         inspector = inspect(engine_testaccount)
-        assert inspector.get_indexes("users") == []
+        assert inspector.get_indexes("users", schema) == []
 
     finally:
         addresses.drop(engine_testaccount)
@@ -687,6 +744,39 @@ def test_create_table_with_cluster_by(engine_testaccount):
         assert columns_in_table[0]["name"] == "Id", "name"
     finally:
         user.drop(engine_testaccount)
+
+
+def test_create_table_with_cluster_by_with_expression(engine_testaccount):
+    metadata = MetaData()
+    Table(
+        "clustered_user",
+        metadata,
+        Column("Id", Integer, primary_key=True),
+        Column("name", String),
+        snowflake_clusterby=["Id", "name", text('"Id" > 5')],
+    )
+    metadata.create_all(engine_testaccount)
+    try:
+        inspector = inspect(engine_testaccount)
+        columns_in_table = inspector.get_columns("clustered_user")
+        assert columns_in_table[0]["name"] == "Id", "name"
+    finally:
+        metadata.drop_all(engine_testaccount)
+
+
+def test_compile_table_with_cluster_by_with_expression(sql_compiler, snapshot):
+    metadata = MetaData()
+    user = Table(
+        "clustered_user",
+        metadata,
+        Column("Id", Integer, primary_key=True),
+        Column("name", String),
+        snowflake_clusterby=["Id", "name", text('"Id" > 5')],
+    )
+
+    create_table = CreateTable(user)
+
+    assert sql_compiler(create_table) == snapshot
 
 
 def test_view_names(engine_testaccount):
@@ -915,37 +1005,6 @@ def test_column_metadata(engine_testaccount):
     assert str(t.columns["real_data"].type) == "FLOAT"
 
 
-def _get_engine_with_columm_metadata_cache(
-    db_parameters, user=None, password=None, account=None
-):
-    """
-    Creates a connection with column metadata cache
-    """
-    if user is not None:
-        db_parameters["user"] = user
-    if password is not None:
-        db_parameters["password"] = password
-    if account is not None:
-        db_parameters["account"] = account
-
-    engine = create_engine(
-        URL(
-            user=db_parameters["user"],
-            password=db_parameters["password"],
-            host=db_parameters["host"],
-            port=db_parameters["port"],
-            database=db_parameters["database"],
-            schema=db_parameters["schema"],
-            account=db_parameters["account"],
-            protocol=db_parameters["protocol"],
-            cache_column_metadata=True,
-        ),
-        poolclass=NullPool,
-    )
-
-    return engine
-
-
 def test_many_table_column_metadta(db_parameters):
     """
     Get dozens of table metadata with column metadata cache.
@@ -953,7 +1012,9 @@ def test_many_table_column_metadta(db_parameters):
     cache_column_metadata=True will cache all column metadata for all tables
     in the schema.
     """
-    engine = _get_engine_with_columm_metadata_cache(db_parameters)
+    url = url_factory(cache_column_metadata=True)
+    engine = get_engine(url)
+
     RE_SUFFIX_NUM = re.compile(r".*(\d+)$")
     metadata = MetaData()
     total_objects = 10
@@ -1079,28 +1140,16 @@ def test_cache_time(engine_testaccount, db_parameters):
     assert outcome
 
 
-@pytest.mark.timeout(15)
-def test_region():
-    engine = create_engine(
-        URL(
-            user="testuser",
-            password="testpassword",
-            account="testaccount",
-            region="eu-central-1",
-            login_timeout=5,
-        )
-    )
-    try:
-        engine.connect()
-        pytest.fail("should not run")
-    except Exception as ex:
-        assert ex.orig.errno == 250001
-        assert "Failed to connect to DB" in ex.orig.msg
-        assert "testaccount.eu-central-1.snowflakecomputing.com" in ex.orig.msg
-
-
-@pytest.mark.timeout(15)
-def test_azure():
+@pytest.mark.skip(reason="Testaccount is not available, it returns 404 error.")
+@pytest.mark.timeout(10)
+@pytest.mark.parametrize(
+    "region",
+    (
+        pytest.param("eu-central-1", id="region"),
+        pytest.param("east-us-2.azure", id="azure"),
+    ),
+)
+def test_connection_timeout_error(region):
     engine = create_engine(
         URL(
             user="testuser",
@@ -1110,13 +1159,13 @@ def test_azure():
             login_timeout=5,
         )
     )
-    try:
+
+    with pytest.raises(OperationalError) as excinfo:
         engine.connect()
-        pytest.fail("should not run")
-    except Exception as ex:
-        assert ex.orig.errno == 250001
-        assert "Failed to connect to DB" in ex.orig.msg
-        assert "testaccount.east-us-2.azure.snowflakecomputing.com" in ex.orig.msg
+
+    assert excinfo.value.orig.errno == 250001
+    assert "Could not connect to Snowflake backend" in excinfo.value.orig.msg
+    assert region not in excinfo.value.orig.msg
 
 
 def test_load_dialect():
@@ -1322,7 +1371,8 @@ def test_comment_sqlalchemy(db_parameters, engine_testaccount, on_public_ci):
     column_comment1 = random_string(10, choices=string.ascii_uppercase)
     table_comment2 = random_string(10, choices=string.ascii_uppercase)
     column_comment2 = random_string(10, choices=string.ascii_uppercase)
-    engine2, _ = get_engine(schema=new_schema)
+
+    engine2 = get_engine(url_factory(schema=new_schema))
     con2 = None
     if not on_public_ci:
         con2 = engine2.connect()
@@ -1388,12 +1438,12 @@ def test_special_schema_character(db_parameters, on_public_ci):
     with connect(**options) as sf_conn:
         sf_connection = (
             sf_conn.cursor()
-            .execute("select current_database(), " "current_schema();")
+            .execute("select current_database(), current_schema();")
             .fetchall()
         )
     with create_engine(URL(**options)).connect() as sa_conn:
         sa_connection = sa_conn.execute(
-            text("select current_database(), " "current_schema();")
+            text("select current_database(), current_schema();")
         ).fetchall()
     # Teardown
     with connect(**options) as conn:
@@ -1403,47 +1453,51 @@ def test_special_schema_character(db_parameters, on_public_ci):
 
 
 def test_autoincrement(engine_testaccount):
+    """Snowflake does not guarantee generating sequence numbers without gaps.
+
+    The generated numbers are not necessarily contiguous.
+    https://docs.snowflake.com/en/user-guide/querying-sequences
+    """
     metadata = MetaData()
     users = Table(
         "users",
         metadata,
-        Column("uid", Integer, Sequence("id_seq"), primary_key=True),
+        Column("uid", Integer, Sequence("id_seq", order=True), primary_key=True),
         Column("name", String(39)),
     )
 
     try:
-        users.create(engine_testaccount)
+        metadata.create_all(engine_testaccount)
 
-        with engine_testaccount.connect() as connection:
-            with connection.begin():
-                connection.execute(users.insert(), [{"name": "sf1"}])
-                assert connection.execute(select(users)).fetchall() == [(1, "sf1")]
-                connection.execute(users.insert(), [{"name": "sf2"}, {"name": "sf3"}])
-                assert connection.execute(select(users)).fetchall() == [
-                    (1, "sf1"),
-                    (2, "sf2"),
-                    (3, "sf3"),
-                ]
-                connection.execute(users.insert(), {"name": "sf4"})
-                assert connection.execute(select(users)).fetchall() == [
-                    (1, "sf1"),
-                    (2, "sf2"),
-                    (3, "sf3"),
-                    (4, "sf4"),
-                ]
+        with engine_testaccount.begin() as connection:
+            connection.execute(insert(users), [{"name": "sf1"}])
+            assert connection.execute(select(users)).fetchall() == [(1, "sf1")]
+            connection.execute(insert(users), [{"name": "sf2"}, {"name": "sf3"}])
+            assert connection.execute(select(users)).fetchall() == [
+                (1, "sf1"),
+                (2, "sf2"),
+                (3, "sf3"),
+            ]
+            connection.execute(insert(users), {"name": "sf4"})
+            assert connection.execute(select(users)).fetchall() == [
+                (1, "sf1"),
+                (2, "sf2"),
+                (3, "sf3"),
+                (4, "sf4"),
+            ]
 
-                seq = Sequence("id_seq")
-                nextid = connection.execute(seq)
-                connection.execute(users.insert(), [{"uid": nextid, "name": "sf5"}])
-                assert connection.execute(select(users)).fetchall() == [
-                    (1, "sf1"),
-                    (2, "sf2"),
-                    (3, "sf3"),
-                    (4, "sf4"),
-                    (5, "sf5"),
-                ]
+            seq = Sequence("id_seq")
+            nextid = connection.execute(seq)
+            connection.execute(insert(users), [{"uid": nextid, "name": "sf5"}])
+            assert connection.execute(select(users)).fetchall() == [
+                (1, "sf1"),
+                (2, "sf2"),
+                (3, "sf3"),
+                (4, "sf4"),
+                (5, "sf5"),
+            ]
     finally:
-        users.drop(engine_testaccount)
+        metadata.drop_all(engine_testaccount)
 
 
 @pytest.mark.skip(
@@ -1523,6 +1577,57 @@ def test_get_too_many_columns(engine_testaccount, db_parameters):
         assert outcome
 
 
+def test_for_exception_in_query_all_columns(engine_testaccount, db_parameters):
+    """This tests whether a too many column error actually triggers the more granular table version"""
+    # Set up a single table
+    metadata = MetaData()
+
+    metadata.create_all(engine_testaccount)
+    inspector = inspect(engine_testaccount)
+    # Do test
+    connection = inspector.bind.connect()
+
+    exception_instance = DBAPIError.instance(
+        """
+        SELECT /* sqlalchemy:_get_schema_columns */
+            ic.table_name,
+            ic.column_name,
+            ic.data_type,
+            ic.character_maximum_length,
+            ic.numeric_precision,
+            ic.numeric_scale,
+            ic.is_nullable,
+            ic.column_default,
+            ic.is_identity,
+            ic.comment
+        FROM information_schema.columns ic
+        WHERE ic.table_schema = 'schema_name'
+        ORDER BY ic.ordinal_position""",
+        {"table_schema": "TESTSCHEMA"},
+        ProgrammingError(
+            "Information schema query returned too much data. Please repeat query with more "
+            "selective predicates.",
+            90030,
+        ),
+        Error,
+        hide_parameters=False,
+        connection_invalidated=False,
+        dialect=SnowflakeDialect(),
+        ismulti=None,
+    )
+
+    def mock_helper(connection, schema, **args):
+        raise exception_instance
+
+    with patch.object(engine_testaccount, "connect") as conn:
+        conn.return_value = connection
+        with patch.object(connection, "execute", side_effect=mock_helper):
+            assert inspector.dialect._query_all_columns_info(connection, "X") is None
+
+    # Clean up
+    metadata.drop_all(engine_testaccount)
+
+
 def test_too_many_columns_detection(engine_testaccount, db_parameters):
     """This tests whether a too many column error actually triggers the more granular table version"""
     # Set up a single table
@@ -1538,45 +1643,18 @@ def test_too_many_columns_detection(engine_testaccount, db_parameters):
     metadata.create_all(engine_testaccount)
     inspector = inspect(engine_testaccount)
     # Do test
-    original_execute = inspector.bind.execute
+    connection = inspector.bind.connect()
 
-    def mock_helper(command, *args, **kwargs):
-        if "_get_schema_columns" in command:
-            # Creating exception exactly how SQLAlchemy does
-            raise DBAPIError.instance(
-                """
-            SELECT /* sqlalchemy:_get_schema_columns */
-                   ic.table_name,
-                   ic.column_name,
-                   ic.data_type,
-                   ic.character_maximum_length,
-                   ic.numeric_precision,
-                   ic.numeric_scale,
-                   ic.is_nullable,
-                   ic.column_default,
-                   ic.is_identity,
-                   ic.comment
-              FROM information_schema.columns ic
-             WHERE ic.table_schema='schema_name'
-             ORDER BY ic.ordinal_position""",
-                {"table_schema": "TESTSCHEMA"},
-                ProgrammingError(
-                    "Information schema query returned too much data. Please repeat query with more "
-                    "selective predicates.",
-                    90030,
-                ),
-                Error,
-                hide_parameters=False,
-                connection_invalidated=False,
-                dialect=SnowflakeDialect(),
-                ismulti=None,
-            )
-        else:
-            return original_execute(command, *args, **kwargs)
+    def mock_helper(connection, schema, **args):
+        return None
 
-    with patch.object(inspector.bind, "execute", side_effect=mock_helper):
-        column_metadata = inspector.get_columns("users", db_parameters["schema"])
-    assert len(column_metadata) == 4
+    with patch.object(engine_testaccount, "connect") as conn:
+        conn.return_value = connection
+        with patch.object(
+            inspector.dialect, "_query_all_columns_info", side_effect=mock_helper
+        ):
+            columns = inspector.get_columns("users", db_parameters["schema"])
+    assert columns is not None and len(columns) == 4
     # Clean up
     metadata.drop_all(engine_testaccount)
 
@@ -1610,20 +1688,19 @@ def test_column_type_schema(engine_testaccount):
             f"""\
 CREATE TEMP TABLE {table_name} (
     C1 BIGINT, C2 BINARY, C3 BOOLEAN, C4 CHAR, C5 CHARACTER, C6 DATE, C7 DATETIME, C8 DEC,
-    C9 DECIMAL, C10 DOUBLE, C11 FLOAT, C12 INT, C13 INTEGER, C14 NUMBER, C15 REAL, C16 BYTEINT,
-    C17 SMALLINT, C18 STRING, C19 TEXT, C20 TIME, C21 TIMESTAMP, C22 TIMESTAMP_TZ, C23 TIMESTAMP_LTZ,
-    C24 TIMESTAMP_NTZ, C25 TINYINT, C26 VARBINARY, C27 VARCHAR, C28 VARIANT, C29 OBJECT, C30 ARRAY, C31 GEOGRAPHY
+    C9 DECIMAL, C10 DECFLOAT, C11 DOUBLE, C12 FLOAT, C13 INT, C14 INTEGER, C15 NUMBER, C16 REAL,
+    C17 BYTEINT, C18 SMALLINT, C19 STRING, C20 TEXT, C21 TIME, C22 TIMESTAMP, C23 TIMESTAMP_TZ,
+    C24 TIMESTAMP_LTZ, C25 TIMESTAMP_NTZ, C26 TINYINT, C27 VARBINARY, C28 VARCHAR, C29 VARIANT,
+    C30 OBJECT, C31 ARRAY, C32 GEOGRAPHY, C33 GEOMETRY
 )
 """
         )
 
-        table_reflected = Table(
-            table_name, MetaData(), autoload=True, autoload_with=conn
-        )
+        table_reflected = Table(table_name, MetaData(), autoload_with=conn)
         columns = table_reflected.columns
-        assert (
-            len(columns) == len(ischema_names_baseline) - 1
-        )  # -1 because FIXED is not supported
+        assert len(columns) == (
+            len(ischema_names_baseline) - 2
+        )  # -2 because FIXED and MAP is not supported
 
 
 def test_result_type_and_value(engine_testaccount):
@@ -1635,13 +1712,12 @@ CREATE TEMP TABLE {table_name} (
     C1 BIGINT, C2 BINARY, C3 BOOLEAN, C4 CHAR, C5 CHARACTER, C6 DATE, C7 DATETIME, C8 DEC(12,3),
     C9 DECIMAL(12,3), C10 DOUBLE, C11 FLOAT, C12 INT, C13 INTEGER, C14 NUMBER, C15 REAL, C16 BYTEINT,
     C17 SMALLINT, C18 STRING, C19 TEXT, C20 TIME, C21 TIMESTAMP, C22 TIMESTAMP_TZ, C23 TIMESTAMP_LTZ,
-    C24 TIMESTAMP_NTZ, C25 TINYINT, C26 VARBINARY, C27 VARCHAR, C28 VARIANT, C29 OBJECT, C30 ARRAY, C31 GEOGRAPHY
+    C24 TIMESTAMP_NTZ, C25 TINYINT, C26 VARBINARY, C27 VARCHAR, C28 VARIANT, C29 OBJECT, C30 ARRAY, C31 GEOGRAPHY,
+    C32 GEOMETRY
 )
 """
         )
-        table_reflected = Table(
-            table_name, MetaData(), autoload=True, autoload_with=conn
-        )
+        table_reflected = Table(table_name, MetaData(), autoload_with=conn)
         current_date = date.today()
         current_utctime = datetime.utcnow()
         current_localtime = pytz.utc.localize(current_utctime, is_dst=False).astimezone(
@@ -1661,6 +1737,8 @@ CREATE TEMP TABLE {table_name} (
         CHAR_VALUE = "A"
         GEOGRAPHY_VALUE = "POINT(-122.35 37.55)"
         GEOGRAPHY_RESULT_VALUE = '{"coordinates": [-122.35,37.55],"type": "Point"}'
+        GEOMETRY_VALUE = "POINT(-94.58473 39.08985)"
+        GEOMETRY_RESULT_VALUE = '{"coordinates": [-94.58473,39.08985],"type": "Point"}'
 
         ins = table_reflected.insert().values(
             c1=MAX_INT_VALUE,  # BIGINT
@@ -1694,6 +1772,7 @@ CREATE TEMP TABLE {table_name} (
             c29=None,  # OBJECT, currently snowflake-sqlalchemy/connector does not support binding variant
             c30=None,  # ARRAY, currently snowflake-sqlalchemy/connector does not support binding variant
             c31=GEOGRAPHY_VALUE,  # GEOGRAPHY
+            c32=GEOMETRY_VALUE,  # GEOMETRY
         )
         conn.execute(ins)
 
@@ -1732,6 +1811,7 @@ CREATE TEMP TABLE {table_name} (
             and result[28] is None
             and result[29] is None
             and json.loads(result[30]) == json.loads(GEOGRAPHY_RESULT_VALUE)
+            and json.loads(result[31]) == json.loads(GEOMETRY_RESULT_VALUE)
         )
 
         sql = f"""
@@ -1796,32 +1876,17 @@ CREATE OR REPLACE TEMP TABLE {table_name}
         )
 
 
+@pytest.mark.pandas
 def test_snowflake_sqlalchemy_as_valid_client_type():
     engine = create_engine(
-        URL(
-            user=CONNECTION_PARAMETERS["user"],
-            password=CONNECTION_PARAMETERS["password"],
-            account=CONNECTION_PARAMETERS["account"],
-            host=CONNECTION_PARAMETERS["host"],
-            port=CONNECTION_PARAMETERS["port"],
-            protocol=CONNECTION_PARAMETERS["protocol"],
-        ),
+        URL(**CONNECTION_PARAMETERS),
         connect_args={"internal_application_name": "UnknownClient"},
     )
     with engine.connect() as conn:
         with pytest.raises(snowflake.connector.errors.NotSupportedError):
             conn.exec_driver_sql("select 1").cursor.fetch_pandas_all()
 
-    engine = create_engine(
-        URL(
-            user=CONNECTION_PARAMETERS["user"],
-            password=CONNECTION_PARAMETERS["password"],
-            account=CONNECTION_PARAMETERS["account"],
-            host=CONNECTION_PARAMETERS["host"],
-            port=CONNECTION_PARAMETERS["port"],
-            protocol=CONNECTION_PARAMETERS["protocol"],
-        )
-    )
+    engine = create_engine(URL(**CONNECTION_PARAMETERS))
     with engine.connect() as conn:
         conn.exec_driver_sql("select 1").cursor.fetch_pandas_all()
 
@@ -1842,20 +1907,17 @@ def test_snowflake_sqlalchemy_as_valid_client_type():
         )
         snowflake.connector.connection.DEFAULT_CONFIGURATION[
             "internal_application_name"
-        ] = ("PythonConnector", (type(None), str))
+        ] = (
+            "PythonConnector",
+            (type(None), str),
+        )
         snowflake.connector.connection.DEFAULT_CONFIGURATION[
             "internal_application_version"
-        ] = ("3.0.0", (type(None), str))
-        engine = create_engine(
-            URL(
-                user=CONNECTION_PARAMETERS["user"],
-                password=CONNECTION_PARAMETERS["password"],
-                account=CONNECTION_PARAMETERS["account"],
-                host=CONNECTION_PARAMETERS["host"],
-                port=CONNECTION_PARAMETERS["port"],
-                protocol=CONNECTION_PARAMETERS["protocol"],
-            )
+        ] = (
+            "3.0.0",
+            (type(None), str),
         )
+        engine = create_engine(URL(**CONNECTION_PARAMETERS))
         with engine.connect() as conn:
             conn.exec_driver_sql("select 1").cursor.fetch_pandas_all()
             assert (
@@ -1875,3 +1937,86 @@ def test_snowflake_sqlalchemy_as_valid_client_type():
         snowflake.connector.connection.DEFAULT_CONFIGURATION[
             "internal_application_version"
         ] = origin_internal_app_version
+
+
+@pytest.mark.parametrize(
+    "operation",
+    [
+        [
+            literal(5),
+            literal(10),
+            0.5,
+        ],
+        [literal(5), func.sqrt(literal(10)), 1.5811388300841895],
+        [literal(4), literal(5), decimal.Decimal("0.800000")],
+        [literal(2), literal(2), 1.0],
+        [literal(3), literal(2), 1.5],
+        [literal(4), literal(1.5), 2.666667],
+        [literal(5.5), literal(10.7), 0.5140187],
+        [literal(5.5), literal(8), 0.6875],
+    ],
+)
+def test_true_division_operation(engine_testaccount, operation):
+    # expected_warning = "div_is_floordiv value will be changed to False in a future release. This will generate a behavior change on true and floor division. Please review https://docs.sqlalchemy.org/en/20/changelog/whatsnew_20.html#python-division-operator-performs-true-division-for-all-backends-added-floor-division"
+    # with pytest.warns(PendingDeprecationWarning, match=expected_warning):
+    with engine_testaccount.connect() as conn:
+        eq_(
+            conn.execute(select(operation[0] / operation[1])).fetchall(),
+            [((operation[2]),)],
+        )
+
+
+@pytest.mark.parametrize(
+    "operation",
+    [
+        [literal(5), literal(10), 0.5, 0.5],
+        [literal(5), func.sqrt(literal(10)), 1.5811388300841895, 1.0],
+        [
+            literal(4),
+            literal(5),
+            decimal.Decimal("0.800000"),
+            decimal.Decimal("0.800000"),
+        ],
+        [literal(2), literal(2), 1.0, 1.0],
+        [literal(3), literal(2), 1.5, 1.5],
+        [literal(4), literal(1.5), 2.666667, 2.0],
+        [literal(5.5), literal(10.7), 0.5140187, 0],
+        [literal(5.5), literal(8), 0.6875, 0.6875],
+    ],
+)
+@pytest.mark.feature_v20
+def test_division_force_div_is_floordiv_default(engine_testaccount, operation):
+    expected_warning = "div_is_floordiv value will be changed to False in a future release. This will generate a behavior change on true and floor division. Please review https://docs.sqlalchemy.org/en/20/changelog/whatsnew_20.html#python-division-operator-performs-true-division-for-all-backends-added-floor-division"
+    with pytest.warns(PendingDeprecationWarning, match=expected_warning):
+        with engine_testaccount.connect() as conn:
+            eq_(
+                conn.execute(
+                    select(operation[0] / operation[1], operation[0] // operation[1])
+                ).fetchall(),
+                [(operation[2], operation[3])],
+            )
+
+
+@pytest.mark.parametrize(
+    "operation",
+    [
+        [literal(5), literal(10), 0.5, 0],
+        [literal(5), func.sqrt(literal(10)), 1.5811388300841895, 1.0],
+        [literal(4), literal(5), decimal.Decimal("0.800000"), 0],
+        [literal(2), literal(2), 1.0, 1.0],
+        [literal(3), literal(2), 1.5, 1],
+        [literal(4), literal(1.5), 2.666667, 2.0],
+        [literal(5.5), literal(10.7), 0.5140187, 0],
+        [literal(5.5), literal(8), 0.6875, 0],
+    ],
+)
+@pytest.mark.feature_v20
+def test_division_force_div_is_floordiv_false(db_parameters, operation):
+    engine = create_engine(URL(**db_parameters), **{"force_div_is_floordiv": False})
+    with engine.connect() as conn:
+        eq_(
+            conn.execute(
+                select(operation[0] / operation[1], operation[0] // operation[1])
+            ).fetchall(),
+            [(operation[2], operation[3])],
+        )

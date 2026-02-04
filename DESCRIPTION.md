@@ -7,12 +7,113 @@ Snowflake Documentation is available at:
 Source code is also available at:
 <https://github.com/snowflakedb/snowflake-sqlalchemy>
 
+# Unreleased Notes
+
+- Add support for DECFLOAT data type
+- Add server_version_info support
+- Add support for ILIKE in queries
+
 # Release Notes
 
-- v1.4.7(Unreleased)
+- v1.8.2 (December 9, 2025)
+  - Updated supported max python version to 3.13
+  - Version 1.8.1 yanked due to max python version supported by `snowflake-connector-python`
+
+- v1.8.1 (December 9, 2025)
+  - Add python 3.14 to project metadata
+
+- v1.8.0(December 5, 2025)
+  - Add logging of SQLAlchemy version
+  - Bump `snowflake-connector-python<5.0.0`
+  - Add python up to 3.14
+  - Add logging of SQLAlchemy version and pandas (if used)
+
+- v1.7.7(September 3, 2025)
+  - Fix exception for structured type columns dropped while collecting metadata
+
+- v1.7.6(July 10, 2025)
+  - Fix get_multi_indexes issue, wrong assign of returned indexes when processing multiple indexes in a table
+
+- v1.7.5(June 20, 2025)
+  - Fix compilation of Merge and Copy Into was not working
+
+- v1.7.4(June 10, 2025)
+  - Fix dependency on DESCRIBE TABLE columns quantity (differences in columns caused by Snowflake parameters).
+  - Fix unnecessary condition was causing issues when parsing StructuredTypes columns.
+  - Update README.md to include instructions on how to verify package signatures using cosign.
+
+- v1.7.3(January 15, 2025)
+  - Fix support for SqlAlchemy ARRAY.
+  - Fix return value of snowflake get_table_names.
+  - Fix incorrect quoting of identifiers with `_` as initial character.
+  - Fix ARRAY type not supported in HYBRID tables.
+  - Add `force_div_is_floordiv` flag to override `div_is_floordiv` new default value `False` in `SnowflakeDialect`.
+    - With the flag in `False`, the `/` division operator will be treated as a float division and `//` as a floor division.
+    - This flag is added to maintain backward compatibility with the previous behavior of Snowflake Dialect division.
+    - This flag will be removed in the future and Snowflake Dialect will use `div_is_floor_div` as `False`.
+
+- v1.7.2(December 18, 2024)
+  - Fix quoting of `_` as column name
+  - Fix index columns was not being reflected
+  - Fix index reflection cache not working
+  - Add support for structured OBJECT datatype
+  - Add support for structured ARRAY datatype
+
+- v1.7.1(December 02, 2024)
+  - Add support for partition by to copy into <location>
+  - Fix BOOLEAN type not found in snowdialect
+  - Add support for autocommit Isolation Level
+
+- v1.7.0(November 21, 2024)
+  - Add support for dynamic tables and required options
+  - Add support for hybrid tables
+  - Fixed SAWarning when registering functions with existing name in default namespace
+  - Update options to be defined in key arguments instead of arguments.
+  - Add support for refresh_mode option in DynamicTable
+  - Add support for iceberg table with Snowflake Catalog
+  - Fix cluster by option to support explicit expressions
+  - Add support for MAP datatype
+
+- v1.6.1(July 9, 2024)
+
+  - Update internal project workflow with pypi publishing
+
+- v1.6.0(July 8, 2024)
+
+  - support for installing with SQLAlchemy 2.0.x
+  - use `hatch` & `uv` for managing project virtual environments
+
+- v1.5.4
+
+  - Add ability to set ORDER / NOORDER sequence on columns with IDENTITY
+
+- v1.5.3(April 16, 2024)
+
+  - Limit SQLAlchemy to < 2.0.0 before releasing version compatible with 2.0
+
+- v1.5.2(April 11, 2024)
+
+  - Bump min SQLAlchemy to 1.4.19 for outer lateral join
+  - Add support for sequence ordering in tests
+
+- v1.5.1(November 03, 2023)
+
+  - Fixed a compatibility issue with Snowflake Behavioral Change 1057 on outer lateral join, for more details check <https://docs.snowflake.com/en/release-notes/bcr-bundles/2023_04/bcr-1057>.
+  - Fixed credentials with `externalbrowser` authentication not caching due to incorrect parsing of boolean query parameters.
+    - This fixes other boolean parameter passing to driver as well.
+
+- v1.5.0(Aug 23, 2023)
+
+  - Added option to create a temporary stage command.
+  - Added support for geometry type.
+  - Fixed a compatibility issue of regex expression with SQLAlchemy 1.4.49.
+
+- v1.4.7(Mar 22, 2023)
 
   - Re-applied the application name of driver connection `SnowflakeConnection` to `SnowflakeSQLAlchemy`.
   - `SnowflakeDialect.get_columns` now throws a `NoSuchTableError` exception when the specified table doesn't exist, instead of the more vague `KeyError`.
+  - Fixed a bug that dialect can not be created with empty host name.
+  - Fixed a bug that `sqlalchemy.func.now` is not rendered correctly.
 
 - v1.4.6(Feb 8, 2023)
 

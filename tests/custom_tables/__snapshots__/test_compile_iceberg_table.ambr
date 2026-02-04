@@ -1,0 +1,19 @@
+# serializer version: 1
+# name: test_compile_dynamic_table_orm_with_as_query
+  "CREATE ICEBERG TABLE test_iceberg_table_orm_2 (\tid INTEGER NOT NULL AUTOINCREMENT, \tname VARCHAR, \tPRIMARY KEY (id))\tEXTERNAL_VOLUME = 'my_external_volume'\tCATALOG = 'SNOWFLAKE'\tBASE_LOCATION = 'my_iceberg_table'\tAS SELECT * FROM table"
+# ---
+# name: test_compile_icberg_table_with_primary_key
+  "CREATE ICEBERG TABLE test_iceberg_table_with_options (\tid INTEGER NOT NULL AUTOINCREMENT, \tgeom VARCHAR, \tPRIMARY KEY (id))\tEXTERNAL_VOLUME = 'my_external_volume'\tCATALOG = 'SNOWFLAKE'\tBASE_LOCATION = 'my_iceberg_table'"
+# ---
+# name: test_compile_iceberg_table
+  "CREATE ICEBERG TABLE test_iceberg_table (\tid INTEGER, \tgeom VARCHAR)\tEXTERNAL_VOLUME = 'my_external_volume'\tCATALOG = 'SNOWFLAKE'\tBASE_LOCATION = 'my_iceberg_table'"
+# ---
+# name: test_compile_iceberg_table_with_one_wrong_option_types
+  '''
+  Invalid parameter type 'IdentifierOption' provided for 'external_volume'. Expected one of the following types: 'LiteralOption', 'str', 'int'.
+  
+  '''
+# ---
+# name: test_compile_iceberg_table_with_options_objects
+  "CREATE ICEBERG TABLE test_iceberg_table_with_options (\tid INTEGER, \tgeom VARCHAR)\tEXTERNAL_VOLUME = 'my_external_volume'\tCATALOG = 'SNOWFLAKE'\tBASE_LOCATION = 'my_iceberg_table'"
+# ---

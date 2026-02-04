@@ -1,11 +1,16 @@
 #
-# Copyright (c) 2012-2022 Snowflake Computing Inc. All rights reserved.
+# Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
 
-from sqlalchemy import Integer, String, and_, func, select
+import pytest
+
+from sqlalchemy import Integer, String, and_, func, insert, select
 from sqlalchemy.schema import DropColumnComment, DropTableComment
 from sqlalchemy.sql import column, quoted_name, table
-from sqlalchemy.testing import AssertsCompiledSQL
+from sqlalchemy.testing.assertions import AssertsCompiledSQL
+
+from snowflake.sqlalchemy import snowdialect
+from src.snowflake.sqlalchemy.snowdialect import SnowflakeDialect
 
 table1 = table(
     "table1", column("id", Integer), column("name", String), column("value", Integer)
@@ -28,6 +33,44 @@ class TestSnowflakeCompiler(AssertsCompiledSQL):
         self.assert_compile(
             statement,
             "SELECT SYSDATE() AS sysdate_1",
+            dialect="snowflake",
+        )
+    
+    def test_now_func(self):
+        statement = select(func.now())
+        self.assert_compile(
+            statement,
+            "SELECT CURRENT_TIMESTAMP AS now_1",
+            dialect="snowflake",
+        )
+
+    def test_underscore_as_valid_identifier(self):
+        _table = table(
+            "table_1745924",
+            column("ca", Integer),
+            column("cb", String),
+            column("_", String),
+        )
+
+        stmt = insert(_table).values(ca=1, cb="test", _="test_")
+        self.assert_compile(
+            stmt,
+            'INSERT INTO table_1745924 (ca, cb, "_") VALUES (%(ca)s, %(cb)s, %(_)s)',
+            dialect="snowflake",
+        )
+
+    def test_underscore_as_initial_character_as_non_quoted_identifier(self):
+        _table = table(
+            "table_1745924",
+            column("ca", Integer),
+            column("cb", String),
+            column("_identifier", String),
+        )
+
+        stmt = insert(_table).values(ca=1, cb="test", _identifier="test_")
+        self.assert_compile(
+            stmt,
+            "INSERT INTO table_1745924 (ca, cb, _identifier) VALUES (%(ca)s, %(cb)s, %(_identifier)s)",
             dialect="snowflake",
         )
 
@@ -64,6 +107,21 @@ class TestSnowflakeCompiler(AssertsCompiledSQL):
             statement,
             "UPDATE table1 SET name=test.table2.name FROM test.table2 "
             "WHERE table1.id = test.table2.name",
+        )
+
+    def test_ilike_compilation(self):
+        statement = select(table1.c.name).where(table1.c.name.ilike("%Ann%"))
+        self.assert_compile(
+            statement,
+            "SELECT table1.name FROM table1 WHERE table1.name ILIKE %(name_1)s",
+        )
+
+        statement = select(table1.c.name).where(
+            ~table1.c.name.ilike("foo\\_%", escape="\\")
+        )
+        self.assert_compile(
+            statement,
+            "SELECT table1.name FROM table1 WHERE table1.name NOT ILIKE %(name_1)s ESCAPE '\\\\'",
         )
 
     def test_drop_table_comment(self):
@@ -107,3 +165,91 @@ def test_quoted_name_label(engine_testaccount):
         sel_from_tbl = select(col).group_by(col).select_from(table("abc"))
         compiled_result = sel_from_tbl.compile()
         assert str(compiled_result) == t["output"]
+
+
+def test_outer_lateral_join():
+    col = column("colname").label("label")
+    col2 = column("colname2").label("label2")
+    lateral_table = func.flatten(func.PARSE_JSON(col2), outer=True).lateral()
+    stmt = select(col).select_from(table("abc")).join(lateral_table).group_by(col)
+    assert (
+        str(stmt.compile(dialect=snowdialect.dialect()))
+        == "SELECT colname AS label \nFROM abc JOIN LATERAL flatten(PARSE_JSON(colname2)) AS anon_1 GROUP BY colname"
+    )
+
+
+@pytest.mark.feature_v20
+def test_division_operator_with_force_div_is_floordiv_false():
+    col1 = column("col1", Integer)
+    col2 = column("col2", Integer)
+    stmt = col1 / col2
+    assert (
+        str(stmt.compile(dialect=SnowflakeDialect(force_div_is_floordiv=False)))
+        == "col1 / col2"
+    )
+
+
+@pytest.mark.feature_v20
+def test_division_operator_with_denominator_expr_force_div_is_floordiv_false():
+    col1 = column("col1", Integer)
+    col2 = column("col2", Integer)
+    stmt = col1 / func.sqrt(col2)
+    assert (
+        str(stmt.compile(dialect=SnowflakeDialect(force_div_is_floordiv=False)))
+        == "col1 / sqrt(col2)"
+    )
+
+
+@pytest.mark.feature_v20
+def test_division_operator_with_force_div_is_floordiv_default_true():
+    col1 = column("col1", Integer)
+    col2 = column("col2", Integer)
+    stmt = col1 / col2
+    assert str(stmt.compile(dialect=SnowflakeDialect())) == "col1 / col2"
+
+
+@pytest.mark.feature_v20
+def test_division_operator_with_denominator_expr_force_div_is_floordiv_default_true():
+    col1 = column("col1", Integer)
+    col2 = column("col2", Integer)
+    stmt = col1 / func.sqrt(col2)
+    assert str(stmt.compile(dialect=SnowflakeDialect())) == "col1 / sqrt(col2)"
+
+
+@pytest.mark.feature_v20
+def test_floor_division_operator_force_div_is_floordiv_false():
+    col1 = column("col1", Integer)
+    col2 = column("col2", Integer)
+    stmt = col1 // col2
+    assert (
+        str(stmt.compile(dialect=SnowflakeDialect(force_div_is_floordiv=False)))
+        == "FLOOR(col1 / col2)"
+    )
+
+
+@pytest.mark.feature_v20
+def test_floor_division_operator_with_denominator_expr_force_div_is_floordiv_false():
+    col1 = column("col1", Integer)
+    col2 = column("col2", Integer)
+    stmt = col1 // func.sqrt(col2)
+    assert (
+        str(stmt.compile(dialect=SnowflakeDialect(force_div_is_floordiv=False)))
+        == "FLOOR(col1 / sqrt(col2))"
+    )
+
+
+@pytest.mark.feature_v20
+def test_floor_division_operator_force_div_is_floordiv_default_true():
+    col1 = column("col1", Integer)
+    col2 = column("col2", Integer)
+    stmt = col1 // col2
+    assert str(stmt.compile(dialect=SnowflakeDialect())) == "col1 / col2"
+
+
+@pytest.mark.feature_v20
+def test_floor_division_operator_with_denominator_expr_force_div_is_floordiv_default_true():
+    col1 = column("col1", Integer)
+    col2 = column("col2", Integer)
+    stmt = col1 // func.sqrt(col2)
+    res = stmt.compile(dialect=SnowflakeDialect())
+    assert str(res) == "FLOOR(col1 / sqrt(col2))"

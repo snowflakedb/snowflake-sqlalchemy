@@ -1,16 +1,19 @@
 #
-# Copyright (c) 2012-2022 Snowflake Computing Inc. All rights reserved.
+# Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
+from __future__ import annotations
 
+import logging.handlers
 import os
 import sys
 import time
 import uuid
-from functools import partial
 from logging import getLogger
+from typing import Literal
 
 import pytest
 from sqlalchemy import create_engine
+from sqlalchemy.pool import NullPool
 
 import snowflake.connector
 import snowflake.connector.connection
@@ -44,49 +47,30 @@ snowflake.connector.connection.DEFAULT_CONFIGURATION[
 
 TEST_SCHEMA = f"sqlalchemy_tests_{str(uuid.uuid4()).replace('-', '_')}"
 
-create_engine_with_future_flag = create_engine
-
 
 def pytest_addoption(parser):
     parser.addoption(
-        "--run_v20_sqlalchemy",
-        help="Use only 2.0 SQLAlchemy APIs, any legacy features (< 2.0) will not be supported."
-        "Turning on this option will set future flag to True on Engine and Session objects according to"
-        "the migration guide: https://docs.sqlalchemy.org/en/14/changelog/migration_20.html",
+        "--ignore_v20_test",
         action="store_true",
+        default=False,
+        help="skip sqlalchemy 2.0 exclusive tests",
     )
 
 
-@pytest.fixture(scope="session")
-def on_travis():
-    return os.getenv("TRAVIS", "").lower() == "true"
-
-
-@pytest.fixture(scope="session")
-def on_appveyor():
-    return os.getenv("APPVEYOR", "").lower() == "true"
-
-
-@pytest.fixture(scope="session")
-def on_public_ci(on_travis, on_appveyor):
-    return on_travis or on_appveyor
-
-
-def help():
-    print(
-        """Connection parameter must be specified in parameters.py,
-    for example:
-CONNECTION_PARAMETERS = {
-    'account': 'testaccount',
-    'user': 'user1',
-    'password': 'test',
-    'database': 'testdb',
-    'schema': 'public',
-}"""
-    )
+def pytest_collection_modifyitems(config, items):
+    if config.getoption("--ignore_v20_test"):
+        skip_feature_v2 = pytest.mark.skip(
+            reason="need remove --ignore_v20_test option to run"
+        )
+        for item in items:
+            if "feature_v20" in item.keywords:
+                item.add_marker(skip_feature_v2)
 
 
 logger = getLogger(__name__)
+
+TZ_ENV_VAR: Literal["TZ"] = "TZ"
+DEFAULT_TZ_VALUE: Literal["UTC"] = "UTC"
 
 DEFAULT_PARAMETERS = {
     "account": "<account_name>",
@@ -102,23 +86,58 @@ DEFAULT_PARAMETERS = {
 
 @pytest.fixture(scope="session")
 def db_parameters():
-    return get_db_parameters()
+    yield get_db_parameters()
 
 
-def get_db_parameters():
+@pytest.fixture(scope="session")
+def external_volume():
+    db_parameters = get_db_parameters()
+    if "external_volume" in db_parameters:
+        yield db_parameters["external_volume"]
+    else:
+        raise ValueError("External_volume is not set")
+
+
+@pytest.fixture(scope="session")
+def external_stage():
+    db_parameters = get_db_parameters()
+    if "external_stage" in db_parameters:
+        yield db_parameters["external_stage"]
+    else:
+        raise ValueError("External_stage is not set")
+
+
+@pytest.fixture(scope="session")
+def on_public_ci():
+    return running_on_public_ci()
+
+
+@pytest.fixture(scope="function")
+def base_location(external_stage, engine_testaccount):
+    unique_id = str(uuid.uuid4())
+    base_location = "L" + unique_id.replace("-", "_")
+    yield base_location
+    remove_base_location = f"""
+    REMOVE @{external_stage} pattern='.*{base_location}.*';
+     """
+    with engine_testaccount.connect() as connection:
+        connection.exec_driver_sql(remove_base_location)
+
+
+def get_db_parameters() -> dict:
     """
     Sets the db connection parameters
     """
     ret = {}
-    os.environ["TZ"] = "UTC"
-    if not IS_WINDOWS:
-        time.tzset()
-    for k, v in CONNECTION_PARAMETERS.items():
-        ret[k] = v
+    os.environ[TZ_ENV_VAR] = DEFAULT_TZ_VALUE
+    if hasattr(time, "tzset"):
+        if not IS_WINDOWS:
+            time.tzset()
+    else:
+        logger.warning("time.tzset is unavailable on this platform")
 
-    for k, v in DEFAULT_PARAMETERS.items():
-        if k not in ret:
-            ret[k] = v
+    ret.update(DEFAULT_PARAMETERS)
+    ret.update(CONNECTION_PARAMETERS)
 
     if "account" in ret and ret["account"] == DEFAULT_PARAMETERS["account"]:
         help()
@@ -153,43 +172,85 @@ def get_db_parameters():
     return ret
 
 
-def get_engine(user=None, password=None, account=None, schema=None):
-    """
-    Creates a connection using the parameters defined in JDBC connect string
-    """
-    ret = get_db_parameters()
+def url_factory(**kwargs) -> URL:
+    url_params = get_db_parameters()
+    url_params.update(kwargs)
+    return URL(**url_params)
 
-    if user is not None:
-        ret["user"] = user
-    if password is not None:
-        ret["password"] = password
-    if account is not None:
-        ret["account"] = account
 
-    from sqlalchemy.pool import NullPool
+def get_engine(url: URL, **engine_kwargs):
+    engine_params = {
+        "poolclass": NullPool,
+        "future": True,
+        "echo": True,
+    }
+    engine_params.update(engine_kwargs)
 
-    engine = create_engine_with_future_flag(
-        URL(
-            user=ret["user"],
-            password=ret["password"],
-            host=ret["host"],
-            port=ret["port"],
-            database=ret["database"],
-            schema=TEST_SCHEMA if not schema else schema,
-            account=ret["account"],
-            protocol=ret["protocol"],
-        ),
-        poolclass=NullPool,
-    )
+    connect_args = engine_params.get("connect_args", {}).copy()
+    connect_args["disable_ocsp_checks"] = True
+    connect_args["insecure_mode"] = True
+    engine_params["connect_args"] = connect_args
 
-    return engine, ret
+    engine = create_engine(url, **engine_params)
+    return engine
 
 
 @pytest.fixture()
 def engine_testaccount(request):
-    engine, _ = get_engine()
+    url = url_factory()
+    engine = get_engine(url)
     request.addfinalizer(engine.dispose)
-    return engine
+    yield engine
+
+
+@pytest.fixture()
+def assert_text_in_buf():
+    buf = logging.handlers.BufferingHandler(100)
+    for log in [
+        logging.getLogger("sqlalchemy.engine"),
+    ]:
+        log.addHandler(buf)
+
+    def go(expected, occurrences=1):
+        assert buf.buffer
+        buflines = [rec.getMessage() for rec in buf.buffer]
+        ocurrences_found = 0
+        for line in buflines:
+            if line.find(expected) != -1:
+                ocurrences_found += 1
+
+        assert occurrences == ocurrences_found, (
+            f"Expected {occurrences} of {expected}, got {ocurrences_found} "
+            f"occurrences in {buflines}."
+        )
+        buf.flush()
+
+    yield go
+    for log in [
+        logging.getLogger("sqlalchemy.engine"),
+    ]:
+        log.removeHandler(buf)
+
+
+@pytest.fixture()
+def engine_testaccount_with_numpy(request):
+    url = url_factory(numpy=True)
+    engine = get_engine(url)
+    request.addfinalizer(engine.dispose)
+    yield engine
+
+
+@pytest.fixture()
+def engine_testaccount_with_qmark(request):
+    snowflake.connector.paramstyle = "qmark"
+
+    url = url_factory()
+    engine = get_engine(url)
+    request.addfinalizer(engine.dispose)
+
+    yield engine
+
+    snowflake.connector.paramstyle = "pyformat"
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -232,19 +293,6 @@ def sql_compiler():
     ).replace("\n", "")
 
 
-@pytest.fixture(scope="session")
-def run_v20_sqlalchemy(pytestconfig):
-    return pytestconfig.option.run_v20_sqlalchemy
-
-
-def pytest_sessionstart(session):
-    # patch the create_engine with future flag
-    global create_engine_with_future_flag
-    create_engine_with_future_flag = partial(
-        create_engine, future=session.config.option.run_v20_sqlalchemy
-    )
-
-
 def running_on_public_ci() -> bool:
     """Whether or not tests are currently running on one of our public CIs."""
     return os.getenv("GITHUB_ACTIONS") == "true"
@@ -252,6 +300,7 @@ def running_on_public_ci() -> bool:
 
 def pytest_runtest_setup(item) -> None:
     """Ran before calling each test, used to decide whether a test should be skipped."""
+    _ensure_optional_dependencies(item)
     test_tags = [mark.name for mark in item.iter_markers()]
 
     # Get what cloud providers the test is marked for if any
@@ -269,3 +318,9 @@ def pytest_runtest_setup(item) -> None:
         pytest.skip("cannot run this test on external CI")
     elif INTERNAL_SKIP_TAGS.intersection(test_tags) and not running_on_public_ci():
         pytest.skip("cannot run this test on internal CI")
+
+
+def _ensure_optional_dependencies(item):
+    """Skip optional-dependency tests when the dependency is unavailable."""
+    if "pandas" in item.keywords:
+        pytest.importorskip("pandas")

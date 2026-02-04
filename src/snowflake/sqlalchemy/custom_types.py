@@ -1,9 +1,15 @@
 #
-# Copyright (c) 2012-2022 Snowflake Computing Inc. All rights reserved.
+# Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
+import decimal
+import warnings
+from typing import Optional, Tuple, Union
 
 import sqlalchemy.types as sqltypes
 import sqlalchemy.util as util
+from sqlalchemy.types import TypeEngine
+
+DECFLOAT_PRECISION = 38
 
 TEXT = sqltypes.VARCHAR
 CHARACTER = sqltypes.CHAR
@@ -37,12 +43,60 @@ class VARIANT(SnowflakeType):
     __visit_name__ = "VARIANT"
 
 
-class OBJECT(SnowflakeType):
+class StructuredType(SnowflakeType):
+    def __init__(self, is_semi_structured: bool = False):
+        self.is_semi_structured = is_semi_structured
+        super().__init__()
+
+
+class MAP(StructuredType):
+    __visit_name__ = "MAP"
+
+    def __init__(
+        self,
+        key_type: sqltypes.TypeEngine,
+        value_type: sqltypes.TypeEngine,
+        not_null: bool = False,
+    ):
+        self.key_type = key_type
+        self.value_type = value_type
+        self.not_null = not_null
+        super().__init__()
+
+
+class OBJECT(StructuredType):
     __visit_name__ = "OBJECT"
 
+    def __init__(self, **items_types: Union[TypeEngine, Tuple[TypeEngine, bool]]):
+        for key, value in items_types.items():
+            if not isinstance(value, tuple):
+                items_types[key] = (value, False)
 
-class ARRAY(SnowflakeType):
-    __visit_name__ = "ARRAY"
+        self.items_types = items_types
+        self.is_semi_structured = len(items_types) == 0
+        super().__init__()
+
+    def __repr__(self):
+        quote_char = "'"
+        return "OBJECT(%s)" % ", ".join(
+            [
+                f"{repr(key).strip(quote_char)}={repr(value)}"
+                for key, value in self.items_types.items()
+            ]
+        )
+
+
+class ARRAY(StructuredType):
+    __visit_name__ = "SNOWFLAKE_ARRAY"
+
+    def __init__(
+        self,
+        value_type: Optional[sqltypes.TypeEngine] = None,
+        not_null: bool = False,
+    ):
+        self.value_type = value_type
+        self.not_null = not_null
+        super().__init__(is_semi_structured=value_type is None)
 
 
 class TIMESTAMP_TZ(SnowflakeType):
@@ -59,6 +113,64 @@ class TIMESTAMP_NTZ(SnowflakeType):
 
 class GEOGRAPHY(SnowflakeType):
     __visit_name__ = "GEOGRAPHY"
+
+
+class GEOMETRY(SnowflakeType):
+    __visit_name__ = "GEOMETRY"
+
+
+class DECFLOAT(SnowflakeType):
+    """Snowflake DECFLOAT type - decimal floating-point with 38 significant digits.
+
+    DECFLOAT supports a wider range of values than FLOAT with higher precision.
+    It can represent values with exponents from approximately -6000 to +6000.
+
+    Note: DECFLOAT has restrictions:
+    - Precision is fixed at 38 digits (cannot be customized)
+    - Cannot be stored in VARIANT, OBJECT, or ARRAY
+    - Not supported in Iceberg or Hybrid tables
+    - Does NOT support special values (inf, -inf, NaN) unlike FLOAT
+
+    Precision: The Snowflake Python connector uses Python's decimal context
+    when converting DECFLOAT to Decimal. Default context precision is 28 digits,
+    which truncates values. For full 38-digit precision, use the dialect parameter::
+
+        engine = create_engine('snowflake://...?enable_decfloat=True')
+
+    Or set manually::
+
+        import decimal
+        decimal.getcontext().prec = 38
+    """
+
+    __visit_name__ = "DECFLOAT"
+    _warned_precision = False
+
+    def result_processor(self, dialect, coltype):
+        """Check decimal context precision and warn if it may truncate DECFLOAT values."""
+        # Check if dialect has enable_decfloat configured
+        decfloat_enabled = getattr(dialect, "_enable_decfloat", False)
+
+        def process(value):
+            if value is not None and not DECFLOAT._warned_precision:
+                # Skip warning if dialect has DECFLOAT support enabled
+                if decfloat_enabled:
+                    return value
+
+                current_prec = decimal.getcontext().prec
+                if current_prec < DECFLOAT_PRECISION:
+                    warnings.warn(
+                        f"Python decimal context precision ({current_prec}) is less than "
+                        f"DECFLOAT precision ({DECFLOAT_PRECISION}). Values may be truncated. "
+                        f"Set enable_decfloat=True in connection URL or "
+                        f"decimal.getcontext().prec = {DECFLOAT_PRECISION} for full precision.",
+                        UserWarning,
+                        stacklevel=2,
+                    )
+                    DECFLOAT._warned_precision = True
+            return value
+
+        return process
 
 
 class _CUSTOM_Date(SnowflakeType, sqltypes.Date):

@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2012-2022 Snowflake Computing Inc. All rights reserved.
+# Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
 import pytest
 from sqlalchemy import Integer, testing
@@ -67,6 +67,10 @@ class InsertBehaviorTest(_InsertBehaviorTest):
         "Snowflake does not support inserting empty values, The value may be a literal or an expression."
     )
     def test_empty_insert_multiple(self, connection):
+        pass
+
+    @pytest.mark.skip("Snowflake does not support returning in insert.")
+    def test_no_results_for_non_returning_insert(self, connection, style, executemany):
         pass
 
 

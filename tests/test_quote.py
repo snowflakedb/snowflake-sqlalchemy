@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2012-2022 Snowflake Computing Inc. All rights reserved.
+# Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
 
 from sqlalchemy import Column, Integer, MetaData, Sequence, String, Table, inspect
@@ -35,6 +35,29 @@ def test_table_name_with_reserved_words(engine_testaccount, db_parameters):
         )
         assert len(columns_in_insert) == 3
 
+    finally:
+        insert_table.drop(engine_testaccount)
+    return insert_table
+
+
+def test_table_column_as_underscore(engine_testaccount):
+    metadata = MetaData()
+    test_table_name = "table_1745924"
+    insert_table = Table(
+        test_table_name,
+        metadata,
+        Column("ca", Integer),
+        Column("cb", String),
+        Column("_", String),
+    )
+    metadata.create_all(engine_testaccount)
+    try:
+        inspector = inspect(engine_testaccount)
+        columns_in_insert = inspector.get_columns(test_table_name)
+        assert len(columns_in_insert) == 3
+        assert columns_in_insert[0]["name"] == "ca"
+        assert columns_in_insert[1]["name"] == "cb"
+        assert columns_in_insert[2]["name"] == "_"
     finally:
         insert_table.drop(engine_testaccount)
     return insert_table

@@ -1,19 +1,49 @@
 #
-# Copyright (c) 2012-2022 Snowflake Computing Inc. All rights reserved.
+# Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
 
+import itertools
 import operator
 import re
+import string
+import warnings
+from typing import List
 
+from sqlalchemy import exc as sa_exc
+from sqlalchemy import inspect, sql
 from sqlalchemy import util as sa_util
 from sqlalchemy.engine import default
+from sqlalchemy.orm import context
+from sqlalchemy.orm.context import _MapperEntity
 from sqlalchemy.schema import Sequence, Table
-from sqlalchemy.sql import compiler, expression
-from sqlalchemy.sql.elements import quoted_name
-from sqlalchemy.util.compat import string_types
+from sqlalchemy.sql import compiler, expression, functions, sqltypes
+from sqlalchemy.sql.base import CompileState
+from sqlalchemy.sql.elements import BindParameter, quoted_name
+from sqlalchemy.sql.expression import Executable
+from sqlalchemy.sql.selectable import Lateral, SelectState
 
-from .custom_commands import AWSBucket, AzureContainer, ExternalStage
-from .util import _set_connection_interpolate_empty_sequences
+from snowflake.sqlalchemy._constants import DIALECT_NAME
+from snowflake.sqlalchemy.compat import IS_VERSION_20, args_reducer, string_types
+from snowflake.sqlalchemy.custom_commands import (
+    AWSBucket,
+    AzureContainer,
+    ExternalStage,
+)
+
+from ._constants import NOT_NULL
+from .exc import (
+    CustomOptionsAreOnlySupportedOnSnowflakeTables,
+    UnexpectedOptionTypeError,
+)
+from .functions import flatten
+from .sql.custom_schema.custom_table_base import CustomTableBase
+from .sql.custom_schema.options.table_option import TableOption
+from .util import (
+    _find_left_clause_to_join_from,
+    _set_connection_interpolate_empty_sequences,
+    _Snowflake_ORMJoin,
+    _Snowflake_Selectable_Join,
+)
 
 RESERVED_WORDS = frozenset(
     [
@@ -86,10 +116,338 @@ RESERVED_WORDS = frozenset(
 AUTOCOMMIT_REGEXP = re.compile(
     r"\s*(?:UPDATE|INSERT|DELETE|MERGE|COPY)", re.I | re.UNICODE
 )
+# used for quoting identifiers ie. table names, column names, etc.
+ILLEGAL_INITIAL_CHARACTERS = frozenset({d for d in string.digits}.union({"$"}))
+
+
+# used for quoting identifiers ie. table names, column names, etc.
+ILLEGAL_IDENTIFIERS = frozenset({d for d in string.digits}.union({"_"}))
+
+"""
+Overwrite methods to handle Snowflake BCR change:
+https://docs.snowflake.com/en/release-notes/bcr-bundles/2023_04/bcr-1057
+- _join_determine_implicit_left_side
+- _join_left_to_right
+"""
+
+
+# handle Snowflake BCR bcr-1057
+@CompileState.plugin_for("default", "select")
+class SnowflakeSelectState(SelectState):
+    def _setup_joins(self, args, raw_columns):
+        for right, onclause, left, flags in args:
+            isouter = flags["isouter"]
+            full = flags["full"]
+
+            if left is None:
+                (
+                    left,
+                    replace_from_obj_index,
+                ) = self._join_determine_implicit_left_side(
+                    raw_columns, left, right, onclause
+                )
+            else:
+                (replace_from_obj_index) = self._join_place_explicit_left_side(left)
+
+            if replace_from_obj_index is not None:
+                # splice into an existing element in the
+                # self._from_obj list
+                left_clause = self.from_clauses[replace_from_obj_index]
+
+                self.from_clauses = (
+                    self.from_clauses[:replace_from_obj_index]
+                    + (
+                        _Snowflake_Selectable_Join(  # handle Snowflake BCR bcr-1057
+                            left_clause,
+                            right,
+                            onclause,
+                            isouter=isouter,
+                            full=full,
+                        ),
+                    )
+                    + self.from_clauses[replace_from_obj_index + 1 :]
+                )
+            else:
+                self.from_clauses = self.from_clauses + (
+                    # handle Snowflake BCR bcr-1057
+                    _Snowflake_Selectable_Join(
+                        left, right, onclause, isouter=isouter, full=full
+                    ),
+                )
+
+    @sa_util.preload_module("sqlalchemy.sql.util")
+    def _join_determine_implicit_left_side(self, raw_columns, left, right, onclause):
+        """When join conditions don't express the left side explicitly,
+        determine if an existing FROM or entity in this query
+        can serve as the left hand side.
+
+        """
+
+        replace_from_obj_index = None
+
+        from_clauses = self.from_clauses
+
+        if from_clauses:
+            # handle Snowflake BCR bcr-1057
+            indexes = _find_left_clause_to_join_from(from_clauses, right, onclause)
+
+            if len(indexes) == 1:
+                replace_from_obj_index = indexes[0]
+                left = from_clauses[replace_from_obj_index]
+        else:
+            potential = {}
+            statement = self.statement
+
+            for from_clause in itertools.chain(
+                itertools.chain.from_iterable(
+                    [element._from_objects for element in raw_columns]
+                ),
+                itertools.chain.from_iterable(
+                    [element._from_objects for element in statement._where_criteria]
+                ),
+            ):
+                potential[from_clause] = ()
+
+            all_clauses = list(potential.keys())
+            # handle Snowflake BCR bcr-1057
+            indexes = _find_left_clause_to_join_from(all_clauses, right, onclause)
+
+            if len(indexes) == 1:
+                left = all_clauses[indexes[0]]
+
+        if len(indexes) > 1:
+            raise sa_exc.InvalidRequestError(
+                "Can't determine which FROM clause to join "
+                "from, there are multiple FROMS which can "
+                "join to this entity. Please use the .select_from() "
+                "method to establish an explicit left side, as well as "
+                "providing an explicit ON clause if not present already to "
+                "help resolve the ambiguity."
+            )
+        elif not indexes:
+            raise sa_exc.InvalidRequestError(
+                "Don't know how to join to %r. "
+                "Please use the .select_from() "
+                "method to establish an explicit left side, as well as "
+                "providing an explicit ON clause if not present already to "
+                "help resolve the ambiguity." % (right,)
+            )
+        return left, replace_from_obj_index
+
+
+# handle Snowflake BCR bcr-1057
+@sql.base.CompileState.plugin_for("orm", "select")
+class SnowflakeORMSelectCompileState(context.ORMSelectCompileState):
+    def _join_determine_implicit_left_side(
+        self, entities_collection, left, right, onclause
+    ):
+        """When join conditions don't express the left side explicitly,
+        determine if an existing FROM or entity in this query
+        can serve as the left hand side.
+
+        """
+
+        # when we are here, it means join() was called without an ORM-
+        # specific way of telling us what the "left" side is, e.g.:
+        #
+        # join(RightEntity)
+        #
+        # or
+        #
+        # join(RightEntity, RightEntity.foo == LeftEntity.bar)
+        #
+
+        r_info = inspect(right)
+
+        replace_from_obj_index = use_entity_index = None
+
+        if self.from_clauses:
+            # we have a list of FROMs already.  So by definition this
+            # join has to connect to one of those FROMs.
+
+            # handle Snowflake BCR bcr-1057
+            indexes = _find_left_clause_to_join_from(
+                self.from_clauses, r_info.selectable, onclause
+            )
+
+            if len(indexes) == 1:
+                replace_from_obj_index = indexes[0]
+                left = self.from_clauses[replace_from_obj_index]
+            elif len(indexes) > 1:
+                raise sa_exc.InvalidRequestError(
+                    "Can't determine which FROM clause to join "
+                    "from, there are multiple FROMS which can "
+                    "join to this entity. Please use the .select_from() "
+                    "method to establish an explicit left side, as well as "
+                    "providing an explicit ON clause if not present already "
+                    "to help resolve the ambiguity."
+                )
+            else:
+                raise sa_exc.InvalidRequestError(
+                    "Don't know how to join to %r. "
+                    "Please use the .select_from() "
+                    "method to establish an explicit left side, as well as "
+                    "providing an explicit ON clause if not present already "
+                    "to help resolve the ambiguity." % (right,)
+                )
+
+        elif entities_collection:
+            # we have no explicit FROMs, so the implicit left has to
+            # come from our list of entities.
+
+            potential = {}
+            for entity_index, ent in enumerate(entities_collection):
+                entity = ent.entity_zero_or_selectable
+                if entity is None:
+                    continue
+                ent_info = inspect(entity)
+                if ent_info is r_info:  # left and right are the same, skip
+                    continue
+
+                # by using a dictionary with the selectables as keys this
+                # de-duplicates those selectables as occurs when the query is
+                # against a series of columns from the same selectable
+                if isinstance(ent, context._MapperEntity):
+                    potential[ent.selectable] = (entity_index, entity)
+                else:
+                    potential[ent_info.selectable] = (None, entity)
+
+            all_clauses = list(potential.keys())
+            # handle Snowflake BCR bcr-1057
+            indexes = _find_left_clause_to_join_from(
+                all_clauses, r_info.selectable, onclause
+            )
+
+            if len(indexes) == 1:
+                use_entity_index, left = potential[all_clauses[indexes[0]]]
+            elif len(indexes) > 1:
+                raise sa_exc.InvalidRequestError(
+                    "Can't determine which FROM clause to join "
+                    "from, there are multiple FROMS which can "
+                    "join to this entity. Please use the .select_from() "
+                    "method to establish an explicit left side, as well as "
+                    "providing an explicit ON clause if not present already "
+                    "to help resolve the ambiguity."
+                )
+            else:
+                raise sa_exc.InvalidRequestError(
+                    "Don't know how to join to %r. "
+                    "Please use the .select_from() "
+                    "method to establish an explicit left side, as well as "
+                    "providing an explicit ON clause if not present already "
+                    "to help resolve the ambiguity." % (right,)
+                )
+        else:
+            raise sa_exc.InvalidRequestError(
+                "No entities to join from; please use "
+                "select_from() to establish the left "
+                "entity/selectable of this join"
+            )
+
+        return left, replace_from_obj_index, use_entity_index
+
+    @args_reducer(positions_to_drop=(6, 7))
+    def _join_left_to_right(
+        self, entities_collection, left, right, onclause, prop, outerjoin, full
+    ):
+        """given raw "left", "right", "onclause" parameters consumed from
+        a particular key within _join(), add a real ORMJoin object to
+        our _from_obj list (or augment an existing one)
+
+        """
+
+        if left is None:
+            # left not given (e.g. no relationship object/name specified)
+            # figure out the best "left" side based on our existing froms /
+            # entities
+            assert prop is None
+            (
+                left,
+                replace_from_obj_index,
+                use_entity_index,
+            ) = self._join_determine_implicit_left_side(
+                entities_collection, left, right, onclause
+            )
+        else:
+            # left is given via a relationship/name, or as explicit left side.
+            # Determine where in our
+            # "froms" list it should be spliced/appended as well as what
+            # existing entity it corresponds to.
+            (
+                replace_from_obj_index,
+                use_entity_index,
+            ) = self._join_place_explicit_left_side(entities_collection, left)
+
+        if left is right:
+            raise sa_exc.InvalidRequestError(
+                "Can't construct a join from %s to %s, they "
+                "are the same entity" % (left, right)
+            )
+
+        # the right side as given often needs to be adapted.  additionally
+        # a lot of things can be wrong with it.  handle all that and
+        # get back the new effective "right" side
+
+        if IS_VERSION_20:
+            r_info, right, onclause = self._join_check_and_adapt_right_side(
+                left, right, onclause, prop
+            )
+        else:
+            r_info, right, onclause = self._join_check_and_adapt_right_side(
+                left, right, onclause, prop, False, False
+            )
+
+        if not r_info.is_selectable:
+            extra_criteria = self._get_extra_criteria(r_info)
+        else:
+            extra_criteria = ()
+
+        if replace_from_obj_index is not None:
+            # splice into an existing element in the
+            # self._from_obj list
+            left_clause = self.from_clauses[replace_from_obj_index]
+
+            self.from_clauses = (
+                self.from_clauses[:replace_from_obj_index]
+                + [
+                    _Snowflake_ORMJoin(  # handle Snowflake BCR bcr-1057
+                        left_clause,
+                        right,
+                        onclause,
+                        isouter=outerjoin,
+                        full=full,
+                        _extra_criteria=extra_criteria,
+                    )
+                ]
+                + self.from_clauses[replace_from_obj_index + 1 :]
+            )
+        else:
+            # add a new element to the self._from_obj list
+            if use_entity_index is not None:
+                # make use of _MapperEntity selectable, which is usually
+                # entity_zero.selectable, but if with_polymorphic() were used
+                # might be distinct
+                assert isinstance(entities_collection[use_entity_index], _MapperEntity)
+                left_clause = entities_collection[use_entity_index].selectable
+            else:
+                left_clause = left
+
+            self.from_clauses = self.from_clauses + [
+                _Snowflake_ORMJoin(  # handle Snowflake BCR bcr-1057
+                    left_clause,
+                    r_info,
+                    onclause,
+                    isouter=outerjoin,
+                    full=full,
+                    _extra_criteria=extra_criteria,
+                )
+            ]
 
 
 class SnowflakeIdentifierPreparer(compiler.IdentifierPreparer):
     reserved_words = {x.lower() for x in RESERVED_WORDS}
+    illegal_initial_characters = ILLEGAL_INITIAL_CHARACTERS
+    illegal_identifiers = ILLEGAL_IDENTIFIERS
 
     def __init__(self, dialect, **kw):
         quote = '"'
@@ -117,6 +475,17 @@ class SnowflakeIdentifierPreparer(compiler.IdentifierPreparer):
             return self.quote(s)
 
         return self.quote_identifier(s) if n.quote else s
+
+    def _requires_quotes(self, value: str) -> bool:
+        """Return True if the given identifier requires quoting."""
+        lc_value = value.lower()
+        return (
+            lc_value in self.reserved_words
+            or lc_value in self.illegal_identifiers
+            or value[0] in self.illegal_initial_characters
+            or not self.legal_characters.match(str(value))
+            or (lc_value != value)
+        )
 
     def _split_schema_by_dot(self, schema):
         ret = []
@@ -156,14 +525,19 @@ class SnowflakeCompiler(compiler.SQLCompiler):
 
     def visit_sysdate_func(self, sysdate, **kw):
         return "SYSDATE()"
+      
+    def visit_now_func(self, now, **kw):
+        return "CURRENT_TIMESTAMP"
 
     def visit_merge_into(self, merge_into, **kw):
         clauses = " ".join(
             clause._compiler_dispatch(self, **kw) for clause in merge_into.clauses
         )
-        return (
-            f"MERGE INTO {merge_into.target} USING {merge_into.source} ON {merge_into.on}"
-            + (" " + clauses if clauses else "")
+        target = merge_into.target._compiler_dispatch(self, asfrom=True, **kw)
+        source = merge_into.source._compiler_dispatch(self, asfrom=True, **kw)
+        on = merge_into.on._compiler_dispatch(self, **kw)
+        return f"MERGE INTO {target} USING {source} ON {on}" + (
+            " " + clauses if clauses else ""
         )
 
     def visit_merge_into_clause(self, merge_into_clause, **kw):
@@ -210,14 +584,10 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             formatter = copy_into.formatter._compiler_dispatch(self, **kw)
         else:
             formatter = ""
-        into = (
-            copy_into.into
-            if isinstance(copy_into.into, Table)
-            else copy_into.into._compiler_dispatch(self, **kw)
-        )
+        into = copy_into.into._compiler_dispatch(self, asfrom=True, **kw)
         from_ = None
         if isinstance(copy_into.from_, Table):
-            from_ = copy_into.from_
+            from_ = copy_into.from_.name
         # this is intended to catch AWSBucket and AzureContainer
         elif (
             isinstance(copy_into.from_, AWSBucket)
@@ -228,6 +598,21 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         # everything else (selects, etc.)
         else:
             from_ = f"({copy_into.from_._compiler_dispatch(self, **kw)})"
+
+        partition_by_value = None
+        if isinstance(copy_into.partition_by, (BindParameter, Executable)):
+            partition_by_value = copy_into.partition_by.compile(
+                compile_kwargs={"literal_binds": True}
+            )
+        elif copy_into.partition_by is not None:
+            partition_by_value = copy_into.partition_by
+
+        partition_by = (
+            f"PARTITION BY {partition_by_value}"
+            if partition_by_value is not None and partition_by_value != ""
+            else ""
+        )
+
         credentials, encryption = "", ""
         if isinstance(into, tuple):
             into, credentials, encryption = into
@@ -238,14 +623,15 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             options_list.sort(key=operator.itemgetter(0))
         options = (
             (
-                " "
-                + " ".join(
+                " ".join(
                     [
                         "{} = {}".format(
                             n,
-                            v._compiler_dispatch(self, **kw)
-                            if getattr(v, "compiler_dispatch", False)
-                            else str(v),
+                            (
+                                v._compiler_dispatch(self, **kw)
+                                if getattr(v, "compiler_dispatch", False)
+                                else str(v)
+                            ),
                         )
                         for n, v in options_list
                     ]
@@ -258,7 +644,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             options += f" {credentials}"
         if encryption:
             options += f" {encryption}"
-        return f"COPY INTO {into} FROM {from_} {formatter}{options}"
+        return f"COPY INTO {into} FROM {' '.join([from_, partition_by, formatter, options])}"
 
     def visit_copy_formatter(self, formatter, **kw):
         options_list = list(formatter.options.items())
@@ -268,20 +654,24 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             return f"FILE_FORMAT=(format_name = {formatter.options['format_name']})"
         return "FILE_FORMAT=(TYPE={}{})".format(
             formatter.file_format,
-            " "
-            + " ".join(
-                [
-                    "{}={}".format(
-                        name,
-                        value._compiler_dispatch(self, **kw)
-                        if hasattr(value, "_compiler_dispatch")
-                        else formatter.value_repr(name, value),
-                    )
-                    for name, value in options_list
-                ]
-            )
-            if formatter.options
-            else "",
+            (
+                " "
+                + " ".join(
+                    [
+                        "{}={}".format(
+                            name,
+                            (
+                                value._compiler_dispatch(self, **kw)
+                                if hasattr(value, "_compiler_dispatch")
+                                else formatter.value_repr(name, value)
+                            ),
+                        )
+                        for name, value in options_list
+                    ]
+                )
+                if formatter.options
+                else ""
+            ),
         )
 
     def visit_aws_bucket(self, aws_bucket, **kw):
@@ -376,7 +766,14 @@ class SnowflakeCompiler(compiler.SQLCompiler):
 
     def visit_regexp_replace_op_binary(self, binary, operator, **kw):
         string, pattern, flags = self._get_regexp_args(binary, kw)
-        replacement = self.process(binary.modifiers["replacement"], **kw)
+        try:
+            replacement = self.process(binary.modifiers["replacement"], **kw)
+        except KeyError:
+            # in sqlalchemy 1.4.49, the internal structure of the expression is changed
+            # that binary.modifiers doesn't have "replacement":
+            # https://docs.sqlalchemy.org/en/20/changelog/changelog_14.html#change-1.4.49
+            return f"REGEXP_REPLACE({string}, {pattern}{'' if flags is None else f', {flags}'})"
+
         if flags is None:
             return f"REGEXP_REPLACE({string}, {pattern}, {replacement})"
         else:
@@ -384,6 +781,83 @@ class SnowflakeCompiler(compiler.SQLCompiler):
 
     def visit_not_regexp_match_op_binary(self, binary, operator, **kw):
         return f"NOT {self.visit_regexp_match_op_binary(binary, operator, **kw)}"
+
+    def visit_ilike_op_binary(self, binary, operator, **kw):
+        return self._render_ilike(binary, negate=False, **kw)
+
+    def visit_not_ilike_op_binary(self, binary, operator, **kw):
+        return self._render_ilike(binary, negate=True, **kw)
+
+    def _render_ilike(self, binary, negate=False, **kw):
+        left = binary.left._compiler_dispatch(self, **kw)
+        right = binary.right._compiler_dispatch(self, **kw)
+        escape = binary.modifiers.get("escape")
+        escape_clause = (
+            " ESCAPE " + self.render_literal_value(escape, sqltypes.STRINGTYPE)
+            if escape is not None
+            else ""
+        )
+        operator = "NOT ILIKE" if negate else "ILIKE"
+        return f"{left} {operator} {right}{escape_clause}"
+
+    def visit_join(self, join, asfrom=False, from_linter=None, **kwargs):
+        if from_linter:
+            from_linter.edges.update(
+                itertools.product(join.left._from_objects, join.right._from_objects)
+            )
+
+        if join.full:
+            join_type = " FULL OUTER JOIN "
+        elif join.isouter:
+            join_type = " LEFT OUTER JOIN "
+        else:
+            join_type = " JOIN "
+
+        join_statement = (
+            join.left._compiler_dispatch(
+                self, asfrom=True, from_linter=from_linter, **kwargs
+            )
+            + join_type
+            + join.right._compiler_dispatch(
+                self, asfrom=True, from_linter=from_linter, **kwargs
+            )
+        )
+
+        if join.onclause is None and isinstance(join.right, Lateral):
+            # in snowflake, onclause is not accepted for lateral due to BCR change:
+            # https://docs.snowflake.com/en/release-notes/bcr-bundles/2023_04/bcr-1057
+            # sqlalchemy only allows join with on condition.
+            # to adapt to snowflake syntax change,
+            # we make the change such that when oncaluse is None and the right part is
+            # Lateral, we do not append the on condition
+            return join_statement
+
+        return (
+            join_statement
+            + " ON "
+            # TODO: likely need asfrom=True here?
+            + join.onclause._compiler_dispatch(self, from_linter=from_linter, **kwargs)
+        )
+
+    def visit_truediv_binary(self, binary, operator, **kw):
+        if self.dialect.div_is_floordiv:
+            warnings.warn(
+                "div_is_floordiv value will be changed to False in a future release. This will generate a behavior change on true and floor division. Please review https://docs.sqlalchemy.org/en/20/changelog/whatsnew_20.html#python-division-operator-performs-true-division-for-all-backends-added-floor-division",
+                PendingDeprecationWarning,
+                stacklevel=2,
+            )
+        return (
+            self.process(binary.left, **kw) + " / " + self.process(binary.right, **kw)
+        )
+
+    def visit_floordiv_binary(self, binary, operator, **kw):
+        if self.dialect.div_is_floordiv and IS_VERSION_20:
+            warnings.warn(
+                "div_is_floordiv value will be changed to False in a future release. This will generate a behavior change on true and floor division. Please review https://docs.sqlalchemy.org/en/20/changelog/whatsnew_20.html#python-division-operator-performs-true-division-for-all-backends-added-floor-division",
+                PendingDeprecationWarning,
+                stacklevel=2,
+            )
+        return super().visit_floordiv_binary(binary, operator, **kw)
 
     def render_literal_value(self, value, type_):
         # escape backslash
@@ -492,7 +966,7 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
 
         return " ".join(colspec)
 
-    def post_create_table(self, table):
+    def handle_cluster_by(self, table):
         """
         Handles snowflake-specific ``CREATE TABLE ... CLUSTER BY`` syntax.
 
@@ -509,7 +983,7 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
         ...     metadata,
         ...     sa.Column('id', sa.Integer, primary_key=True),
         ...     sa.Column('name', sa.String),
-        ...     snowflake_clusterby=['id', 'name']
+        ...     snowflake_clusterby=['id', 'name', text("id > 5")]
         ... )
         >>> print(CreateTable(user).compile(engine))
         <BLANKLINE>
@@ -517,28 +991,59 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
             id INTEGER NOT NULL AUTOINCREMENT,
             name VARCHAR,
             PRIMARY KEY (id)
-        ) CLUSTER BY (id, name)
+        ) CLUSTER BY (id, name, id > 5)
         <BLANKLINE>
         <BLANKLINE>
         """
         text = ""
-        info = table.dialect_options["snowflake"]
+        info = table.dialect_options[DIALECT_NAME]
         cluster = info.get("clusterby")
         if cluster:
             text += " CLUSTER BY ({})".format(
-                ", ".join(self.denormalize_column_name(key) for key in cluster)
+                ", ".join(
+                    (
+                        self.denormalize_column_name(key)
+                        if isinstance(key, str)
+                        else str(key)
+                    )
+                    for key in cluster
+                )
             )
+        return text
+
+    def post_create_table(self, table):
+        text = self.handle_cluster_by(table)
+        options = []
+        invalid_options: List[str] = []
+
+        for key, option in table.dialect_options[DIALECT_NAME].items():
+            if isinstance(option, TableOption):
+                options.append(option)
+            elif key not in ["clusterby", "*"]:
+                invalid_options.append(key)
+
+        if len(invalid_options) > 0:
+            raise UnexpectedOptionTypeError(sorted(invalid_options))
+
+        if isinstance(table, CustomTableBase):
+            options.sort(key=lambda x: (x.priority.value, x.option_name), reverse=True)
+            for option in options:
+                text += "\t" + option.render_option(self)
+        elif len(options) > 0:
+            raise CustomOptionsAreOnlySupportedOnSnowflakeTables()
+
         return text
 
     def visit_create_stage(self, create_stage, **kw):
         """
         This visitor will create the SQL representation for a CREATE STAGE command.
         """
-        return "CREATE {}STAGE {}{} URL={}".format(
-            "OR REPLACE " if create_stage.replace_if_exists else "",
+        return "CREATE {or_replace}{temporary}STAGE {}{} URL={}".format(
             create_stage.stage.namespace,
             create_stage.stage.name,
             repr(create_stage.container),
+            or_replace="OR REPLACE " if create_stage.replace_if_exists else "",
+            temporary="TEMPORARY " if create_stage.temporary else "",
         )
 
     def visit_create_file_format(self, file_format, **kw):
@@ -577,12 +1082,37 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
         )
 
     def visit_identity_column(self, identity, **kw):
-        text = " IDENTITY"
+        text = "IDENTITY"
         if identity.start is not None or identity.increment is not None:
             start = 1 if identity.start is None else identity.start
             increment = 1 if identity.increment is None else identity.increment
             text += f"({start},{increment})"
+        if identity.order is not None:
+            order = "ORDER" if identity.order else "NOORDER"
+            text += f" {order}"
         return text
+
+    def get_identity_options(self, identity_options):
+        text = []
+        if identity_options.increment is not None:
+            text.append("INCREMENT BY %d" % identity_options.increment)
+        if identity_options.start is not None:
+            text.append("START WITH %d" % identity_options.start)
+        if identity_options.minvalue is not None:
+            text.append("MINVALUE %d" % identity_options.minvalue)
+        if identity_options.maxvalue is not None:
+            text.append("MAXVALUE %d" % identity_options.maxvalue)
+        if identity_options.nominvalue is not None:
+            text.append("NO MINVALUE")
+        if identity_options.nomaxvalue is not None:
+            text.append("NO MAXVALUE")
+        if identity_options.cache is not None:
+            text.append("CACHE %d" % identity_options.cache)
+        if identity_options.cycle is not None:
+            text.append("CYCLE" if identity_options.cycle else "NO CYCLE")
+        if identity_options.order is not None:
+            text.append("ORDER" if identity_options.order else "NOORDER")
+        return " ".join(text)
 
 
 class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
@@ -616,11 +1146,34 @@ class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
     def visit_VARIANT(self, type_, **kw):
         return "VARIANT"
 
+    def visit_MAP(self, type_, **kw):
+        not_null = f" {NOT_NULL}" if type_.not_null else ""
+        return (
+            f"MAP({type_.key_type.compile()}, {type_.value_type.compile()}{not_null})"
+        )
+
     def visit_ARRAY(self, type_, **kw):
         return "ARRAY"
 
+    def visit_SNOWFLAKE_ARRAY(self, type_, **kw):
+        if type_.is_semi_structured:
+            return "ARRAY"
+        not_null = f" {NOT_NULL}" if type_.not_null else ""
+        return f"ARRAY({type_.value_type.compile()}{not_null})"
+
     def visit_OBJECT(self, type_, **kw):
-        return "OBJECT"
+        if type_.is_semi_structured:
+            return "OBJECT"
+        else:
+            contents = []
+            for key in type_.items_types:
+
+                row_text = f"{key} {type_.items_types[key][0].compile()}"
+                # Type and not null is specified
+                if len(type_.items_types[key]) > 1:
+                    row_text += f"{' NOT NULL' if type_.items_types[key][1] else ''}"
+                contents.append(row_text)
+            return "OBJECT" if contents == [] else f"OBJECT({', '.join(contents)})"
 
     def visit_BLOB(self, type_, **kw):
         return "BINARY"
@@ -646,5 +1199,13 @@ class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
     def visit_GEOGRAPHY(self, type_, **kw):
         return "GEOGRAPHY"
 
+    def visit_GEOMETRY(self, type_, **kw):
+        return "GEOMETRY"
+
+    def visit_DECFLOAT(self, type_, **kw):
+        return "DECFLOAT"
+
 
 construct_arguments = [(Table, {"clusterby": None})]
+
+functions.register_function("flatten", flatten, "snowflake")

@@ -3,20 +3,28 @@ on:
   pull_request:
     branches:
       - main
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
 jobs:
   snyk:
     runs-on: ubuntu-latest
     if: ${{ github.event.pull_request.user.login == 'sfc-gh-snyk-sca-sa' }}
     steps:
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
+        persist-credentials: false
         ref: ${{ github.event.pull_request.head.ref }}
         fetch-depth: 0
 
     - name: Checkout Action
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
+        persist-credentials: false
         repository: snowflakedb/whitesource-actions
         token: ${{ secrets.whitesource_action_token }}
         path: whitesource-actions

@@ -1,0 +1,249 @@
+# serializer version: 1
+# name: test_compile_table_with_cluster_by_with_expression
+  'CREATE TABLE clustered_user (\t"Id" INTEGER NOT NULL AUTOINCREMENT, \tname MAP(DECIMAL, VARCHAR), \tPRIMARY KEY ("Id"))'
+# ---
+# name: test_compile_table_with_double_map
+  'CREATE TABLE clustered_user (\t"Id" INTEGER NOT NULL AUTOINCREMENT, \tname MAP(DECIMAL, MAP(DECIMAL, VARCHAR)), \tPRIMARY KEY ("Id"))'
+# ---
+# name: test_compile_table_with_sqlalchemy_array
+  'CREATE TABLE clustered_user (\t"Id" INTEGER NOT NULL AUTOINCREMENT, \tname ARRAY, \tPRIMARY KEY ("Id"))'
+# ---
+# name: test_compile_table_with_structured_data_type[structured_type0]
+  'CREATE TABLE clustered_user (\t"Id" INTEGER NOT NULL AUTOINCREMENT, \tname MAP(DECIMAL(10, 0), MAP(DECIMAL(10, 0), VARCHAR(16777216))), \tPRIMARY KEY ("Id"))'
+# ---
+# name: test_compile_table_with_structured_data_type[structured_type1]
+  'CREATE TABLE clustered_user (\t"Id" INTEGER NOT NULL AUTOINCREMENT, \tname OBJECT(key1 VARCHAR(16777216), key2 DECIMAL(10, 0)), \tPRIMARY KEY ("Id"))'
+# ---
+# name: test_compile_table_with_structured_data_type[structured_type2]
+  'CREATE TABLE clustered_user (\t"Id" INTEGER NOT NULL AUTOINCREMENT, \tname OBJECT(key1 VARCHAR(16777216), key2 DECIMAL(10, 0)), \tPRIMARY KEY ("Id"))'
+# ---
+# name: test_compile_table_with_structured_data_type[structured_type3]
+  'CREATE TABLE clustered_user (\t"Id" INTEGER NOT NULL AUTOINCREMENT, \tname ARRAY(MAP(DECIMAL(10, 0), VARCHAR(16777216))), \tPRIMARY KEY ("Id"))'
+# ---
+# name: test_insert_array
+  list([
+    (1, '[\n  "item1",\n  "item2"\n]'),
+  ])
+# ---
+# name: test_insert_array_orm
+  '''
+  002014 (22000): SQL compilation error:
+  Invalid expression [CAST(ARRAY_CONSTRUCT('item1', 'item2') AS ARRAY(VARCHAR(16777216)))] in VALUES clause
+  '''
+# ---
+# name: test_insert_map
+  list([
+    (1, '{\n  "100": "item1",\n  "200": "item2"\n}'),
+  ])
+# ---
+# name: test_insert_map_orm
+  '''
+  002014 (22000): SQL compilation error:
+  Invalid expression [CAST(OBJECT_CONSTRUCT('100', 'item1', '200', 'item2') AS MAP(NUMBER(10,0), VARCHAR(16777216)))] in VALUES clause
+  '''
+# ---
+# name: test_insert_structured_object
+  list([
+    (1, '{\n  "key1": "item1",\n  "key2": 15\n}'),
+  ])
+# ---
+# name: test_insert_structured_object_orm
+  '''
+  002014 (22000): SQL compilation error:
+  Invalid expression [CAST(OBJECT_CONSTRUCT('key1', 1, 'key2', 'item1') AS OBJECT(key1 NUMBER(10,0), key2 VARCHAR(16777216)))] in VALUES clause
+  '''
+# ---
+# name: test_inspect_structured_data_types[structured_type0-MAP]
+  list([
+    dict({
+      'autoincrement': True,
+      'comment': None,
+      'default': None,
+      'identity': dict({
+        'increment': 1,
+        'start': 1,
+      }),
+      'name': 'id',
+      'nullable': False,
+      'primary_key': True,
+      'type': _CUSTOM_DECIMAL(precision=10, scale=0),
+    }),
+    dict({
+      'autoincrement': False,
+      'comment': None,
+      'default': None,
+      'name': 'structured_type_col',
+      'nullable': True,
+      'primary_key': False,
+      'type': MAP(_CUSTOM_DECIMAL(precision=10, scale=0), VARCHAR(length=16777216)),
+    }),
+  ])
+# ---
+# name: test_inspect_structured_data_types[structured_type0]
+  list([
+    dict({
+      'autoincrement': True,
+      'comment': None,
+      'default': None,
+      'identity': dict({
+        'increment': 1,
+        'start': 1,
+      }),
+      'name': 'id',
+      'nullable': False,
+      'primary_key': True,
+      'type': _CUSTOM_DECIMAL(precision=10, scale=0),
+    }),
+    dict({
+      'autoincrement': False,
+      'comment': None,
+      'default': None,
+      'name': 'map_id',
+      'nullable': True,
+      'primary_key': False,
+      'type': MAP(_CUSTOM_DECIMAL(precision=10, scale=0), VARCHAR(length=16777216)),
+    }),
+  ])
+# ---
+# name: test_inspect_structured_data_types[structured_type1-MAP]
+  list([
+    dict({
+      'autoincrement': True,
+      'comment': None,
+      'default': None,
+      'identity': dict({
+        'increment': 1,
+        'start': 1,
+      }),
+      'name': 'id',
+      'nullable': False,
+      'primary_key': True,
+      'type': _CUSTOM_DECIMAL(precision=10, scale=0),
+    }),
+    dict({
+      'autoincrement': False,
+      'comment': None,
+      'default': None,
+      'name': 'structured_type_col',
+      'nullable': True,
+      'primary_key': False,
+      'type': MAP(_CUSTOM_DECIMAL(precision=10, scale=0), MAP(_CUSTOM_DECIMAL(precision=10, scale=0), VARCHAR(length=16777216))),
+    }),
+  ])
+# ---
+# name: test_inspect_structured_data_types[structured_type1]
+  list([
+    dict({
+      'autoincrement': True,
+      'comment': None,
+      'default': None,
+      'identity': dict({
+        'increment': 1,
+        'start': 1,
+      }),
+      'name': 'id',
+      'nullable': False,
+      'primary_key': True,
+      'type': _CUSTOM_DECIMAL(precision=10, scale=0),
+    }),
+    dict({
+      'autoincrement': False,
+      'comment': None,
+      'default': None,
+      'name': 'map_id',
+      'nullable': True,
+      'primary_key': False,
+      'type': MAP(_CUSTOM_DECIMAL(precision=10, scale=0), MAP(_CUSTOM_DECIMAL(precision=10, scale=0), VARCHAR(length=16777216))),
+    }),
+  ])
+# ---
+# name: test_inspect_structured_data_types[structured_type2-OBJECT]
+  list([
+    dict({
+      'autoincrement': True,
+      'comment': None,
+      'default': None,
+      'identity': dict({
+        'increment': 1,
+        'start': 1,
+      }),
+      'name': 'id',
+      'nullable': False,
+      'primary_key': True,
+      'type': _CUSTOM_DECIMAL(precision=10, scale=0),
+    }),
+    dict({
+      'autoincrement': False,
+      'comment': None,
+      'default': None,
+      'name': 'structured_type_col',
+      'nullable': True,
+      'primary_key': False,
+      'type': OBJECT(key1=(VARCHAR(length=16777216), False), key2=(_CUSTOM_DECIMAL(precision=10, scale=0), False)),
+    }),
+  ])
+# ---
+# name: test_inspect_structured_data_types[structured_type3-ARRAY]
+  list([
+    dict({
+      'autoincrement': True,
+      'comment': None,
+      'default': None,
+      'identity': dict({
+        'increment': 1,
+        'start': 1,
+      }),
+      'name': 'id',
+      'nullable': False,
+      'primary_key': True,
+      'type': _CUSTOM_DECIMAL(precision=10, scale=0),
+    }),
+    dict({
+      'autoincrement': False,
+      'comment': None,
+      'default': None,
+      'name': 'structured_type_col',
+      'nullable': True,
+      'primary_key': False,
+      'type': ARRAY(value_type=VARCHAR(length=16777216)),
+    }),
+  ])
+# ---
+# name: test_reflect_structured_data_types[ARRAY(MAP(NUMBER(10, 0), VARCHAR))]
+  "CREATE ICEBERG TABLE test_reflect_st_types (\tid DECIMAL(38, 0) NOT NULL, \tstructured_type_col ARRAY(MAP(DECIMAL(10, 0), VARCHAR(16777216))), \tCONSTRAINT constraint_name PRIMARY KEY (id))\tCATALOG = 'SNOWFLAKE'"
+# ---
+# name: test_reflect_structured_data_types[MAP(NUMBER(10, 0), MAP(NUMBER(10, 0), VARCHAR))]
+  "CREATE ICEBERG TABLE test_reflect_st_types (\tid DECIMAL(38, 0) NOT NULL, \tstructured_type_col MAP(DECIMAL(10, 0), MAP(DECIMAL(10, 0), VARCHAR(16777216))), \tCONSTRAINT constraint_name PRIMARY KEY (id))\tCATALOG = 'SNOWFLAKE'"
+# ---
+# name: test_reflect_structured_data_types[MAP(NUMBER(10, 0), VARCHAR)]
+  "CREATE ICEBERG TABLE test_reflect_st_types (\tid DECIMAL(38, 0) NOT NULL, \tstructured_type_col MAP(DECIMAL(10, 0), VARCHAR(16777216)), \tCONSTRAINT constraint_name PRIMARY KEY (id))\tCATALOG = 'SNOWFLAKE'"
+# ---
+# name: test_reflect_structured_data_types[OBJECT(key1 VARCHAR, key2 NUMBER(10, 0))]
+  "CREATE ICEBERG TABLE test_reflect_st_types (\tid DECIMAL(38, 0) NOT NULL, \tstructured_type_col OBJECT(key1 VARCHAR(16777216), key2 DECIMAL(10, 0)), \tCONSTRAINT constraint_name PRIMARY KEY (id))\tCATALOG = 'SNOWFLAKE'"
+# ---
+# name: test_select_array_orm
+  list([
+    (1, '[\n  "item3",\n  "item4"\n]'),
+    (2, '[\n  "item1",\n  "item2"\n]'),
+  ])
+# ---
+# name: test_select_map_orm
+  list([
+    (1, '{\n  "100": "item1",\n  "200": "item2"\n}'),
+    (2, '{\n  "100": "item1",\n  "200": "item2"\n}'),
+  ])
+# ---
+# name: test_select_map_orm.1
+  list([
+  ])
+# ---
+# name: test_select_map_orm.2
+  list([
+  ])
+# ---
+# name: test_select_structured_object_orm
+  list([
+    (1, '{\n  "key1": "value2",\n  "key2": 2\n}'),
+    (2, '{\n  "key1": "value1",\n  "key2": 1\n}'),
+  ])
+# ---

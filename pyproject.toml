@@ -1,0 +1,145 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "snowflake-sqlalchemy"
+dynamic = ["version"]
+description = "Snowflake SQLAlchemy Dialect"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.8"
+authors = [
+  { name = "Snowflake Inc.", email = "triage-snowpark-python-api-dl@snowflake.com" },
+]
+keywords = ["Snowflake", "analytics", "cloud", "database", "db", "warehouse"]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Environment :: Console",
+  "Environment :: Other Environment",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Education",
+  "Intended Audience :: Information Technology",
+  "Intended Audience :: System Administrators",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: SQL",
+  "Topic :: Database",
+  "Topic :: Scientific/Engineering :: Information Analysis",
+  "Topic :: Software Development",
+  "Topic :: Software Development :: Libraries",
+  "Topic :: Software Development :: Libraries :: Application Frameworks",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = ["SQLAlchemy>=1.4.19", "snowflake-connector-python<5.0.0"]
+
+[tool.hatch.version]
+path = "src/snowflake/sqlalchemy/version.py"
+
+[project.optional-dependencies]
+development = [
+  "pre-commit",
+  "pytest",
+  "setuptools",
+  "pytest-cov",
+  "pytest-timeout",
+  "pytest-rerunfailures",
+  "pytest-xdist",
+  "pytz",
+  "numpy",
+  "mock",
+  "syrupy",
+]
+pandas = ["snowflake-connector-python[pandas]"]
+
+[project.entry-points."sqlalchemy.dialects"]
+snowflake = "snowflake.sqlalchemy:dialect"
+
+[project.urls]
+Changelog = "https://github.com/snowflakedb/snowflake-sqlalchemy/blob/main/DESCRIPTION.md"
+Documentation = "https://docs.snowflake.com/en/user-guide/sqlalchemy.html"
+Homepage = "https://www.snowflake.com/"
+Issues = "https://github.com/snowflakedb/snowflake-sqlalchemy/issues"
+Source = "https://github.com/snowflakedb/snowflake-sqlalchemy"
+
+[tool.hatch.build.targets.sdist]
+exclude = ["/.github"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/snowflake"]
+
+[tool.hatch.envs.default]
+extra-dependencies = ["SQLAlchemy>=1.4.19,<2.1.0"]
+features = ["development", "pandas"]
+python = "3.12"
+installer = "uv"
+
+[tool.hatch.envs.sa14]
+installer = "uv"
+builder = true
+extra-dependencies = ["SQLAlchemy>=1.4.19,<2.0.0", "pandas<2.1", "numpy<2"]
+features = ["development", "pandas"]
+python = "3.12"
+
+[tool.hatch.envs.sa14.scripts]
+test-dialect = "pytest --ignore_v20_test -ra -vvv --tb=short --cov snowflake.sqlalchemy --cov-append --junitxml ./junit.xml --ignore=tests/sqlalchemy_test_suite tests/"
+test-dialect-compatibility = "pytest --ignore_v20_test -ra -vvv --tb=short --cov snowflake.sqlalchemy --cov-append --junitxml ./junit.xml tests/sqlalchemy_test_suite"
+test-dialect-aws = "pytest --ignore_v20_test -m \"aws\" -ra -vvv --tb=short --cov snowflake.sqlalchemy --cov-append --junitxml ./junit.xml --ignore=tests/sqlalchemy_test_suite tests/"
+
+[tool.hatch.envs.default.env-vars]
+COVERAGE_FILE = "coverage.xml"
+SQLACHEMY_WARN_20 = "1"
+
+[tool.hatch.envs.default.scripts]
+check = "pre-commit run --all-files"
+test-dialect = "pytest -ra -vvv --tb=short --cov snowflake.sqlalchemy --cov-append --junitxml ./junit.xml --ignore=tests/sqlalchemy_test_suite tests/"
+test-dialect-compatibility = "pytest -ra -vvv --tb=short --cov snowflake.sqlalchemy --cov-append --junitxml ./junit.xml tests/sqlalchemy_test_suite"
+test-dialect-aws = "pytest -m \"aws\" -ra -vvv --tb=short --cov snowflake.sqlalchemy --cov-append --junitxml ./junit.xml --ignore=tests/sqlalchemy_test_suite tests/"
+gh-cache-sum = "python -VV | sha256sum | cut -d' ' -f1"
+check-import = "python -c 'import snowflake.sqlalchemy; print(snowflake.sqlalchemy.__version__)'"
+
+[[tool.hatch.envs.release.matrix]]
+python = ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
+features = ["development", "pandas"]
+
+[tool.hatch.envs.release.scripts]
+test-dialect = "pytest -ra -vvv --tb=short --ignore=tests/sqlalchemy_test_suite tests/"
+test-compatibility = "pytest -ra -vvv --tb=short tests/sqlalchemy_test_suite tests/"
+
+[tool.ruff]
+line-length = 88
+
+[tool.black]
+line-length = 88
+
+[tool.pytest.ini_options]
+addopts = "-m 'not feature_max_lob_size and not aws and not requires_external_volume'"
+markers = [
+  # Optional dependency groups markers
+  "lambda: AWS lambda tests",
+  "pandas: tests for pandas integration",
+  "sso: tests for sso optional dependency integration",
+  # Cloud provider markers
+  "aws: tests for Amazon Cloud storage",
+  "azure: tests for Azure Cloud storage",
+  "gcp: tests for Google Cloud storage",
+  # Test type markers
+  "integ: integration tests",
+  "unit: unit tests",
+  "skipolddriver: skip for old driver tests",
+  # Other markers
+  "timeout: tests that need a timeout time",
+  "internal: tests that could but should only run on our internal CI",
+  "requires_external_volume: tests that needs a external volume to be executed",
+  "external: tests that could but should only run on our external CI",
+  "feature_max_lob_size: tests that could but should only run on our external CI",
+  "feature_v20: tests that could but should only run on SqlAlchemy v20",
+]

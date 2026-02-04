@@ -1,187 +1,309 @@
 name: Build and Test
 
 on:
-    push:
-        branches:
-            - main
-        tags:
-            - v*
-    pull_request:
-        branches:
-            - main
-            - prep-**
-    workflow_dispatch:
-        inputs:
-          logLevel:
-
-            default: warning
-            description: "Log level"
-            required: true
-          tags:
-            description: "Test scenario tags"
+  push:
+    branches:
+      - main
+    tags:
+      - v*
+  pull_request:
+    branches:
+      - main
+      - prep-**
+  workflow_dispatch:
+    inputs:
+      logLevel:
+        default: warning
+        description: "Log level"
+        required: true
+      tags:
+        description: "Test scenario tags"
 jobs:
   lint:
     name: Check linting
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - name: Set up Python
-        uses: actions/setup-python@v2
+      - uses: actions/checkout@v4
         with:
-          python-version: '3.8'
-      - name: Display Python version
-        run: python -c "import sys; import os; print(\"\n\".join(os.environ[\"PATH\"].split(os.pathsep))); print(sys.version); print(sys.executable);"
-      - name: Upgrade setuptools, pip and wheel
-        run: python -m pip install -U setuptools pip wheel
-      - name: Install tox
-        run: python -m pip install tox
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Upgrade and install tools
+        run: |
+          python -m pip install -U uv
+          python -m uv pip install -U hatch
+          python -m hatch env create default
       - name: Set PY
-        run: echo "PY=$(python -VV | sha256sum | cut -d' ' -f1)" >> $GITHUB_ENV
-      - uses: actions/cache@v1
+        run: echo "PY=$(hatch run gh-cache-sum)" >> $GITHUB_ENV
+      - uses: actions/cache@v4
         with:
           path: ~/.cache/pre-commit
           key: pre-commit|${{ env.PY }}|${{ hashFiles('.pre-commit-config.yaml') }}
-      - name: Run fix_lint
-        run: python -m tox -e fix_lint
+      - name: Run lint checks
+        run: hatch run check
 
-  test:
-   name: Test ${{ matrix.os.download_name }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
-   needs: lint
-   runs-on: ${{ matrix.os.image_name }}
-   strategy:
-    fail-fast: false
-    matrix:
-      os:
-       - image_name: ubuntu-latest
-         download_name: manylinux_x86_64
-       - image_name: macos-latest
-         download_name: macosx_x86_64
-       - image_name: windows-2019
-         download_name: win_amd64
-      python-version: ["3.8"]
-      cloud-provider: [aws, azure, gcp]
-   steps:
-    - uses: actions/checkout@v2
-    - name: Set up Python
-      uses: actions/setup-python@v2
-      with:
-        python-version: ${{ matrix.python-version }}
-    - name: Display Python version
-      run: python -c "import sys; print(sys.version)"
-    - name: Setup parameters file
-      shell: bash
-      env:
-        PARAMETERS_SECRET: ${{ secrets.PARAMETERS_SECRET }}
-      run: |
-        gpg --quiet --batch --yes --decrypt --passphrase="$PARAMETERS_SECRET" \
-        .github/workflows/parameters/parameters_${{ matrix.cloud-provider }}.py.gpg > tests/parameters.py
-    - name: Upgrade setuptools, pip and wheel
-      run: python -m pip install -U setuptools pip wheel
-    - name: Install tox
-      run: python -m pip install tox
-    - name: List installed packages
-      run: python -m pip freeze
-    - name: Run tests
-      run: python -m tox -e "py${PYTHON_VERSION/\./}" --skip-missing-interpreters false
-      env:
-        PYTHON_VERSION: ${{ matrix.python-version }}
-        PYTEST_ADDOPTS: -vvv --color=yes --tb=short
-        TOX_PARALLEL_NO_SPINNER: 1
-    - name: Combine coverages
-      run: python -m tox -e coverage --skip-missing-interpreters false
-      shell: bash
-    - uses: actions/upload-artifact@v2
-      with:
-        name: coverage_${{ matrix.os.download_name }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
-        path: |
-          .tox/.coverage
-          .tox/coverage.xml
+  build-install:
+    name: Test package build and installation
+    runs-on: ubuntu-latest
+    needs: lint
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - hatch-env: default
+            python-version: "3.13"
+          - hatch-env: sa14
+            python-version: "3.12"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Setup up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Upgrade and install tools
+        run: |
+          python -m pip install -U uv
+          python -m uv pip install -U hatch
+      - name: Build package
+        run: |
+          python -m hatch -e ${{ matrix.hatch-env }} build --clean
+      - name: Install and check import
+        run: |
+          python -m uv pip install dist/snowflake_sqlalchemy-*.whl
+          python -c "import snowflake.sqlalchemy; print(snowflake.sqlalchemy.__version__)"
 
-  test_connector_regression:
-   name: Connector Regression Test ${{ matrix.os.download_name }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
-   needs: lint
-   runs-on: ${{ matrix.os.image_name }}
-   strategy:
-    fail-fast: false
-    matrix:
-      os:
-       - image_name: ubuntu-latest
-         download_name: manylinux_x86_64
-      python-version: ["3.8"]
-      cloud-provider: [aws]
-   steps:
-    - uses: actions/checkout@v2
-      with:
-        submodules: true
-    - name: Set up Python
-      uses: actions/setup-python@v2
-      with:
-        python-version: ${{ matrix.python-version }}
-    - name: Display Python version
-      run: python -c "import sys; print(sys.version)"
-    - name: Setup parameters file
-      shell: bash
-      env:
-        PARAMETERS_SECRET: ${{ secrets.PARAMETERS_SECRET }}
-      run: |
-        gpg --quiet --batch --yes --decrypt --passphrase="$PARAMETERS_SECRET" \
-        .github/workflows/parameters/parameters_${{ matrix.cloud-provider }}.py.gpg > tests/connector_regression/test/parameters.py
-    - name: Upgrade setuptools, pip and wheel
-      run: python -m pip install -U setuptools pip wheel
-    - name: Install tox
-      run: python -m pip install tox
-    - name: List installed packages
-      run: python -m pip freeze
-    - name: Run tests
-      run: python -m tox -e connector_regression --skip-missing-interpreters false
-      env:
-        PYTEST_ADDOPTS: -vvv --color=yes --tb=short
-        TOX_PARALLEL_NO_SPINNER: 1
+  test-dialect:
+    name: Test dialect ${{ matrix.os }}-${{ fromJson('{"default":"3.13","sa14":"3.12"}')[matrix.hatch-env] }}-${{ matrix.cloud-provider }}-${{ matrix.hatch-env }}
+    needs: [lint, build-install]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-15, windows-latest]
+        cloud-provider: [aws, azure, gcp]
+        hatch-env: [default, sa14]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ fromJson('{"default":"3.13","sa14":"3.12"}')[matrix.hatch-env] }}
+      - name: Upgrade pip and prepare environment
+        run: |
+          python -m pip install -U uv
+          python -m uv pip install -U hatch
+          python -m hatch env create ${{ matrix.hatch-env }}
+      - name: Setup parameters file
+        shell: bash
+        env:
+          PARAMETERS_SECRET: ${{ secrets.PARAMETERS_SECRET }}
+        run: |
+          printf "%s" "$PARAMETERS_SECRET" | gpg --quiet --batch --yes \
+            --decrypt \
+            --passphrase-fd 0 \
+            --pinentry-mode loopback \
+            --output tests/parameters.py \
+            .github/workflows/parameters/parameters_${{ matrix.cloud-provider }}.py.gpg
+      - name: Run test for AWS (default)
+        if: matrix.cloud-provider == 'aws' && matrix.hatch-env == 'default'
+        run: hatch run test-dialect-aws
+      - name: Run test for AWS (sa14)
+        if: matrix.cloud-provider == 'aws' && matrix.hatch-env == 'sa14'
+        run: hatch run sa14:test-dialect-aws
+      - name: Run tests (default)
+        if: matrix.hatch-env == 'default'
+        run: hatch run test-dialect
+      - name: Run tests (sa14)
+        if: matrix.hatch-env == 'sa14'
+        run: hatch run sa14:test-dialect
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage.xml_dialect-${{ matrix.os }}-${{ fromJson('{"default":"3.13","sa14":"3.12"}')[matrix.hatch-env] }}-${{ matrix.cloud-provider }}-${{ matrix.hatch-env }}
+          path: |
+            ./coverage.xml
+
+  test-dialect-compatibility:
+    name: Test dialect compatibility ${{ matrix.os }}-${{ fromJson('{"default":"3.13","sa14":"3.12"}')[matrix.hatch-env] }}-${{ matrix.cloud-provider }}-${{ matrix.hatch-env }}
+    needs: [lint, build-install]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-15, windows-latest]
+        cloud-provider: [aws, azure, gcp]
+        hatch-env: [default, sa14]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ fromJson('{"default":"3.13","sa14":"3.12"}')[matrix.hatch-env] }}
+      - name: Upgrade pip and install hatch
+        run: |
+          python -m pip install -U uv
+          python -m uv pip install -U hatch
+          python -m hatch env create ${{ matrix.hatch-env }}
+      - name: Setup parameters file
+        shell: bash
+        env:
+          PARAMETERS_SECRET: ${{ secrets.PARAMETERS_SECRET }}
+        run: |
+          printf "%s" "$PARAMETERS_SECRET" | gpg --quiet --batch --yes \
+            --decrypt \
+            --passphrase-fd 0 \
+            --pinentry-mode loopback \
+            --output tests/parameters.py \
+            .github/workflows/parameters/parameters_${{ matrix.cloud-provider }}.py.gpg
+      - name: Run tests (default)
+        if: matrix.hatch-env == 'default'
+        run: hatch run test-dialect-compatibility
+      - name: Run tests (sa14)
+        if: matrix.hatch-env == 'sa14'
+        run: hatch run sa14:test-dialect-compatibility
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage.xml_dialect-compatibility-${{ matrix.os }}-${{ fromJson('{"default":"3.13","sa14":"3.12"}')[matrix.hatch-env] }}-${{ matrix.cloud-provider }}-${{ matrix.hatch-env }}
+          path: |
+            ./coverage.xml
+
+  test-dialect-v14:
+    name: Test dialect v14 ${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
+    needs: [lint, build-install]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-15, windows-latest]
+        python-version: ["3.12"]
+        cloud-provider: [aws, azure, gcp]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Setup parameters file
+        shell: bash
+        env:
+          PARAMETERS_SECRET: ${{ secrets.PARAMETERS_SECRET }}
+        run: |
+          printf "%s" "$PARAMETERS_SECRET" | gpg --quiet --batch --yes \
+            --decrypt \
+            --passphrase-fd 0 \
+            --pinentry-mode loopback \
+            --output tests/parameters.py \
+            .github/workflows/parameters/parameters_${{ matrix.cloud-provider }}.py.gpg
+      - name: Upgrade pip and install hatch
+        run: |
+          python -m pip install -U uv
+          python -m uv pip install -U hatch
+          python -m hatch env create default
+      - name: Run test for AWS
+        run: hatch run sa14:test-dialect-aws
+        if: matrix.cloud-provider == 'aws'
+      - name: Run tests
+        run: hatch run sa14:test-dialect
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage.xml_dialect-v14-${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
+          path: |
+            ./coverage.xml
+
+  test-dialect-compatibility-v14:
+    name: Test dialect v14 compatibility ${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
+    needs: lint
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-15, windows-latest]
+        python-version: ["3.12"]
+        cloud-provider: [aws, azure, gcp]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Upgrade pip and install hatch
+        run: |
+          python -m pip install -U uv
+          python -m uv pip install -U hatch
+          python -m hatch env create default
+      - name: Setup parameters file
+        shell: bash
+        env:
+          PARAMETERS_SECRET: ${{ secrets.PARAMETERS_SECRET }}
+        run: |
+          printf "%s" "$PARAMETERS_SECRET" | gpg --quiet --batch --yes \
+            --decrypt \
+            --passphrase-fd 0 \
+            --pinentry-mode loopback \
+            --output tests/parameters.py \
+            .github/workflows/parameters/parameters_${{ matrix.cloud-provider }}.py.gpg
+      - name: Run tests
+        run: hatch run sa14:test-dialect-compatibility
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage.xml_dialect-v14-compatibility-${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
+          path: |
+            ./coverage.xml
 
   combine-coverage:
-    if: ${{ success() || failure() }}
     name: Combine coverage
-    needs: [test, test_connector_regression]
+    if: ${{ success() || failure() }}
+    needs:
+      [
+        test-dialect,
+        test-dialect-compatibility,
+        test-dialect-v14,
+        test-dialect-compatibility-v14,
+      ]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/download-artifact@v2
-        with:
-          path: artifacts
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.8'
-      - name: Display Python version
-        run: python -c "import sys; print(sys.version)"
-      - name: Upgrade setuptools and pip
-        run: python -m pip install -U setuptools pip wheel
-      - name: Install tox
-        run: python -m pip install tox
-      - name: Collect all coverages to one dir
+          python-version: "3.12"
+      - name: Prepare environment
         run: |
-          python -c '
-          from pathlib import Path
-          import shutil
-          src_dir = Path("artifacts")
-          dst_dir = Path(".") / ".tox"
-          dst_dir.mkdir()
-          for src_file in src_dir.glob("*/.coverage"):
-              dst_file = dst_dir / f".coverage.{src_file.parent.name[9:]}"
-              print(f"{src_file} copy to {dst_file}")
-              shutil.copy(str(src_file), str(dst_file))'
-      - name: Combine coverages
-        run: python -m tox -e coverage
-      - name: Publish html coverage
-        uses: actions/upload-artifact@v2
+          python -m pip install -U uv
+          python -m uv pip install -U hatch
+          hatch env create default
+      - uses: actions/checkout@v4
         with:
-          name: overall_cov_html
-          path: .tox/htmlcov
-      - name: Publish xml coverage
-        uses: actions/upload-artifact@v2
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
         with:
-          name: overall_cov_xml
-          path: .tox/coverage.xml
-      - uses: codecov/codecov-action@v1
+          path: artifacts/
+      - name: Combine coverage files
+        run: |
+          hatch run coverage combine -a artifacts/coverage.xml_*/coverage.xml
+          hatch run coverage report -m
+      - name: Store coverage reports
+        uses: actions/upload-artifact@v4
         with:
-          file: .tox/coverage.xml
+          name: coverage.xml
+          path: coverage.xml
+      - name: Uplaod to codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: coverage.xml
+          env_vars: OS,PYTHON
+          fail_ci_if_error: false
+          flags: unittests
+          token: ${{ secrets.CODECOV_TOKEN }}
+          verbose: true
+          url: https://snowflake.codecov.io/
