@@ -9,9 +9,10 @@ Source code is also available at:
 
 # Unreleased Notes
 
-- Add support for DECFLOAT and VECTOR data types
+- Add support for `DECFLOAT` and `VECTOR` data types
 - Add server_version_info support
-- Add support for ILIKE in queries
+- Add support for `ILIKE` in queries
+- Fix `SYSDATE()` rendering
 
 # Release Notes
 

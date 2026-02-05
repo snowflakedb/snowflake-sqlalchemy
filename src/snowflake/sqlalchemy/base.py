@@ -526,6 +526,9 @@ class SnowflakeCompiler(compiler.SQLCompiler):
     def visit_now_func(self, now, **kw):
         return "CURRENT_TIMESTAMP"
 
+    def visit_sysdate_func(self, sysdate, **kw):
+        return "SYSDATE()"
+
     def visit_merge_into(self, merge_into, **kw):
         clauses = " ".join(
             clause._compiler_dispatch(self, **kw) for clause in merge_into.clauses
@@ -1164,7 +1167,6 @@ class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
         else:
             contents = []
             for key in type_.items_types:
-
                 row_text = f"{key} {type_.items_types[key][0].compile()}"
                 # Type and not null is specified
                 if len(type_.items_types[key]) > 1:
