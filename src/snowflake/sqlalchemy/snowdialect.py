@@ -40,6 +40,7 @@ from .base import (
 )
 from .custom_types import (
     DECFLOAT_PRECISION,
+    VECTOR,
     StructuredType,
     _CUSTOM_Date,
     _CUSTOM_DateTime,
@@ -48,7 +49,7 @@ from .custom_types import (
 )
 from .parser.custom_type_parser import *  # noqa
 from .parser.custom_type_parser import _CUSTOM_DECIMAL  # noqa
-from .parser.custom_type_parser import ischema_names, parse_index_columns
+from .parser.custom_type_parser import ischema_names, parse_index_columns, parse_type
 from .sql.custom_schema.custom_table_prefix import CustomTablePrefix
 from .util import (
     _update_connection_application_name,
@@ -540,6 +541,7 @@ class SnowflakeDialect(default.DefaultDialect):
             comment,
             identity_start,
             identity_increment,
+            data_type_alias,
         ) in result:
             table_name = self.normalize_name(table_name)
             column_name = self.normalize_name(column_name)
@@ -569,12 +571,18 @@ class SnowflakeDialect(default.DefaultDialect):
                         continue
                     else:
                         col_type = NullType
+
             if col_type == NullType:
                 sa_util.warn(
                     f"Did not recognize type '{coltype}' of column '{column_name}'"
                 )
 
-            type_instance = col_type(**col_type_kw)
+            if issubclass(col_type, VECTOR):
+                # Vector has to be parsed from text (data_type_alias column, which contains e.g., `Vector(INT, 2)`),
+                # as in contrast to other types, the type parameters are not returned in their dedicated column.
+                type_instance = parse_type(data_type_alias)
+            else:
+                type_instance = col_type(**col_type_kw)
 
             current_table_pks = schema_primary_keys.get(table_name)
 
@@ -649,7 +657,8 @@ class SnowflakeDialect(default.DefaultDialect):
                    ic.is_identity,
                    ic.comment,
                    ic.identity_start,
-                   ic.identity_increment
+                   ic.identity_increment,
+                   ic.data_type_alias
               FROM information_schema.columns ic
              WHERE ic.table_schema=:table_schema
              ORDER BY ic.ordinal_position"""

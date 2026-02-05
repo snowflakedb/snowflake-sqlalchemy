@@ -14,11 +14,13 @@ def test_string_conversions():
         "VARIANT",
         "OBJECT",
         "ARRAY",
+        "DECFLOAT",
         "TIMESTAMP_TZ",
         "TIMESTAMP_LTZ",
         "TIMESTAMP_NTZ",
         "GEOGRAPHY",
         "GEOMETRY",
+        "VECTOR",
     ]
     sf_types = [
         "TEXT",
@@ -34,8 +36,15 @@ def test_string_conversions():
     ] + sf_custom_types
 
     for type_ in sf_types:
-        sample = getattr(custom_types, type_)()
-        if type_ in sf_custom_types:
+        # Since vector data type has required parameters, it has to be instantiated and asserted differently
+        if type_ == "VECTOR":
+            sample = getattr(custom_types, type_)("FLOAT", 2)
+        else:
+            sample = getattr(custom_types, type_)()
+
+        if type_ == "VECTOR":
+            assert "VECTOR(FLOAT, 2)" == str(sample)
+        elif type_ in sf_custom_types:
             assert type_ == str(sample)
 
 

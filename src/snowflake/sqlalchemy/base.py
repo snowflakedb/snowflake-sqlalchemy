@@ -1202,6 +1202,9 @@ class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
     def visit_DECFLOAT(self, type_, **kw):
         return "DECFLOAT"
 
+    def visit_VECTOR(self, type_, **kw):
+        return f"VECTOR({type_.element_type}, {type_.dimension})"
+
 
 construct_arguments = [(Table, {"clusterby": None})]
 

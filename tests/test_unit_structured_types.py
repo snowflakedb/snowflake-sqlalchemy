@@ -2,9 +2,10 @@
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
 import pytest
+from sqlalchemy.sql.sqltypes import Float, Integer, Text
 
 from snowflake.sqlalchemy import NUMBER
-from snowflake.sqlalchemy.custom_types import MAP, TEXT
+from snowflake.sqlalchemy.custom_types import MAP, TEXT, VECTOR
 from src.snowflake.sqlalchemy.parser.custom_type_parser import (
     parse_type,
     tokenize_parameters,
@@ -75,7 +76,36 @@ def test_extract_parameters():
         ),
         ("GEOGRAPHY", "GEOGRAPHY"),
         ("GEOMETRY", "GEOMETRY"),
+        ("VECTOR(FLOAT, 3)", "VECTOR(FLOAT, 3)"),
+        ("VECTOR(INT, 256)", "VECTOR(INT, 256)"),
     ],
 )
 def test_snowflake_data_types(input_type, expected_type):
     assert parse_type(input_type).compile() == expected_type
+
+
+def test_vector_type_accepts_string_and_case_insensitive():
+    assert repr(VECTOR("FLOAT", 3)) == "VECTOR(FLOAT, 3)"
+    assert repr(VECTOR("int", 256)) == "VECTOR(INT, 256)"
+    assert repr(VECTOR("int", 5000)) == "VECTOR(INT, 5000)"
+
+
+def test_vector_type_accepts_sqlalchemy_types():
+    assert repr(VECTOR(Integer(), 8)) == "VECTOR(INT, 8)"
+    assert repr(VECTOR(Float(), 2)) == "VECTOR(FLOAT, 2)"
+
+
+def test_vector_invalid_dimension():
+    with pytest.raises(ValueError):
+        VECTOR("FLOAT", 0)
+    with pytest.raises(ValueError):
+        VECTOR("FLOAT", -10)
+    with pytest.raises(TypeError):
+        VECTOR("FLOAT", "10")
+
+
+def test_vector_rejects_invalid_element_type():
+    with pytest.raises(ValueError):
+        VECTOR("STRING", 10)
+    with pytest.raises(TypeError):
+        VECTOR(Text(), 10)
