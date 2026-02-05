@@ -27,6 +27,14 @@ table2 = table(
 class TestSnowflakeCompiler(AssertsCompiledSQL):
     __dialect__ = "snowflake"
 
+    def test_sysdate_func(self):
+        statement = select(func.sysdate())
+        self.assert_compile(
+            statement,
+            "SELECT SYSDATE() AS sysdate_1",
+            dialect="snowflake",
+        )
+
     def test_now_func(self):
         statement = select(func.now())
         self.assert_compile(
