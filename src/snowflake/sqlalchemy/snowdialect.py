@@ -560,7 +560,7 @@ class SnowflakeDialect(default.DefaultDialect):
                 elif issubclass(col_type, sqltypes.Numeric):
                     col_type_kw["precision"] = numeric_precision
                     col_type_kw["scale"] = numeric_scale
-                elif issubclass(col_type, (sqltypes.String, sqltypes.BINARY)):
+                elif issubclass(col_type, sqltypes.String):
                     col_type_kw["length"] = character_maximum_length
                 elif issubclass(col_type, StructuredType):
                     column_info = structured_type_info_manager.get_column_info(
@@ -619,7 +619,11 @@ class SnowflakeDialect(default.DefaultDialect):
         if not schema:
             _, schema = self._current_database_schema(connection, **kw)
 
-        schema_columns = self._get_schema_columns(connection, schema, **kw)
+        if self._cache_column_metadata:
+            schema_columns = self._get_schema_columns(connection, schema, **kw)
+        else:
+            schema_columns = None
+
         if schema_columns is None:
             column_info_manager = _StructuredTypeInfoManager(
                 connection, self.name_utils, self.default_schema_name

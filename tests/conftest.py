@@ -81,6 +81,7 @@ DEFAULT_PARAMETERS = {
     "protocol": "https",
     "host": "<host>",
     "port": "443",
+    "cache_column_metadata": False,
 }
 
 

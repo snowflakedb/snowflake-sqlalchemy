@@ -6,7 +6,6 @@ from sqlalchemy.sql.elements import quoted_name
 
 
 class _NameUtils:
-
     def __init__(self, identifier_preparer: IdentifierPreparer) -> None:
         self.identifier_preparer = identifier_preparer
 
@@ -19,7 +18,9 @@ class _NameUtils:
             name.lower()
         ):
             return name.lower()
-        elif name.lower() == name:
+        elif name.lower() == name and self.identifier_preparer._requires_quotes(
+            name.lower()
+        ):
             return quoted_name(name, quote=True)
         else:
             return name
