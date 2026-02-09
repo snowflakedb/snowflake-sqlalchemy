@@ -145,4 +145,5 @@ markers = [
 ]
 
 [tool.uv.extra-build-dependencies]
-pandas = ["pkg_resources"]
+# Force pandas to build using an older setuptools that still includes pkg_resources
+pandas = ["setuptools<70"]
