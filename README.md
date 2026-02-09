@@ -10,44 +10,44 @@ Snowflake SQLAlchemy runs on the top of the Snowflake Connector for Python as a 
 
 Table of contents:
 <!-- TOC -->
-- [Snowflake SQLAlchemy](#snowflake-sqlalchemy)
-  - [Prerequisites](#prerequisites)
-    - [Snowflake Connector for Python](#snowflake-connector-for-python)
-    - [Data Analytics and Web Application Frameworks (Optional)](#data-analytics-and-web-application-frameworks-optional)
-  - [Installing Snowflake SQLAlchemy](#installing-snowflake-sqlalchemy)
-  - [Verifying Your Installation](#verifying-your-installation)
-  - [Parameters and Behavior](#parameters-and-behavior)
-    - [Connection Parameters](#connection-parameters)
-      - [Escaping Special Characters such as `%, @` signs in Passwords](#escaping-special-characters-such-as---signs-in-passwords)
-      - [Using a proxy server](#using-a-proxy-server)
-      - [Using session parameters](#using-session-parameters)
-    - [Opening and Closing Connection](#opening-and-closing-connection)
-    - [Auto-increment Behavior](#auto-increment-behavior)
-    - [Object Name Case Handling](#object-name-case-handling)
-    - [Index Support](#index-support)
-      - [Single Column Index](#single-column-index)
-      - [Multi-Column Index](#multi-column-index)
-    - [Numpy Data Type Support](#numpy-data-type-support)
-    - [DECFLOAT Data Type Support](#decfloat-data-type-support)
-      - [DECFLOAT Precision](#decfloat-precision)
-    - [VECTOR Data Type Support](#vector-data-type-support)
-    - [Cache Column Metadata](#cache-column-metadata)
-    - [VARIANT, ARRAY and OBJECT Support](#variant-array-and-object-support)
-    - [Structured Data Types Support](#structured-data-types-support)
-      - [MAP](#map)
-      - [OBJECT](#object)
-      - [ARRAY](#array)
-    - [CLUSTER BY Support](#cluster-by-support)
-    - [Alembic Support](#alembic-support)
-    - [Key Pair Authentication Support](#key-pair-authentication-support)
-    - [Merge Command Support](#merge-command-support)
-    - [CopyIntoStorage Support](#copyintostorage-support)
-    - [Iceberg Table with Snowflake Catalog support](#iceberg-table-with-snowflake-catalog-support)
-    - [Hybrid Table support](#hybrid-table-support)
-    - [Dynamic Tables support](#dynamic-tables-support)
-    - [Notes](#notes)
-  - [Verifying Package Signatures](#verifying-package-signatures)
-  - [Support](#support)
+* [Snowflake SQLAlchemy](#snowflake-sqlalchemy)
+  * [Prerequisites](#prerequisites)
+    * [Snowflake Connector for Python](#snowflake-connector-for-python)
+    * [Data Analytics and Web Application Frameworks (Optional)](#data-analytics-and-web-application-frameworks-optional)
+  * [Installing Snowflake SQLAlchemy](#installing-snowflake-sqlalchemy)
+  * [Verifying Your Installation](#verifying-your-installation)
+  * [Parameters and Behavior](#parameters-and-behavior)
+    * [Connection Parameters](#connection-parameters)
+      * [Escaping Special Characters such as `%, @` signs in Passwords](#escaping-special-characters-such-as---signs-in-passwords)
+      * [Using a proxy server](#using-a-proxy-server)
+      * [Using session parameters](#using-session-parameters)
+    * [Opening and Closing Connection](#opening-and-closing-connection)
+    * [Auto-increment Behavior](#auto-increment-behavior)
+    * [Object Name Case Handling](#object-name-case-handling)
+    * [Index Support](#index-support)
+      * [Single Column Index](#single-column-index)
+      * [Multi-Column Index](#multi-column-index)
+    * [Numpy Data Type Support](#numpy-data-type-support)
+    * [DECFLOAT Data Type Support](#decfloat-data-type-support)
+      * [DECFLOAT Precision](#decfloat-precision)
+    * [VECTOR Data Type Support](#vector-data-type-support)
+    * [Cache Column Metadata](#cache-column-metadata)
+    * [VARIANT, ARRAY and OBJECT Support](#variant-array-and-object-support)
+    * [Structured Data Types Support](#structured-data-types-support)
+      * [MAP](#map)
+      * [OBJECT](#object)
+      * [ARRAY](#array)
+    * [CLUSTER BY Support](#cluster-by-support)
+    * [Alembic Support](#alembic-support)
+    * [Key Pair Authentication Support](#key-pair-authentication-support)
+    * [Merge Command Support](#merge-command-support)
+    * [CopyIntoStorage Support](#copyintostorage-support)
+    * [Iceberg Table with Snowflake Catalog support](#iceberg-table-with-snowflake-catalog-support)
+    * [Hybrid Table support](#hybrid-table-support)
+    * [Dynamic Tables support](#dynamic-tables-support)
+    * [Notes](#notes)
+  * [Verifying Package Signatures](#verifying-package-signatures)
+  * [Support](#support)
 <!-- TOC -->
 
 ## Prerequisites
@@ -243,6 +243,23 @@ engine = create_engine(
         }
     },
 )
+```
+
+Session parameters set this way apply to all queries executed within the session.
+To change a session parameter for specific queries mid-session, use `ALTER SESSION`:
+
+```python
+from sqlalchemy import text
+
+with engine.connect() as conn:
+    conn.execute(text("ALTER SESSION SET QUERY_TAG = 'batch_job_1'"))
+    conn.execute(text("..."))  # Uses 'batch_job_1'
+
+    conn.execute(text("ALTER SESSION SET QUERY_TAG = 'batch_job_2'"))
+    conn.execute(text("..."))  # Uses 'batch_job_2'
+
+    conn.execute(text("ALTER SESSION UNSET QUERY_TAG"))
+    conn.execute(text("..."))  # No tag
 ```
 
 ### Opening and Closing Connection
