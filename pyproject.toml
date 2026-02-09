@@ -143,3 +143,6 @@ markers = [
   "feature_max_lob_size: tests that could but should only run on our external CI",
   "feature_v20: tests that could but should only run on SqlAlchemy v20",
 ]
+
+[tool.uv.extra-build-dependencies]
+pandas = ["pkg_resources"]
