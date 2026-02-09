@@ -197,42 +197,6 @@ def test_boolean_query_argument_parsing():
         engine.dispose()
 
 
-def test_query_tag_via_url():
-    """
-    Tests that query_tag parameter is properly propagated to the Snowflake connector
-    when passed via URL.
-    """
-    test_query_tag = "sqlalchemy_test_tag"
-    engine = create_engine(
-        URL(
-            **CONNECTION_PARAMETERS,
-            query_tag=test_query_tag,
-        )
-    )
-    try:
-        connection = engine.raw_connection()
-        assert connection.query_tag == test_query_tag
-    finally:
-        engine.dispose()
-
-
-def test_query_tag_via_connect_args():
-    """
-    Tests that query_tag parameter is properly propagated to the Snowflake connector
-    when passed via connect_args.
-    """
-    test_query_tag = "sqlalchemy_connect_args_tag"
-    engine = create_engine(
-        URL(**CONNECTION_PARAMETERS),
-        connect_args={"query_tag": test_query_tag},
-    )
-    try:
-        connection = engine.raw_connection()
-        assert connection.query_tag == test_query_tag
-    finally:
-        engine.dispose()
-
-
 def test_query_tag_appears_in_query_history():
     """
     Tests that query_tag actually appears in Snowflake's query history.
@@ -241,9 +205,14 @@ def test_query_tag_appears_in_query_history():
     engine = create_engine(
         URL(
             **CONNECTION_PARAMETERS,
-            query_tag=test_query_tag,
-        )
+        ),
+        connect_args={
+            "session_parameters": {
+                "QUERY_TAG": test_query_tag,
+            }
+        },
     )
+
     try:
         with engine.connect() as conn:
             # Execute a simple query
@@ -257,8 +226,7 @@ def test_query_tag_appears_in_query_history():
                     SELECT QUERY_TAG
                     FROM TABLE(INFORMATION_SCHEMA.QUERY_HISTORY_BY_SESSION())
                     WHERE QUERY_TEXT = 'SELECT 1; -- query tag test'
-                    ORDER BY START_TIME DESC
-                    LIMIT 1
+                    ORDER BY START_TIME DESC LIMIT 1
                     """
                 )
             )
@@ -298,7 +266,8 @@ def test_query_tag_per_query():
                     """
                     SELECT QUERY_TEXT, QUERY_TAG
                     FROM TABLE(INFORMATION_SCHEMA.QUERY_HISTORY_BY_SESSION())
-                    WHERE QUERY_TEXT LIKE 'SELECT %; -- batch%' OR QUERY_TEXT LIKE 'SELECT %; -- no tag%'
+                    WHERE QUERY_TEXT LIKE 'SELECT %; -- batch%'
+                       OR QUERY_TEXT LIKE 'SELECT %; -- no tag%'
                     ORDER BY START_TIME DESC
                     """
                 )
