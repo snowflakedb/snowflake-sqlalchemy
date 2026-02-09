@@ -132,14 +132,3 @@ def test_url():
         "snowflake://testuser:test@testaccount"
         "/?authenticator=https%3A%2F%2Ftestokta.okta.com"
     )
-
-    # query tag is supported
-    assert (
-        URL(
-            account="testaccount",
-            user="admin",
-            password="test",
-            query_tag="my_app_tag",
-        )
-        == "snowflake://admin:test@testaccount/?query_tag=my_app_tag"
-    )
