@@ -97,10 +97,21 @@ class _StructuredTypeInfoManager:
                 column_default if column_default else "",
             )
             if match:
+                # Build complete identity metadata for SQLAlchemy 2.0+ ReflectedIdentity convention
                 identity = {
                     "start": int(match.group("start")),
                     "increment": int(match.group("increment")),
-                    "order_type": match.group("order_type"),
+                    # Snowflake-specific defaults (same as main reflection path)
+                    "always": False,  # Snowflake only supports BY DEFAULT
+                    "on_null": None,  # Not separately tracked
+                    "cycle": False,  # Snowflake only supports NO CYCLE
+                    "order": match.group("order_type") == "ORDER",
+                    # Not available via DESC TABLE
+                    "minvalue": None,
+                    "maxvalue": None,
+                    "nominvalue": None,
+                    "nomaxvalue": None,
+                    "cache": None,
                 }
             is_identity = identity is not None
 

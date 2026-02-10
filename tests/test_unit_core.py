@@ -159,6 +159,25 @@ def test_create_connect_args():
         assert opts == ts[1], f"Failed: {idx}: {ts[0]}"
 
 
+def test_normalize_name_empty_string():
+    """normalize_name should handle empty strings without crashing.
+
+    Reported as: SNOW-593204
+    https://github.com/snowflakedb/snowflake-sqlalchemy/issues/296
+
+    Calling normalize_name("") used to crash with IndexError because
+    _requires_quotes tried to access value[0] on an empty string.
+    """
+    sfdialect = base.dialect()
+
+    # Should not raise IndexError
+    result = sfdialect.normalize_name("")
+    assert result == ""
+
+    # Also test None for completeness
+    assert sfdialect.normalize_name(None) is None
+
+
 def test_denormalize_quote_join():
     sfdialect = base.dialect()
 
