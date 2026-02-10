@@ -1908,7 +1908,7 @@ def test_normalize_name_empty_string_does_not_crash(engine_testaccount):
         conn.execute(text('CREATE OR REPLACE TABLE "" (ID INTEGER, NAME STRING)'))
 
         md = MetaData(schema=schema)
-        md.reflect(bind=engine_testaccount)
+        md.reflect(bind=conn)
 
         table_keys = list(md.tables.keys())
 
