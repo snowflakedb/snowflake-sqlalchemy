@@ -216,8 +216,8 @@ def test_query_tag_appears_in_query_history():
     try:
         with engine.connect() as conn:
             # Execute a simple query
-            conn.execute(text("SELECT 1; -- query tag test"))
-            conn.commit()
+            with conn.begin():
+                conn.execute(text("SELECT 1; -- query tag test"))
 
             # Query the query history to verify the tag
             result = conn.execute(
@@ -246,19 +246,19 @@ def test_query_tag_per_query():
     try:
         with engine.connect() as conn:
             # Set query_tag for first set of operations
-            conn.execute(text("ALTER SESSION SET QUERY_TAG = 'batch_job_1'"))
-            conn.execute(text("SELECT 1; -- batch 1 query"))
-            conn.commit()
+            with conn.begin():
+                conn.execute(text("ALTER SESSION SET QUERY_TAG = 'batch_job_1'"))
+                conn.execute(text("SELECT 1; -- batch 1 query"))
 
             # Change query_tag for second set of operations
-            conn.execute(text("ALTER SESSION SET QUERY_TAG = 'batch_job_2'"))
-            conn.execute(text("SELECT 2; -- batch 2 query"))
-            conn.commit()
+            with conn.begin():
+                conn.execute(text("ALTER SESSION SET QUERY_TAG = 'batch_job_2'"))
+                conn.execute(text("SELECT 2; -- batch 2 query"))
 
             # Reset query_tag (unset it)
-            conn.execute(text("ALTER SESSION UNSET QUERY_TAG"))
-            conn.execute(text("SELECT 3; -- no tag query"))
-            conn.commit()
+            with conn.begin():
+                conn.execute(text("ALTER SESSION UNSET QUERY_TAG"))
+                conn.execute(text("SELECT 3; -- no tag query"))
 
             # Verify the query tags in history
             result = conn.execute(
