@@ -18,12 +18,8 @@ def _snowflake_create_db(cfg, eng, ident):
     - The schema name becomes the 'ident' (e.g., test_schema_gw0)
     """
     with eng.begin() as conn:
-        # Check if schema already exists
-        result = conn.exec_driver_sql(
-            f"SHOW SCHEMAS LIKE '{ident}' IN DATABASE {conn.connection.database}"
-        )
-        if not result.fetchone():
-            conn.exec_driver_sql(f"CREATE SCHEMA IF NOT EXISTS {ident}")
+        # Create schema if it does not already exist
+        conn.exec_driver_sql(f"CREATE SCHEMA IF NOT EXISTS {ident}")
 
 
 @drop_db.for_db("snowflake")

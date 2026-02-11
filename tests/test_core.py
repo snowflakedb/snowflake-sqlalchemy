@@ -1901,8 +1901,6 @@ def test_normalize_name_empty_string_does_not_crash(engine_testaccount):
     schema = "test_normalize_empty"
     with engine_testaccount.connect() as conn:
         conn.execute(text(f"CREATE OR REPLACE SCHEMA {schema}"))
-        conn.execute(text(f"USE SCHEMA {schema}"))
-
         conn.execute(text("CREATE OR REPLACE TABLE NORMAL_TABLE (ID INTEGER)"))
         conn.execute(text('CREATE OR REPLACE TABLE "" (ID INTEGER, NAME STRING)'))
 
@@ -1915,19 +1913,16 @@ def test_normalize_name_empty_string_does_not_crash(engine_testaccount):
             "normal_table" in key for key in table_keys
         ), f"Expected normal_table in {table_keys}"
 
-        assert any(
-            key.endswith(".") or key == "" for key in table_keys
-        ), f"Expected empty string table in {table_keys}"
+        empty_string_as_table_identifier = f"{schema}."
+        assert (
+            empty_string_as_table_identifier in table_keys
+        ), f"Expected empty string table '{empty_string_as_table_identifier}' in {table_keys}"
 
-        empty_table_key = next(
-            (key for key in table_keys if key.endswith(".") or key == ""), None
-        )
-        if empty_table_key:
-            empty_table = md.tables[empty_table_key]
-            assert empty_table.name == ""
-            col_names = [c.name.lower() for c in empty_table.columns]
-            assert "id" in col_names
-            assert "name" in col_names
+        empty_table = md.tables[empty_string_as_table_identifier]
+        assert empty_table.name == ""
+        col_names = [c.name.lower() for c in empty_table.columns]
+        assert "id" in col_names
+        assert "name" in col_names
 
 
 def test_empty_column_names_not_supported_by_sqlalchemy():
