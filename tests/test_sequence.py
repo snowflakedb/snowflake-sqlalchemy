@@ -13,8 +13,11 @@ from sqlalchemy import (
     insert,
     select,
 )
+from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 from sqlalchemy.sql import text
 from sqlalchemy.sql.ddl import CreateTable
+
+from snowflake.sqlalchemy import SnowflakeTable
 
 
 def test_table_with_sequence(engine_testaccount, db_parameters):
@@ -137,6 +140,46 @@ def test_table_with_autoincrement(engine_testaccount):
 
     finally:
         metadata.drop_all(engine_testaccount)
+
+
+def test_orm_autoincrement_with_snowflake_table(engine_testaccount):
+    """ORM autoincrement should work with SnowflakeTable without explicit Sequence.
+
+    SnowflakeTable implicitly creates a Sequence for autoincrement columns,
+    allowing the ORM to pre-fetch the next ID via fire_sequence before INSERT.
+    This works around the lack of INSERT ... RETURNING support in Snowflake.
+    """
+
+    class Base(DeclarativeBase):
+        pass
+
+    class User(Base):
+        __tablename__ = "test_orm_autoincrement"
+
+        id: Mapped[int] = mapped_column(primary_key=True)
+        name: Mapped[str] = mapped_column()
+
+        @classmethod
+        def __table_cls__(cls, name, metadata, *arg, **kw):
+            return SnowflakeTable(name, metadata, *arg, **kw)
+
+    try:
+        Base.metadata.create_all(engine_testaccount)
+
+        with Session(engine_testaccount) as session:
+            u1 = User(name="Spongebob")
+            u2 = User(name="Patrick")
+            session.add_all([u1, u2])
+            session.commit()
+
+            assert u1.id is not None
+            assert u2.id is not None
+            assert u1.id != u2.id
+
+            fetched = session.get(User, u1.id)
+            assert fetched.name == "Spongebob"
+    finally:
+        Base.metadata.drop_all(engine_testaccount)
 
 
 def test_table_with_identity(sql_compiler):
