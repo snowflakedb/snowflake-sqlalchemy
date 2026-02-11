@@ -35,7 +35,7 @@ from sqlalchemy import (
     inspect,
     text,
 )
-from sqlalchemy.exc import DBAPIError, NoSuchTableError, OperationalError
+from sqlalchemy.exc import ArgumentError, DBAPIError, NoSuchTableError, OperationalError
 from sqlalchemy.sql import and_, literal, not_, or_, select
 from sqlalchemy.sql.ddl import CreateTable
 from sqlalchemy.testing.assertions import eq_
@@ -1874,6 +1874,110 @@ CREATE OR REPLACE TEMP TABLE {table_name}
             and columns[0]["name"] == "col"
             and columns[1]["name"] == ""
         )
+
+
+def test_normalize_name_empty_string_does_not_crash(engine_testaccount):
+    """Reflection should handle empty string table names without crashing.
+
+    Reported as: SNOW-593204
+    https://github.com/snowflakedb/snowflake-sqlalchemy/issues/296
+
+    The bug occurred when SHOW TABLES returned a row with an empty string as the
+    table name. Snowflake accepts "" (quoted empty string) as a valid identifier.
+
+    The normalize_name() method would call _requires_quotes(name.lower())
+    which tried to access value[0] on an empty string, causing:
+        IndexError: string index out of range
+
+    The fix (name_utils.py lines 16-17) returns early when name == "", preventing
+    the call to _requires_quotes() on an empty string.
+
+    This test creates a table with empty string name and verifies that
+    MetaData.reflect() handles it without crashing with IndexError.
+
+    Note: Empty string column names are not tested because SQLAlchemy core
+    explicitly disallows empty column names (raises ArgumentError).
+    """
+    schema = "test_normalize_empty"
+    with engine_testaccount.connect() as conn:
+        conn.execute(text(f"CREATE OR REPLACE SCHEMA {schema}"))
+        conn.execute(text("CREATE OR REPLACE TABLE NORMAL_TABLE (ID INTEGER)"))
+        conn.execute(text('CREATE OR REPLACE TABLE "" (ID INTEGER, NAME STRING)'))
+
+        md = MetaData(schema=schema)
+        md.reflect(bind=engine_testaccount)
+
+        table_keys = list(md.tables.keys())
+
+        assert any(
+            "normal_table" in key for key in table_keys
+        ), f"Expected normal_table in {table_keys}"
+
+        empty_string_as_table_identifier = f"{schema}."
+        assert (
+            empty_string_as_table_identifier in table_keys
+        ), f"Expected empty string table '{empty_string_as_table_identifier}' in {table_keys}"
+
+        empty_table = md.tables[empty_string_as_table_identifier]
+        assert empty_table.name == ""
+        col_names = [c.name.lower() for c in empty_table.columns]
+        assert "id" in col_names
+        assert "name" in col_names
+
+
+def test_empty_column_names_not_supported_by_sqlalchemy():
+    """SQLAlchemy core disallows empty string column names with ArgumentError.
+
+    Related to: SNOW-593204
+    https://github.com/snowflakedb/snowflake-sqlalchemy/issues/296
+
+    While Snowflake accepts "" (quoted empty string) as a valid column identifier,
+    SQLAlchemy itself rejects empty column names at Table construction time.
+    This means even if a Snowflake table has an empty-string column, reflecting
+    it through SQLAlchemy would not produce a usable Column object.
+
+    This test documents this SQLAlchemy-level limitation so it is explicit
+    rather than buried in a docstring note.
+    """
+    with pytest.raises(
+        ArgumentError,
+        match="Column must be constructed with a non-blank name",
+    ):
+        Table("some_table", MetaData(), Column("", Integer))
+
+
+def test_reflect_schema_none_does_not_crash(engine_testaccount):
+    """MetaData().reflect() without schema should not crash with TypeError.
+
+    Reported as: SNOW-2852779
+    https://github.com/snowflakedb/snowflake-sqlalchemy/issues/623
+
+    When MetaData().reflect() is called without specifying a schema,
+    and the dialect's default schema is used, _denormalize_quote_join could
+    receive None arguments causing:
+        TypeError: reduce() of empty iterable with no initial value
+    """
+    table_name = "t_reflect_schema_none_test"
+
+    with engine_testaccount.connect() as conn:
+        conn.execute(text(f"CREATE OR REPLACE TABLE {table_name} (id INTEGER)"))
+        conn.commit()
+
+    try:
+        md = MetaData()
+
+        md.reflect(bind=engine_testaccount, views=True)
+
+        table_names = [k.lower() for k in md.tables.keys()]
+
+        assert any(
+            table_name in name for name in table_names
+        ), f"Expected {table_name} in reflected metadata, got {list(md.tables.keys())}"
+
+    finally:
+        with engine_testaccount.connect() as conn:
+            conn.execute(text(f"DROP TABLE IF EXISTS {table_name}"))
+            conn.commit()
 
 
 @pytest.mark.pandas

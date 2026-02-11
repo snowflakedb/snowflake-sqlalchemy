@@ -13,6 +13,14 @@ Source code is also available at:
 - Add server_version_info support
 - Add support for `ILIKE` in queries
 - Fix `SYSDATE()` rendering
+- Fix and improve schema reflection (SNOW-593204, SNOW-2331576, SNOW-2852779)
+  - Fix crash when reflecting without specifying a schema, caused by `None` arguments in internal schema resolution ([#623](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/623)).
+  - Fix crash when `SHOW TABLES` returns empty string table names, causing `IndexError` during reflection ([#296](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/296)).
+  - Fix incomplete identity column reflection metadata, now includes all fields required by SQLAlchemy 2.0+ (`always`, `cycle`, `order`, etc.).
+  - Introduce shared helper for fully-qualified schema name resolution, replacing inconsistent ad-hoc patterns across reflection methods.
+  - Refactor column reflection internals into dedicated helpers to reduce complexity without changing behavior.
+  - Add `pytest-xdist` parallel test support via per-worker schema provisioning hooks.
+- Bump `pandas` lower bound in `sa14` test environment from `<2.1` to `>=2.1.1,<2.2` to ensure pre-built wheels are available for Python 3.12
 
 # Release Notes
 
