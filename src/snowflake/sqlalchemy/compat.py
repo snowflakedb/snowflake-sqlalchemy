@@ -11,7 +11,7 @@ from sqlalchemy import util
 string_types = (str,)
 returns_unicode = util.symbol("RETURNS_UNICODE")
 
-IS_VERSION_20 = tuple(int(v) for v in SA_VERSION.split(".")) >= (2, 0, 0)
+IS_VERSION_20 = tuple(int(v) for v in SA_VERSION.split(".")[:2]) >= (2, 0)
 
 
 def args_reducer(positions_to_drop: tuple):
