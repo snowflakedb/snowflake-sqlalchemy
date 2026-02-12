@@ -55,7 +55,6 @@ development = [
   "pytest-xdist",
   "pytz",
   "numpy",
-  "mock",
   "syrupy",
 ]
 pandas = ["snowflake-connector-python[pandas]"]
@@ -85,7 +84,11 @@ installer = "uv"
 [tool.hatch.envs.sa14]
 installer = "uv"
 builder = true
-extra-dependencies = ["SQLAlchemy>=1.4.19,<2.0.0", "pandas>=2.1.1,<2.2", "numpy<2"]
+extra-dependencies = [
+  "SQLAlchemy>=1.4.19,<2.0.0",
+  "pandas>=2.1.1,<2.2",
+  "numpy<2",
+]
 features = ["development", "pandas"]
 python = "3.12"
 
