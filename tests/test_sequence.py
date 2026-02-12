@@ -14,7 +14,7 @@ from sqlalchemy import (
     inspect,
     select,
 )
-from sqlalchemy.orm import Mapped, Session, declarative_base, mapped_column
+from sqlalchemy.orm import Session, declarative_base
 from sqlalchemy.orm.exc import FlushError
 from sqlalchemy.sql import text
 from sqlalchemy.sql.ddl import CreateTable
@@ -157,8 +157,8 @@ def test_orm_autoincrement_without_snowflake_table_fails(engine_testaccount):
     class User(Base):
         __tablename__ = "test_orm_autoincrement_no_sf_table"
 
-        id: Mapped[int] = mapped_column(primary_key=True)
-        name: Mapped[str] = mapped_column()
+        id = Column(Integer, primary_key=True)
+        name = Column(String)
 
     try:
         Base.metadata.create_all(engine_testaccount)
@@ -184,8 +184,8 @@ def test_orm_autoincrement_with_snowflake_table(engine_testaccount):
     class User(Base):
         __tablename__ = "test_orm_autoincrement"
 
-        id: Mapped[int] = mapped_column(primary_key=True)
-        name: Mapped[str] = mapped_column()
+        id = Column(Integer, primary_key=True)
+        name = Column(String)
 
         @classmethod
         def __table_cls__(cls, name, metadata, *arg, **kw):
