@@ -14,7 +14,7 @@ from sqlalchemy import (
     inspect,
     select,
 )
-from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
+from sqlalchemy.orm import Mapped, Session, declarative_base, mapped_column
 from sqlalchemy.orm.exc import FlushError
 from sqlalchemy.sql import text
 from sqlalchemy.sql.ddl import CreateTable
@@ -152,8 +152,7 @@ def test_orm_autoincrement_without_snowflake_table_fails(engine_testaccount):
     auto-generated primary key after INSERT, resulting in a FlushError.
     """
 
-    class Base(DeclarativeBase):
-        pass
+    Base = declarative_base()
 
     class User(Base):
         __tablename__ = "test_orm_autoincrement_no_sf_table"
@@ -180,8 +179,7 @@ def test_orm_autoincrement_with_snowflake_table(engine_testaccount):
     This works around the lack of INSERT ... RETURNING support in Snowflake.
     """
 
-    class Base(DeclarativeBase):
-        pass
+    Base = declarative_base()
 
     class User(Base):
         __tablename__ = "test_orm_autoincrement"
