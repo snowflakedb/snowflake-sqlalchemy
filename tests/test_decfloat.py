@@ -15,12 +15,7 @@ from sqlalchemy.schema import CreateTable
 from snowflake.sqlalchemy import DECFLOAT, snowdialect
 from snowflake.sqlalchemy.parser.custom_type_parser import parse_type
 
-from .util import random_string
-
-
-def _normalize_ddl(ddl: str) -> str:
-    """Normalize DDL string by removing extra whitespace and newlines."""
-    return re.sub(r"\s+", " ", ddl).strip()
+from .util import normalize_ddl, random_string
 
 
 class TestDECFLOATType:
@@ -131,7 +126,7 @@ class TestDECFLOATCompilation:
             "value DECFLOAT, "
             "PRIMARY KEY (id) )"
         )
-        assert _normalize_ddl(ddl) == expected
+        assert normalize_ddl(ddl) == expected
 
 
 class TestDECFLOATReflection:

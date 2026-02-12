@@ -1,8 +1,6 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 
-import re
-
 import pytest
 from sqlalchemy import Column, Integer, MetaData, String, inspect, select
 from sqlalchemy.exc import ProgrammingError
@@ -15,12 +13,7 @@ from sqlalchemy.sql.sqltypes import Text as SAText
 from snowflake.sqlalchemy import snowdialect
 from snowflake.sqlalchemy.custom_types import VECTOR
 
-from .util import random_string
-
-
-def _normalize_ddl(ddl: str) -> str:
-    """Normalize DDL string by removing extra whitespace and newlines."""
-    return re.sub(r"\s+", " ", ddl).strip()
+from .util import normalize_ddl, random_string
 
 
 class TestVectorTypeUnit:
@@ -86,7 +79,7 @@ class TestVectorTypeUnit:
             "name VARCHAR, "
             "PRIMARY KEY (id) )"
         )
-        assert _normalize_ddl(ddl) == expected
+        assert normalize_ddl(ddl) == expected
 
 
 class TestVectorIntegration:

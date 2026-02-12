@@ -22,6 +22,7 @@ Source code is also available at:
   - Add `pytest-xdist` parallel test support via per-worker schema provisioning hooks.
 - Bump `pandas` lower bound in `sa14` test environment from `<2.1` to `>=2.1.1,<2.2` to ensure pre-built wheels are available for Python 3.12
 - Fix SQLAlchemy version parsing (SNOW-3066571)
+- Support timezone in timestamp and datetime types ([#199](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/199))
 
 # Release Notes
 

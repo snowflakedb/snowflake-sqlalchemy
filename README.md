@@ -372,6 +372,45 @@ t = Table('my_table', metadata,
 metadata.create_all(engine)
 ```
 
+### Timestamp and Timezone Support
+
+Snowflake SQLAlchemy provides three Snowflake-specific timestamp types that map directly to their Snowflake counterparts:
+
+```python
+from sqlalchemy import Column, Integer, MetaData, Table, create_engine
+from snowflake.sqlalchemy import TIMESTAMP_NTZ, TIMESTAMP_TZ, TIMESTAMP_LTZ
+
+engine = create_engine(...)
+metadata = MetaData()
+t = Table('events', metadata,
+    Column('id', Integer, primary_key=True),
+    Column('created_at', TIMESTAMP_NTZ()),   # TIMESTAMP WITHOUT TIME ZONE
+    Column('scheduled_at', TIMESTAMP_TZ()),  # TIMESTAMP WITH TIME ZONE
+    Column('logged_at', TIMESTAMP_LTZ()),    # TIMESTAMP WITH LOCAL TIME ZONE
+)
+metadata.create_all(engine)
+```
+
+SQLAlchemy's generic `DateTime` and `TIMESTAMP` types also support timezone-aware columns via the `timezone` parameter. When `timezone=True` is set, the dialect emits `TIMESTAMP_TZ` instead of the default `TIMESTAMP_NTZ`:
+
+```python
+from sqlalchemy import Column, DateTime, Integer, MetaData, Table, create_engine
+from sqlalchemy.types import TIMESTAMP
+
+engine = create_engine(...)
+metadata = MetaData()
+t = Table('events', metadata,
+    Column('id', Integer, primary_key=True),
+    Column('naive_ts', DateTime()),                 # produces TIMESTAMP_NTZ
+    Column('aware_ts', DateTime(timezone=True)),    # produces TIMESTAMP_TZ
+    Column('naive_ts2', TIMESTAMP()),               # produces TIMESTAMP_NTZ
+    Column('aware_ts2', TIMESTAMP(timezone=True)),  # produces TIMESTAMP_TZ
+)
+metadata.create_all(engine)
+```
+
+This also applies when using pandas `to_sql()` with timezone-aware datetime columns, which infers `DateTime(timezone=True)` automatically (see [#199](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/199)).
+
 ### Cache Column Metadata
 
 SQLAlchemy provides [the runtime inspection API](http://docs.sqlalchemy.org/en/latest/core/inspection.html) to get the runtime information about the various objects. One of the common use case is get all tables and their column metadata in a schema in order to construct a schema catalog. For example, [alembic](http://alembic.zzzcomputing.com/) on top of SQLAlchemy manages database schema migrations. A pseudo code flow is as follows:

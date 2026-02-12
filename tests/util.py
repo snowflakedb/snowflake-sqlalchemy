@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import random
+import re
 import string
 from typing import Sequence
 
@@ -97,3 +98,16 @@ def random_string(
     """
     random_part = "".join([random.choice(choices) for _ in range(length)])
     return "".join([prefix, random_part, suffix])
+
+
+def normalize_ddl(ddl: str) -> str:
+    """Normalize DDL string by removing extra whitespace and newlines."""
+    return re.sub(r"\s+", " ", ddl).strip()
+
+
+def compile_type(type_instance):
+    """Compile a type to its DDL string using the Snowflake type compiler."""
+    from snowflake.sqlalchemy import snowdialect
+
+    dialect = snowdialect.dialect()
+    return dialect.type_compiler.process(type_instance)
