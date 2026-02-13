@@ -4,6 +4,7 @@
 
 import decimal
 import re
+import sys
 import warnings
 from decimal import Decimal
 
@@ -161,6 +162,10 @@ class TestDECFLOATStringConversion:
 class TestDECFLOATIntegration:
     """Integration tests for DECFLOAT type against real Snowflake database."""
 
+    @pytest.mark.skipif(
+        sys.version_info < (3, 9),
+        reason="DECFLOAT requires snowflake-connector-python >= 3.14.1",
+    )
     def test_decfloat_precision_with_enable_decfloat_parameter(self, request):
         """Test that enable_decfloat dialect parameter sets decimal context.
 
@@ -204,6 +209,10 @@ class TestDECFLOATIntegration:
                 ), "enable_decfloat=True should preserve full precision"
                 assert result == value_38_digits
 
+    @pytest.mark.skipif(
+        sys.version_info < (3, 9),
+        reason="DECFLOAT requires snowflake-connector-python >= 3.14.1",
+    )
     def test_decfloat_precision_depends_on_decimal_context(self, engine_testaccount):
         """Test that Python decimal context affects DECFLOAT precision from connector.
 
@@ -275,6 +284,10 @@ class TestDECFLOATIntegration:
         finally:
             test_table.drop(engine_testaccount)
 
+    @pytest.mark.skipif(
+        sys.version_info < (3, 9),
+        reason="DECFLOAT requires snowflake-connector-python >= 3.14.1",
+    )
     def test_insert_and_select_decfloat_values(self, engine_testaccount):
         """Test inserting and selecting DECFLOAT values.
 
