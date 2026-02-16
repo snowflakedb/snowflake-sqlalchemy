@@ -1898,7 +1898,8 @@ def test_normalize_name_empty_string_does_not_crash(engine_testaccount):
     Note: Empty string column names are not tested because SQLAlchemy core
     explicitly disallows empty column names (raises ArgumentError).
     """
-    schema = f"test_normalize_empty_{random_string(5, choices=string.ascii_uppercase)}"
+    schema = f"TEST_NORMALIZE_EMPTY_{random_string(5, choices=string.ascii_uppercase)}"
+    normalized_schema = schema.lower()
     with engine_testaccount.connect() as conn:
         conn.execute(text(f"CREATE OR REPLACE SCHEMA {schema}"))
         conn.execute(
@@ -1909,7 +1910,7 @@ def test_normalize_name_empty_string_does_not_crash(engine_testaccount):
         )
 
         try:
-            md = MetaData(schema=schema)
+            md = MetaData(schema=normalized_schema)
             md.reflect(bind=engine_testaccount)
 
             table_keys = list(md.tables.keys())
@@ -1918,7 +1919,7 @@ def test_normalize_name_empty_string_does_not_crash(engine_testaccount):
                 "normal_table" in key for key in table_keys
             ), f"Expected normal_table in {table_keys}"
 
-            empty_string_as_table_identifier = f"{schema}."
+            empty_string_as_table_identifier = f"{normalized_schema}."
             assert (
                 empty_string_as_table_identifier in table_keys
             ), f"Expected empty string table '{empty_string_as_table_identifier}' in {table_keys}"
