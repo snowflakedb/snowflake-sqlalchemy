@@ -1898,31 +1898,38 @@ def test_normalize_name_empty_string_does_not_crash(engine_testaccount):
     Note: Empty string column names are not tested because SQLAlchemy core
     explicitly disallows empty column names (raises ArgumentError).
     """
-    schema = "test_normalize_empty"
+    schema = f"test_normalize_empty_{random_string(5, choices=string.ascii_uppercase)}"
     with engine_testaccount.connect() as conn:
         conn.execute(text(f"CREATE OR REPLACE SCHEMA {schema}"))
-        conn.execute(text("CREATE OR REPLACE TABLE NORMAL_TABLE (ID INTEGER)"))
-        conn.execute(text('CREATE OR REPLACE TABLE "" (ID INTEGER, NAME STRING)'))
+        conn.execute(
+            text(f"CREATE OR REPLACE TABLE {schema}.NORMAL_TABLE (ID INTEGER)")
+        )
+        conn.execute(
+            text(f'CREATE OR REPLACE TABLE {schema}."" (ID INTEGER, NAME STRING)')
+        )
 
-        md = MetaData(schema=schema)
-        md.reflect(bind=engine_testaccount)
+        try:
+            md = MetaData(schema=schema)
+            md.reflect(bind=engine_testaccount)
 
-        table_keys = list(md.tables.keys())
+            table_keys = list(md.tables.keys())
 
-        assert any(
-            "normal_table" in key for key in table_keys
-        ), f"Expected normal_table in {table_keys}"
+            assert any(
+                "normal_table" in key for key in table_keys
+            ), f"Expected normal_table in {table_keys}"
 
-        empty_string_as_table_identifier = f"{schema}."
-        assert (
-            empty_string_as_table_identifier in table_keys
-        ), f"Expected empty string table '{empty_string_as_table_identifier}' in {table_keys}"
+            empty_string_as_table_identifier = f"{schema}."
+            assert (
+                empty_string_as_table_identifier in table_keys
+            ), f"Expected empty string table '{empty_string_as_table_identifier}' in {table_keys}"
 
-        empty_table = md.tables[empty_string_as_table_identifier]
-        assert empty_table.name == ""
-        col_names = [c.name.lower() for c in empty_table.columns]
-        assert "id" in col_names
-        assert "name" in col_names
+            empty_table = md.tables[empty_string_as_table_identifier]
+            assert empty_table.name == ""
+            col_names = [c.name.lower() for c in empty_table.columns]
+            assert "id" in col_names
+            assert "name" in col_names
+        finally:
+            conn.execute(text(f"DROP SCHEMA IF EXISTS {schema}"))
 
 
 def test_empty_column_names_not_supported_by_sqlalchemy():
