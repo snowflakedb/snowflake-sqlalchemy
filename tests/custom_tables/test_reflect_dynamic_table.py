@@ -7,8 +7,9 @@ from snowflake.sqlalchemy import DynamicTable
 from snowflake.sqlalchemy.custom_commands import NoneType
 
 
-def test_simple_reflection_dynamic_table_as_table(engine_testaccount, db_parameters):
-    warehouse = db_parameters.get("warehouse", "default")
+def test_simple_reflection_dynamic_table_as_table(
+    engine_testaccount, default_warehouse
+):
     metadata = MetaData()
     test_table_1 = Table(
         "test_table_1", metadata, Column("id", Integer), Column("name", String)
@@ -24,7 +25,7 @@ def test_simple_reflection_dynamic_table_as_table(engine_testaccount, db_paramet
     create_table_sql = f"""
    CREATE DYNAMIC TABLE dynamic_test_table (id INT, name VARCHAR)
       TARGET_LAG = '20 minutes'
-      WAREHOUSE = {warehouse}
+      WAREHOUSE = {default_warehouse}
       AS SELECT id, name from test_table_1;
     """
     with engine_testaccount.connect() as connection:
@@ -46,8 +47,9 @@ def test_simple_reflection_dynamic_table_as_table(engine_testaccount, db_paramet
         metadata.drop_all(engine_testaccount)
 
 
-def test_simple_reflection_without_options_loading(engine_testaccount, db_parameters):
-    warehouse = db_parameters.get("warehouse", "default")
+def test_simple_reflection_without_options_loading(
+    engine_testaccount, default_warehouse
+):
     metadata = MetaData()
     test_table_1 = Table(
         "test_table_1", metadata, Column("id", Integer), Column("name", String)
@@ -63,7 +65,7 @@ def test_simple_reflection_without_options_loading(engine_testaccount, db_parame
     create_table_sql = f"""
    CREATE DYNAMIC TABLE dynamic_test_table (id INT, name VARCHAR)
       TARGET_LAG = '20 minutes'
-      WAREHOUSE = {warehouse}
+      WAREHOUSE = {default_warehouse}
       AS SELECT id, name from test_table_1;
     """
     with engine_testaccount.connect() as connection:

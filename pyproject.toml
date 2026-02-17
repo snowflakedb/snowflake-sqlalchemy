@@ -55,7 +55,6 @@ development = [
   "pytest-xdist",
   "pytz",
   "numpy",
-  "mock",
   "syrupy",
 ]
 pandas = ["snowflake-connector-python[pandas]"]
@@ -85,7 +84,11 @@ installer = "uv"
 [tool.hatch.envs.sa14]
 installer = "uv"
 builder = true
-extra-dependencies = ["SQLAlchemy>=1.4.19,<2.0.0", "pandas>=2.1.1,<2.2", "numpy<2"]
+extra-dependencies = [
+  "SQLAlchemy>=1.4.19,<2.0.0",
+  "pandas>=2.1.1,<2.2",
+  "numpy<2",
+]
 features = ["development", "pandas"]
 python = "3.12"
 
@@ -142,4 +145,5 @@ markers = [
   "external: tests that could but should only run on our external CI",
   "feature_max_lob_size: tests that could but should only run on our external CI",
   "feature_v20: tests that could but should only run on SqlAlchemy v20",
+  "mypy: typing tests",
 ]

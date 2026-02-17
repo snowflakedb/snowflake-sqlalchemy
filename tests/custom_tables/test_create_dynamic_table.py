@@ -17,8 +17,7 @@ from snowflake.sqlalchemy.sql.custom_schema.options.target_lag_option import (
 )
 
 
-def test_create_dynamic_table(engine_testaccount, db_parameters):
-    warehouse = db_parameters.get("warehouse", "default")
+def test_create_dynamic_table(engine_testaccount, default_warehouse):
     metadata = MetaData()
     test_table_1 = Table(
         "test_table_1", metadata, Column("id", Integer), Column("name", String)
@@ -38,7 +37,7 @@ def test_create_dynamic_table(engine_testaccount, db_parameters):
         Column("id", Integer),
         Column("name", String),
         target_lag=(1, TimeUnit.HOURS),
-        warehouse=warehouse,
+        warehouse=default_warehouse,
         as_query="SELECT id, name from test_table_1;",
         refresh_mode=SnowflakeKeyword.FULL,
     )
@@ -58,9 +57,8 @@ def test_create_dynamic_table(engine_testaccount, db_parameters):
 
 
 def test_create_dynamic_table_without_dynamictable_class(
-    engine_testaccount, db_parameters, snapshot
+    engine_testaccount, default_warehouse, snapshot
 ):
-    warehouse = db_parameters.get("warehouse", "default")
     metadata = MetaData()
     test_table_1 = Table(
         "test_table_1", metadata, Column("id", Integer), Column("name", String)
@@ -79,7 +77,7 @@ def test_create_dynamic_table_without_dynamictable_class(
         metadata,
         Column("id", Integer),
         Column("name", String),
-        snowflake_warehouse=warehouse,
+        snowflake_warehouse=default_warehouse,
         snowflake_as_query="SELECT id, name from test_table_1;",
         prefixes=["DYNAMIC"],
     )
@@ -90,9 +88,8 @@ def test_create_dynamic_table_without_dynamictable_class(
 
 
 def test_create_dynamic_table_without_dynamictable_and_defined_options(
-    engine_testaccount, db_parameters, snapshot
+    engine_testaccount, default_warehouse, snapshot
 ):
-    warehouse = db_parameters.get("warehouse", "default")
     metadata = MetaData()
     test_table_1 = Table(
         "test_table_1", metadata, Column("id", Integer), Column("name", String)
@@ -113,7 +110,7 @@ def test_create_dynamic_table_without_dynamictable_and_defined_options(
         Column("name", String),
         snowflake_target_lag=TargetLagOption.create((1, TimeUnit.HOURS)),
         snowflake_warehouse=IdentifierOption.create(
-            TableOptionKey.WAREHOUSE, warehouse
+            TableOptionKey.WAREHOUSE, default_warehouse
         ),
         snowflake_as_query=AsQueryOption.create("SELECT id, name from test_table_1;"),
         prefixes=["DYNAMIC"],
