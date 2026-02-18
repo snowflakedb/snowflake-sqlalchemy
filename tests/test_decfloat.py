@@ -3,7 +3,6 @@
 #
 
 import decimal
-import re
 import sys
 import warnings
 from decimal import Decimal
