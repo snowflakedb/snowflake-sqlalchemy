@@ -13,6 +13,7 @@ Source code is also available at:
 - Add server_version_info support
 - Add support for `ILIKE` in queries
 - Fix `SYSDATE()` rendering
+- Document support for session parameters (like [QUERY_TAG](https://docs.snowflake.com/en/sql-reference/parameters#query-tag)), references: [#644](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/495)
 
 # Release Notes
 
