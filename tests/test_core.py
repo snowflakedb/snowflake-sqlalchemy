@@ -197,6 +197,91 @@ def test_boolean_query_argument_parsing():
         engine.dispose()
 
 
+def test_query_tag_appears_in_query_history():
+    """
+    Tests that query_tag actually appears in Snowflake's query history.
+    """
+    test_query_tag = "sqlalchemy_history_test_tag"
+    engine = create_engine(
+        URL(
+            **CONNECTION_PARAMETERS,
+        ),
+        connect_args={
+            "session_parameters": {
+                "QUERY_TAG": test_query_tag,
+            }
+        },
+    )
+
+    try:
+        with engine.connect() as conn:
+            # Execute a simple query
+            with conn.begin():
+                conn.execute(text("SELECT 1; -- query tag test"))
+
+            # Query the query history to verify the tag
+            result = conn.execute(
+                text(
+                    """
+                    SELECT QUERY_TAG
+                    FROM TABLE(INFORMATION_SCHEMA.QUERY_HISTORY_BY_SESSION())
+                    WHERE QUERY_TEXT = 'SELECT 1; -- query tag test'
+                    ORDER BY START_TIME DESC LIMIT 1
+                    """
+                )
+            )
+            row = result.fetchone()
+            assert row is not None, "Query should be found in history"
+            assert row[0] == test_query_tag, f"Query tag should be '{test_query_tag}'"
+    finally:
+        engine.dispose()
+
+
+def test_query_tag_per_query():
+    """
+    Tests setting query_tag dynamically per query or per set of SQL actions
+    using ALTER SESSION SET QUERY_TAG.
+    """
+    engine = create_engine(URL(**CONNECTION_PARAMETERS))
+    try:
+        with engine.connect() as conn:
+            # Set query_tag for first set of operations
+            with conn.begin():
+                conn.execute(text("ALTER SESSION SET QUERY_TAG = 'batch_job_1'"))
+                conn.execute(text("SELECT 1; -- batch 1 query"))
+
+            # Change query_tag for second set of operations
+            with conn.begin():
+                conn.execute(text("ALTER SESSION SET QUERY_TAG = 'batch_job_2'"))
+                conn.execute(text("SELECT 2; -- batch 2 query"))
+
+            # Reset query_tag (unset it)
+            with conn.begin():
+                conn.execute(text("ALTER SESSION UNSET QUERY_TAG"))
+                conn.execute(text("SELECT 3; -- no tag query"))
+
+            # Verify the query tags in history
+            result = conn.execute(
+                text(
+                    """
+                    SELECT QUERY_TEXT, QUERY_TAG
+                    FROM TABLE(INFORMATION_SCHEMA.QUERY_HISTORY_BY_SESSION())
+                    WHERE QUERY_TEXT LIKE 'SELECT %; -- batch%'
+                       OR QUERY_TEXT LIKE 'SELECT %; -- no tag%'
+                    ORDER BY START_TIME DESC
+                    """
+                )
+            )
+            rows = result.fetchall()
+            query_tags = {row[0]: row[1] for row in rows}
+
+            assert query_tags.get("SELECT 1; -- batch 1 query") == "batch_job_1"
+            assert query_tags.get("SELECT 2; -- batch 2 query") == "batch_job_2"
+            assert query_tags.get("SELECT 3; -- no tag query") in (None, "")
+    finally:
+        engine.dispose()
+
+
 def test_create_dialect():
     """
     Tests getting only dialect object through create_engine

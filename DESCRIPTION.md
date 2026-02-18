@@ -22,6 +22,7 @@ Source code is also available at:
   - Add `pytest-xdist` parallel test support via per-worker schema provisioning hooks.
 - Bump `pandas` lower bound in `sa14` test environment from `<2.1` to `>=2.1.1,<2.2` to ensure pre-built wheels are available for Python 3.12
 - Fix SQLAlchemy version parsing (SNOW-3066571)
+- Document support for session parameters (like [QUERY_TAG](https://docs.snowflake.com/en/sql-reference/parameters#query-tag)), references: [#644](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/495)
 
 # Release Notes
 

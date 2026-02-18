@@ -8,7 +8,47 @@
 
 Snowflake SQLAlchemy runs on the top of the Snowflake Connector for Python as a [dialect](http://docs.sqlalchemy.org/en/latest/dialects/) to bridge a Snowflake database and SQLAlchemy applications.
 
-
+Table of contents:
+<!-- TOC -->
+* [Snowflake SQLAlchemy](#snowflake-sqlalchemy)
+  * [Prerequisites](#prerequisites)
+    * [Snowflake Connector for Python](#snowflake-connector-for-python)
+    * [Data Analytics and Web Application Frameworks (Optional)](#data-analytics-and-web-application-frameworks-optional)
+  * [Installing Snowflake SQLAlchemy](#installing-snowflake-sqlalchemy)
+  * [Verifying Your Installation](#verifying-your-installation)
+  * [Parameters and Behavior](#parameters-and-behavior)
+    * [Connection Parameters](#connection-parameters)
+      * [Escaping Special Characters such as `%, @` signs in Passwords](#escaping-special-characters-such-as---signs-in-passwords)
+      * [Using a proxy server](#using-a-proxy-server)
+      * [Using session parameters](#using-session-parameters)
+    * [Opening and Closing Connection](#opening-and-closing-connection)
+    * [Auto-increment Behavior](#auto-increment-behavior)
+    * [Object Name Case Handling](#object-name-case-handling)
+    * [Index Support](#index-support)
+      * [Single Column Index](#single-column-index)
+      * [Multi-Column Index](#multi-column-index)
+    * [Numpy Data Type Support](#numpy-data-type-support)
+    * [DECFLOAT Data Type Support](#decfloat-data-type-support)
+      * [DECFLOAT Precision](#decfloat-precision)
+    * [VECTOR Data Type Support](#vector-data-type-support)
+    * [Cache Column Metadata](#cache-column-metadata)
+    * [VARIANT, ARRAY and OBJECT Support](#variant-array-and-object-support)
+    * [Structured Data Types Support](#structured-data-types-support)
+      * [MAP](#map)
+      * [OBJECT](#object)
+      * [ARRAY](#array)
+    * [CLUSTER BY Support](#cluster-by-support)
+    * [Alembic Support](#alembic-support)
+    * [Key Pair Authentication Support](#key-pair-authentication-support)
+    * [Merge Command Support](#merge-command-support)
+    * [CopyIntoStorage Support](#copyintostorage-support)
+    * [Iceberg Table with Snowflake Catalog support](#iceberg-table-with-snowflake-catalog-support)
+    * [Hybrid Table support](#hybrid-table-support)
+    * [Dynamic Tables support](#dynamic-tables-support)
+    * [Notes](#notes)
+  * [Verifying Package Signatures](#verifying-package-signatures)
+  * [Support](#support)
+<!-- TOC -->
 
 ## Prerequisites
 
@@ -183,6 +223,44 @@ engine = create_engine(URL(
 #### Using a proxy server
 
 Use the supported environment variables, `HTTPS_PROXY`, `HTTP_PROXY` and `NO_PROXY` to configure a proxy server.
+
+#### Using session parameters
+
+Snowflake [session parameters](https://docs.snowflake.com/en/sql-reference/parameters#session-parameters) (such as [`QUERY_TAG`](https://docs.snowflake.com/en/sql-reference/parameters#query-tag)) cannot be set directly through the `URL` helper.
+Instead, pass them via the `connect_args` parameter of `create_engine`, using the `session_parameters` dict — the same way you would [through the Python connector](https://docs.snowflake.com/en/developer-guide/python-connector/python-connector-connect#setting-session-parameters):
+
+```python
+from snowflake.sqlalchemy import URL
+from sqlalchemy import create_engine
+
+engine = create_engine(
+    URL(
+        # CONNECTION_PARAMETERS
+    ),
+    connect_args={
+        "session_parameters": {
+            "QUERY_TAG": "SOME_QUERY_TAGS",
+        }
+    },
+)
+```
+
+Session parameters set this way apply to all queries executed within the session.
+To change a session parameter for specific queries mid-session, use `ALTER SESSION`:
+
+```python
+from sqlalchemy import text
+
+with engine.connect() as conn:
+    conn.execute(text("ALTER SESSION SET QUERY_TAG = 'batch_job_1'"))
+    conn.execute(text("..."))  # Uses 'batch_job_1'
+
+    conn.execute(text("ALTER SESSION SET QUERY_TAG = 'batch_job_2'"))
+    conn.execute(text("..."))  # Uses 'batch_job_2'
+
+    conn.execute(text("ALTER SESSION UNSET QUERY_TAG"))
+    conn.execute(text("..."))  # No tag
+```
 
 ### Opening and Closing Connection
 
