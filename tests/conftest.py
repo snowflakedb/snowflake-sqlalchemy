@@ -112,6 +112,17 @@ def on_public_ci():
     return running_on_public_ci()
 
 
+@pytest.fixture()
+def default_warehouse(db_parameters, engine_testaccount):
+    wh = db_parameters.get("warehouse")
+    if wh is None:
+        with engine_testaccount.connect() as conn:
+            wh = conn.exec_driver_sql("SELECT CURRENT_WAREHOUSE()").scalar()
+    if wh is None:
+        pytest.fail("No warehouse configured for the current user/session")
+    return wh
+
+
 @pytest.fixture(scope="function")
 def base_location(external_stage, engine_testaccount):
     unique_id = str(uuid.uuid4())
