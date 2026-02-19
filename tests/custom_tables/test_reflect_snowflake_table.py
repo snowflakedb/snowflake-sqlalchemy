@@ -44,7 +44,7 @@ def test_simple_reflection_of_table_as_sqlalchemy_table(
     table_name = "test_snowflake_table_reflection"
 
     create_table_sql = f"""
-   CREATE TABLE {table_name} (id INT primary key, name VARCHAR);
+   CREATE TABLE {table_name} (id INT primary key, name VARCHAR(256));
     """
 
     with engine_testaccount.connect() as connection:
@@ -74,7 +74,7 @@ def test_simple_reflection_of_table_as_snowflake_table(
     table_name = "test_snowflake_table_reflection"
 
     create_table_sql = f"""
-   CREATE TABLE {table_name} (id INT primary key, name VARCHAR);
+   CREATE TABLE {table_name} (id INT primary key, name VARCHAR(256));
     """
 
     with engine_testaccount.connect() as connection:
@@ -106,7 +106,7 @@ def test_inspect_snowflake_table(
     table_name = "test_snowflake_table_inspect"
 
     create_table_sql = f"""
-   CREATE TABLE {table_name} (id INT primary key, name VARCHAR);
+   CREATE TABLE {table_name} (id INT primary key, name VARCHAR(256));
     """
 
     with engine_testaccount.connect() as connection:

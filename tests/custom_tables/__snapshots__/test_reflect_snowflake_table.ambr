@@ -17,7 +17,7 @@
       'name': 'name',
       'nullable': True,
       'primary_key': False,
-      'type': VARCHAR(length=16777216),
+      'type': VARCHAR(length=256),
     }),
   ])
 # ---
@@ -25,8 +25,8 @@
   'CREATE TABLE test_snowflake_table_reflection (\tid DECIMAL(38, 0) NOT NULL, \tname OBJECT, \tCONSTRAINT demo_name PRIMARY KEY (id))'
 # ---
 # name: test_simple_reflection_of_table_as_snowflake_table
-  'CREATE TABLE test_snowflake_table_reflection (\tid DECIMAL(38, 0) NOT NULL, \tname VARCHAR(16777216), \tCONSTRAINT demo_name PRIMARY KEY (id))'
+  'CREATE TABLE test_snowflake_table_reflection (\tid DECIMAL(38, 0) NOT NULL, \tname VARCHAR(256), \tCONSTRAINT demo_name PRIMARY KEY (id))'
 # ---
 # name: test_simple_reflection_of_table_as_sqlalchemy_table
-  'CREATE TABLE test_snowflake_table_reflection (\tid DECIMAL(38, 0) NOT NULL, \tname VARCHAR(16777216), \tCONSTRAINT demo_name PRIMARY KEY (id))'
+  'CREATE TABLE test_snowflake_table_reflection (\tid DECIMAL(38, 0) NOT NULL, \tname VARCHAR(256), \tCONSTRAINT demo_name PRIMARY KEY (id))'
 # ---
