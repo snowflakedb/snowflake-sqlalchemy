@@ -12,6 +12,14 @@ string_types = (str,)
 returns_unicode = util.symbol("RETURNS_UNICODE")
 
 IS_VERSION_20 = tuple(int(v) for v in SA_VERSION.split(".")[:2]) >= (2, 0)
+IS_VERSION_21 = tuple(int(v) for v in SA_VERSION.split(".")[:2]) >= (2, 1)
+
+if IS_VERSION_21:
+    from sqlalchemy.orm.context import _ORMSelectCompileState as ORMSelectCompileState
+else:
+    from sqlalchemy.orm.context import (  # noqa: F401
+        ORMSelectCompileState as ORMSelectCompileState,
+    )
 
 
 def args_reducer(positions_to_drop: tuple):

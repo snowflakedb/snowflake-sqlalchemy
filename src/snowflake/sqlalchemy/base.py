@@ -20,10 +20,16 @@ from sqlalchemy.sql import compiler, expression, functions, sqltypes
 from sqlalchemy.sql.base import CompileState
 from sqlalchemy.sql.elements import BindParameter, quoted_name
 from sqlalchemy.sql.expression import Executable
-from sqlalchemy.sql.selectable import Lateral, SelectState
+from sqlalchemy.sql.selectable import Join, Lateral, SelectState
 
 from snowflake.sqlalchemy._constants import DIALECT_NAME
-from snowflake.sqlalchemy.compat import IS_VERSION_20, args_reducer, string_types
+from snowflake.sqlalchemy.compat import (
+    IS_VERSION_20,
+    IS_VERSION_21,
+    ORMSelectCompileState,
+    args_reducer,
+    string_types,
+)
 from snowflake.sqlalchemy.custom_commands import (
     AWSBucket,
     AzureContainer,
@@ -136,6 +142,7 @@ https://docs.snowflake.com/en/release-notes/bcr-bundles/2023_04/bcr-1057
 class SnowflakeSelectState(SelectState):
     def _setup_joins(self, args, raw_columns):
         for right, onclause, left, flags in args:
+            explicit_left = left
             isouter = flags["isouter"]
             full = flags["full"]
 
@@ -153,6 +160,17 @@ class SnowflakeSelectState(SelectState):
                 # splice into an existing element in the
                 # self._from_obj list
                 left_clause = self.from_clauses[replace_from_obj_index]
+
+                # SQLA 2.1+: auto-derive ON clause from the original explicit
+                # left when one was given but no onclause was provided.
+                # For Snowflake BCR bcr-1057, lateral joins have no FK
+                # relationships so we allow onclause to remain None.
+                if IS_VERSION_21 and explicit_left is not None and onclause is None:
+                    try:
+                        onclause = Join._join_condition(explicit_left, right)
+                    except sa_exc.NoForeignKeysError:
+                        if not isinstance(right, Lateral):
+                            raise
 
                 self.from_clauses = (
                     self.from_clauses[:replace_from_obj_index]
@@ -237,7 +255,7 @@ class SnowflakeSelectState(SelectState):
 
 # handle Snowflake BCR bcr-1057
 @sql.base.CompileState.plugin_for("orm", "select")
-class SnowflakeORMSelectCompileState(context.ORMSelectCompileState):
+class SnowflakeORMSelectCompileState(ORMSelectCompileState):
     def _join_determine_implicit_left_side(
         self, entities_collection, left, right, onclause
     ):
@@ -356,6 +374,8 @@ class SnowflakeORMSelectCompileState(context.ORMSelectCompileState):
 
         """
 
+        explicit_left = left
+
         if left is None:
             # left not given (e.g. no relationship object/name specified)
             # figure out the best "left" side based on our existing froms /
@@ -406,6 +426,17 @@ class SnowflakeORMSelectCompileState(context.ORMSelectCompileState):
             # splice into an existing element in the
             # self._from_obj list
             left_clause = self.from_clauses[replace_from_obj_index]
+
+            # SQLA 2.1+: auto-derive ON clause from the original explicit
+            # left when one was given but no onclause was provided.
+            # For Snowflake BCR bcr-1057, lateral joins have no FK
+            # relationships so we allow onclause to remain None.
+            if IS_VERSION_21 and explicit_left is not None and onclause is None:
+                try:
+                    onclause = _Snowflake_ORMJoin._join_condition(explicit_left, right)
+                except sa_exc.NoForeignKeysError:
+                    if not isinstance(right, Lateral):
+                        raise
 
             self.from_clauses = (
                 self.from_clauses[:replace_from_obj_index]
