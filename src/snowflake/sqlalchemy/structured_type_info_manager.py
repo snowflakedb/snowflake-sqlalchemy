@@ -3,6 +3,7 @@
 
 import re
 
+import sqlalchemy.sql.sqltypes as sqltypes
 from sqlalchemy import util as sa_util
 from sqlalchemy.sql import text
 
@@ -45,7 +46,6 @@ class _StructuredTypeInfoManager:
     def _load_structured_type_info(self, schema_name: str, table_name: str):
         """Get column information for a structured type"""
         if (schema_name, table_name) not in self.full_columns_descriptions:
-
             column_definitions = self.get_table_columns(table_name, schema_name)
             if not column_definitions:
                 self.full_columns_descriptions[(schema_name, table_name)] = {}
@@ -68,8 +68,8 @@ class _StructuredTypeInfoManager:
 
         schema = schema if schema else self.default_schema
 
-        table_schema = self.name_utils.denormalize_name(schema)
-        table_name = self.name_utils.denormalize_name(table_name)
+        table_schema = self.name_utils.quote_for_sql(schema)
+        table_name = self.name_utils.quote_for_sql(table_name)
         result = self._execute_desc(table_schema, table_name)
         if not result:
             return []
@@ -114,6 +114,15 @@ class _StructuredTypeInfoManager:
                     "cache": None,
                 }
             is_identity = identity is not None
+
+            # Normalize BINARY type length for consistency with _get_schema_columns().
+            # DESC TABLE returns the type with the length attribute, but
+            # information_schema.columns does not (character_maximum_length is None).
+            # Setting length to None ensures both code paths return identical column
+            # metadata, which is important when cache_column_metadata toggles between
+            # the two approaches.
+            if isinstance(type_instance, sqltypes.BINARY):
+                type_instance.length = None
 
             ans.append(
                 {

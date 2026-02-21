@@ -603,12 +603,12 @@ def test_structured_type_not_supported_in_table_columns_error(
 
 
 @patch.object(_StructuredTypeInfoManager, "_execute_desc")
-@patch.object(_NameUtils, "denormalize_name")
+@patch.object(_NameUtils, "quote_for_sql")
 def test_structured_type_on_dropped_table(
-    mocked_execute_desc_method, mocked_denormalize_name_method
+    mocked_quote_for_sql_method, mocked_execute_desc_method
 ):
     mocked_execute_desc_method.return_value = None
-    mocked_denormalize_name_method.side_effect = lambda self, v: v
+    mocked_quote_for_sql_method.side_effect = lambda v: v
     structured_type_info = _StructuredTypeInfoManager(
         None, _NameUtils(None), "mySchema"
     )
@@ -619,9 +619,9 @@ def test_structured_type_on_dropped_table(
 
 
 @patch.object(_StructuredTypeInfoManager, "_execute_desc")
-@patch.object(_NameUtils, "denormalize_name")
+@patch.object(_NameUtils, "quote_for_sql")
 def test_structured_type_on_table_with_map(
-    mocked_execute_desc_method, mocked_denormalize_name_method
+    mocked_quote_for_sql_method, mocked_execute_desc_method
 ):
     mocked_execute_desc_method.return_value = [
         [
@@ -637,7 +637,7 @@ def test_structured_type_on_table_with_map(
             "MapColumn",
         ]
     ]
-    mocked_denormalize_name_method.side_effect = lambda self, v: v
+    mocked_quote_for_sql_method.side_effect = lambda v: v
     structured_type_info = _StructuredTypeInfoManager(
         None, _NameUtils(None), "mySchema"
     )

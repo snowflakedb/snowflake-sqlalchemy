@@ -6,7 +6,6 @@ from sqlalchemy.sql.elements import quoted_name
 
 
 class _NameUtils:
-
     def __init__(self, identifier_preparer: IdentifierPreparer) -> None:
         self.identifier_preparer = identifier_preparer
 
@@ -14,7 +13,7 @@ class _NameUtils:
         if name is None:
             return None
         if name == "":
-            return ""
+            return quoted_name(name, quote=True)
         if name.upper() == name and not self.identifier_preparer._requires_quotes(
             name.lower()
         ):
@@ -34,3 +33,12 @@ class _NameUtils:
         ):
             name = name.upper()
         return name
+
+    def quote_for_sql(self, name):
+        """Denormalize then conditionally quote a name for use in raw SQL."""
+        denormalized = self.denormalize_name(name)
+        if denormalized is None:
+            return None
+        if denormalized == "":
+            return '""'
+        return self.identifier_preparer.quote(denormalized)
