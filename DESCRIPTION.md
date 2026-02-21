@@ -9,6 +9,8 @@ Source code is also available at:
 
 # Unreleased Notes
 
+- Add bare bones support for SQLA2.1
+
 # Release Notes
 
 

@@ -9,6 +9,7 @@ import string
 import warnings
 from typing import Any, List
 
+from sqlalchemy import __version__ as _SA_VERSION
 from sqlalchemy import exc as sa_exc
 from sqlalchemy import inspect, sql
 from sqlalchemy import util as sa_util
@@ -20,10 +21,21 @@ from sqlalchemy.sql import compiler, expression, functions, sqltypes
 from sqlalchemy.sql.base import CompileState
 from sqlalchemy.sql.elements import BindParameter, quoted_name
 from sqlalchemy.sql.expression import Executable
-from sqlalchemy.sql.selectable import Lateral, SelectState
+from sqlalchemy.sql.selectable import Join, Lateral, SelectState
 
 from snowflake.sqlalchemy._constants import DIALECT_NAME
 from snowflake.sqlalchemy.custom_commands import CloudStorageLocation, ExternalStage
+
+IS_VERSION_21 = tuple(int(v) for v in _SA_VERSION.split(".")[:2]) >= (2, 1)
+
+if IS_VERSION_21:
+    from sqlalchemy.orm.context import (
+        _ORMSelectCompileState as _SnowflakeORMSelectCompileStateBase,
+    )
+else:
+    from sqlalchemy.orm.context import (
+        ORMSelectCompileState as _SnowflakeORMSelectCompileStateBase,
+    )
 
 from ._constants import NOT_NULL
 from .exc import (
@@ -140,6 +152,7 @@ class SnowflakeSelectState(SelectState):
         if not self._is_snowflake:
             return super()._setup_joins(args, raw_columns)
         for right, onclause, left, flags in args:
+            explicit_left = left
             isouter = flags["isouter"]
             full = flags["full"]
 
@@ -157,6 +170,17 @@ class SnowflakeSelectState(SelectState):
                 # splice into an existing element in the
                 # self._from_obj list
                 left_clause = self.from_clauses[replace_from_obj_index]
+
+                # SQLA 2.1+: auto-derive ON clause from the original explicit
+                # left when one was given but no onclause was provided.
+                # For Snowflake BCR bcr-1057, lateral joins have no FK
+                # relationships so we allow onclause to remain None.
+                if IS_VERSION_21 and explicit_left is not None and onclause is None:
+                    try:
+                        onclause = Join._join_condition(explicit_left, right)
+                    except sa_exc.NoForeignKeysError:
+                        if not isinstance(right, Lateral):
+                            raise
 
                 self.from_clauses = (
                     self.from_clauses[:replace_from_obj_index]
@@ -240,7 +264,7 @@ class SnowflakeSelectState(SelectState):
 
 # handle Snowflake BCR bcr-1057
 @sql.base.CompileState.plugin_for("orm", "select")
-class SnowflakeORMSelectCompileState(context.ORMSelectCompileState):
+class SnowflakeORMSelectCompileState(_SnowflakeORMSelectCompileStateBase):
     # Set by _init_global_attributes (always called on SA 2.x).
     _is_snowflake = False
 
@@ -364,6 +388,8 @@ class SnowflakeORMSelectCompileState(context.ORMSelectCompileState):
                 entities_collection, left, right, onclause, prop, outerjoin, full
             )
 
+        explicit_left = left
+
         if left is None:
             # left not given (e.g. no relationship object/name specified)
             # figure out the best "left" side based on our existing froms /
@@ -409,6 +435,17 @@ class SnowflakeORMSelectCompileState(context.ORMSelectCompileState):
             # splice into an existing element in the
             # self._from_obj list
             left_clause = self.from_clauses[replace_from_obj_index]
+
+            # SQLA 2.1+: auto-derive ON clause from the original explicit
+            # left when one was given but no onclause was provided.
+            # For Snowflake BCR bcr-1057, lateral joins have no FK
+            # relationships so we allow onclause to remain None.
+            if IS_VERSION_21 and explicit_left is not None and onclause is None:
+                try:
+                    onclause = _Snowflake_ORMJoin._join_condition(explicit_left, right)
+                except sa_exc.NoForeignKeysError:
+                    if not isinstance(right, Lateral):
+                        raise
 
             self.from_clauses = (
                 self.from_clauses[:replace_from_obj_index]
