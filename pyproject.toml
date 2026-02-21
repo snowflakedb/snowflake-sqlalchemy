@@ -91,10 +91,13 @@ exclude = ["/.github"]
 packages = ["src/snowflake"]
 
 [tool.hatch.envs.default]
-extra-dependencies = ["SQLAlchemy>=2.0.44"]
+builder = true
+extra-dependencies = ["SQLAlchemy>=2.1.0rc2"]
 features = ["development", "pandas"]
 python = "3.11"
 installer = "uv"
+pip-pre = true
+
 
 [tool.hatch.envs.default.env-vars]
 COVERAGE_FILE = "coverage.xml"
