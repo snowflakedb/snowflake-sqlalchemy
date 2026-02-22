@@ -216,13 +216,13 @@ class _Snowflake_ORMJoin(sa_orm_util_ORMJoin):
         self._left_memo = _left_memo
         self._right_memo = _right_memo
 
-        # legacy, for string attr name ON clause.  if that's removed
-        # then the "_joined_from_info" concept can go
-        left_orm_info = getattr(left, "_joined_from_info", left_info)
-        self._joined_from_info = right_info
-        if isinstance(onclause, compat.string_types):
-            onclause = getattr(left_orm_info.entity, onclause)
-        # ####
+        # legacy, for string attr name ON clause.  Removed in SQLA 2.1
+        # where the "_joined_from_info" concept no longer exists.
+        if not compat.IS_VERSION_21:
+            left_orm_info = getattr(left, "_joined_from_info", left_info)
+            self._joined_from_info = right_info
+            if isinstance(onclause, compat.string_types):
+                onclause = getattr(left_orm_info.entity, onclause)
 
         if isinstance(onclause, attributes.QueryableAttribute):
             on_selectable = onclause.comparator._source_selectable()
@@ -288,7 +288,12 @@ class _Snowflake_ORMJoin(sa_orm_util_ORMJoin):
                     {"parententity": parententity}
                 )
 
-        augment_onclause = onclause is None and _extra_criteria
+        # SQLA 2.1 changed the augment_onclause logic: it now augments when
+        # extra_criteria exists and no prop was given (bug fix from upstream).
+        if compat.IS_VERSION_21:
+            augment_onclause = bool(_extra_criteria) and not prop
+        else:
+            augment_onclause = onclause is None and _extra_criteria
         # handle Snowflake BCR bcr-1057
         _Snowflake_Selectable_Join.__init__(self, left, right, onclause, isouter, full)
 
