@@ -35,13 +35,25 @@ class TestUnitDatetimeAndTimestampWithTimezone:
     def test_timestamp_with_timezone_compiles_to_timestamp_tz(self):
         assert compile_type(TIMESTAMP(timezone=True)) == "TIMESTAMP_TZ"
 
-    def test_custom_datetime_preserves_timezone_flag(self):
-        custom_datetime = DateTime(timezone=True).adapt(_CUSTOM_DateTime)
-        assert getattr(custom_datetime, "timezone", None) is True
+    def test_custom_datetime_constructor_timezone_true(self):
+        custom_datetime = _CUSTOM_DateTime(timezone=True)
+        assert custom_datetime.timezone is True
 
-    def test_custom_datetime_without_timezone_flag(self):
+    def test_custom_datetime_constructor_timezone_false(self):
+        custom_datetime = _CUSTOM_DateTime(timezone=False)
+        assert custom_datetime.timezone is False
+
+    def test_custom_datetime_constructor_defaults_to_no_timezone(self):
+        custom_datetime = _CUSTOM_DateTime()
+        assert custom_datetime.timezone is False
+
+    def test_custom_datetime_adapt_preserves_timezone_flag(self):
+        custom_datetime = DateTime(timezone=True).adapt(_CUSTOM_DateTime)
+        assert custom_datetime.timezone is True
+
+    def test_custom_datetime_adapt_without_timezone_flag(self):
         custom_datetime = DateTime(timezone=False).adapt(_CUSTOM_DateTime)
-        assert getattr(custom_datetime, "timezone", None) is False
+        assert custom_datetime.timezone is False
 
     def test_create_table_datetime_timezone_true_ddl(self):
         metadata = MetaData()

@@ -252,6 +252,9 @@ class _CUSTOM_Date(SnowflakeType, sqltypes.Date):
 
 
 class _CUSTOM_DateTime(SnowflakeType, sqltypes.DateTime):
+    def __init__(self, timezone=False):
+        super().__init__(timezone=timezone)
+
     def literal_processor(self, dialect):
         def process(value):
             if value is not None:
