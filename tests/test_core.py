@@ -1766,6 +1766,50 @@ def test_empty_comments(engine_testaccount):
             conn.execute(text(f"drop table public.{table_name}"))
 
 
+def test_single_table_reflection_uses_optimized_path(engine_testaccount):
+    """
+    Verify that single-table reflection uses table-specific queries (DESC TABLE)
+    instead of querying the entire schema via information_schema.
+
+    This test ensures the optimization from _should_use_table_specific_query
+    is working correctly, preventing slow schema-wide queries for single tables.
+    """
+    table_name = random_string(5, choices=string.ascii_uppercase)
+    with engine_testaccount.connect() as conn:
+        try:
+            # Create a test table
+            conn.execute(
+                text(f'create table public.{table_name} ("col1" text, "col2" integer);')
+            )
+
+            # Create inspector (without info_cache, typical single-table scenario)
+            inspector = inspect(engine_testaccount)
+
+            # Mock _query_all_columns_info to detect if it's called
+            # If optimization works, this should NOT be called
+
+            with patch.object(
+                inspector.dialect,
+                "_query_all_columns_info",
+                side_effect=AssertionError(
+                    "Should not call schema-wide query for single table!"
+                ),
+            ) as mock_query:
+                # This should use table-specific DESC TABLE, not schema-wide query
+                columns = inspector.get_columns(table_name, schema="PUBLIC")
+
+                # Verify we got the columns
+                assert len(columns) == 2
+                assert columns[0]["name"].lower() == "col1"
+                assert columns[1]["name"].lower() == "col2"
+
+                # Verify the schema-wide query was NOT called
+                mock_query.assert_not_called()
+
+        finally:
+            conn.execute(text(f"drop table if exists public.{table_name}"))
+
+
 def test_column_type_schema(engine_testaccount):
     with engine_testaccount.connect() as conn:
         table_name = random_string(5)
