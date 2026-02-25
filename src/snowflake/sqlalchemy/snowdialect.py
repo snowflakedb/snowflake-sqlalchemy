@@ -981,7 +981,8 @@ class SnowflakeDialect(default.DefaultDialect):
 
         Returns True when:
         1. cache_column_metadata=False (explicit user preference)
-        2. Schema-wide columns are not yet cached AND table list is not cached
+        2. No info_cache is available (typical for single-table reflection scenarios)
+        3. Schema-wide columns are not yet cached AND table list is not cached
            (indicates probable single-table reflection)
 
         Returns False when:
@@ -996,7 +997,9 @@ class SnowflakeDialect(default.DefaultDialect):
         # Check if we're in the middle of a multi-table reflection
         info_cache = kw.get("info_cache")
         if info_cache is None:
-            return False  # No cache, use default schema-wide behavior
+            # No cache available - default to table-specific queries for performance
+            # This is typically the case for simple single-table reflection scenarios
+            return True
 
         # Check if schema-wide columns are already cached - if so, use them!
         # The cache key format used by @reflection.cache is (method, schema_name)
