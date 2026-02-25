@@ -1086,7 +1086,8 @@ def test_column_metadata(engine_testaccount):
     inspector.reflect_table(t, None)
     assert str(t.columns["id"].type) == "DECIMAL(38, 3)"
     assert str(t.columns["string_with_len"].type) == "VARCHAR(100)"
-    assert str(t.columns["binary_data"].type) == "BINARY"
+    # DESC TABLE returns full type specification including size
+    assert str(t.columns["binary_data"].type) in ("BINARY", "BINARY(8388608)")
     assert str(t.columns["real_data"].type) == "FLOAT"
 
 
@@ -1096,34 +1097,40 @@ def test_many_table_column_metadta(db_parameters):
 
     cache_column_metadata=True will cache all column metadata for all tables
     in the schema.
+
+    Optimized: Uses TRANSIENT tables with autoincrement (no explicit sequences)
+    and fewer tables to significantly reduce test duration while maintaining
+    coverage of multi-table metadata caching.
     """
     url = url_factory(cache_column_metadata=True)
     engine = get_engine(url)
 
     RE_SUFFIX_NUM = re.compile(r".*(\d+)$")
     metadata = MetaData()
-    total_objects = 10
+    total_objects = (
+        5  # Reduced from 10 - still validates caching across multiple tables
+    )
     for idx in range(total_objects):
         Table(
             "mainusers" + str(idx),
             metadata,
-            Column("id" + str(idx), Integer, Sequence("user_id_seq"), primary_key=True),
+            Column("id" + str(idx), Integer, primary_key=True, autoincrement=True),
             Column("name" + str(idx), String),
             Column("fullname", String),
             Column("password", String),
+            prefixes=["TRANSIENT"],
         )
         Table(
             "mainaddresses" + str(idx),
             metadata,
-            Column(
-                "id" + str(idx), Integer, Sequence("address_id_seq"), primary_key=True
-            ),
+            Column("id" + str(idx), Integer, primary_key=True, autoincrement=True),
             Column(
                 "user_id" + str(idx),
                 None,
                 ForeignKey("mainusers" + str(idx) + ".id" + str(idx)),
             ),
             Column("email_address" + str(idx), String, nullable=False),
+            prefixes=["TRANSIENT"],
         )
     metadata.create_all(engine)
 
@@ -1763,6 +1770,50 @@ def test_empty_comments(engine_testaccount):
             assert all([c["comment"] is None for c in columns])
         finally:
             conn.execute(text(f"drop table public.{table_name}"))
+
+
+def test_single_table_reflection_uses_optimized_path(engine_testaccount):
+    """
+    Verify that single-table reflection uses table-specific queries (DESC TABLE)
+    instead of querying the entire schema via information_schema.
+
+    This test ensures the optimization from _should_use_table_specific_query
+    is working correctly, preventing slow schema-wide queries for single tables.
+    """
+    table_name = random_string(5, choices=string.ascii_uppercase)
+    with engine_testaccount.connect() as conn:
+        try:
+            # Create a test table
+            conn.execute(
+                text(f'create table public.{table_name} ("col1" text, "col2" integer);')
+            )
+
+            # Create inspector (without info_cache, typical single-table scenario)
+            inspector = inspect(engine_testaccount)
+
+            # Mock _query_all_columns_info to detect if it's called
+            # If optimization works, this should NOT be called
+
+            with patch.object(
+                inspector.dialect,
+                "_query_all_columns_info",
+                side_effect=AssertionError(
+                    "Should not call schema-wide query for single table!"
+                ),
+            ) as mock_query:
+                # This should use table-specific DESC TABLE, not schema-wide query
+                columns = inspector.get_columns(table_name, schema="PUBLIC")
+
+                # Verify we got the columns
+                assert len(columns) == 2
+                assert columns[0]["name"].lower() == "col1"
+                assert columns[1]["name"].lower() == "col2"
+
+                # Verify the schema-wide query was NOT called
+                mock_query.assert_not_called()
+
+        finally:
+            conn.execute(text(f"drop table if exists public.{table_name}"))
 
 
 def test_column_type_schema(engine_testaccount):
