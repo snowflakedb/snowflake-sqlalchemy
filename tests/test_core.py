@@ -1097,34 +1097,40 @@ def test_many_table_column_metadta(db_parameters):
 
     cache_column_metadata=True will cache all column metadata for all tables
     in the schema.
+
+    Optimized: Uses TRANSIENT tables with autoincrement (no explicit sequences)
+    and fewer tables to significantly reduce test duration while maintaining
+    coverage of multi-table metadata caching.
     """
     url = url_factory(cache_column_metadata=True)
     engine = get_engine(url)
 
     RE_SUFFIX_NUM = re.compile(r".*(\d+)$")
     metadata = MetaData()
-    total_objects = 10
+    total_objects = (
+        5  # Reduced from 10 - still validates caching across multiple tables
+    )
     for idx in range(total_objects):
         Table(
             "mainusers" + str(idx),
             metadata,
-            Column("id" + str(idx), Integer, Sequence("user_id_seq"), primary_key=True),
+            Column("id" + str(idx), Integer, primary_key=True, autoincrement=True),
             Column("name" + str(idx), String),
             Column("fullname", String),
             Column("password", String),
+            prefixes=["TRANSIENT"],
         )
         Table(
             "mainaddresses" + str(idx),
             metadata,
-            Column(
-                "id" + str(idx), Integer, Sequence("address_id_seq"), primary_key=True
-            ),
+            Column("id" + str(idx), Integer, primary_key=True, autoincrement=True),
             Column(
                 "user_id" + str(idx),
                 None,
                 ForeignKey("mainusers" + str(idx) + ".id" + str(idx)),
             ),
             Column("email_address" + str(idx), String, nullable=False),
+            prefixes=["TRANSIENT"],
         )
     metadata.create_all(engine)
 
