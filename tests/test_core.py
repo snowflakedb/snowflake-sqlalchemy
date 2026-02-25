@@ -1086,7 +1086,8 @@ def test_column_metadata(engine_testaccount):
     inspector.reflect_table(t, None)
     assert str(t.columns["id"].type) == "DECIMAL(38, 3)"
     assert str(t.columns["string_with_len"].type) == "VARCHAR(100)"
-    assert str(t.columns["binary_data"].type) == "BINARY"
+    # DESC TABLE returns full type specification including size
+    assert str(t.columns["binary_data"].type) in ("BINARY", "BINARY(8388608)")
     assert str(t.columns["real_data"].type) == "FLOAT"
 
 
