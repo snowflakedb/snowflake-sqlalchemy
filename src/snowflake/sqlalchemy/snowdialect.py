@@ -373,6 +373,37 @@ class SnowflakeDialect(default.DefaultDialect):
         # check constraints are not supported by Snowflake
         return []
 
+    def _get_table_primary_keys(self, connection, table_name, schema, **kw):
+        """
+        Get primary key constraint for a specific table using table-specific query.
+        Used when cache_column_metadata=False for optimized single-table reflection.
+        """
+        full_name = self._denormalize_quote_join(schema, table_name)
+        try:
+            result = connection.execute(
+                text(
+                    f"SHOW /* sqlalchemy:_get_table_primary_keys */ PRIMARY KEYS IN TABLE {full_name}"
+                )
+            )
+            constrained_columns = []
+            constraint_name = None
+            for row in result:
+                if constraint_name is None:
+                    constraint_name = self.normalize_name(
+                        row._mapping["constraint_name"]
+                    )
+                constrained_columns.append(
+                    self.normalize_name(row._mapping["column_name"])
+                )
+            if constraint_name:
+                return {
+                    "constrained_columns": constrained_columns,
+                    "name": constraint_name,
+                }
+            return {"constrained_columns": [], "name": None}
+        except sa_exc.DBAPIError:
+            return {"constrained_columns": [], "name": None}
+
     @reflection.cache
     def _get_schema_primary_keys(self, connection, schema, **kw):
         result = connection.execute(
@@ -395,10 +426,46 @@ class SnowflakeDialect(default.DefaultDialect):
 
     def get_pk_constraint(self, connection, table_name, schema=None, **kw):
         schema = schema or self.default_schema_name
+
+        # Use smart detection to decide between table-specific vs schema-wide query
+        if self._should_use_table_specific_query(schema, **kw):
+            return self._get_table_primary_keys(connection, table_name, schema, **kw)
+
+        # Use schema-wide cached query (optimal for full schema reflection)
         full_schema_name = self._get_full_schema_name(connection, schema, **kw)
         return self._get_schema_primary_keys(
             connection, self.denormalize_name(full_schema_name), **kw
         ).get(table_name, {"constrained_columns": [], "name": None})
+
+    def _get_table_unique_constraints(self, connection, table_name, schema, **kw):
+        """
+        Get unique constraints for a specific table using table-specific query.
+        Used when cache_column_metadata=False for optimized single-table reflection.
+        """
+        full_name = self._denormalize_quote_join(schema, table_name)
+        try:
+            result = connection.execute(
+                text(
+                    f"SHOW /* sqlalchemy:_get_table_unique_constraints */ UNIQUE KEYS IN TABLE {full_name}"
+                )
+            )
+            unique_constraints = {}
+            for row in result:
+                name = self.normalize_name(row._mapping["constraint_name"])
+                if name not in unique_constraints:
+                    unique_constraints[name] = {
+                        "column_names": [
+                            self.normalize_name(row._mapping["column_name"])
+                        ],
+                        "name": name,
+                    }
+                else:
+                    unique_constraints[name]["column_names"].append(
+                        self.normalize_name(row._mapping["column_name"])
+                    )
+            return list(unique_constraints.values())
+        except sa_exc.DBAPIError:
+            return []
 
     @reflection.cache
     def _get_schema_unique_constraints(self, connection, schema, **kw):
@@ -429,10 +496,77 @@ class SnowflakeDialect(default.DefaultDialect):
 
     def get_unique_constraints(self, connection, table_name, schema, **kw):
         schema = schema or self.default_schema_name
+
+        # Use smart detection to decide between table-specific vs schema-wide query
+        if self._should_use_table_specific_query(schema, **kw):
+            return self._get_table_unique_constraints(
+                connection, table_name, schema, **kw
+            )
+
+        # Use schema-wide cached query (optimal for full schema reflection)
         full_schema_name = self._get_full_schema_name(connection, schema, **kw)
         return self._get_schema_unique_constraints(
             connection, self.denormalize_name(full_schema_name), **kw
         ).get(table_name, [])
+
+    def _get_table_foreign_keys(self, connection, table_name, schema, **kw):
+        """
+        Get foreign keys for a specific table using table-specific query.
+        Used when cache_column_metadata=False or in single-table reflection.
+        """
+        full_name = self._denormalize_quote_join(schema, table_name)
+        _, current_schema = self._current_database_schema(connection, **kw)
+        try:
+            result = connection.execute(
+                text(
+                    f"SHOW /* sqlalchemy:_get_table_foreign_keys */ IMPORTED KEYS IN TABLE {full_name}"
+                )
+            )
+            foreign_key_map = {}
+            for row in result:
+                name = self.normalize_name(row._mapping["fk_name"])
+                if name not in foreign_key_map:
+                    referred_schema = self.normalize_name(
+                        row._mapping["pk_schema_name"]
+                    )
+                    foreign_key_map[name] = {
+                        "constrained_columns": [
+                            self.normalize_name(row._mapping["fk_column_name"])
+                        ],
+                        "referred_schema": (
+                            referred_schema
+                            if referred_schema
+                            not in (self.default_schema_name, current_schema)
+                            else None
+                        ),
+                        "referred_table": self.normalize_name(
+                            row._mapping["pk_table_name"]
+                        ),
+                        "referred_columns": [
+                            self.normalize_name(row._mapping["pk_column_name"])
+                        ],
+                        "name": name,
+                    }
+                    options = {}
+                    if self.normalize_name(row._mapping["delete_rule"]) != "NO ACTION":
+                        options["ondelete"] = self.normalize_name(
+                            row._mapping["delete_rule"]
+                        )
+                    if self.normalize_name(row._mapping["update_rule"]) != "NO ACTION":
+                        options["onupdate"] = self.normalize_name(
+                            row._mapping["update_rule"]
+                        )
+                    foreign_key_map[name]["options"] = options
+                else:
+                    foreign_key_map[name]["constrained_columns"].append(
+                        self.normalize_name(row._mapping["fk_column_name"])
+                    )
+                    foreign_key_map[name]["referred_columns"].append(
+                        self.normalize_name(row._mapping["pk_column_name"])
+                    )
+            return list(foreign_key_map.values())
+        except sa_exc.DBAPIError:
+            return []
 
     @reflection.cache
     def _get_schema_foreign_keys(self, connection, schema, **kw):
@@ -501,8 +635,13 @@ class SnowflakeDialect(default.DefaultDialect):
         Gets all foreign keys for a table
         """
         schema = schema or self.default_schema_name
-        full_schema_name = self._get_full_schema_name(connection, schema, **kw)
 
+        # Use smart detection to decide between table-specific vs schema-wide query
+        if self._should_use_table_specific_query(schema, **kw):
+            return self._get_table_foreign_keys(connection, table_name, schema, **kw)
+
+        # Use schema-wide cached query (optimal for full schema reflection)
+        full_schema_name = self._get_full_schema_name(connection, schema, **kw)
         foreign_key_map = self._get_schema_foreign_keys(
             connection, self.denormalize_name(full_schema_name), **kw
         )
@@ -808,6 +947,76 @@ class SnowflakeDialect(default.DefaultDialect):
 
         return columns_by_table
 
+    def _is_safe_for_desc_table(self, table_name):
+        """
+        Check if a table name is safe to use with DESC TABLE command.
+
+        DESC TABLE is more restrictive than information_schema queries.
+        Avoid optimization for table names with problematic characters.
+
+        Args:
+            table_name: The table name to check
+
+        Returns:
+            True if safe for DESC TABLE, False otherwise
+        """
+        # Avoid tables with characters that cause issues in DESC TABLE:
+        # - Parentheses, brackets (require special escaping)
+        # - Leading/trailing spaces
+        # - Very complex quoted names
+        problematic_chars = ["(", ")", "[", "]"]
+
+        if any(char in str(table_name) for char in problematic_chars):
+            return False
+
+        # Avoid names that are just whitespace or have leading/trailing spaces
+        if str(table_name) != str(table_name).strip():
+            return False
+
+        return True
+
+    def _should_use_table_specific_query(self, schema, **kw):
+        """
+        Determine if we should use table-specific queries instead of schema-wide queries.
+
+        Returns True when:
+        1. cache_column_metadata=False (explicit user preference)
+        2. Schema-wide columns are not yet cached AND table list is not cached
+           (indicates probable single-table reflection)
+
+        Returns False when:
+        1. Schema-wide columns are already cached (use the cache!)
+        2. Table names are already cached (indicates multi-table reflection in progress)
+        3. We're doing a full schema reflection (metadata.reflect())
+        """
+        # Explicit opt-out via cache_column_metadata=False
+        if not getattr(self, "_cache_column_metadata", True):
+            return True
+
+        # Check if we're in the middle of a multi-table reflection
+        info_cache = kw.get("info_cache")
+        if info_cache is None:
+            return False  # No cache, use default schema-wide behavior
+
+        # Check if schema-wide columns are already cached - if so, use them!
+        # The cache key format used by @reflection.cache is (method, schema_name)
+        schema_columns_key = (self._get_schema_columns.__name__, (schema,))
+        if schema_columns_key in info_cache:
+            return False  # Already have schema-wide data, use it
+
+        # Check if table names have been fetched (indicates metadata.reflect() in progress)
+        tables_info_key = (self._get_schema_tables_info.__name__, (schema,))
+        if tables_info_key in info_cache:
+            return False  # Multi-table reflection likely in progress
+
+        # Don't use table-specific queries for full schema reflection
+        # Check if we have _reflect_info which indicates metadata.reflect() is happening
+        if "_reflect_info" in kw:
+            return False  # Full schema reflection in progress
+
+        # Cache is fresh and no table list yet - probably single-table reflection
+        return True
+
     def get_columns(self, connection, table_name, schema=None, **kw):
         """
         Gets all column info given the table info
@@ -816,6 +1025,22 @@ class SnowflakeDialect(default.DefaultDialect):
         if not schema:
             _, schema = self._current_database_schema(connection, **kw)
 
+        # Optimization: For single-table reflection, use table-specific query
+        # Skip optimization for edge cases (empty strings, special characters in DESC TABLE)
+        # DESC TABLE is more restrictive than information_schema queries for certain characters
+        if (
+            self._should_use_table_specific_query(schema, **kw)
+            and table_name
+            and self._is_safe_for_desc_table(table_name)
+        ):
+            # Build fully-qualified table name with proper quoting
+            full_table_name = self._denormalize_quote_join(schema, table_name)
+            column_info_manager = _StructuredTypeInfoManager(
+                connection, self.name_utils, self.default_schema_name
+            )
+            return column_info_manager.get_table_columns_by_full_name(full_table_name)
+
+        # Use schema-wide cached query (optimal for multi-table reflection)
         schema_columns = self._get_schema_columns(connection, schema, **kw)
         if schema_columns is None:
             column_info_manager = _StructuredTypeInfoManager(
