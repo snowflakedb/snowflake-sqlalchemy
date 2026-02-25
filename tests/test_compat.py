@@ -28,10 +28,12 @@ def init_test_schema():
     ],
 )
 def test_is_version_20(version, expected):
-    with pytest.MonkeyPatch.context() as mp:
-        mp.setattr("sqlalchemy.__version__", version)
+    try:
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr("sqlalchemy.__version__", version)
+            importlib.reload(compat_module)
+            assert compat_module.IS_VERSION_20 == expected
+    finally:
+        # Context manager has exited and reverted sqlalchemy.__version__; reload so
+        # IS_VERSION_20 reflects the real version for later tests.
         importlib.reload(compat_module)
-        assert compat_module.IS_VERSION_20 == expected
-    # Context manager reverted sqlalchemy.__version__; reload so
-    # IS_VERSION_20 reflects the real version for later tests.
-    importlib.reload(compat_module)
