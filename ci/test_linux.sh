@@ -28,5 +28,5 @@ for PYTHON_VERSION in ${PYTHON_VERSIONS}; do
     echo "[Info] Skipping pandas tests for Python ${PYTHON_VERSION} (pyarrow not available)"
   fi
   echo "[Info] Running tox for ${TEST_ENVLIST}"
-  python3 -m tox -p auto -e ${TEST_ENVLIST} --installpkg ${SQLALCHEMY_WHL}
+  python3 -m tox -p auto --parallel-no-spinner -e ${TEST_ENVLIST} --installpkg ${SQLALCHEMY_WHL}
 done
