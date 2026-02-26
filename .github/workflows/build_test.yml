@@ -33,7 +33,7 @@ jobs:
       - name: Upgrade and install tools
         run: |
           python -m pip install -U uv
-          python -m uv pip install -U hatch
+          python -m uv pip install -U 'virtualenv<21.0' hatch
           python -m hatch env create default
       - name: Set PY
         run: echo "PY=$(hatch run gh-cache-sum)" >> $GITHUB_ENV
@@ -67,7 +67,7 @@ jobs:
       - name: Upgrade and install tools
         run: |
           python -m pip install -U uv
-          python -m uv pip install -U hatch
+          python -m uv pip install -U 'virtualenv<21.0' hatch
       - name: Build package
         run: |
           python -m hatch -e ${{ matrix.hatch-env }} build --clean
@@ -97,7 +97,7 @@ jobs:
       - name: Upgrade pip and prepare environment
         run: |
           python -m pip install -U uv
-          python -m uv pip install -U hatch
+          python -m uv pip install -U 'virtualenv<21.0' hatch
           python -m hatch env create ${{ matrix.hatch-env }}
       - name: Setup parameters file
         shell: bash
@@ -149,7 +149,7 @@ jobs:
       - name: Upgrade pip and install hatch
         run: |
           python -m pip install -U uv
-          python -m uv pip install -U hatch
+          python -m uv pip install -U 'virtualenv<21.0' hatch
           python -m hatch env create ${{ matrix.hatch-env }}
       - name: Setup parameters file
         shell: bash
@@ -206,7 +206,7 @@ jobs:
       - name: Upgrade pip and install hatch
         run: |
           python -m pip install -U uv
-          python -m uv pip install -U hatch
+          python -m uv pip install -U 'virtualenv<21.0' hatch
           python -m hatch env create default
       - name: Run test for AWS
         run: hatch run sa14:test-dialect-aws
@@ -240,7 +240,7 @@ jobs:
       - name: Upgrade pip and install hatch
         run: |
           python -m pip install -U uv
-          python -m uv pip install -U hatch
+          python -m uv pip install -U 'virtualenv<21.0' hatch
           python -m hatch env create default
       - name: Setup parameters file
         shell: bash
@@ -280,7 +280,7 @@ jobs:
       - name: Prepare environment
         run: |
           python -m pip install -U uv
-          python -m uv pip install -U hatch
+          python -m uv pip install -U 'virtualenv<21.0' hatch
           hatch env create default
       - uses: actions/checkout@v4
         with:
