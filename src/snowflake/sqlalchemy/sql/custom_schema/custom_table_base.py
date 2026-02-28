@@ -4,6 +4,7 @@
 import typing
 from typing import Any, List
 
+from sqlalchemy import Sequence
 from sqlalchemy.sql.schema import MetaData, SchemaItem, Table
 
 from ..._constants import DIALECT_NAME
@@ -51,7 +52,27 @@ class CustomTableBase(Table):
             super().__init__(name, metadata, *args, **kw)
 
         if not kw.get("autoload_with", False):
+            self._attach_implicit_sequence()
             self._validate_table()
+
+    def _attach_implicit_sequence(self):
+        """Attach an implicit Sequence to the autoincrement column if needed.
+
+        Snowflake does not support INSERT ... RETURNING, so the ORM cannot
+        retrieve auto-generated primary key values after INSERT. By attaching
+        a Sequence, SQLAlchemy's fire_sequence mechanism pre-fetches the next
+        ID before each INSERT, allowing the ORM to work transparently.
+        """
+        auto_col = self._autoincrement_column
+        if (
+            auto_col is not None
+            and auto_col.default is None
+            and auto_col.identity is None
+            and auto_col.server_default is None
+        ):
+            seq_name = f"{self.name}_{auto_col.name}_seq"
+            seq = Sequence(seq_name, schema=self.schema)
+            auto_col._init_items(seq)
 
     def _validate_table(self):
         exceptions: List[Exception] = []
