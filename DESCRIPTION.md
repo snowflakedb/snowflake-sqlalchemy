@@ -24,6 +24,7 @@ Source code is also available at:
 - Fix SQLAlchemy version parsing (SNOW-3066571)
 - Document support for session parameters (like [QUERY_TAG](https://docs.snowflake.com/en/sql-reference/parameters#query-tag)), references: [#644](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/495)
 - Support timezone in timestamp and datetime types ([#199](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/199))
+- Introduce composite key ordering, fixes [#450](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/450)
 
 # Release Notes
 
