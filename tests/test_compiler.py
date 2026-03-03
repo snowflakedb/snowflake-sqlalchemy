@@ -2,13 +2,15 @@
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
 
+from datetime import datetime
+
 import pytest
-from sqlalchemy import Integer, String, and_, func, insert, select
+from sqlalchemy import DateTime, Integer, String, and_, func, insert, select
 from sqlalchemy.schema import DropColumnComment, DropTableComment
 from sqlalchemy.sql import column, quoted_name, table
 from sqlalchemy.testing.assertions import AssertsCompiledSQL
 
-from snowflake.sqlalchemy import snowdialect
+from snowflake.sqlalchemy import MergeInto, snowdialect
 from src.snowflake.sqlalchemy.snowdialect import SnowflakeDialect
 
 table1 = table(
@@ -252,3 +254,78 @@ def test_floor_division_operator_with_denominator_expr_force_div_is_floordiv_def
     stmt = col1 // func.sqrt(col2)
     res = stmt.compile(dialect=SnowflakeDialect())
     assert str(res) == "FLOOR(col1 / sqrt(col2))"
+
+
+class TestMergeIntoBindParameters:
+    """Regression tests for issue #536: MergeInto must propagate bind variables."""
+
+    target = table("base_table", column("id", Integer), column("ts", DateTime))
+    source = table("delta_table", column("id", Integer), column("ts", DateTime))
+
+    def _compile(self, merge):
+        dialect = snowdialect.dialect()
+        return merge.compile(dialect=dialect)
+
+    def test_merge_into_on_clause_collects_bind_params(self):
+        ts_value = datetime(2024, 1, 1)
+        merge = MergeInto(
+            target=self.target,
+            source=self.source,
+            on=and_(
+                self.target.c.id == self.source.c.id,
+                self.target.c.ts >= ts_value,
+            ),
+        )
+        merge.when_matched_then_update().values(id=self.source.c.id)
+
+        compiled = self._compile(merge)
+        assert "ts_1" in compiled.params
+        assert compiled.params["ts_1"] == ts_value
+
+    def test_merge_into_on_clause_uses_pyformat_placeholder(self):
+        merge = MergeInto(
+            target=self.target,
+            source=self.source,
+            on=and_(
+                self.target.c.id == self.source.c.id,
+                self.target.c.ts >= datetime(2024, 1, 1),
+            ),
+        )
+        merge.when_matched_then_update().values(id=self.source.c.id)
+
+        compiled = self._compile(merge)
+        assert "%(ts_1)s" in compiled.string
+        assert ":ts_1" not in compiled.string
+
+    def test_merge_into_on_clause_renders_literal_bind(self):
+        ts_value = datetime(2024, 1, 1)
+        merge = MergeInto(
+            target=self.target,
+            source=self.source,
+            on=and_(
+                self.target.c.id == self.source.c.id,
+                self.target.c.ts >= ts_value,
+            ),
+        )
+        merge.when_matched_then_update().values(id=self.source.c.id)
+
+        dialect = snowdialect.dialect()
+        compiled = merge.compile(
+            dialect=dialect, compile_kwargs={"literal_binds": True}
+        )
+        assert "'2024-01-01 00:00:00.000000'" in compiled.string
+        assert "%(ts_1)s" not in compiled.string
+
+    def test_merge_into_where_clause_collects_bind_params(self):
+        merge = MergeInto(
+            target=self.target,
+            source=self.source,
+            on=self.target.c.id == self.source.c.id,
+        )
+        merge.when_matched_then_update().values(id=self.source.c.id).where(
+            self.target.c.ts >= datetime(2024, 6, 15)
+        )
+
+        compiled = self._compile(merge)
+        assert "ts_1" in compiled.params
+        assert compiled.params["ts_1"] == datetime(2024, 6, 15)
