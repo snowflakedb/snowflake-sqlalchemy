@@ -7,13 +7,13 @@ from datetime import datetime
 import pandas as pd
 import pytest
 import pytz
-from sqlalchemy import Column, DateTime, Integer, MetaData, Table, inspect, text
+from sqlalchemy import Column, DateTime, Integer, MetaData, Table, Time, inspect, text
 from sqlalchemy.schema import CreateTable
 from sqlalchemy.sql import select
 from sqlalchemy.types import TIMESTAMP
 
 from snowflake.sqlalchemy import TIMESTAMP_LTZ, TIMESTAMP_NTZ, TIMESTAMP_TZ, snowdialect
-from snowflake.sqlalchemy.custom_types import _CUSTOM_DateTime
+from snowflake.sqlalchemy.custom_types import _CUSTOM_DateTime, _CUSTOM_Time
 from tests.util import compile_type, normalize_ddl, random_string
 
 PST_TZ = "America/Los_Angeles"
@@ -101,6 +101,35 @@ class TestUnitDatetimeAndTimestampWithTimezone:
         assert "ntz TIMESTAMP_NTZ" in ddl
         assert "tz TIMESTAMP_TZ" in ddl
         assert "ltz TIMESTAMP_LTZ" in ddl
+
+
+class TestUnitCustomTime:
+    """Unit tests for _CUSTOM_Time literal processor and timezone-ignored compilation."""
+
+    def test_time_with_timezone_compiles_to_plain_time(self):
+        assert compile_type(Time(timezone=True)) == "TIME"
+
+    def test_time_without_timezone_compiles_to_time(self):
+        assert compile_type(Time(timezone=False)) == "TIME"
+
+    def test_custom_time_literal_processor_formats_microseconds(self):
+        from datetime import time
+
+        custom_time = _CUSTOM_Time()
+        processor = custom_time.literal_processor(dialect=snowdialect.dialect())
+        assert processor(time(14, 30, 59, 123456)) == "'14:30:59.123456'"
+
+    def test_custom_time_literal_processor_zero_microseconds(self):
+        from datetime import time
+
+        custom_time = _CUSTOM_Time()
+        processor = custom_time.literal_processor(dialect=snowdialect.dialect())
+        assert processor(time(8, 0, 0)) == "'08:00:00.000000'"
+
+    def test_custom_time_literal_processor_returns_none_for_none(self):
+        custom_time = _CUSTOM_Time()
+        processor = custom_time.literal_processor(dialect=snowdialect.dialect())
+        assert processor(None) is None
 
 
 class TestIntegrationDatetimeAndTimestampWithTimezone:

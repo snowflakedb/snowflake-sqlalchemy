@@ -265,6 +265,16 @@ class _CUSTOM_DateTime(SnowflakeType, sqltypes.DateTime):
 
 
 class _CUSTOM_Time(SnowflakeType, sqltypes.Time):
+    """Internal Time type for the Snowflake dialect.
+
+    SQLAlchemy's ``Time(timezone=True)`` has no effect in this dialect because
+    Snowflake's TIME data type does not support time zones
+    (https://docs.snowflake.com/en/sql-reference/data-types-datetime#time).
+    The column will always be compiled to plain ``TIME`` regardless of the
+    ``timezone`` flag.  To store timestamps with time-zone information use
+    :class:`TIMESTAMP_TZ` or ``DateTime(timezone=True)`` instead.
+    """
+
     def literal_processor(self, dialect):
         def process(value):
             if value is not None:

@@ -489,6 +489,8 @@ metadata.create_all(engine)
 
 This also applies when using pandas `to_sql()` with timezone-aware datetime columns, which infers `DateTime(timezone=True)` automatically (see [#199](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/199)).
 
+**Note on `Time` and timezones:** SQLAlchemy's `Time` type accepts a `timezone` parameter, but [Snowflake's TIME data type does not support time zones](https://docs.snowflake.com/en/sql-reference/data-types-datetime#time). Using `Time(timezone=True)` will compile to plain `TIME` and the `timezone` flag will have no effect. If you need to store time data with time-zone information, use a timestamp type such as `TIMESTAMP_TZ` or `DateTime(timezone=True)` instead.
+
 ### Cache Column Metadata
 
 SQLAlchemy provides [the runtime inspection API](http://docs.sqlalchemy.org/en/latest/core/inspection.html) to get the runtime information about the various objects. One of the common use case is get all tables and their column metadata in a schema in order to construct a schema catalog. For example, [alembic](http://alembic.zzzcomputing.com/) on top of SQLAlchemy manages database schema migrations. A pseudo code flow is as follows:
