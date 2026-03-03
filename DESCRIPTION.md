@@ -9,23 +9,24 @@ Source code is also available at:
 
 # Unreleased Notes
 
-- Add support for `DECFLOAT` and `VECTOR` data types
-- Add server_version_info support
-- Add support for `ILIKE` in queries
-- Fix `SYSDATE()` rendering
-- Fix and improve schema reflection (SNOW-593204, SNOW-2331576, SNOW-2852779)
-  - Fix crash when reflecting without specifying a schema, caused by `None` arguments in internal schema resolution ([#623](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/623)).
-  - Fix crash when `SHOW TABLES` returns empty string table names, causing `IndexError` during reflection ([#296](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/296)).
-  - Fix incomplete identity column reflection metadata, now includes all fields required by SQLAlchemy 2.0+ (`always`, `cycle`, `order`, etc.).
-  - Introduce shared helper for fully-qualified schema name resolution, replacing inconsistent ad-hoc patterns across reflection methods.
-  - Refactor column reflection internals into dedicated helpers to reduce complexity without changing behavior.
-  - Add `pytest-xdist` parallel test support via per-worker schema provisioning hooks.
-- Bump `pandas` lower bound in `sa14` test environment from `<2.1` to `>=2.1.1,<2.2` to ensure pre-built wheels are available for Python 3.12
-- Fix SQLAlchemy version parsing (SNOW-3066571)
-- Document support for session parameters (like [QUERY_TAG](https://docs.snowflake.com/en/sql-reference/parameters#query-tag)), references: [#644](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/495)
-- Support timezone in timestamp and datetime types ([#199](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/199))
-
 # Release Notes
+
+- v1.9.0 (March 4, 2026)
+  - Add support for `DECFLOAT` and `VECTOR` data types
+  - Add server_version_info support
+  - Add support for `ILIKE` in queries
+  - Fix `SYSDATE()` rendering
+  - Fix and improve schema reflection (SNOW-593204, SNOW-2331576, SNOW-2852779)
+    - Fix crash when reflecting without specifying a schema, caused by `None` arguments in internal schema resolution ([#623](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/623)).
+    - Fix crash when `SHOW TABLES` returns empty string table names, causing `IndexError` during reflection ([#296](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/296)).
+    - Fix incomplete identity column reflection metadata, now includes all fields required by SQLAlchemy 2.0+ (`always`, `cycle`, `order`, etc.).
+    - Introduce shared helper for fully-qualified schema name resolution, replacing inconsistent ad-hoc patterns across reflection methods.
+    - Refactor column reflection internals into dedicated helpers to reduce complexity without changing behavior.
+    - Add `pytest-xdist` parallel test support via per-worker schema provisioning hooks.
+  - Bump `pandas` lower bound in `sa14` test environment from `<2.1` to `>=2.1.1,<2.2` to ensure pre-built wheels are available for Python 3.12
+  - Fix SQLAlchemy version parsing (SNOW-3066571)
+  - Document support for session parameters (like [QUERY_TAG](https://docs.snowflake.com/en/sql-reference/parameters#query-tag)), references: [#644](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/495)
+  - Support timezone in timestamp and datetime types ([#199](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/199))
 
 - v1.8.2 (December 9, 2025)
   - Updated supported max python version to 3.13
