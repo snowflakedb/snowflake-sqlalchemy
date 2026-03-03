@@ -389,8 +389,15 @@ class SnowflakeDialect(default.DefaultDialect):
                     "name": self.normalize_name(row._mapping["constraint_name"]),
                 }
             ans[table_name]["constrained_columns"].append(
-                self.normalize_name(row._mapping["column_name"])
+                (
+                    row._mapping["key_sequence"],
+                    self.normalize_name(row._mapping["column_name"]),
+                )
             )
+        for table_name in ans:
+            ans[table_name]["constrained_columns"] = [
+                col for _, col in sorted(ans[table_name]["constrained_columns"])
+            ]
         return ans
 
     def get_pk_constraint(self, connection, table_name, schema=None, **kw):
@@ -412,17 +419,28 @@ class SnowflakeDialect(default.DefaultDialect):
             name = self.normalize_name(row._mapping["constraint_name"])
             if name not in unique_constraints:
                 unique_constraints[name] = {
-                    "column_names": [self.normalize_name(row._mapping["column_name"])],
+                    "column_names": [
+                        (
+                            row._mapping["key_sequence"],
+                            self.normalize_name(row._mapping["column_name"]),
+                        )
+                    ],
                     "name": name,
                     "table_name": self.normalize_name(row._mapping["table_name"]),
                 }
             else:
                 unique_constraints[name]["column_names"].append(
-                    self.normalize_name(row._mapping["column_name"])
+                    (
+                        row._mapping["key_sequence"],
+                        self.normalize_name(row._mapping["column_name"]),
+                    )
                 )
 
         ans = defaultdict(list)
         for constraint in unique_constraints.values():
+            constraint["column_names"] = [
+                col for _, col in sorted(constraint["column_names"])
+            ]
             table_name = constraint.pop("table_name")
             ans[table_name].append(constraint)
         return ans
@@ -449,7 +467,10 @@ class SnowflakeDialect(default.DefaultDialect):
                 referred_schema = self.normalize_name(row._mapping["pk_schema_name"])
                 foreign_key_map[name] = {
                     "constrained_columns": [
-                        self.normalize_name(row._mapping["fk_column_name"])
+                        (
+                            row._mapping["key_sequence"],
+                            self.normalize_name(row._mapping["fk_column_name"]),
+                        )
                     ],
                     # referred schema should be None in context where it doesn't need to be specified
                     # https://docs.sqlalchemy.org/en/14/core/reflection.html#reflection-schema-qualified-interaction
@@ -463,7 +484,10 @@ class SnowflakeDialect(default.DefaultDialect):
                         row._mapping["pk_table_name"]
                     ),
                     "referred_columns": [
-                        self.normalize_name(row._mapping["pk_column_name"])
+                        (
+                            row._mapping["key_sequence"],
+                            self.normalize_name(row._mapping["pk_column_name"]),
+                        )
                     ],
                     "name": name,
                     "table_name": self.normalize_name(row._mapping["fk_table_name"]),
@@ -480,15 +504,25 @@ class SnowflakeDialect(default.DefaultDialect):
                 foreign_key_map[name]["options"] = options
             else:
                 foreign_key_map[name]["constrained_columns"].append(
-                    self.normalize_name(row._mapping["fk_column_name"])
+                    (
+                        row._mapping["key_sequence"],
+                        self.normalize_name(row._mapping["fk_column_name"]),
+                    )
                 )
                 foreign_key_map[name]["referred_columns"].append(
-                    self.normalize_name(row._mapping["pk_column_name"])
+                    (
+                        row._mapping["key_sequence"],
+                        self.normalize_name(row._mapping["pk_column_name"]),
+                    )
                 )
 
         ans = {}
 
         for _, v in foreign_key_map.items():
+            v["constrained_columns"] = [
+                col for _, col in sorted(v["constrained_columns"])
+            ]
+            v["referred_columns"] = [col for _, col in sorted(v["referred_columns"])]
             if v["table_name"] not in ans:
                 ans[v["table_name"]] = []
             ans[v["table_name"]].append(
