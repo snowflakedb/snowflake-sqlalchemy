@@ -22,5 +22,5 @@ echo "[Info] Building snowflake-sqlalchemy with $PYTHON"
 # Clean up possible build artifacts
 rm -rf build generated_version.py
 export UV_NO_CACHE=true
-${PYTHON} -m pip install uv hatch
-${PYTHON} -m hatch build
+${PYTHON} -m pip install uv
+${PYTHON} -m uv build
