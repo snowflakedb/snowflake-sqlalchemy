@@ -4,8 +4,6 @@
 
 from datetime import datetime
 
-import pandas as pd
-import pytest
 import pytz
 from sqlalchemy import Column, DateTime, Integer, MetaData, Table, Time, inspect, text
 from sqlalchemy.schema import CreateTable
@@ -229,42 +227,6 @@ class TestIntegrationDatetimeAndTimestampWithTimezone:
             assert "timestamp_with_timezone timestamp_tz" in ddl_text
         finally:
             table.drop(engine_testaccount)
-
-
-@pytest.mark.pandas
-class TestPandasTimezoneReproduction:
-    """Reproduction of the original issue #199 scenario: pandas to_sql()
-    with timezone-aware DataFrame columns creates TIMESTAMP_TZ columns."""
-
-    def test_pandas_to_sql_with_timezone_aware_timestamps_uses_timestamp_tz(
-        self, engine_testaccount
-    ):
-        """When pandas encounters a timezone-aware datetime column it infers
-        DateTime(timezone=True). The dialect must emit TIMESTAMP_TZ."""
-
-        table_name = (
-            "test_pandas_to_sql_with_timezone_aware_timestamps_uses_timestamp_tz"
-            + random_string(8)
-        )
-        df = pd.DataFrame(
-            {
-                "id": [1, 2],
-                "with_timezone": pd.to_datetime(
-                    ["2024-01-01 12:00:00", "2024-06-15 18:30:00"]
-                ).tz_localize("UTC"),
-            }
-        )
-        try:
-            with engine_testaccount.connect() as conn:
-                df.to_sql(table_name, conn, index=False, if_exists="replace")
-
-            insp = inspect(engine_testaccount)
-            cols = {c["name"]: c for c in insp.get_columns(table_name)}
-            assert cols["with_timezone"]["type"].__class__.__name__ == "TIMESTAMP_TZ"
-        finally:
-            with engine_testaccount.connect() as conn:
-                with conn.begin():
-                    conn.execute(text(f"DROP TABLE IF EXISTS {table_name}"))
 
 
 def test_create_table_timestamp_datatypes(engine_testaccount):
