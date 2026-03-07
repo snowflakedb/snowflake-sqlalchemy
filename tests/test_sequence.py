@@ -1,7 +1,7 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
-
+import pytest
 from sqlalchemy import (
     Column,
     Identity,
@@ -11,10 +11,15 @@ from sqlalchemy import (
     String,
     Table,
     insert,
+    inspect,
     select,
 )
+from sqlalchemy.orm import Session, declarative_base
+from sqlalchemy.orm.exc import FlushError
 from sqlalchemy.sql import text
 from sqlalchemy.sql.ddl import CreateTable
+
+from snowflake.sqlalchemy import SnowflakeTable
 
 
 def test_table_with_sequence(engine_testaccount, db_parameters):
@@ -137,6 +142,85 @@ def test_table_with_autoincrement(engine_testaccount):
 
     finally:
         metadata.drop_all(engine_testaccount)
+
+
+def test_orm_autoincrement_without_snowflake_table_fails(engine_testaccount):
+    """ORM autoincrement fails with default Table because Snowflake does not
+    support INSERT ... RETURNING and the connector lacks lastrowid support.
+
+    Without SnowflakeTable's implicit Sequence, the ORM cannot retrieve the
+    auto-generated primary key after INSERT, resulting in a FlushError.
+    """
+
+    Base = declarative_base()
+
+    class User(Base):
+        __tablename__ = "test_orm_autoincrement_no_sf_table"
+
+        id = Column(Integer, primary_key=True)
+        name = Column(String)
+
+    try:
+        Base.metadata.create_all(engine_testaccount)
+
+        with Session(engine_testaccount) as session:
+            session.add(User(name="Spongebob"))
+            with pytest.raises(FlushError, match="NULL identity key"):
+                session.commit()
+    finally:
+        Base.metadata.drop_all(engine_testaccount)
+
+
+def test_orm_autoincrement_with_snowflake_table(engine_testaccount):
+    """ORM autoincrement should work with SnowflakeTable without explicit Sequence.
+
+    SnowflakeTable implicitly creates a Sequence for autoincrement columns,
+    allowing the ORM to pre-fetch the next ID via fire_sequence before INSERT.
+    This works around the lack of INSERT ... RETURNING support in Snowflake.
+    """
+
+    Base = declarative_base()
+
+    class User(Base):
+        __tablename__ = "test_orm_autoincrement"
+
+        id = Column(Integer, primary_key=True)
+        name = Column(String)
+
+        @classmethod
+        def __table_cls__(cls, name, metadata, *arg, **kw):
+            return SnowflakeTable(name, metadata, *arg, **kw)
+
+    # Verify implicit Sequence was attached to the id column
+    id_col = User.__table__.c.id
+    assert isinstance(
+        id_col.default, Sequence
+    ), "SnowflakeTable should attach an implicit Sequence to the autoincrement column"
+    assert id_col.default.name == "test_orm_autoincrement_id_seq"
+
+    try:
+        Base.metadata.create_all(engine_testaccount)
+
+        # Verify the sequence actually exists in Snowflake
+        insp = inspect(engine_testaccount)
+        assert insp.has_sequence(
+            "test_orm_autoincrement_id_seq"
+        ), "Implicit sequence should be created in Snowflake"
+
+        with Session(engine_testaccount) as session:
+            u1 = User(name="Spongebob")
+            u2 = User(name="Patrick")
+            session.add_all([u1, u2])
+            session.commit()
+
+            assert u1.id is not None
+            assert u2.id is not None
+            assert u1.id != u2.id
+
+            fetched = session.get(User, u1.id)
+            assert fetched.name == "Spongebob"
+    finally:
+        Base.metadata.drop_all(engine_testaccount)
 
 
 def test_table_with_identity(sql_compiler):
