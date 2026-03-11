@@ -1,11 +1,6 @@
 name: Build and Test
 
 on:
-  push:
-    branches:
-      - main
-    tags:
-      - v*
   pull_request:
     branches:
       - main
@@ -26,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       fork-full-path: ${{ steps.extract-pr-info.outputs.FORK_FULL_PATH }}
-      got-testable-changes: ${{ steps.changes.outputs.run_tests }}
+      got-testable-changes: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.changes.outputs.run_tests }}
     steps:
       - name: Extract PR info and validate head commit SHA
         id: extract-pr-info
@@ -65,6 +60,14 @@ jobs:
           # Export fork repository path for the checkout step
           echo "FORK_FULL_PATH=$FORK_FULL_PATH" >> $GITHUB_OUTPUT
 
+      - name: Checkout Code
+        id: checkout_code
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event_name == 'workflow_dispatch' && steps.extract-pr-info.outputs.FORK_FULL_PATH || github.repository }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.commit-sha || '' }}
+          persist-credentials: false
+
       - name: Filter changed files
         uses: dorny/paths-filter@v3
         id: changes
@@ -80,31 +83,26 @@ jobs:
               - 'pyproject.toml'
 
   lint:
+    needs: verify-test-run
     if: |
       !cancelled() &&
-      (github.event_name == 'workflow_dispatch') ||
       (
-        github.event_name == 'pull_request' &&
-        github.event.pull_request.head.repo.full_name == github.repository &&
-        needs.verify-test-run.outputs.got-testable-changes == 'true'
+        (github.event_name == 'workflow_dispatch') ||
+        (
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          needs.verify-test-run.outputs.got-testable-changes == 'true'
+        )
       )
     name: Check linting
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code (Workflow Dispatch Event)
-        id: checkout_dispatch
-        if: github.event_name == 'workflow_dispatch'
+      - name: Checkout Code
+        id: checkout_code
         uses: actions/checkout@v4
         with:
-          repository: ${{ needs.verify-test-run.outputs.fork-full-path }}
-          ref: ${{ inputs.commit-sha }}
-          persist-credentials: false
-
-      - name: Checkout Code (Pull Request Event)
-        id: checkout_pr
-        if: github.event_name == 'pull_request'
-        uses: actions/checkout@v4
-        with:
+          repository: ${{ github.event_name == 'workflow_dispatch' && needs.verify-test-run.outputs.fork-full-path || github.repository }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.commit-sha || '' }}
           persist-credentials: false
 
       - name: Set up Python
@@ -130,17 +128,19 @@ jobs:
         run: hatch run check
 
   build-install:
+    needs: [verify-test-run, lint]
     if: |
       !cancelled() &&
-      (github.event_name == 'workflow_dispatch') ||
       (
-        github.event_name == 'pull_request' &&
-        github.event.pull_request.head.repo.full_name == github.repository &&
-        needs.verify-test-run.outputs.got-testable-changes == 'true'
+        (github.event_name == 'workflow_dispatch') ||
+        (
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          needs.verify-test-run.outputs.got-testable-changes == 'true'
+        )
       )
     name: Test package build and installation
     runs-on: ubuntu-latest
-    needs: lint
     strategy:
       fail-fast: true
       matrix:
@@ -150,20 +150,12 @@ jobs:
           - hatch-env: sa14
             python-version: "3.12"
     steps:
-      - name: Checkout Code (Workflow Dispatch Event)
-        id: checkout_dispatch
-        if: github.event_name == 'workflow_dispatch'
+      - name: Checkout Code
+        id: checkout_code
         uses: actions/checkout@v4
         with:
-          repository: ${{ needs.verify-test-run.outputs.fork-full-path }}
-          ref: ${{ inputs.commit-sha }}
-          persist-credentials: false
-
-      - name: Checkout Code (Pull Request Event)
-        id: checkout_pr
-        if: github.event_name == 'pull_request'
-        uses: actions/checkout@v4
-        with:
+          repository: ${{ github.event_name == 'workflow_dispatch' && needs.verify-test-run.outputs.fork-full-path || github.repository }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.commit-sha || '' }}
           persist-credentials: false
 
       - name: Setup up Python
@@ -186,16 +178,18 @@ jobs:
           python -c "import snowflake.sqlalchemy; print(snowflake.sqlalchemy.__version__)"
 
   test-dialect:
+    needs: [verify-test-run, lint, build-install]
     if: |
       !cancelled() &&
-      (github.event_name == 'workflow_dispatch') ||
       (
-        github.event_name == 'pull_request' &&
-        github.event.pull_request.head.repo.full_name == github.repository &&
-        needs.verify-test-run.outputs.got-testable-changes == 'true'
+        (github.event_name == 'workflow_dispatch') ||
+        (
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          needs.verify-test-run.outputs.got-testable-changes == 'true'
+        )
       )
     name: Test dialect ${{ matrix.os }}-${{ fromJson('{"default":"3.13","sa14":"3.12"}')[matrix.hatch-env] }}-${{ matrix.cloud-provider }}-${{ matrix.hatch-env }}
-    needs: [lint, build-install]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -204,20 +198,12 @@ jobs:
         cloud-provider: [aws, azure, gcp]
         hatch-env: [default, sa14]
     steps:
-      - name: Checkout Code (Workflow Dispatch Event)
-        id: checkout_dispatch
-        if: github.event_name == 'workflow_dispatch'
+      - name: Checkout Code
+        id: checkout_code
         uses: actions/checkout@v4
         with:
-          repository: ${{ needs.verify-test-run.outputs.fork-full-path }}
-          ref: ${{ inputs.commit-sha }}
-          persist-credentials: false
-
-      - name: Checkout Code (Pull Request Event)
-        id: checkout_pr
-        if: github.event_name == 'pull_request'
-        uses: actions/checkout@v4
-        with:
+          repository: ${{ github.event_name == 'workflow_dispatch' && needs.verify-test-run.outputs.fork-full-path || github.repository }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.commit-sha || '' }}
           persist-credentials: false
 
       - name: Set up Python
@@ -266,16 +252,18 @@ jobs:
             ./coverage.xml
 
   test-dialect-compatibility:
+    needs: [verify-test-run, lint, build-install]
     if: |
       !cancelled() &&
-      (github.event_name == 'workflow_dispatch') ||
       (
-        github.event_name == 'pull_request' &&
-        github.event.pull_request.head.repo.full_name == github.repository &&
-        needs.verify-test-run.outputs.got-testable-changes == 'true'
+        (github.event_name == 'workflow_dispatch') ||
+        (
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          needs.verify-test-run.outputs.got-testable-changes == 'true'
+        )
       )
     name: Test dialect compatibility ${{ matrix.os }}-${{ fromJson('{"default":"3.13","sa14":"3.12"}')[matrix.hatch-env] }}-${{ matrix.cloud-provider }}-${{ matrix.hatch-env }}
-    needs: [lint, build-install]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -284,20 +272,12 @@ jobs:
         cloud-provider: [aws, azure, gcp]
         hatch-env: [default, sa14]
     steps:
-      - name: Checkout Code (Workflow Dispatch Event)
-        id: checkout_dispatch
-        if: github.event_name == 'workflow_dispatch'
+      - name: Checkout Code
+        id: checkout_code
         uses: actions/checkout@v4
         with:
-          repository: ${{ needs.verify-test-run.outputs.fork-full-path }}
-          ref: ${{ inputs.commit-sha }}
-          persist-credentials: false
-
-      - name: Checkout Code (Pull Request Event)
-        id: checkout_pr
-        if: github.event_name == 'pull_request'
-        uses: actions/checkout@v4
-        with:
+          repository: ${{ github.event_name == 'workflow_dispatch' && needs.verify-test-run.outputs.fork-full-path || github.repository }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.commit-sha || '' }}
           persist-credentials: false
 
       - name: Set up Python
@@ -338,16 +318,18 @@ jobs:
             ./coverage.xml
 
   test-dialect-v14:
+    needs: [verify-test-run, lint, build-install]
     if: |
       !cancelled() &&
-      (github.event_name == 'workflow_dispatch') ||
       (
-        github.event_name == 'pull_request' &&
-        github.event.pull_request.head.repo.full_name == github.repository &&
-        needs.verify-test-run.outputs.got-testable-changes == 'true'
+        (github.event_name == 'workflow_dispatch') ||
+        (
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          needs.verify-test-run.outputs.got-testable-changes == 'true'
+        )
       )
     name: Test dialect v14 ${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
-    needs: [lint, build-install]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -356,20 +338,12 @@ jobs:
         python-version: ["3.12"]
         cloud-provider: [aws, azure, gcp]
     steps:
-      - name: Checkout Code (Workflow Dispatch Event)
-        id: checkout_dispatch
-        if: github.event_name == 'workflow_dispatch'
+      - name: Checkout Code
+        id: checkout_code
         uses: actions/checkout@v4
         with:
-          repository: ${{ needs.verify-test-run.outputs.fork-full-path }}
-          ref: ${{ inputs.commit-sha }}
-          persist-credentials: false
-
-      - name: Checkout Code (Pull Request Event)
-        id: checkout_pr
-        if: github.event_name == 'pull_request'
-        uses: actions/checkout@v4
-        with:
+          repository: ${{ github.event_name == 'workflow_dispatch' && needs.verify-test-run.outputs.fork-full-path || github.repository }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.commit-sha || '' }}
           persist-credentials: false
 
       - name: Set up Python
@@ -409,16 +383,18 @@ jobs:
             ./coverage.xml
 
   test-dialect-compatibility-v14:
+    needs: [verify-test-run, lint, build-install]
     if: |
       !cancelled() &&
-      (github.event_name == 'workflow_dispatch') ||
       (
-        github.event_name == 'pull_request' &&
-        github.event.pull_request.head.repo.full_name == github.repository &&
-        needs.verify-test-run.outputs.got-testable-changes == 'true'
+        (github.event_name == 'workflow_dispatch') ||
+        (
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          needs.verify-test-run.outputs.got-testable-changes == 'true'
+        )
       )
     name: Test dialect v14 compatibility ${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
-    needs: lint
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -427,20 +403,12 @@ jobs:
         python-version: ["3.12"]
         cloud-provider: [aws, azure, gcp]
     steps:
-      - name: Checkout Code (Workflow Dispatch Event)
-        id: checkout_dispatch
-        if: github.event_name == 'workflow_dispatch'
+      - name: Checkout Code
+        id: checkout_code
         uses: actions/checkout@v4
         with:
-          repository: ${{ needs.verify-test-run.outputs.fork-full-path }}
-          ref: ${{ inputs.commit-sha }}
-          persist-credentials: false
-
-      - name: Checkout Code (Pull Request Event)
-        id: checkout_pr
-        if: github.event_name == 'pull_request'
-        uses: actions/checkout@v4
-        with:
+          repository: ${{ github.event_name == 'workflow_dispatch' && needs.verify-test-run.outputs.fork-full-path || github.repository }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.commit-sha || '' }}
           persist-credentials: false
 
       - name: Set up Python
@@ -476,38 +444,26 @@ jobs:
             ./coverage.xml
 
   combine-coverage:
+    needs: [verify-test-run, lint, test-dialect, test-dialect-compatibility, test-dialect-v14, test-dialect-compatibility-v14]
     name: Combine coverage
     if: |
       !cancelled() && (success() || failure()) &&
-      (github.event_name == 'workflow_dispatch') ||
       (
-        github.event_name == 'pull_request' &&
-        github.event.pull_request.head.repo.full_name == github.repository &&
-        needs.verify-test-run.outputs.got-testable-changes == 'true'
+        (github.event_name == 'workflow_dispatch') ||
+        (
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          needs.verify-test-run.outputs.got-testable-changes == 'true'
+        )
       )
-    needs:
-      [
-        test-dialect,
-        test-dialect-compatibility,
-        test-dialect-v14,
-        test-dialect-compatibility-v14,
-      ]
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code (Workflow Dispatch Event)
-        id: checkout_dispatch
-        if: github.event_name == 'workflow_dispatch'
+      - name: Checkout Code
+        id: checkout_code
         uses: actions/checkout@v4
         with:
-          repository: ${{ needs.verify-test-run.outputs.fork-full-path }}
-          ref: ${{ inputs.commit-sha }}
-          persist-credentials: false
-
-      - name: Checkout Code (Pull Request Event)
-        id: checkout_pr
-        if: github.event_name == 'pull_request'
-        uses: actions/checkout@v4
-        with:
+          repository: ${{ github.event_name == 'workflow_dispatch' && needs.verify-test-run.outputs.fork-full-path || github.repository }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.commit-sha || '' }}
           persist-credentials: false
 
       - name: Set up Python
