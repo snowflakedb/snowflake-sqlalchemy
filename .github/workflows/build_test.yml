@@ -27,12 +27,15 @@ jobs:
         id: extract-pr-info
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ inputs.pr-number }}
+          COMMIT_SHA: ${{ inputs.commit-sha }}
+          REPO: ${{ github.repository }}
         run: |
-          echo "Fetching details for PR #${{ inputs.pr-number }}..."
+          echo "Fetching details for PR #$PR_NUMBER..."
 
           # Fetch PR data as JSON
-          PR_JSON=$(gh pr view ${{ inputs.pr-number }} \
-            --repo ${{ github.repository }} \
+          PR_JSON=$(gh pr view "$PR_NUMBER" \
+            --repo "$REPO" \
             --json headRepository,headRefOid)
 
           # Extract variables using jq
@@ -46,12 +49,12 @@ jobs:
           echo "--- PR Details ---"
           echo "Fork Repository: $FORK_FULL_PATH"
           echo "Actual Head SHA: $ACTUAL_SHA"
-          echo "Expected SHA:    ${{ inputs.commit-sha }}"
+          echo "Expected SHA:    $COMMIT_SHA"
           echo "------------------"
 
           # Validate head commit SHA
-          if [ "$ACTUAL_SHA" != "${{ inputs.commit-sha }}" ]; then
-            echo "::error::Security Check Failed! The PR head commit ($ACTUAL_SHA) does not match the reviewed commit (${{ inputs.commit-sha }})."
+          if [ "$ACTUAL_SHA" != "$COMMIT_SHA" ]; then
+            echo "::error::Security Check Failed! The PR head commit ($ACTUAL_SHA) does not match the reviewed commit ($COMMIT_SHA)."
             exit 1
           fi
 
