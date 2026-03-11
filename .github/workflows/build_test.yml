@@ -25,6 +25,7 @@ jobs:
     steps:
       - name: Extract PR info and validate head commit SHA
         id: extract-pr-info
+        if: github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ inputs.pr-number }}
