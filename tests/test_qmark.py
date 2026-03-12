@@ -25,12 +25,10 @@ def test_qmark_bulk_insert(engine_testaccount_with_qmark):
 
     with engine_testaccount_with_qmark.connect() as con:
         with con.begin():
-            con.exec_driver_sql(
-                """
+            con.exec_driver_sql("""
                 create or replace table src(c1 int, c2 string) as select seq8(),
                 randstr(100, random()) from table(generator(rowcount=>100000))
-                """
-            )
+                """)
             con.exec_driver_sql("create or replace table dst like src")
 
             for data in pd.read_sql_query(

@@ -138,15 +138,11 @@ def test_numpy_datatypes(engine_testaccount_with_numpy, db_parameters):
 def test_to_sql(engine_testaccount_with_numpy, db_parameters):
     with engine_testaccount_with_numpy.connect() as conn:
         total_rows = 10000
-        conn.exec_driver_sql(
-            textwrap.dedent(
-                f"""\
+        conn.exec_driver_sql(textwrap.dedent(f"""\
                 create or replace table src(c1 float)
                 as select random(123) from table(generator(timelimit=>1))
                 limit {total_rows}
-                """
-            )
-        )
+                """))
         conn.exec_driver_sql("create or replace table dst(c1 float)")
         tbl = pd.read_sql_query(text("select * from src"), conn)
 
@@ -186,34 +182,25 @@ def test_timezone(db_parameters, engine_testaccount, engine_testaccount_with_num
     with sa_engine.connect() as conn:
 
         with conn.begin():
-            conn.exec_driver_sql(
-                textwrap.dedent(
-                    f"""\
+            conn.exec_driver_sql(textwrap.dedent(f"""\
                 CREATE OR REPLACE TABLE {test_table_name}(
                     tz_col timestamp_tz,
                     ntz_col timestamp_ntz,
                     decimal_col decimal(10,1),
                     float_col float
                 );
-                """
-                )
-            )
+                """))
 
-            conn.exec_driver_sql(
-                textwrap.dedent(
-                    f"""\
+            conn.exec_driver_sql(textwrap.dedent(f"""\
                 INSERT INTO {test_table_name}
                     SELECT
                         current_timestamp(),
                         current_timestamp()::timestamp_ntz,
                         to_decimal(.1, 10, 1),
                         .10;
-                """
-                )
-            )
+                """))
         try:
-            qry = textwrap.dedent(
-                f"""\
+            qry = textwrap.dedent(f"""\
             SELECT
                 tz_col,
                 ntz_col,
@@ -222,8 +209,7 @@ def test_timezone(db_parameters, engine_testaccount, engine_testaccount_with_num
                 decimal_col,
                 float_col
             FROM {test_table_name};
-            """
-            )
+            """)
 
             result = pd.read_sql_query(text(qry), conn)
             result2 = pd.read_sql_query(qry, sa_engine2_raw_conn)
@@ -369,14 +355,12 @@ def test_percent_signs(engine_testaccount):
             conn.exec_driver_sql(
                 f"CREATE OR REPLACE TEMP TABLE {table_name}(c1 int, c2 string)"
             )
-            conn.exec_driver_sql(
-                f"""
+            conn.exec_driver_sql(f"""
                 INSERT INTO {table_name}(c1, c2) values
                 (1, 'abc'),
                 (2, 'def'),
                 (3, 'ghi')
-                """
-            )
+                """)
 
             not_like_sql = f"select * from {table_name} where c2 not like '%b%'"
             like_sql = f"select * from {table_name} where c2 like '%b%'"
