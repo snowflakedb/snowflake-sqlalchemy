@@ -787,6 +787,30 @@ def test_get_composite_foreign_keys_column_order(engine_testaccount):
         parent.drop(engine_testaccount)
 
 
+def test_get_composite_unique_constraints_column_order(engine_testaccount):
+    """Reflected composite unique constraint column order must match definition order."""
+    metadata = MetaData()
+    table = Table(
+        "test_composite_uq_table",
+        metadata,
+        Column("id", Integer, primary_key=True),
+        Column("col_x", Integer),
+        Column("col_y", Integer),
+        Column("col_z", Integer),
+        UniqueConstraint("col_x", "col_y", "col_z", name="uq_composite_test"),
+    )
+    metadata.create_all(engine_testaccount)
+
+    try:
+        inspector = inspect(engine_testaccount)
+        uqs = inspector.get_unique_constraints("test_composite_uq_table")
+        assert len(uqs) == 1
+        assert uqs[0]["name"] == "uq_composite_test"
+        assert uqs[0]["column_names"] == ["col_x", "col_y", "col_z"]
+    finally:
+        table.drop(engine_testaccount)
+
+
 def test_naming_convention_constraint_names(engine_testaccount):
     metadata = MetaData(
         naming_convention={
