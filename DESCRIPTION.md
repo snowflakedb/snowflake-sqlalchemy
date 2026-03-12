@@ -9,6 +9,8 @@ Source code is also available at:
 
 # Unreleased Notes
 
+- Emit `SAWarning` at DDL compile time when `Identity()` is used on a primary key column, alerting users that ORM flush operations will raise a `FlushError`. Use `Sequence()` instead.
+
 # Release Notes
 
 - v1.9.0 (March 4, 2026)
