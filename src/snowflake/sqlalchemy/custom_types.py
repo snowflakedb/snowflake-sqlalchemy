@@ -86,7 +86,7 @@ class VECTOR(SnowflakeType):
 
     @staticmethod
     def _map_sqlalchemy_type(
-        element_type: Union[sqltypes.Integer, sqltypes.Float]
+        element_type: Union[sqltypes.Integer, sqltypes.Float],
     ) -> str:
         if isinstance(element_type, sqltypes.Integer):
             return "INT"

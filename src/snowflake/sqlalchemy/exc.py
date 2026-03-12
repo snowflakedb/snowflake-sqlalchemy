@@ -17,14 +17,14 @@ class UnsupportedPrimaryKeysAndForeignKeysError(ArgumentError):
 
 
 class RequiredParametersNotProvidedError(ArgumentError):
-    def __init__(self, target: str, parameters: List[str]):
+    def __init__(self, target: str, parameters: List[str]):  # noqa: B042
         super().__init__(
             f"{target} requires the following parameters: %s." % ", ".join(parameters)
         )
 
 
 class UnexpectedTableOptionKeyError(ArgumentError):
-    def __init__(self, expected: str, actual: str):
+    def __init__(self, expected: str, actual: str):  # noqa: B042
         super().__init__(f"Expected table option {expected} but got {actual}.")
 
 
@@ -36,7 +36,9 @@ class OptionKeyNotProvidedError(ArgumentError):
 
 
 class UnexpectedOptionParameterTypeError(ArgumentError):
-    def __init__(self, parameter_name: str, target: str, types: List[str]):
+    def __init__(  # noqa: B042
+        self, parameter_name: str, target: str, types: List[str]
+    ):
         super().__init__(
             f"Parameter {parameter_name} of {target} requires to be one"
             f" of following types: {', '.join(types)}."
@@ -58,7 +60,9 @@ class UnexpectedOptionTypeError(ArgumentError):
 
 
 class InvalidTableParameterTypeError(ArgumentError):
-    def __init__(self, name: str, input_type: str, expected_types: List[str]):
+    def __init__(  # noqa: B042
+        self, name: str, input_type: str, expected_types: List[str]
+    ):
         expected_types_str = "', '".join(expected_types)
         super().__init__(
             f"Invalid parameter type '{input_type}' provided for '{name}'. "
@@ -67,7 +71,7 @@ class InvalidTableParameterTypeError(ArgumentError):
 
 
 class MultipleErrors(ArgumentError):
-    def __init__(self, errors):
+    def __init__(self, errors):  # noqa: B042
         self.errors = errors
 
     def __str__(self):
@@ -75,7 +79,9 @@ class MultipleErrors(ArgumentError):
 
 
 class StructuredTypeNotSupportedInTableColumnsError(ArgumentError):
-    def __init__(self, table_type: str, table_name: str, column_name: str):
+    def __init__(  # noqa: B042
+        self, table_type: str, table_name: str, column_name: str
+    ):
         super().__init__(
             f"Column '{column_name}' is of a structured type, which is only supported on Iceberg tables. "
             f"The table '{table_name}' is of type '{table_type}', not Iceberg."
