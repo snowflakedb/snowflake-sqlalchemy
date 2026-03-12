@@ -6,6 +6,15 @@ from typing import List
 from sqlalchemy.exc import ArgumentError
 
 
+class SnowflakeWarning(UserWarning):
+    """Base warning class for Snowflake-specific SQLAlchemy warnings.
+
+    Subclasses UserWarning rather than SAWarning so that SQLAlchemy's
+    own test suite (which promotes SAWarning to errors) does not
+    inadvertently fail when the Snowflake dialect emits these warnings.
+    """
+
+
 class NoPrimaryKeyError(ArgumentError):
     def __init__(self, target: str):
         super().__init__(f"Table {target} required primary key.")
