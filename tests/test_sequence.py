@@ -2,17 +2,10 @@
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
 
-from sqlalchemy import (
-    Column,
-    Identity,
-    Integer,
-    MetaData,
-    Sequence,
-    String,
-    Table,
-    insert,
-    select,
-)
+import pytest
+from sqlalchemy import Column, Identity, Integer, MetaData, Sequence, String, Table
+from sqlalchemy import exc as sa_exc
+from sqlalchemy import insert, select
 from sqlalchemy.sql import text
 from sqlalchemy.sql.ddl import CreateTable
 
@@ -152,7 +145,9 @@ def test_table_with_identity(sql_compiler):
         Column("identity_col", Integer, Identity()),
     )
     create_table = CreateTable(identity_autoincrement_table)
-    actual = sql_compiler(create_table)
+    # Identity() on a primary key emits SAWarning about ORM flush limitation
+    with pytest.warns(sa_exc.SAWarning, match="FlushError"):
+        actual = sql_compiler(create_table)
     expected = (
         "CREATE TABLE identity ("
         "\tid INTEGER NOT NULL IDENTITY(1,1) ORDER, "
@@ -161,3 +156,31 @@ def test_table_with_identity(sql_compiler):
         "\tPRIMARY KEY (id))"
     )
     assert actual == expected
+
+
+def test_identity_pk_warns_about_orm_limitation(sql_compiler):
+    """Regression test for https://github.com/snowflakedb/snowflake-sqlalchemy/issues/611
+
+    When Identity() is used on a primary key column, an SAWarning must be emitted at
+    DDL compile time. Snowflake does not support retrieving the last inserted identity
+    value via the Python connector, so ORM flush would raise a cryptic
+    FlushError: NULL identity key. The warning directs users to Sequence() instead.
+    """
+    metadata = MetaData()
+    table = Table(
+        "t",
+        metadata,
+        Column("id", Integer, Identity(), primary_key=True),
+        Column("data", String(50)),
+    )
+
+    with pytest.warns(sa_exc.SAWarning) as warning_list:
+        sql_compiler(CreateTable(table))
+
+    messages = [str(w.message) for w in warning_list]
+    assert any(
+        "Identity" in m and "primary key" in m and "FlushError" in m for m in messages
+    ), f"Expected warning about Identity/primary key/FlushError, got: {messages}"
+    assert any(
+        "Sequence" in m for m in messages
+    ), f"Expected warning to mention Sequence() workaround, got: {messages}"

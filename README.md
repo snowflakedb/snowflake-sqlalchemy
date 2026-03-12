@@ -48,6 +48,8 @@ Table of contents:
     * [Notes](#notes)
   * [Verifying Package Signatures](#verifying-package-signatures)
   * [Support](#support)
+  * [Known Limitations](#known-limitations)
+    * [Identity columns as primary keys](#identity-columns-as-primary-keys)
 <!-- TOC -->
 
 ## Prerequisites
@@ -888,3 +890,59 @@ To ensure the authenticity and integrity of the Python package, follow the steps
 
 Feel free to file an issue or submit a PR here for general cases. For official support, contact Snowflake support at:
 <https://community.snowflake.com/s/article/How-To-Submit-a-Support-Case-in-Snowflake-Lodge>
+
+## Known Limitations
+
+### Identity columns as primary keys
+
+Using SQLAlchemy's `Identity()` construct on a primary key column is **not compatible with the SQLAlchemy ORM** when targeting Snowflake.
+
+**Why it fails:** After an `INSERT`, the ORM must retrieve the generated primary key to populate the in-memory object. SQLAlchemy supports two mechanisms for this — `RETURNING` (not available in Snowflake) and `cursor.lastrowid` (the Snowflake Python connector returns `None` for this attribute because Snowflake has no native rowid concept — see [snowflake-connector-python#1201](https://github.com/snowflakedb/snowflake-connector-python/pull/1201)). With neither mechanism available, the ORM receives `None` as the primary key and raises:
+
+```
+sqlalchemy.orm.exc.FlushError: Instance <MyModel at 0x...> has a NULL identity key after a flush ...
+```
+
+**Example that fails:**
+
+```python
+from sqlalchemy import Column, Identity, Integer, String
+from sqlalchemy.orm import declarative_base, Session
+
+Base = declarative_base()
+
+class MyModel(Base):
+    __tablename__ = "my_model"
+    id = Column(Integer, Identity(start=1, increment=1), primary_key=True)  # does not work with ORM
+    name = Column(String)
+
+Base.metadata.create_all(engine)
+
+with Session(engine) as session:
+    session.add(MyModel(name="test"))
+    session.commit()  # raises FlushError: NULL identity key
+```
+
+The dialect emits an `SAWarning` at DDL compile time when `Identity()` is detected on a primary key column to surface this problem early.
+
+**Workaround — use `Sequence()` instead:**
+
+```python
+from sqlalchemy import Column, Integer, Sequence, String
+from sqlalchemy.orm import declarative_base, Session
+
+Base = declarative_base()
+
+class MyModel(Base):
+    __tablename__ = "my_model"
+    id = Column(Integer, Sequence("my_model_id_seq"), primary_key=True)
+    name = Column(String)
+
+Base.metadata.create_all(engine)
+
+with Session(engine) as session:
+    session.add(MyModel(name="test"))
+    session.commit()  # id is populated correctly
+```
+
+`Sequence` objects are fully supported by the Snowflake dialect and are the recommended way to generate auto-incrementing primary keys when using the ORM. See the [Auto-increment Behavior](#auto-increment-behavior) section for more details.

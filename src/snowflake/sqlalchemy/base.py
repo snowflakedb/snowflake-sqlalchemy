@@ -962,6 +962,17 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
                 colspec.append("AUTOINCREMENT")
 
         if has_identity:
+            if column.primary_key:
+                warnings.warn(
+                    f"Column '{column.name}' uses Identity() as a primary key. "
+                    "Snowflake does not support retrieving the last inserted identity "
+                    "value via the Python connector, which will cause a FlushError "
+                    "during SQLAlchemy ORM flush operations. "
+                    f"Use Sequence() instead: Column('{column.name}', Integer, "
+                    "Sequence('seq_name'), primary_key=True)",
+                    sa_exc.SAWarning,
+                    stacklevel=2,
+                )
             colspec.append(self.process(column.identity))
 
         return " ".join(colspec)
