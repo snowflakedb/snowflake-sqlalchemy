@@ -923,7 +923,22 @@ with Session(engine) as session:
     session.commit()  # raises FlushError: NULL identity key
 ```
 
-The dialect emits an `SAWarning` at DDL compile time when `Identity()` is detected on a primary key column to surface this problem early.
+The dialect emits a `SnowflakeWarning` at DDL compile time when `Identity()` is detected on a primary key column to surface this problem early. The warning is emitted **once per unique `(table, column)` pair per Python process** — repeated DDL compilation of the same schema does not produce duplicate output.
+
+To silence the warning entirely, use Python's standard warning filter:
+
+```python
+import warnings
+from snowflake.sqlalchemy.exc import SnowflakeWarning
+
+warnings.filterwarnings("ignore", category=SnowflakeWarning)
+```
+
+Or set it via the `PYTHONWARNINGS` environment variable before starting your application:
+
+```shell
+PYTHONWARNINGS=ignore::snowflake.sqlalchemy.exc.SnowflakeWarning python my_app.py
+```
 
 **Workaround — use `Sequence()` instead:**
 

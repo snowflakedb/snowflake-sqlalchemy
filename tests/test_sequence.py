@@ -3,11 +3,21 @@
 #
 
 import pytest
-from sqlalchemy import Column, Identity, Integer, MetaData, Sequence, String, Table
-from sqlalchemy import exc as sa_exc
-from sqlalchemy import insert, select
+from sqlalchemy import (
+    Column,
+    Identity,
+    Integer,
+    MetaData,
+    Sequence,
+    String,
+    Table,
+    insert,
+    select,
+)
 from sqlalchemy.sql import text
 from sqlalchemy.sql.ddl import CreateTable
+
+from snowflake.sqlalchemy.exc import SnowflakeWarning
 
 
 def test_table_with_sequence(engine_testaccount, db_parameters):
@@ -145,8 +155,8 @@ def test_table_with_identity(sql_compiler):
         Column("identity_col", Integer, Identity()),
     )
     create_table = CreateTable(identity_autoincrement_table)
-    # Identity() on a primary key emits SAWarning about ORM flush limitation
-    with pytest.warns(sa_exc.SAWarning, match="FlushError"):
+    # Identity() on a primary key emits SnowflakeWarning about ORM flush limitation
+    with pytest.warns(SnowflakeWarning, match="FlushError"):
         actual = sql_compiler(create_table)
     expected = (
         "CREATE TABLE identity ("
@@ -161,7 +171,7 @@ def test_table_with_identity(sql_compiler):
 def test_identity_pk_warns_about_orm_limitation(sql_compiler):
     """Regression test for https://github.com/snowflakedb/snowflake-sqlalchemy/issues/611
 
-    When Identity() is used on a primary key column, an SAWarning must be emitted at
+    When Identity() is used on a primary key column, a SnowflakeWarning must be emitted at
     DDL compile time. Snowflake does not support retrieving the last inserted identity
     value via the Python connector, so ORM flush would raise a cryptic
     FlushError: NULL identity key. The warning directs users to Sequence() instead.
@@ -174,7 +184,7 @@ def test_identity_pk_warns_about_orm_limitation(sql_compiler):
         Column("data", String(50)),
     )
 
-    with pytest.warns(sa_exc.SAWarning) as warning_list:
+    with pytest.warns(SnowflakeWarning) as warning_list:
         sql_compiler(CreateTable(table))
 
     messages = [str(w.message) for w in warning_list]

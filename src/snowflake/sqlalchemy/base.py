@@ -33,6 +33,7 @@ from snowflake.sqlalchemy.custom_commands import (
 from ._constants import NOT_NULL
 from .exc import (
     CustomOptionsAreOnlySupportedOnSnowflakeTables,
+    SnowflakeWarning,
     UnexpectedOptionTypeError,
 )
 from .functions import flatten
@@ -917,6 +918,12 @@ class SnowflakeExecutionContext(default.DefaultExecutionContext):
         return self.cursor.rowcount
 
 
+# Tracks (table_name, column_name) pairs for which the Identity-on-PK warning
+# has already been emitted this session, preventing duplicate output when the
+# same table schema is compiled repeatedly (e.g. inside ORM session loops).
+_identity_pk_warned: set = set()
+
+
 class SnowflakeDDLCompiler(compiler.DDLCompiler):
     def denormalize_column_name(self, name):
         if name is None:
@@ -963,16 +970,20 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
 
         if has_identity:
             if column.primary_key:
-                warnings.warn(
-                    f"Column '{column.name}' uses Identity() as a primary key. "
-                    "Snowflake does not support retrieving the last inserted identity "
-                    "value via the Python connector, which will cause a FlushError "
-                    "during SQLAlchemy ORM flush operations. "
-                    f"Use Sequence() instead: Column('{column.name}', Integer, "
-                    "Sequence('seq_name'), primary_key=True)",
-                    sa_exc.SAWarning,
-                    stacklevel=2,
-                )
+                table_name = column.table.name if column.table is not None else ""
+                key = (table_name, column.name)
+                if key not in _identity_pk_warned:
+                    _identity_pk_warned.add(key)
+                    warnings.warn(
+                        f"Column '{column.name}' uses Identity() as a primary key. "
+                        "Snowflake does not support retrieving the last inserted identity "
+                        "value via the Python connector, which will cause a FlushError "
+                        "during SQLAlchemy ORM flush operations. "
+                        f"Use Sequence() instead: Column('{column.name}', Integer, "
+                        "Sequence('seq_name'), primary_key=True)",
+                        SnowflakeWarning,
+                        stacklevel=2,
+                    )
             colspec.append(self.process(column.identity))
 
         return " ".join(colspec)

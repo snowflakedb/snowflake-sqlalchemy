@@ -9,7 +9,7 @@ Source code is also available at:
 
 # Unreleased Notes
 
-- Emit `SAWarning` at DDL compile time when `Identity()` is used on a primary key column, alerting users that ORM flush operations will raise a `FlushError`. Use `Sequence()` instead.
+- Emit `SnowflakeWarning` at DDL compile time when `Identity()` is used on a primary key column, alerting users that ORM flush operations will raise a `FlushError`. The warning is emitted once per unique `(table, column)` pair per Python process. Use `Sequence()` instead.
 
 # Release Notes
 
