@@ -24,6 +24,8 @@ repos:
         - id: black
           args:
               - --safe
+              - --target-version
+              - py38
           language_version: python3
 -   repo: https://github.com/Lucas-C/pre-commit-hooks.git
     rev: v1.5.5

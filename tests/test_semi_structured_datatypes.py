@@ -33,14 +33,12 @@ def test_create_table_semi_structured_datatypes(engine_testaccount):
         test_variant.drop(engine_testaccount)
 
 
-@pytest.mark.skip(
-    """
+@pytest.mark.skip("""
 Semi-structured data cannot be inserted by INSERT VALUES. Instead,
 INSERT SELECT must be used. The fix should be either 1) SQLAlchemy dialect
 transforms INSERT statement or 2) Snwoflake DB supports INSERT VALUES for
 semi-structured data types. No ETA for this fix.
-"""
-)
+""")
 def test_insert_semi_structured_datatypes(engine_testaccount):
     metadata = MetaData()
     table_name = "test_variant1"
@@ -78,8 +76,7 @@ def test_inspect_semi_structured_datatypes(engine_testaccount):
     try:
         with engine_testaccount.connect() as conn:
             with conn.begin():
-                sql = textwrap.dedent(
-                    f"""
+                sql = textwrap.dedent(f"""
                     INSERT INTO {table_name}(id, va, ar)
                     SELECT 1,
                            PARSE_JSON('{{"vk1":100, "vk2":200, "vk3":300}}'),
@@ -88,8 +85,7 @@ def test_inspect_semi_structured_datatypes(engine_testaccount):
                     {{"k":2, "v":"str2"}},
                     {{"k":3, "v":"str3"}}]'
                     )
-                    """
-                )
+                    """)
                 conn.exec_driver_sql(sql)
                 inspecter = inspect(engine_testaccount)
                 columns = inspecter.get_columns(table_name)
