@@ -970,8 +970,7 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
 
         if has_identity:
             if column.primary_key:
-                table_name = column.table.name if column.table is not None else ""
-                key = (table_name, column.name)
+                key = (column.table.name, column.name)
                 if key not in _identity_pk_warned:
                     _identity_pk_warned.add(key)
                     warnings.warn(
