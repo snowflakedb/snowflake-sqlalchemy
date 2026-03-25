@@ -388,16 +388,21 @@ class SnowflakeDialect(default.DefaultDialect):
                     "constrained_columns": [],
                     "name": self.normalize_name(row._mapping["constraint_name"]),
                 }
+
             ans[table_name]["constrained_columns"].append(
+                # Use pair (key_sequence, column_name) to sort constrained columns by key sequence
                 (
                     row._mapping["key_sequence"],
                     self.normalize_name(row._mapping["column_name"]),
                 )
             )
+
+        # Sort constrained columns by key sequence
         for table_name in ans:
             ans[table_name]["constrained_columns"] = [
                 col for _, col in sorted(ans[table_name]["constrained_columns"])
             ]
+
         return ans
 
     def get_pk_constraint(self, connection, table_name, schema=None, **kw):
@@ -414,12 +419,14 @@ class SnowflakeDialect(default.DefaultDialect):
                 f"SHOW /* sqlalchemy:_get_schema_unique_constraints */ UNIQUE KEYS IN SCHEMA {schema}"
             )
         )
+
         unique_constraints = {}
         for row in result:
             name = self.normalize_name(row._mapping["constraint_name"])
             if name not in unique_constraints:
                 unique_constraints[name] = {
                     "column_names": [
+                        # Use pair (key_sequence, column_name) to sort constrained columns by key sequence
                         (
                             row._mapping["key_sequence"],
                             self.normalize_name(row._mapping["column_name"]),
@@ -430,6 +437,7 @@ class SnowflakeDialect(default.DefaultDialect):
                 }
             else:
                 unique_constraints[name]["column_names"].append(
+                    # Use pair (key_sequence, column_name) to sort constrained columns by key sequence
                     (
                         row._mapping["key_sequence"],
                         self.normalize_name(row._mapping["column_name"]),
@@ -438,11 +446,13 @@ class SnowflakeDialect(default.DefaultDialect):
 
         ans = defaultdict(list)
         for constraint in unique_constraints.values():
+            # Sort constrained columns by key sequence
             constraint["column_names"] = [
                 col for _, col in sorted(constraint["column_names"])
             ]
             table_name = constraint.pop("table_name")
             ans[table_name].append(constraint)
+
         return ans
 
     def get_unique_constraints(self, connection, table_name, schema, **kw):
@@ -467,6 +477,7 @@ class SnowflakeDialect(default.DefaultDialect):
                 referred_schema = self.normalize_name(row._mapping["pk_schema_name"])
                 foreign_key_map[name] = {
                     "constrained_columns": [
+                        # Use pair (key_sequence, column_name) to sort constrained columns by key sequence
                         (
                             row._mapping["key_sequence"],
                             self.normalize_name(row._mapping["fk_column_name"]),
@@ -484,6 +495,7 @@ class SnowflakeDialect(default.DefaultDialect):
                         row._mapping["pk_table_name"]
                     ),
                     "referred_columns": [
+                        # Use pair (key_sequence, column_name) to sort constrained columns by key sequence
                         (
                             row._mapping["key_sequence"],
                             self.normalize_name(row._mapping["pk_column_name"]),
@@ -504,12 +516,14 @@ class SnowflakeDialect(default.DefaultDialect):
                 foreign_key_map[name]["options"] = options
             else:
                 foreign_key_map[name]["constrained_columns"].append(
+                    # Use pair (key_sequence, column_name) to sort constrained columns by key sequence
                     (
                         row._mapping["key_sequence"],
                         self.normalize_name(row._mapping["fk_column_name"]),
                     )
                 )
                 foreign_key_map[name]["referred_columns"].append(
+                    # Use pair (key_sequence, column_name) to sort constrained columns by key sequence
                     (
                         row._mapping["key_sequence"],
                         self.normalize_name(row._mapping["pk_column_name"]),
@@ -517,17 +531,22 @@ class SnowflakeDialect(default.DefaultDialect):
                 )
 
         ans = {}
-
         for _, v in foreign_key_map.items():
+            # Sort referred columns by key sequence
             v["constrained_columns"] = [
                 col for _, col in sorted(v["constrained_columns"])
             ]
+
+            # Sort referred columns by key sequence
             v["referred_columns"] = [col for _, col in sorted(v["referred_columns"])]
+
             if v["table_name"] not in ans:
                 ans[v["table_name"]] = []
+
             ans[v["table_name"]].append(
                 {k2: v2 for k2, v2 in v.items() if k2 != "table_name"}
             )
+
         return ans
 
     def get_foreign_keys(self, connection, table_name, schema=None, **kw):
@@ -857,9 +876,11 @@ class SnowflakeDialect(default.DefaultDialect):
             )
             # Too many results, fall back to only query about single table
             return column_info_manager.get_table_columns(table_name, schema)
+
         normalized_table_name = self.normalize_name(table_name)
         if normalized_table_name not in schema_columns:
             raise sa_exc.NoSuchTableError()
+
         return schema_columns[normalized_table_name]
 
     def get_prefixes_from_data(self, name_to_index_map, row, **kw):

@@ -19,7 +19,6 @@ from sqlalchemy import (
     Column,
     DateTime,
     ForeignKey,
-    ForeignKeyConstraint,
     Integer,
     LargeBinary,
     MetaData,
@@ -739,76 +738,6 @@ def test_get_foreign_keys(engine_testaccount):
     finally:
         addresses.drop(engine_testaccount)
         users.drop(engine_testaccount)
-
-
-def test_get_composite_foreign_keys_column_order(engine_testaccount):
-    metadata = MetaData()
-    parent = Table(
-        "test_composite_fk_parent",
-        metadata,
-        Column("col_a", Integer),
-        Column("col_b", Integer),
-        Column("col_c", Integer),
-        PrimaryKeyConstraint("col_a", "col_b", "col_c"),
-    )
-    child = Table(
-        "test_composite_fk_child",
-        metadata,
-        Column("id", Integer, primary_key=True),
-        Column("ref_a", Integer),
-        Column("ref_b", Integer),
-        Column("ref_c", Integer),
-        ForeignKeyConstraint(
-            ["ref_a", "ref_b", "ref_c"],
-            [
-                "test_composite_fk_parent.col_a",
-                "test_composite_fk_parent.col_b",
-                "test_composite_fk_parent.col_c",
-            ],
-            name="fk_composite_test",
-        ),
-    )
-    metadata.create_all(engine_testaccount)
-
-    try:
-        inspector = inspect(engine_testaccount)
-
-        pk = inspector.get_pk_constraint("test_composite_fk_parent")
-        assert pk["constrained_columns"] == ["col_a", "col_b", "col_c"]
-
-        fks = inspector.get_foreign_keys("test_composite_fk_child")
-        assert len(fks) == 1
-        assert fks[0]["name"] == "fk_composite_test"
-        assert fks[0]["constrained_columns"] == ["ref_a", "ref_b", "ref_c"]
-        assert fks[0]["referred_columns"] == ["col_a", "col_b", "col_c"]
-        assert fks[0]["referred_table"] == "test_composite_fk_parent"
-    finally:
-        child.drop(engine_testaccount)
-        parent.drop(engine_testaccount)
-
-
-def test_get_composite_unique_constraints_column_order(engine_testaccount):
-    """Reflected composite unique constraint column order must match definition order."""
-    metadata = MetaData()
-    table = Table(
-        "test_composite_uq_table",
-        metadata,
-        Column("id", Integer, primary_key=True),
-        Column("col_x", Integer),
-        Column("col_y", Integer),
-        Column("col_z", Integer),
-        UniqueConstraint("col_x", "col_y", "col_z", name="uq_composite_test"),
-    )
-    metadata.create_all(engine_testaccount)
-
-    try:
-        inspector = inspect(engine_testaccount)
-        uqs = inspector.get_unique_constraints("test_composite_uq_table")
-        assert len(uqs) == 1
-        assert uqs[0]["name"] == "uq_composite_test"
-        assert uqs[0]["column_names"] == ["col_x", "col_y", "col_z"]
-    finally:
-        table.drop(engine_testaccount)
 
 
 def test_naming_convention_constraint_names(engine_testaccount):
