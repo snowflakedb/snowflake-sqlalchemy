@@ -1777,8 +1777,8 @@ def test_single_table_reflection_uses_optimized_path(engine_testaccount):
     Verify that single-table reflection uses table-specific queries (DESC TABLE)
     instead of querying the entire schema via information_schema.
 
-    This test ensures the optimization from _should_use_table_specific_query
-    is working correctly, preventing slow schema-wide queries for single tables.
+    SA 2.x: get_columns is always a single-table call (IS_VERSION_20 guard).
+    SA 1.4: opt-in via cache_column_metadata=True.
     """
     table_name = random_string(5, choices=string.ascii_uppercase)
     with engine_testaccount.connect() as conn:
@@ -1788,8 +1788,10 @@ def test_single_table_reflection_uses_optimized_path(engine_testaccount):
                 text(f'create table public.{table_name} ("col1" text, "col2" integer);')
             )
 
-            # Create inspector (without info_cache, typical single-table scenario)
+            # SA 2.x: DESC TABLE is used unconditionally (IS_VERSION_20 guard).
+            # SA 1.4: opt-in via cache_column_metadata=True.
             inspector = inspect(engine_testaccount)
+            inspector.dialect._cache_column_metadata = True
 
             # Mock _query_all_columns_info to detect if it's called
             # If optimization works, this should NOT be called
