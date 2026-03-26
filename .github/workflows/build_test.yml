@@ -1,53 +1,150 @@
 name: Build and Test
 
 on:
-  push:
-    branches:
-      - main
-    tags:
-      - v*
   pull_request:
     branches:
       - main
       - prep-**
   workflow_dispatch:
     inputs:
-      logLevel:
-        default: warning
-        description: "Log level"
+      pr-number:
+        type: number
         required: true
-      tags:
-        description: "Test scenario tags"
+        description: "Pull request number to run the tests on"
+      commit-sha:
+        type: string
+        required: true
+        description: "Last commit SHA in the pull request"
+
 jobs:
+  verify-test-run:
+    runs-on: ubuntu-latest
+    outputs:
+      fork-full-path: ${{ steps.extract-pr-info.outputs.FORK_FULL_PATH }}
+      got-testable-changes: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.changes.outputs.run_tests }}
+    steps:
+      - name: Extract PR info and validate head commit SHA
+        id: extract-pr-info
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ inputs.pr-number }}
+          COMMIT_SHA: ${{ inputs.commit-sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          echo "Fetching details for PR #$PR_NUMBER..."
+
+          # Fetch PR data as JSON
+          PR_JSON=$(gh pr view "$PR_NUMBER" \
+            --repo "$REPO" \
+            --json headRepository,headRefOid)
+
+          # Extract variables using jq
+          ACTUAL_SHA=$(echo "$PR_JSON" | jq -r '.headRefOid')
+          FORK_OWNER=$(echo "$PR_JSON" | jq -r '.headRepository.owner.login')
+          FORK_REPO_NAME=$(echo "$PR_JSON" | jq -r '.headRepository.name')
+
+          # Construct the full repository string (e.g., "octocat/Hello-World")
+          FORK_FULL_PATH="$FORK_OWNER/$FORK_REPO_NAME"
+
+          echo "--- PR Details ---"
+          echo "Fork Repository: $FORK_FULL_PATH"
+          echo "Actual Head SHA: $ACTUAL_SHA"
+          echo "Expected SHA:    $COMMIT_SHA"
+          echo "------------------"
+
+          # Validate head commit SHA
+          if [ "$ACTUAL_SHA" != "$COMMIT_SHA" ]; then
+            echo "::error::Security Check Failed! The PR head commit ($ACTUAL_SHA) does not match the reviewed commit ($COMMIT_SHA)."
+            exit 1
+          fi
+
+          echo "✅ Validation passed!"
+
+          # Export fork repository path for the checkout step
+          echo "FORK_FULL_PATH=$FORK_FULL_PATH" >> $GITHUB_OUTPUT
+
+      - name: Checkout Code
+        id: checkout_code
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event_name == 'workflow_dispatch' && steps.extract-pr-info.outputs.FORK_FULL_PATH || github.repository }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.commit-sha || '' }}
+          persist-credentials: false
+
+      - name: Filter changed files
+        uses: dorny/paths-filter@v3
+        id: changes
+        if: github.event_name != 'workflow_dispatch'
+        with:
+          filters: |
+            run_tests:
+              - '.github/**'
+              - 'src/**'
+              - 'tests/**'
+              - 'tox.ini'
+              - 'setup.cfg'
+              - 'pyproject.toml'
+
   lint:
+    needs: verify-test-run
+    if: |
+      !cancelled() &&
+      (
+        (github.event_name == 'workflow_dispatch') ||
+        (
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          needs.verify-test-run.outputs.got-testable-changes == 'true'
+        )
+      )
     name: Check linting
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Code
+        id: checkout_code
+        uses: actions/checkout@v4
         with:
+          repository: ${{ github.event_name == 'workflow_dispatch' && needs.verify-test-run.outputs.fork-full-path || github.repository }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.commit-sha || '' }}
           persist-credentials: false
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
       - name: Upgrade and install tools
         run: |
           python -m pip install -U uv
           python -m uv pip install -U 'virtualenv<21.0' hatch
           python -m hatch env create default
+
       - name: Set PY
         run: echo "PY=$(hatch run gh-cache-sum)" >> $GITHUB_ENV
+
       - uses: actions/cache@v4
         with:
           path: ~/.cache/pre-commit
           key: pre-commit|${{ env.PY }}|${{ hashFiles('.pre-commit-config.yaml') }}
+
       - name: Run lint checks
         run: hatch run check
 
   build-install:
+    needs: [verify-test-run, lint]
+    if: |
+      !cancelled() &&
+      (
+        (github.event_name == 'workflow_dispatch') ||
+        (
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          needs.verify-test-run.outputs.got-testable-changes == 'true'
+        )
+      )
     name: Test package build and installation
     runs-on: ubuntu-latest
-    needs: lint
     strategy:
       fail-fast: true
       matrix:
@@ -57,28 +154,46 @@ jobs:
           - hatch-env: sa14
             python-version: "3.12"
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Code
+        id: checkout_code
+        uses: actions/checkout@v4
         with:
+          repository: ${{ github.event_name == 'workflow_dispatch' && needs.verify-test-run.outputs.fork-full-path || github.repository }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.commit-sha || '' }}
           persist-credentials: false
+
       - name: Setup up Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+
       - name: Upgrade and install tools
         run: |
           python -m pip install -U uv
           python -m uv pip install -U 'virtualenv<21.0' hatch
+
       - name: Build package
         run: |
           python -m hatch -e ${{ matrix.hatch-env }} build --clean
+
       - name: Install and check import
         run: |
           python -m uv pip install dist/snowflake_sqlalchemy-*.whl
           python -c "import snowflake.sqlalchemy; print(snowflake.sqlalchemy.__version__)"
 
   test-dialect:
+    needs: [verify-test-run, lint, build-install]
+    if: |
+      !cancelled() &&
+      (
+        (github.event_name == 'workflow_dispatch') ||
+        (
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          needs.verify-test-run.outputs.got-testable-changes == 'true'
+        )
+      )
     name: Test dialect ${{ matrix.os }}-${{ fromJson('{"default":"3.13","sa14":"3.12"}')[matrix.hatch-env] }}-${{ matrix.cloud-provider }}-${{ matrix.hatch-env }}
-    needs: [lint, build-install]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -87,18 +202,25 @@ jobs:
         cloud-provider: [aws, azure, gcp]
         hatch-env: [default, sa14]
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Code
+        id: checkout_code
+        uses: actions/checkout@v4
         with:
+          repository: ${{ github.event_name == 'workflow_dispatch' && needs.verify-test-run.outputs.fork-full-path || github.repository }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.commit-sha || '' }}
           persist-credentials: false
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ fromJson('{"default":"3.13","sa14":"3.12"}')[matrix.hatch-env] }}
+
       - name: Upgrade pip and prepare environment
         run: |
           python -m pip install -U uv
           python -m uv pip install -U 'virtualenv<21.0' hatch
           python -m hatch env create ${{ matrix.hatch-env }}
+
       - name: Setup parameters file
         shell: bash
         env:
@@ -110,18 +232,23 @@ jobs:
             --pinentry-mode loopback \
             --output tests/parameters.py \
             .github/workflows/parameters/parameters_${{ matrix.cloud-provider }}.py.gpg
+
       - name: Run test for AWS (default)
         if: matrix.cloud-provider == 'aws' && matrix.hatch-env == 'default'
         run: hatch run test-dialect-aws
+
       - name: Run test for AWS (sa14)
         if: matrix.cloud-provider == 'aws' && matrix.hatch-env == 'sa14'
         run: hatch run sa14:test-dialect-aws
+
       - name: Run tests (default)
         if: matrix.hatch-env == 'default'
         run: hatch run test-dialect
+
       - name: Run tests (sa14)
         if: matrix.hatch-env == 'sa14'
         run: hatch run sa14:test-dialect
+
       - uses: actions/upload-artifact@v4
         with:
           name: coverage.xml_dialect-${{ matrix.os }}-${{ fromJson('{"default":"3.13","sa14":"3.12"}')[matrix.hatch-env] }}-${{ matrix.cloud-provider }}-${{ matrix.hatch-env }}
@@ -129,8 +256,18 @@ jobs:
             ./coverage.xml
 
   test-dialect-compatibility:
+    needs: [verify-test-run, lint, build-install]
+    if: |
+      !cancelled() &&
+      (
+        (github.event_name == 'workflow_dispatch') ||
+        (
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          needs.verify-test-run.outputs.got-testable-changes == 'true'
+        )
+      )
     name: Test dialect compatibility ${{ matrix.os }}-${{ fromJson('{"default":"3.13","sa14":"3.12"}')[matrix.hatch-env] }}-${{ matrix.cloud-provider }}-${{ matrix.hatch-env }}
-    needs: [lint, build-install]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -139,18 +276,25 @@ jobs:
         cloud-provider: [aws, azure, gcp]
         hatch-env: [default, sa14]
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Code
+        id: checkout_code
+        uses: actions/checkout@v4
         with:
+          repository: ${{ github.event_name == 'workflow_dispatch' && needs.verify-test-run.outputs.fork-full-path || github.repository }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.commit-sha || '' }}
           persist-credentials: false
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ fromJson('{"default":"3.13","sa14":"3.12"}')[matrix.hatch-env] }}
+
       - name: Upgrade pip and install hatch
         run: |
           python -m pip install -U uv
           python -m uv pip install -U 'virtualenv<21.0' hatch
           python -m hatch env create ${{ matrix.hatch-env }}
+
       - name: Setup parameters file
         shell: bash
         env:
@@ -162,12 +306,15 @@ jobs:
             --pinentry-mode loopback \
             --output tests/parameters.py \
             .github/workflows/parameters/parameters_${{ matrix.cloud-provider }}.py.gpg
+
       - name: Run tests (default)
         if: matrix.hatch-env == 'default'
         run: hatch run test-dialect-compatibility
+
       - name: Run tests (sa14)
         if: matrix.hatch-env == 'sa14'
         run: hatch run sa14:test-dialect-compatibility
+
       - uses: actions/upload-artifact@v4
         with:
           name: coverage.xml_dialect-compatibility-${{ matrix.os }}-${{ fromJson('{"default":"3.13","sa14":"3.12"}')[matrix.hatch-env] }}-${{ matrix.cloud-provider }}-${{ matrix.hatch-env }}
@@ -175,8 +322,18 @@ jobs:
             ./coverage.xml
 
   test-dialect-v14:
+    needs: [verify-test-run, lint, build-install]
+    if: |
+      !cancelled() &&
+      (
+        (github.event_name == 'workflow_dispatch') ||
+        (
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          needs.verify-test-run.outputs.got-testable-changes == 'true'
+        )
+      )
     name: Test dialect v14 ${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
-    needs: [lint, build-install]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -185,13 +342,19 @@ jobs:
         python-version: ["3.12"]
         cloud-provider: [aws, azure, gcp]
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Code
+        id: checkout_code
+        uses: actions/checkout@v4
         with:
+          repository: ${{ github.event_name == 'workflow_dispatch' && needs.verify-test-run.outputs.fork-full-path || github.repository }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.commit-sha || '' }}
           persist-credentials: false
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+
       - name: Setup parameters file
         shell: bash
         env:
@@ -203,16 +366,20 @@ jobs:
             --pinentry-mode loopback \
             --output tests/parameters.py \
             .github/workflows/parameters/parameters_${{ matrix.cloud-provider }}.py.gpg
+
       - name: Upgrade pip and install hatch
         run: |
           python -m pip install -U uv
           python -m uv pip install -U 'virtualenv<21.0' hatch
           python -m hatch env create default
+
       - name: Run test for AWS
         run: hatch run sa14:test-dialect-aws
         if: matrix.cloud-provider == 'aws'
+
       - name: Run tests
         run: hatch run sa14:test-dialect
+
       - uses: actions/upload-artifact@v4
         with:
           name: coverage.xml_dialect-v14-${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
@@ -220,8 +387,18 @@ jobs:
             ./coverage.xml
 
   test-dialect-compatibility-v14:
+    needs: [verify-test-run, lint, build-install]
+    if: |
+      !cancelled() &&
+      (
+        (github.event_name == 'workflow_dispatch') ||
+        (
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          needs.verify-test-run.outputs.got-testable-changes == 'true'
+        )
+      )
     name: Test dialect v14 compatibility ${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
-    needs: lint
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -230,18 +407,25 @@ jobs:
         python-version: ["3.12"]
         cloud-provider: [aws, azure, gcp]
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Code
+        id: checkout_code
+        uses: actions/checkout@v4
         with:
+          repository: ${{ github.event_name == 'workflow_dispatch' && needs.verify-test-run.outputs.fork-full-path || github.repository }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.commit-sha || '' }}
           persist-credentials: false
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+
       - name: Upgrade pip and install hatch
         run: |
           python -m pip install -U uv
           python -m uv pip install -U 'virtualenv<21.0' hatch
           python -m hatch env create default
+
       - name: Setup parameters file
         shell: bash
         env:
@@ -253,8 +437,10 @@ jobs:
             --pinentry-mode loopback \
             --output tests/parameters.py \
             .github/workflows/parameters/parameters_${{ matrix.cloud-provider }}.py.gpg
+
       - name: Run tests
         run: hatch run sa14:test-dialect-compatibility
+
       - uses: actions/upload-artifact@v4
         with:
           name: coverage.xml_dialect-v14-compatibility-${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
@@ -262,42 +448,55 @@ jobs:
             ./coverage.xml
 
   combine-coverage:
+    needs: [verify-test-run, lint, test-dialect, test-dialect-compatibility, test-dialect-v14, test-dialect-compatibility-v14]
     name: Combine coverage
-    if: ${{ success() || failure() }}
-    needs:
-      [
-        test-dialect,
-        test-dialect-compatibility,
-        test-dialect-v14,
-        test-dialect-compatibility-v14,
-      ]
+    if: |
+      !cancelled() && (success() || failure()) &&
+      (
+        (github.event_name == 'workflow_dispatch') ||
+        (
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          needs.verify-test-run.outputs.got-testable-changes == 'true'
+        )
+      )
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout Code
+        id: checkout_code
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event_name == 'workflow_dispatch' && needs.verify-test-run.outputs.fork-full-path || github.repository }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.commit-sha || '' }}
+          persist-credentials: false
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
       - name: Prepare environment
         run: |
           python -m pip install -U uv
           python -m uv pip install -U 'virtualenv<21.0' hatch
           hatch env create default
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
+
       - uses: actions/download-artifact@v4
         with:
           path: artifacts/
+
       - name: Combine coverage files
         run: |
           hatch run coverage combine -a artifacts/coverage.xml_*/coverage.xml
           hatch run coverage report -m
+
       - name: Store coverage reports
         uses: actions/upload-artifact@v4
         with:
           name: coverage.xml
           path: coverage.xml
-      - name: Uplaod to codecov
+
+      - name: Upload to codecov
         uses: codecov/codecov-action@v4
         with:
           file: coverage.xml
