@@ -52,7 +52,7 @@ class TargetLagOption(TableOption):
 
     @staticmethod
     def create(
-        value: Union["TargetLagOption", Tuple[int, TimeUnit], KeywordOptionType]
+        value: Union["TargetLagOption", Tuple[int, TimeUnit], KeywordOptionType],
     ) -> Optional[TableOption]:
         if isinstance(value, NoneType):
             return value

@@ -14,16 +14,18 @@ repos:
     hooks:
         - id: isort
 -   repo: https://github.com/asottile/pyupgrade
-    rev: v3.15.1
+    rev: v3.21.2
     hooks:
     -   id: pyupgrade
         args: [--py37-plus]
 -   repo: https://github.com/psf/black
-    rev: 24.2.0
+    rev: 26.3.1
     hooks:
         - id: black
           args:
               - --safe
+              - --target-version
+              - py38
           language_version: python3
 -   repo: https://github.com/Lucas-C/pre-commit-hooks.git
     rev: v1.5.5
@@ -40,7 +42,7 @@ repos:
             - --license-filepath
             - license_header.txt
 -   repo: https://github.com/pycqa/flake8
-    rev: 7.0.0
+    rev: 7.3.0
     hooks:
       - id: flake8
         additional_dependencies:
