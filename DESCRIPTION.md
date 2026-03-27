@@ -10,6 +10,7 @@ Source code is also available at:
 # Unreleased Notes
 
 - Emit `SnowflakeWarning` at DDL compile time when `Identity()` is used on a primary key column, alerting users that ORM flush operations will raise a `FlushError`. The warning is emitted once per unique `(table, column)` pair per Python process. Use `Sequence()` instead.
+- Add support for cross-database schema reflection using `schema='database.schema'` notation. This allows reflecting and joining tables from different databases in a single session without raw SQL. ([#456](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/456))
 
 # Release Notes
 

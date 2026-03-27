@@ -323,6 +323,7 @@ class SnowflakeDialect(default.DefaultDialect):
         Args:
             connection: Database connection
             schema: Optional schema name. If None, uses default_schema_name.
+                   Can be "schema" or "database.schema" for cross-database access.
             **kw: Keyword arguments including optional info_cache
 
         Returns:
@@ -332,9 +333,28 @@ class SnowflakeDialect(default.DefaultDialect):
         current_database, current_schema = self._current_database_schema(
             connection, **kw
         )
-        return self._denormalize_quote_join(
-            current_database, schema if schema else current_schema
-        )
+
+        if schema:
+            # Check if schema contains a database qualifier (e.g., "db.schema")
+            parts = self.identifier_preparer._split_schema_by_dot(schema)
+            if len(parts) == 2:
+                # Schema already includes database, use as-is
+                # Don't use _denormalize_quote_join as parts are already split
+                quoted_parts = self.identifier_preparer._quote_free_identifiers(*parts)
+                return ".".join(quoted_parts)
+            elif len(parts) == 1:
+                # Single-part schema, prepend current database (backward compatible)
+                # Don't pass already-split part through _denormalize_quote_join
+                quoted_parts = self.identifier_preparer._quote_free_identifiers(
+                    current_database, parts[0]
+                )
+                return ".".join(quoted_parts)
+            else:
+                # More than 2 parts is not valid, fall back to original behavior
+                return self._denormalize_quote_join(current_database, schema)
+        else:
+            # No schema provided, use current database and schema
+            return self._denormalize_quote_join(current_database, current_schema)
 
     @reflection.cache
     def _current_database_schema(self, connection, **kw):
@@ -738,16 +758,17 @@ class SnowflakeDialect(default.DefaultDialect):
             Returns None (cacheable) when hitting Snowflake's information_schema
             result size limit, triggering fallback to per-table DESC queries.
         """
-        schema_name = self.denormalize_name(schema)
+        # Get the full schema name, which handles cross-database schemas
+        full_schema_name = self._get_full_schema_name(connection, schema, **kw)
 
-        result = self._query_all_columns_info(connection, schema_name, **kw)
+        # Query columns using the denormalized full schema name
+        result = self._query_all_columns_info(connection, full_schema_name, **kw)
         if result is None:
             return None
 
         current_database, default_schema = self._current_database_schema(
             connection, **kw
         )
-        full_schema_name = self._denormalize_quote_join(current_database, schema)
 
         schema_primary_keys = self._get_schema_primary_keys(
             connection, full_schema_name, **kw
@@ -794,7 +815,7 @@ class SnowflakeDialect(default.DefaultDialect):
                 identity_cycle,
                 identity_ordered,
                 data_type_alias,
-                schema_name,
+                full_schema_name,
                 schema_primary_keys,
                 structured_type_info_manager,
                 **kw,
@@ -838,10 +859,26 @@ class SnowflakeDialect(default.DefaultDialect):
 
     @reflection.cache
     def _query_all_columns_info(self, connection, schema_name, **kw):
+        # Check if schema_name is database-qualified (e.g., db.schema or "db"."schema")
+        # Use the identifier preparer to properly parse the denormalized name
+        parts = self.identifier_preparer._split_schema_by_dot(schema_name)
+
+        if len(parts) >= 2:
+            # Schema is database-qualified
+            # First part is database, second is schema
+            database_part = self.identifier_preparer.quote(parts[0])
+            schema_only = str(parts[1])  # Schema name without quotes for WHERE clause
+            # Use database-qualified information_schema
+            info_schema_table = f"{database_part}.information_schema.columns"
+        else:
+            # Single schema name (backward compatible)
+            schema_only = str(parts[0]) if parts else schema_name
+            info_schema_table = "information_schema.columns"
+
         try:
             return connection.execute(
                 text(
-                    """
+                    f"""
             SELECT /* sqlalchemy:_get_schema_columns */
                    ic.table_name,
                    ic.column_name,
@@ -859,11 +896,11 @@ class SnowflakeDialect(default.DefaultDialect):
                    ic.identity_cycle,
                    ic.identity_ordered,
                    ic.data_type_alias
-              FROM information_schema.columns ic
+              FROM {info_schema_table} ic
              WHERE ic.table_schema=:table_schema
              ORDER BY ic.ordinal_position"""
                 ),
-                {"table_schema": schema_name},
+                {"table_schema": schema_only},
             )
         except sa_exc.ProgrammingError as pe:
             if pe.orig.errno == 90030:
