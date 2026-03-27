@@ -847,6 +847,8 @@ class SnowflakeCompiler(compiler.SQLCompiler):
                 PendingDeprecationWarning,
                 stacklevel=2,
             )
+            # Delegate to parent to get CAST behavior for backward compatibility
+            return super().visit_truediv_binary(binary, operator, **kw)
         return (
             self.process(binary.left, **kw) + " / " + self.process(binary.right, **kw)
         )
