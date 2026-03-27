@@ -520,6 +520,8 @@ SQLAlchemy 2.x distinguishes bulk reflection from single-table inspection at the
 
 No configuration is needed; the routing is handled automatically by the SA 2.x dispatch layer.
 
+**Note on reflected type representations:** Because `inspector.get_columns()` uses `DESC TABLE`, reflected types always include Snowflake's resolved default sizes (e.g. `BINARY(8388608)` instead of `BINARY`, `VARCHAR(16777216)` instead of `VARCHAR`). The type *objects* are functionally identical; only `str()` output differs. Use `isinstance()` checks rather than string comparison for type introspection.
+
 ```python
 from sqlalchemy import MetaData, inspect, create_engine
 

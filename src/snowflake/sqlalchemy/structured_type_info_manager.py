@@ -3,6 +3,7 @@
 
 import re
 
+from sqlalchemy import exc as sa_exc
 from sqlalchemy import util as sa_util
 from sqlalchemy.sql import text
 
@@ -166,8 +167,10 @@ class _StructuredTypeInfoManager:
             Query result or None if the command fails
 
         Note:
-            Exception can be caused by another session dropping the table while
-            this process is running.
+            Only SQL-level errors (ProgrammingError) are swallowed — e.g. the
+            table was dropped by another session or the object type does not
+            support DESC.  Connection / operational errors propagate so callers
+            fail fast with actionable diagnostics.
         """
         try:
             return self.connection.execute(
@@ -175,7 +178,7 @@ class _StructuredTypeInfoManager:
                     f"DESC /* sqlalchemy:_get_schema_columns */ TABLE {full_table_name} TYPE = COLUMNS"
                 )
             )
-        except Exception:
+        except sa_exc.ProgrammingError:
             sa_util.warn(
                 f"Failed to reflect table '{full_table_name}' using sqlalchemy:_get_schema_columns"
             )

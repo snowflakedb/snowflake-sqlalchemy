@@ -512,8 +512,7 @@ class SnowflakeDialect(default.DefaultDialect):
     def _get_table_primary_keys(self, connection, table_name, schema, **kw):
         """SHOW PRIMARY KEYS IN TABLE — single-table path (cache_column_metadata=True).
 
-        Results are not cached. DDL executed mid-session is reflected immediately
-        on the next call, unlike the schema-wide cached path.
+        Results are cached by the calling method's @reflection.cache decorator.
         """
         full_name = self._always_quote_join(schema, table_name)
         try:
@@ -526,7 +525,8 @@ class SnowflakeDialect(default.DefaultDialect):
             return self._parse_pk_rows(result).get(
                 normalized_table_name, {"constrained_columns": [], "name": None}
             )
-        except sa_exc.DBAPIError:
+        except sa_exc.ProgrammingError:
+            logger.debug("Failed to reflect primary keys for %s", full_name)
             return {"constrained_columns": [], "name": None}
 
     @reflection.cache
@@ -591,8 +591,7 @@ class SnowflakeDialect(default.DefaultDialect):
     def _get_table_unique_constraints(self, connection, table_name, schema, **kw):
         """SHOW UNIQUE KEYS IN TABLE — single-table path (cache_column_metadata=True).
 
-        Results are not cached. DDL executed mid-session is reflected immediately
-        on the next call, unlike the schema-wide cached path.
+        Results are cached by the calling method's @reflection.cache decorator.
         """
         full_name = self._always_quote_join(schema, table_name)
         try:
@@ -603,7 +602,8 @@ class SnowflakeDialect(default.DefaultDialect):
             )
             normalized_table_name = self.normalize_name(table_name)
             return self._parse_uk_rows(result).get(normalized_table_name, [])
-        except sa_exc.DBAPIError:
+        except sa_exc.ProgrammingError:
+            logger.debug("Failed to reflect unique constraints for %s", full_name)
             return []
 
     @reflection.cache
@@ -671,8 +671,7 @@ class SnowflakeDialect(default.DefaultDialect):
         (e.g. USE SCHEMA called after engine creation, or reflecting a non-default
         schema) are handled correctly.
 
-        Results are not cached. DDL executed mid-session is reflected immediately
-        on the next call, unlike the schema-wide cached path.
+        Results are cached by the calling method's @reflection.cache decorator.
         """
         full_name = self._always_quote_join(schema, table_name)
         _, current_schema = self._current_database_schema(connection, **kw)
@@ -691,7 +690,8 @@ class SnowflakeDialect(default.DefaultDialect):
             return self._parse_fk_rows(result, same_schemas).get(
                 normalized_table_name, []
             )
-        except sa_exc.DBAPIError:
+        except sa_exc.ProgrammingError:
+            logger.debug("Failed to reflect foreign keys for %s", full_name)
             return []
 
     @reflection.cache
@@ -699,15 +699,24 @@ class SnowflakeDialect(default.DefaultDialect):
         """SHOW IMPORTED KEYS IN SCHEMA — schema-wide path for get_foreign_keys
         (SA 1.4) and get_multi_foreign_keys (SA 2.x).
 
-        referred_schema is set to None for FKs whose target is in the current or
-        default schema.  See:
+        referred_schema is set to None for FKs whose target is in the same
+        schema as the table being reflected.  The same-schema set includes the
+        explicitly-reflected schema so that cross-session-schema scenarios
+        (e.g. USE SCHEMA called after engine creation, or reflecting a
+        non-default schema) are handled correctly.
+
+        See:
         https://docs.sqlalchemy.org/en/14/core/reflection.html#reflection-schema-qualified-interaction
 
         Results are cached for the lifetime of a connection via @reflection.cache.
         DDL executed mid-session will not be reflected until a new connection is used.
         """
         _, current_schema = self._current_database_schema(connection, **kw)
-        same_schemas = {self.default_schema_name, current_schema}
+        same_schemas = {
+            self.normalize_name(schema),
+            self.default_schema_name,
+            current_schema,
+        }
         result = connection.execute(
             text(
                 f"SHOW /* sqlalchemy:_get_schema_foreign_keys */ IMPORTED KEYS IN SCHEMA {schema}"
@@ -778,16 +787,14 @@ class SnowflakeDialect(default.DefaultDialect):
         if all_columns is None:
             all_columns = {}
         tables = filter_names if filter_names is not None else list(all_columns.keys())
+        mgr = _StructuredTypeInfoManager(
+            connection, self.name_utils, self.default_schema_name
+        )
         result = []
         for table_name in tables:
             cols = all_columns.get(table_name)
             if cols is None:
-                # Not in information_schema (temp table, dynamic table, etc.)
-                # Fall back to DESC TABLE on the live connection.
                 full_name = self._always_quote_join(effective_schema, table_name)
-                mgr = _StructuredTypeInfoManager(
-                    connection, self.name_utils, self.default_schema_name
-                )
                 cols = mgr.get_table_columns_by_full_name(full_name)
             result.append(((schema, table_name), cols))
         return result
@@ -1409,37 +1416,12 @@ class SnowflakeDialect(default.DefaultDialect):
             )
         )
 
-        n2i = self._map_name_to_idx(result)
-        indexes = {}
-
-        for row in result.cursor.fetchall():
-            table_name = self.normalize_name(str(row[n2i["table"]]))
-            if (
-                row[n2i["name"]] == f'SYS_INDEX_{row[n2i["table"]]}_PRIMARY'
-                or table_name not in filter_names
-                or table_name not in hybrid_table_names
-            ):
-                continue
-            index = {
-                "name": row[n2i["name"]],
-                "unique": row[n2i["is_unique"]] == "Y",
-                "column_names": [
-                    self.normalize_name(column)
-                    for column in parse_index_columns(row[n2i["columns"]])
-                ],
-                "include_columns": [
-                    self.normalize_name(column)
-                    for column in parse_index_columns(row[n2i["included_columns"]])
-                ],
-                "dialect_options": {},
-            }
-
-            if (schema, table_name) in indexes:
-                indexes[(schema, table_name)].append(index)
-            else:
-                indexes[(schema, table_name)] = [index]
-
-        return list(indexes.items())
+        all_indexes = self._parse_index_rows(result)
+        return [
+            ((schema, table_name), table_indexes)
+            for table_name, table_indexes in all_indexes.items()
+            if table_name in filter_names and table_name in hybrid_table_names
+        ]
 
     def _value_or_default(self, data, table, schema):
         table = self.normalize_name(str(table))
@@ -1449,13 +1431,44 @@ class SnowflakeDialect(default.DefaultDialect):
         else:
             return []
 
+    def _parse_index_rows(self, result):
+        """Parse SHOW INDEXES rows into {table_name: [index_dict, ...]}.
+
+        Both SHOW INDEXES IN TABLE and SHOW INDEXES IN SCHEMA return the same
+        column set (including table), so this helper works for both paths.
+        SYS_INDEX primary-key sentinels are filtered out.
+        """
+        n2i = self._map_name_to_idx(result)
+        indexes = defaultdict(list)
+        for row in result.cursor.fetchall():
+            if row[n2i["name"]] == f'SYS_INDEX_{row[n2i["table"]]}_PRIMARY':
+                continue
+            table_name = self.normalize_name(str(row[n2i["table"]]))
+            indexes[table_name].append(
+                {
+                    "name": row[n2i["name"]],
+                    "unique": row[n2i["is_unique"]] == "Y",
+                    "column_names": [
+                        self.normalize_name(column)
+                        for column in parse_index_columns(row[n2i["columns"]])
+                    ],
+                    "include_columns": [
+                        self.normalize_name(column)
+                        for column in parse_index_columns(row[n2i["included_columns"]])
+                    ],
+                    "dialect_options": {},
+                }
+            )
+        return dict(indexes)
+
     def _get_table_indexes(self, connection, table_name, schema, **kw):
-        """SHOW INDEXES IN TABLE — used for single-table reflection when opt-in
-        is active (cache_column_metadata=true).
+        """SHOW INDEXES IN TABLE — single-table path (cache_column_metadata=True).
 
         For non-hybrid tables Snowflake returns an empty result set (not an
         error), so the list will simply be empty.  The SYS_INDEX primary-key
         sentinel is filtered out, consistent with the schema-wide path.
+
+        Results are cached by the calling method's @reflection.cache decorator.
         """
         full_name = self._always_quote_join(schema, table_name)
         try:
@@ -1464,30 +1477,10 @@ class SnowflakeDialect(default.DefaultDialect):
                     f"SHOW /* sqlalchemy:_get_table_indexes */ INDEXES IN TABLE {full_name}"
                 )
             )
-            n2i = self._map_name_to_idx(result)
-            indexes = []
-            for row in result.cursor.fetchall():
-                if row[n2i["name"]] == f'SYS_INDEX_{row[n2i["table"]]}_PRIMARY':
-                    continue
-                indexes.append(
-                    {
-                        "name": row[n2i["name"]],
-                        "unique": row[n2i["is_unique"]] == "Y",
-                        "column_names": [
-                            self.normalize_name(column)
-                            for column in parse_index_columns(row[n2i["columns"]])
-                        ],
-                        "include_columns": [
-                            self.normalize_name(column)
-                            for column in parse_index_columns(
-                                row[n2i["included_columns"]]
-                            )
-                        ],
-                        "dialect_options": {},
-                    }
-                )
-            return indexes
-        except sa_exc.DBAPIError:
+            normalized_table_name = self.normalize_name(table_name)
+            return self._parse_index_rows(result).get(normalized_table_name, [])
+        except sa_exc.ProgrammingError:
+            logger.debug("Failed to reflect indexes for %s", full_name)
             return []
 
     @reflection.cache
