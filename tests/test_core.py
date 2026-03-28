@@ -8,6 +8,7 @@ import re
 import string
 import textwrap
 import time
+import uuid
 from datetime import date, datetime
 from unittest.mock import patch
 
@@ -738,6 +739,130 @@ def test_get_foreign_keys(engine_testaccount):
     finally:
         addresses.drop(engine_testaccount)
         users.drop(engine_testaccount)
+
+
+def test_get_foreign_keys_multi_schema(engine_testaccount, db_parameters):
+    """
+    Tests foreign keys across multiple schemas to verify referred_schema is correctly set.
+
+    This test validates the fix for issue #610 where same-schema FKs in non-default schemas
+    incorrectly returned referred_schema with the schema name instead of None.
+    """
+    schema1_name = f"test_schema1_{str(uuid.uuid4()).replace('-', '_')}"
+    schema2_name = f"test_schema2_{str(uuid.uuid4()).replace('-', '_')}"
+    default_schema = db_parameters.get("schema")
+
+    with engine_testaccount.connect() as conn:
+        # Create test schemas
+        conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema1_name}"))
+        conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema2_name}"))
+        conn.commit()
+
+        try:
+            # Create tables with various FK relationships
+            metadata = MetaData()
+
+            # Table in schema1
+            Table(
+                "users",
+                metadata,
+                Column("id", Integer, primary_key=True),
+                Column("name", String),
+                schema=schema1_name,
+            )
+
+            # Table in schema2 with FK to schema1 (cross-schema FK)
+            Table(
+                "orders_cross",
+                metadata,
+                Column("id", Integer, primary_key=True),
+                Column(
+                    "user_id",
+                    ForeignKey(f"{schema1_name}.users.id", name="fk_cross_schema"),
+                ),
+                schema=schema2_name,
+            )
+
+            # Table in schema2 with FK to same schema (same-schema FK in non-default schema)
+            Table(
+                "products",
+                metadata,
+                Column("id", Integer, primary_key=True),
+                Column("name", String),
+                schema=schema2_name,
+            )
+
+            Table(
+                "orders_same",
+                metadata,
+                Column("id", Integer, primary_key=True),
+                Column(
+                    "product_id",
+                    ForeignKey(f"{schema2_name}.products.id", name="fk_same_schema"),
+                ),
+                schema=schema2_name,
+            )
+
+            # Table in default schema
+            Table(
+                "categories",
+                metadata,
+                Column("id", Integer, primary_key=True),
+                Column("name", String),
+                schema=default_schema,
+            )
+
+            # Table with FK to default schema
+            Table(
+                "items",
+                metadata,
+                Column("id", Integer, primary_key=True),
+                Column(
+                    "category_id",
+                    ForeignKey(f"{default_schema}.categories.id", name="fk_to_default"),
+                ),
+                schema=schema2_name,
+            )
+
+            # Create all tables
+            metadata.create_all(engine_testaccount)
+
+            # Test FK reflection
+            inspector = inspect(engine_testaccount)
+
+            # Test case 1: Cross-schema FK (schema2 -> schema1)
+            fks_cross = inspector.get_foreign_keys("orders_cross", schema=schema2_name)
+            assert len(fks_cross) == 1
+            assert fks_cross[0]["name"] == "fk_cross_schema"
+            assert fks_cross[0]["referred_table"] == "users"
+            assert (
+                fks_cross[0]["referred_schema"] == schema1_name.lower()
+            ), f"Cross-schema FK should have referred_schema={schema1_name.lower()}"
+
+            # Test case 2: Same-schema FK in non-default schema (schema2 -> schema2)
+            fks_same = inspector.get_foreign_keys("orders_same", schema=schema2_name)
+            assert len(fks_same) == 1
+            assert fks_same[0]["name"] == "fk_same_schema"
+            assert fks_same[0]["referred_table"] == "products"
+            assert (
+                fks_same[0]["referred_schema"] is None
+            ), "Same-schema FK should have referred_schema=None"
+
+            # Test case 3: FK to default schema
+            fks_default = inspector.get_foreign_keys("items", schema=schema2_name)
+            assert len(fks_default) == 1
+            assert fks_default[0]["name"] == "fk_to_default"
+            assert fks_default[0]["referred_table"] == "categories"
+            assert (
+                fks_default[0]["referred_schema"] is None
+            ), "FK to default schema should have referred_schema=None"
+
+        finally:
+            # Clean up
+            metadata.drop_all(engine_testaccount)
+            conn.execute(text(f"DROP SCHEMA IF EXISTS {schema1_name}"))
+            conn.execute(text(f"DROP SCHEMA IF EXISTS {schema2_name}"))
+            conn.commit()
 
 
 def test_naming_convention_constraint_names(engine_testaccount):

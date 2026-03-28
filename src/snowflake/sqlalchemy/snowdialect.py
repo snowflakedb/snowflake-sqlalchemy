@@ -437,6 +437,7 @@ class SnowflakeDialect(default.DefaultDialect):
     @reflection.cache
     def _get_schema_foreign_keys(self, connection, schema, **kw):
         _, current_schema = self._current_database_schema(connection, **kw)
+        current_schema = self.normalize_name(current_schema)
         result = connection.execute(
             text(
                 f"SHOW /* sqlalchemy:_get_schema_foreign_keys */ IMPORTED KEYS IN SCHEMA {schema}"
@@ -447,6 +448,7 @@ class SnowflakeDialect(default.DefaultDialect):
             name = self.normalize_name(row._mapping["fk_name"])
             if name not in foreign_key_map:
                 referred_schema = self.normalize_name(row._mapping["pk_schema_name"])
+                fk_schema = self.normalize_name(row._mapping["fk_schema_name"])
                 foreign_key_map[name] = {
                     "constrained_columns": [
                         self.normalize_name(row._mapping["fk_column_name"])
@@ -454,10 +456,10 @@ class SnowflakeDialect(default.DefaultDialect):
                     # referred schema should be None in context where it doesn't need to be specified
                     # https://docs.sqlalchemy.org/en/14/core/reflection.html#reflection-schema-qualified-interaction
                     "referred_schema": (
-                        referred_schema
+                        None
                         if referred_schema
-                        not in (self.default_schema_name, current_schema)
-                        else None
+                        in (fk_schema, self.default_schema_name, current_schema)
+                        else referred_schema
                     ),
                     "referred_table": self.normalize_name(
                         row._mapping["pk_table_name"]
