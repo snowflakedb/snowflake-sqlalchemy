@@ -83,7 +83,7 @@ class _KeyedColumn(NamedTuple):
     column_name: str
 
     @classmethod
-    def from_row(cls, key_sequence, column_name: str) -> "_KeyedColumn":
+    def new(cls, key_sequence, column_name: str) -> "_KeyedColumn":
         return cls(int(key_sequence), column_name)
 
 
@@ -405,7 +405,7 @@ class SnowflakeDialect(default.DefaultDialect):
                 }
 
             ans[table_name]["constrained_columns"].append(
-                _KeyedColumn.from_row(
+                _KeyedColumn.new(
                     row._mapping["key_sequence"],
                     self.normalize_name(row._mapping["column_name"]),
                 )
@@ -439,7 +439,7 @@ class SnowflakeDialect(default.DefaultDialect):
             if name not in unique_constraints:
                 unique_constraints[name] = {
                     "column_names": [
-                        _KeyedColumn.from_row(
+                        _KeyedColumn.new(
                             row._mapping["key_sequence"],
                             self.normalize_name(row._mapping["column_name"]),
                         )
@@ -449,7 +449,7 @@ class SnowflakeDialect(default.DefaultDialect):
                 }
             else:
                 unique_constraints[name]["column_names"].append(
-                    _KeyedColumn.from_row(
+                    _KeyedColumn.new(
                         row._mapping["key_sequence"],
                         self.normalize_name(row._mapping["column_name"]),
                     )
@@ -487,7 +487,7 @@ class SnowflakeDialect(default.DefaultDialect):
                 referred_schema = self.normalize_name(row._mapping["pk_schema_name"])
                 foreign_key_map[name] = {
                     "constrained_columns": [
-                        _KeyedColumn.from_row(
+                        _KeyedColumn.new(
                             row._mapping["key_sequence"],
                             self.normalize_name(row._mapping["fk_column_name"]),
                         )
@@ -504,7 +504,7 @@ class SnowflakeDialect(default.DefaultDialect):
                         row._mapping["pk_table_name"]
                     ),
                     "referred_columns": [
-                        _KeyedColumn.from_row(
+                        _KeyedColumn.new(
                             row._mapping["key_sequence"],
                             self.normalize_name(row._mapping["pk_column_name"]),
                         )
@@ -524,13 +524,13 @@ class SnowflakeDialect(default.DefaultDialect):
                 foreign_key_map[name]["options"] = options
             else:
                 foreign_key_map[name]["constrained_columns"].append(
-                    _KeyedColumn.from_row(
+                    _KeyedColumn.new(
                         row._mapping["key_sequence"],
                         self.normalize_name(row._mapping["fk_column_name"]),
                     )
                 )
                 foreign_key_map[name]["referred_columns"].append(
-                    _KeyedColumn.from_row(
+                    _KeyedColumn.new(
                         row._mapping["key_sequence"],
                         self.normalize_name(row._mapping["pk_column_name"]),
                     )
