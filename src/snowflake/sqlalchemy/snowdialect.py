@@ -8,7 +8,7 @@ from enum import Enum
 from functools import reduce
 from logging import getLogger
 from time import time as time_in_seconds
-from typing import Any, Collection, Optional, cast
+from typing import Any, Collection, NamedTuple, Optional, cast
 from urllib.parse import unquote_plus
 
 import sqlalchemy.sql.sqltypes as sqltypes
@@ -76,6 +76,14 @@ class TelemetryEvents(Enum):
 class SnowflakeIsolationLevel(Enum):
     READ_COMMITTED = "READ COMMITTED"
     AUTOCOMMIT = "AUTOCOMMIT"
+
+
+class _KeyedColumn(NamedTuple):
+    key_sequence: int
+    column_name: str
+
+    def __new__(cls, key_sequence, column_name: str):
+        return super().__new__(cls, int(key_sequence), column_name)
 
 
 class SnowflakeDialect(default.DefaultDialect):
@@ -373,6 +381,12 @@ class SnowflakeDialect(default.DefaultDialect):
         # check constraints are not supported by Snowflake
         return []
 
+    @staticmethod
+    def _sort_columns_by_key_sequence(columns: list[_KeyedColumn]) -> list[str]:
+        """Sort columns by key_sequence and return column names."""
+        columns.sort(key=lambda c: c.key_sequence)
+        return [c.column_name for c in columns]
+
     @reflection.cache
     def _get_schema_primary_keys(self, connection, schema, **kw):
         result = connection.execute(
@@ -390,18 +404,16 @@ class SnowflakeDialect(default.DefaultDialect):
                 }
 
             ans[table_name]["constrained_columns"].append(
-                # Use pair (key_sequence, column_name) to sort constrained columns by key sequence
-                (
+                _KeyedColumn(
                     row._mapping["key_sequence"],
                     self.normalize_name(row._mapping["column_name"]),
                 )
             )
 
-        # Sort constrained columns by key sequence
         for table_name in ans:
-            ans[table_name]["constrained_columns"] = [
-                col for _, col in sorted(ans[table_name]["constrained_columns"])
-            ]
+            ans[table_name]["constrained_columns"] = self._sort_columns_by_key_sequence(
+                ans[table_name]["constrained_columns"]
+            )
 
         return ans
 
@@ -426,8 +438,7 @@ class SnowflakeDialect(default.DefaultDialect):
             if name not in unique_constraints:
                 unique_constraints[name] = {
                     "column_names": [
-                        # Use pair (key_sequence, column_name) to sort constrained columns by key sequence
-                        (
+                        _KeyedColumn(
                             row._mapping["key_sequence"],
                             self.normalize_name(row._mapping["column_name"]),
                         )
@@ -437,8 +448,7 @@ class SnowflakeDialect(default.DefaultDialect):
                 }
             else:
                 unique_constraints[name]["column_names"].append(
-                    # Use pair (key_sequence, column_name) to sort constrained columns by key sequence
-                    (
+                    _KeyedColumn(
                         row._mapping["key_sequence"],
                         self.normalize_name(row._mapping["column_name"]),
                     )
@@ -446,10 +456,9 @@ class SnowflakeDialect(default.DefaultDialect):
 
         ans = defaultdict(list)
         for constraint in unique_constraints.values():
-            # Sort constrained columns by key sequence
-            constraint["column_names"] = [
-                col for _, col in sorted(constraint["column_names"])
-            ]
+            constraint["column_names"] = self._sort_columns_by_key_sequence(
+                constraint["column_names"]
+            )
             table_name = constraint.pop("table_name")
             ans[table_name].append(constraint)
 
@@ -477,8 +486,7 @@ class SnowflakeDialect(default.DefaultDialect):
                 referred_schema = self.normalize_name(row._mapping["pk_schema_name"])
                 foreign_key_map[name] = {
                     "constrained_columns": [
-                        # Use pair (key_sequence, column_name) to sort constrained columns by key sequence
-                        (
+                        _KeyedColumn(
                             row._mapping["key_sequence"],
                             self.normalize_name(row._mapping["fk_column_name"]),
                         )
@@ -495,8 +503,7 @@ class SnowflakeDialect(default.DefaultDialect):
                         row._mapping["pk_table_name"]
                     ),
                     "referred_columns": [
-                        # Use pair (key_sequence, column_name) to sort constrained columns by key sequence
-                        (
+                        _KeyedColumn(
                             row._mapping["key_sequence"],
                             self.normalize_name(row._mapping["pk_column_name"]),
                         )
@@ -516,15 +523,13 @@ class SnowflakeDialect(default.DefaultDialect):
                 foreign_key_map[name]["options"] = options
             else:
                 foreign_key_map[name]["constrained_columns"].append(
-                    # Use pair (key_sequence, column_name) to sort constrained columns by key sequence
-                    (
+                    _KeyedColumn(
                         row._mapping["key_sequence"],
                         self.normalize_name(row._mapping["fk_column_name"]),
                     )
                 )
                 foreign_key_map[name]["referred_columns"].append(
-                    # Use pair (key_sequence, column_name) to sort constrained columns by key sequence
-                    (
+                    _KeyedColumn(
                         row._mapping["key_sequence"],
                         self.normalize_name(row._mapping["pk_column_name"]),
                     )
@@ -532,13 +537,12 @@ class SnowflakeDialect(default.DefaultDialect):
 
         ans = {}
         for _, v in foreign_key_map.items():
-            # Sort referred columns by key sequence
-            v["constrained_columns"] = [
-                col for _, col in sorted(v["constrained_columns"])
-            ]
-
-            # Sort referred columns by key sequence
-            v["referred_columns"] = [col for _, col in sorted(v["referred_columns"])]
+            v["constrained_columns"] = self._sort_columns_by_key_sequence(
+                v["constrained_columns"]
+            )
+            v["referred_columns"] = self._sort_columns_by_key_sequence(
+                v["referred_columns"]
+            )
 
             if v["table_name"] not in ans:
                 ans[v["table_name"]] = []
