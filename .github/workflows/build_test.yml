@@ -66,7 +66,7 @@ jobs:
 
       - name: Checkout Code
         id: checkout_code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: ${{ github.event_name == 'workflow_dispatch' && steps.extract-pr-info.outputs.FORK_FULL_PATH || github.repository }}
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.commit-sha || '' }}
@@ -103,7 +103,7 @@ jobs:
     steps:
       - name: Checkout Code
         id: checkout_code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: ${{ github.event_name == 'workflow_dispatch' && needs.verify-test-run.outputs.fork-full-path || github.repository }}
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.commit-sha || '' }}
@@ -156,7 +156,7 @@ jobs:
     steps:
       - name: Checkout Code
         id: checkout_code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: ${{ github.event_name == 'workflow_dispatch' && needs.verify-test-run.outputs.fork-full-path || github.repository }}
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.commit-sha || '' }}
@@ -204,7 +204,7 @@ jobs:
     steps:
       - name: Checkout Code
         id: checkout_code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: ${{ github.event_name == 'workflow_dispatch' && needs.verify-test-run.outputs.fork-full-path || github.repository }}
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.commit-sha || '' }}
@@ -278,7 +278,7 @@ jobs:
     steps:
       - name: Checkout Code
         id: checkout_code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: ${{ github.event_name == 'workflow_dispatch' && needs.verify-test-run.outputs.fork-full-path || github.repository }}
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.commit-sha || '' }}
@@ -344,7 +344,7 @@ jobs:
     steps:
       - name: Checkout Code
         id: checkout_code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: ${{ github.event_name == 'workflow_dispatch' && needs.verify-test-run.outputs.fork-full-path || github.repository }}
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.commit-sha || '' }}
@@ -409,7 +409,7 @@ jobs:
     steps:
       - name: Checkout Code
         id: checkout_code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: ${{ github.event_name == 'workflow_dispatch' && needs.verify-test-run.outputs.fork-full-path || github.repository }}
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.commit-sha || '' }}
@@ -464,7 +464,7 @@ jobs:
     steps:
       - name: Checkout Code
         id: checkout_code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: ${{ github.event_name == 'workflow_dispatch' && needs.verify-test-run.outputs.fork-full-path || github.repository }}
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.commit-sha || '' }}
