@@ -1009,3 +1009,88 @@ with Session(engine) as session:
 ```
 
 `Sequence` objects are fully supported by the Snowflake dialect and are the recommended way to generate auto-incrementing primary keys when using the ORM. See the [Auto-increment Behavior](#auto-increment-behavior) section for more details.
+
+---
+
+### Case-sensitive identifiers
+
+Snowflake stores unquoted identifiers in UPPERCASE and treats them case-insensitively.  SQLAlchemy uses lowercase for case-insensitive identifiers.  The dialect bridges this gap via `normalize_name` / `denormalize_name`, but a few edge cases require explicit opt-in.
+
+#### Lowercase column names in CLUSTER BY
+
+Column objects wrapped in `quoted_name("mycol", True)` are treated as case-sensitive by SQLAlchemy.  Pass them directly to `snowflake_clusterby`:
+
+```python
+from sqlalchemy.sql.elements import quoted_name
+from sqlalchemy import Column, Integer, MetaData, Table
+
+t = Table(
+    "my_table",
+    MetaData(),
+    Column(quoted_name("mycol", True), Integer),
+    snowflake_clusterby=[quoted_name("mycol", True)],
+)
+# Generates: CLUSTER BY ("mycol")
+```
+
+Without `quoted_name(..., True)` the column name is treated as case-insensitive and Snowflake resolves it as `MYCOL`.
+
+#### Reserved-word table/column names (e.g. `TABLE`, `SELECT`)
+
+When a Snowflake object has a name that is also a SQL reserved word, the dialect's default normalization returns the name unchanged (all-uppercase) instead of lowercasing it.  Enable the `case_sensitive_identifiers` flag to have the dialect instead return `quoted_name("table", True)` — the standard SQLAlchemy convention for case-sensitive names:
+
+```python
+from sqlalchemy import create_engine
+
+engine = create_engine(
+    "snowflake://user:pass@account/db",
+    case_sensitive_identifiers=True,
+)
+```
+
+Or via URL:
+
+```
+snowflake://user:pass@account/db?case_sensitive_identifiers=True
+```
+
+**Hard limit:** Enabling this flag changes the dict key used by `normalize_name("TABLE")` from `"TABLE"` to `quoted_name("table", True)`.  Because `hash("TABLE") != hash("table")`, any existing code that accesses `metadata.tables["TABLE"]` by uppercase key will miss after the flag is enabled.
+
+#### Case-sensitive schema names
+
+To connect to a schema whose name is lowercase or mixed-case in Snowflake (created with double-quotes), use the `create_snowflake_engine` helper:
+
+```python
+from snowflake.sqlalchemy import create_snowflake_engine
+
+engine = create_snowflake_engine(
+    "snowflake://user:pass@account/mydb",
+    schema="myschema",        # lowercase schema created with quotes in Snowflake
+    case_sensitive_schema=True,
+)
+```
+
+Alternatively, encode the schema manually using `%22` (URL-encoded double-quote):
+
+```
+snowflake://user:pass@account/mydb/%22myschema%22
+```
+
+The dialect's `create_connect_args` decodes `%22` back to a literal `"` before passing it to the Snowflake connector, which then executes `USE SCHEMA "myschema"` preserving case.
+
+#### Alembic autogenerate and case-sensitive columns
+
+Alembic's default renderer serialises `quoted_name("mycol", True)` as the plain string `"mycol"`, losing the case-sensitivity signal.  The generated migration would create a case-insensitive `MYCOL` column instead of `"mycol"`.
+
+Use the `render_item` hook from `snowflake.sqlalchemy.alembic_util` in your Alembic `env.py`:
+
+```python
+from snowflake.sqlalchemy.alembic_util import render_item as snowflake_render_item
+
+context.configure(
+    ...,
+    render_item=snowflake_render_item,
+)
+```
+
+**Hard limit:** Alembic has no dialect-level rendering hook.  The `render_item` callback in `env.py` is the only injection point and requires a two-line opt-in **per project**.  This cannot be eliminated without upstream Alembic changes.

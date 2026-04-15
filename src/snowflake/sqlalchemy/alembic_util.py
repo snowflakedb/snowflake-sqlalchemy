@@ -54,12 +54,11 @@ def render_item(type_, obj, autogen_context):
     """
     if type_ == "column" and isinstance(obj.name, quoted_name) and obj.name.quote:
         col_name = str(obj.name)
-        type_renderer = autogen_context.opts.get("render_item")
         # Render the column type using Alembic's own type renderer
         try:
-            rendered_type = autogen_context.opts["autogenerate_module"].render_column_type(
-                obj.type, autogen_context
-            )
+            rendered_type = autogen_context.opts[
+                "autogenerate_module"
+            ].render_column_type(obj.type, autogen_context)
         except (KeyError, AttributeError):
             # Fall back to plain repr if autogenerate_module not available
             rendered_type = repr(obj.type)

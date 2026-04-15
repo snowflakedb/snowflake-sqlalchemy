@@ -9,6 +9,13 @@ Source code is also available at:
 
 # Unreleased Notes
 
+- Fix case-sensitive identifier handling (SNOW-1232488):
+  - `denormalize_column_name` now correctly double-quotes `quoted_name("mycol", True)` columns in `CLUSTER BY` clauses instead of silently dropping the case-sensitivity signal.
+  - `_has_object` (used by `has_table` / `has_sequence`) now applies `denormalize_name` before building the `DESC` SQL, making it consistent with all other reflection methods.
+  - Add `case_sensitive_identifiers` engine flag (kwarg or `?case_sensitive_identifiers=True` URL param): when enabled, ALL-UPPERCASE reserved-word identifiers (e.g. `TABLE`) are normalized to `quoted_name("table", True)` instead of returning unchanged, preventing key-lookup mismatches between creation and reflection.
+  - Add `create_snowflake_engine(url, schema=..., case_sensitive_schema=True)` helper that URL-encodes case-sensitive schema names using `%22` so the Snowflake connector receives the literal double-quoted form.
+  - Add `snowflake.sqlalchemy.alembic_util.render_item` — a drop-in Alembic `render_item` hook for `env.py` that serialises `quoted_name` columns with `quote=True` correctly in generated migration files, preventing Alembic autogenerate from silently converting case-sensitive column names to uppercase.
+
 - Emit `SnowflakeWarning` at DDL compile time when `Identity()` is used on a primary key column, alerting users that ORM flush operations will raise a `FlushError`. The warning is emitted once per unique `(table, column)` pair per Python process. Use `Sequence()` instead.
 - Optimise reflection performance (SNOW-689531, [#656](https://github.com/snowflakedb/snowflake-sqlalchemy/pull/656)):
   - Add `get_multi_columns`, `get_multi_pk_constraint`, `get_multi_unique_constraints`, `get_multi_foreign_keys` for SQLAlchemy 2.x bulk reflection — each issues one schema-wide query per reflection pass instead of one query per table.

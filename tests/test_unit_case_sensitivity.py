@@ -6,13 +6,11 @@
 
 from unittest import mock
 
-import pytest
 from sqlalchemy.engine.url import URL as SAUrl
 from sqlalchemy.sql.elements import quoted_name
 
 from snowflake.sqlalchemy import base
 from snowflake.sqlalchemy.snowdialect import SnowflakeDialect
-
 
 # ---------------------------------------------------------------------------
 # Bug 1 — denormalize_column_name respects quoted_name.quote
@@ -26,13 +24,9 @@ class TestDenormalizeColumnName:
         """Return a SnowflakeDDLCompiler with a minimal dialect."""
         if dialect is None:
             dialect = base.dialect()
-        from sqlalchemy import MetaData, Table, Column, Integer
+        from sqlalchemy import Column, Integer, MetaData, Table
 
         t = Table("t", MetaData(), Column("id", Integer))
-        # Create a DDL compiler; the simplest way is to use the dialect's
-        # ddl_compiler class.
-        from sqlalchemy.sql.compiler import DDLCompiler
-
         # We just need the preparer attribute—grab it from the dialect.
         compiler_cls = dialect.ddl_compiler
         # Create a minimal object: DDLCompiler requires (dialect, statement, ...)
@@ -101,7 +95,9 @@ class TestNormalizeNameReservedWord:
         """With flag=True: normalize_name('TABLE') returns quoted_name('table', True)."""
         d = self._dialect(case_sensitive=True)
         result = d.normalize_name("TABLE")
-        assert isinstance(result, quoted_name), f"Expected quoted_name, got {type(result)}"
+        assert isinstance(
+            result, quoted_name
+        ), f"Expected quoted_name, got {type(result)}"
         assert result.quote is True, "Expected quote=True"
         assert str(result) == "table", f"Expected 'table', got {str(result)!r}"
 
@@ -110,18 +106,18 @@ class TestNormalizeNameReservedWord:
         for flag in (False, True):
             d = self._dialect(case_sensitive=flag)
             result = d.normalize_name("MYTABLE")
-            assert result == "mytable", (
-                f"normalize_name('MYTABLE') should be 'mytable' with flag={flag}, got {result!r}"
-            )
+            assert (
+                result == "mytable"
+            ), f"normalize_name('MYTABLE') should be 'mytable' with flag={flag}, got {result!r}"
 
     def test_lowercase_returns_quoted_name(self):
         """normalize_name('mytable') always returns quoted_name('mytable', True)."""
         for flag in (False, True):
             d = self._dialect(case_sensitive=flag)
             result = d.normalize_name("mytable")
-            assert isinstance(result, quoted_name), (
-                f"Expected quoted_name for 'mytable' with flag={flag}"
-            )
+            assert isinstance(
+                result, quoted_name
+            ), f"Expected quoted_name for 'mytable' with flag={flag}"
             assert result.quote is True
 
     def test_none_and_empty(self):
@@ -141,9 +137,9 @@ class TestNormalizeNameReservedWord:
             if upper == word:  # only truly all-uppercase reserved words
                 result = d.normalize_name(upper)
                 # With flag off, reserved-word UPPERCASE names fall through unchanged
-                assert result == upper, (
-                    f"flag=False: normalize_name({upper!r}) should be {upper!r}, got {result!r}"
-                )
+                assert (
+                    result == upper
+                ), f"flag=False: normalize_name({upper!r}) should be {upper!r}, got {result!r}"
 
     def test_all_reserved_words_flag_on_returns_quoted(self):
         """With flag=True, ALL-UPPERCASE reserved words return quoted_name(lc, True)."""
@@ -154,9 +150,9 @@ class TestNormalizeNameReservedWord:
             upper = word.upper()
             if upper == word:
                 result = d.normalize_name(upper)
-                assert isinstance(result, quoted_name), (
-                    f"flag=True: normalize_name({upper!r}) should be quoted_name, got {result!r}"
-                )
+                assert isinstance(
+                    result, quoted_name
+                ), f"flag=True: normalize_name({upper!r}) should be quoted_name, got {result!r}"
                 assert result.quote is True
                 assert str(result) == upper.lower()
 
@@ -186,9 +182,9 @@ class TestHasObjectNormalization:
         sql_text = str(call_args[0][0])
         # denormalize_name('mytable') -> 'MYTABLE'
         # _denormalize_quote_join('MYTABLE') -> '"MYTABLE"'
-        assert '"MYTABLE"' in sql_text, (
-            f"Expected '\"MYTABLE\"' in DESC SQL, got: {sql_text!r}"
-        )
+        assert (
+            '"MYTABLE"' in sql_text
+        ), f"Expected '\"MYTABLE\"' in DESC SQL, got: {sql_text!r}"
 
     def test_quoted_name_generates_quoted_lowercase(self):
         """_has_object(quoted_name('mytable', True)) should generate DESC TABLE \"mytable\"."""
@@ -196,13 +192,14 @@ class TestHasObjectNormalization:
         d._has_object(conn, "TABLE", quoted_name("mytable", True))
         call_args = conn.execute.call_args
         sql_text = str(call_args[0][0])
-        assert '"mytable"' in sql_text, (
-            f"Expected '\"mytable\"' in DESC SQL, got: {sql_text!r}"
-        )
+        assert (
+            '"mytable"' in sql_text
+        ), f"Expected '\"mytable\"' in DESC SQL, got: {sql_text!r}"
 
     def test_programming_error_returns_false(self):
         """_has_object returns False when DESC raises ProgrammingError."""
         import sqlalchemy.exc as sa_exc
+
         from snowflake.connector import errors as sf_errors
 
         d = SnowflakeDialect()
@@ -277,9 +274,9 @@ class TestCaseSensitiveIdentifiersFlag:
             query={"case_sensitive_identifiers": "True"},
         )
         _, opts = d.create_connect_args(url)
-        assert "case_sensitive_identifiers" not in opts, (
-            "case_sensitive_identifiers must not be forwarded to connector opts"
-        )
+        assert (
+            "case_sensitive_identifiers" not in opts
+        ), "case_sensitive_identifiers must not be forwarded to connector opts"
 
 
 # ---------------------------------------------------------------------------
@@ -304,9 +301,9 @@ class TestCreateSnowflakeEngineHelper:
                 case_sensitive_schema=True,
             )
             call_url = mock_ce.call_args[0][0]
-            assert "%22myschema%22" in call_url, (
-                f"Expected %22myschema%22 in URL, got: {call_url!r}"
-            )
+            assert (
+                "%22myschema%22" in call_url
+            ), f"Expected %22myschema%22 in URL, got: {call_url!r}"
 
     def test_case_insensitive_schema_no_encoding(self):
         """case_sensitive_schema=False (default) should not encode schema."""
@@ -320,9 +317,9 @@ class TestCreateSnowflakeEngineHelper:
                 case_sensitive_schema=False,
             )
             call_url = mock_ce.call_args[0][0]
-            assert "%22" not in call_url, (
-                f"Should not have percent-encoded quotes in URL, got: {call_url!r}"
-            )
+            assert (
+                "%22" not in call_url
+            ), f"Should not have percent-encoded quotes in URL, got: {call_url!r}"
             assert "myschema" in call_url
 
     def test_no_schema(self):
@@ -353,8 +350,9 @@ class TestAlembicRenderItemHelper:
 
     def test_quoted_name_column_returns_string(self):
         """render_item for a quoted_name column must return a non-False string."""
-        from snowflake.sqlalchemy.alembic_util import render_item
         from sqlalchemy import Column, Integer
+
+        from snowflake.sqlalchemy.alembic_util import render_item
 
         col = Column(quoted_name("mycol", True), Integer)
 
@@ -364,14 +362,17 @@ class TestAlembicRenderItemHelper:
         )
 
         result = render_item("column", col, autogen_ctx)
-        assert result is not False, "render_item should return a string for quoted_name columns"
+        assert (
+            result is not False
+        ), "render_item should return a string for quoted_name columns"
         assert isinstance(result, str), f"Expected str, got {type(result)}"
         assert "mycol" in result, f"Expected 'mycol' in result, got {result!r}"
 
     def test_plain_column_returns_false(self):
         """render_item for a plain (non-quoted) column returns False (delegate to default)."""
-        from snowflake.sqlalchemy.alembic_util import render_item
         from sqlalchemy import Column, Integer
+
+        from snowflake.sqlalchemy.alembic_util import render_item
 
         col = Column("mycol", Integer)
         result = render_item("column", col, mock.MagicMock())
@@ -386,8 +387,9 @@ class TestAlembicRenderItemHelper:
 
     def test_quoted_name_false_returns_false(self):
         """render_item for quoted_name('mycol', False) returns False (no forced quoting)."""
-        from snowflake.sqlalchemy.alembic_util import render_item
         from sqlalchemy import Column, Integer
+
+        from snowflake.sqlalchemy.alembic_util import render_item
 
         col = Column(quoted_name("mycol", False), Integer)
         result = render_item("column", col, mock.MagicMock())
@@ -406,8 +408,6 @@ class TestStructuredTypeCacheKeyNormalization:
         from snowflake.sqlalchemy.structured_type_info_manager import (
             _StructuredTypeInfoManager,
         )
-        from snowflake.sqlalchemy.name_utils import _NameUtils
-        from sqlalchemy.dialects.postgresql import dialect as pg_dialect
 
         d = SnowflakeDialect()
         name_utils = d.name_utils
@@ -455,9 +455,65 @@ class TestStructuredTypeCacheKeyNormalization:
         # The key stored internally uses the names as passed; let's verify
         # the column lookup normalizes correctly.
         # After DESC, column_name 'MYCOL' is normalized to 'mycol' in _parse_desc_result.
-        assert ("PUBLIC", "MYTABLE") in manager.full_columns_descriptions, (
+        assert (
+            "PUBLIC",
+            "MYTABLE",
+        ) in manager.full_columns_descriptions, (
             "Cache should be populated for ('PUBLIC', 'MYTABLE')"
         )
         inner = manager.full_columns_descriptions[("PUBLIC", "MYTABLE")]
         # The column name is normalized
-        assert "mycol" in inner, f"Expected 'mycol' in inner dict, got keys: {list(inner.keys())}"
+        assert (
+            "mycol" in inner
+        ), f"Expected 'mycol' in inner dict, got keys: {list(inner.keys())}"
+
+
+# ---------------------------------------------------------------------------
+# CLUSTER BY DDL — quoted_name column generates correct SQL
+# ---------------------------------------------------------------------------
+
+
+class TestClusterByWithQuotedName:
+    """Bug 1 (compiler path): CLUSTER BY DDL with quoted_name column."""
+
+    def _compile_create(self, table_obj):
+        """Compile a CreateTable statement to a string using the Snowflake dialect."""
+        from sqlalchemy.schema import CreateTable
+
+        dialect = SnowflakeDialect()
+        stmt = CreateTable(table_obj)
+        return stmt.compile(dialect=dialect).string
+
+    def test_cluster_by_quoted_name_column_emits_double_quotes(self):
+        """CLUSTER BY with quoted_name('mycol', True) must emit CLUSTER BY (\"mycol\")."""
+        from sqlalchemy import Column, Integer, MetaData, Table
+
+        metadata = MetaData()
+        t = Table(
+            "mytest",
+            metadata,
+            Column("id", Integer, primary_key=True),
+            Column(quoted_name("mycol", True), Integer),
+            snowflake_clusterby=[quoted_name("mycol", True)],
+        )
+        sql = self._compile_create(t)
+        assert (
+            'CLUSTER BY ("mycol")' in sql
+        ), f"Expected 'CLUSTER BY (\"mycol\")' in CREATE TABLE, got: {sql!r}"
+
+    def test_cluster_by_plain_column_unquoted(self):
+        """CLUSTER BY with plain 'mycol' remains unquoted (regression guard)."""
+        from sqlalchemy import Column, Integer, MetaData, Table
+
+        metadata = MetaData()
+        t = Table(
+            "mytest",
+            metadata,
+            Column("id", Integer, primary_key=True),
+            Column("mycol", Integer),
+            snowflake_clusterby=["mycol"],
+        )
+        sql = self._compile_create(t)
+        assert (
+            "CLUSTER BY (mycol)" in sql
+        ), f"Expected 'CLUSTER BY (mycol)' in CREATE TABLE, got: {sql!r}"

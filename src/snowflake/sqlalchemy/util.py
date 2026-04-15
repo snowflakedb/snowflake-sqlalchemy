@@ -5,11 +5,10 @@
 import re
 from itertools import chain
 from typing import Any
-from urllib.parse import quote_plus
 from urllib.parse import quote as _url_quote
+from urllib.parse import quote_plus
 
 from sqlalchemy import create_engine as _sa_create_engine
-
 from sqlalchemy import exc, inspection, sql
 from sqlalchemy.exc import NoForeignKeysError
 from sqlalchemy.orm.interfaces import MapperProperty
@@ -347,7 +346,9 @@ class _Snowflake_Selectable_Join(Join):
         self.full = full
 
 
-def create_snowflake_engine(base_url, schema=None, case_sensitive_schema=False, **kwargs):
+def create_snowflake_engine(
+    base_url, schema=None, case_sensitive_schema=False, **kwargs
+):
     """
     Create a Snowflake SQLAlchemy engine with optional case-sensitive schema support.
 
