@@ -5,8 +5,10 @@
 import re
 from itertools import chain
 from typing import Any
-from urllib.parse import quote_plus
+from urllib.parse import quote as _url_quote
+from urllib.parse import quote_plus, urlsplit, urlunsplit
 
+from sqlalchemy import create_engine as _sa_create_engine
 from sqlalchemy import exc, inspection, sql
 from sqlalchemy.exc import NoForeignKeysError
 from sqlalchemy.orm.interfaces import MapperProperty
@@ -342,3 +344,51 @@ class _Snowflake_Selectable_Join(Join):
 
         self.isouter = isouter
         self.full = full
+
+
+def create_snowflake_engine(
+    base_url, schema=None, case_sensitive_schema=False, **kwargs
+):
+    """
+    Create a Snowflake SQLAlchemy engine with optional case-sensitive schema support.
+
+    When ``case_sensitive_schema=True`` the schema name is wrapped in URL-encoded
+    double-quotes (``%22``) so that Snowflake treats the name as case-sensitive.
+    ``create_connect_args`` calls ``unquote_plus`` on the database/schema
+    component, which turns ``%22myschema%22`` back into ``'"myschema"'`` (with
+    literal double-quotes) before forwarding to the Snowflake connector.
+
+    Parameters
+    ----------
+    base_url:
+        A Snowflake SQLAlchemy URL string of the form
+        ``snowflake://user:password@account/database``.  Must not end with a
+        trailing slash unless no database is specified.
+    schema:
+        Optional schema name to append to the URL.
+    case_sensitive_schema:
+        When *True* the schema name is enclosed in ``%22...%22`` to preserve
+        case in Snowflake.  Defaults to *False*.
+    **kwargs:
+        Additional keyword arguments forwarded verbatim to
+        :func:`sqlalchemy.create_engine`.
+
+    Returns
+    -------
+    sqlalchemy.engine.Engine
+    """
+    if schema is not None:
+        if case_sensitive_schema:
+            schema_part = f"%22{_url_quote(schema, safe='')}%22"
+        else:
+            schema_part = _url_quote(schema, safe="")
+        # Use urlsplit/urlunsplit to safely insert schema into path before query params
+        parsed = urlsplit(base_url)
+        path = parsed.path.rstrip("/")
+        new_path = f"{path}/{schema_part}"
+        url = urlunsplit(
+            (parsed.scheme, parsed.netloc, new_path, parsed.query, parsed.fragment)
+        )
+    else:
+        url = base_url
+    return _sa_create_engine(url, **kwargs)
