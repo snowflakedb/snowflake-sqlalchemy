@@ -408,7 +408,7 @@ class SnowflakeDialect(default.DefaultDialect):
 
         Both SHOW PRIMARY KEYS IN TABLE and SHOW PRIMARY KEYS IN SCHEMA return the
         same column set (including table_name), so this helper works for both paths.
-        Rows are ordered by key_sequence, which Snowflake guarantees.
+        Columns are sorted by key_sequence to preserve the constraint's declared order.
         """
         result = {}
         for row in rows:
@@ -419,8 +419,15 @@ class SnowflakeDialect(default.DefaultDialect):
                     "name": self.normalize_name(row._mapping["constraint_name"]),
                 }
             result[table_name]["constrained_columns"].append(
-                self.normalize_name(row._mapping["column_name"])
+                (
+                    int(row._mapping["key_sequence"]),
+                    self.normalize_name(row._mapping["column_name"]),
+                )
             )
+        for entry in result.values():
+            entry["constrained_columns"] = [
+                col for _, col in sorted(entry["constrained_columns"])
+            ]
         return result
 
     def _parse_uk_rows(self, rows):
@@ -428,6 +435,7 @@ class SnowflakeDialect(default.DefaultDialect):
 
         Both SHOW UNIQUE KEYS IN TABLE and SHOW UNIQUE KEYS IN SCHEMA return the
         same column set, so this helper works for both paths.
+        Columns are sorted by key_sequence to preserve the constraint's declared order.
         """
         constraints = {}  # keyed by (table_name, constraint_name)
         for row in rows:
@@ -436,17 +444,28 @@ class SnowflakeDialect(default.DefaultDialect):
             key = (table_name, constraint_name)
             if key not in constraints:
                 constraints[key] = {
-                    "column_names": [self.normalize_name(row._mapping["column_name"])],
+                    "column_names": [
+                        (
+                            int(row._mapping["key_sequence"]),
+                            self.normalize_name(row._mapping["column_name"]),
+                        )
+                    ],
                     "name": constraint_name,
                     "_table_name": table_name,
                 }
             else:
                 constraints[key]["column_names"].append(
-                    self.normalize_name(row._mapping["column_name"])
+                    (
+                        int(row._mapping["key_sequence"]),
+                        self.normalize_name(row._mapping["column_name"]),
+                    )
                 )
         result = defaultdict(list)
         for constraint in constraints.values():
             table_name = constraint.pop("_table_name")
+            constraint["column_names"] = [
+                col for _, col in sorted(constraint["column_names"])
+            ]
             result[table_name].append(constraint)
         return dict(result)
 
@@ -455,6 +474,7 @@ class SnowflakeDialect(default.DefaultDialect):
 
         Both SHOW IMPORTED KEYS IN TABLE and SHOW IMPORTED KEYS IN SCHEMA return
         the same column set, so this helper works for both paths.
+        Columns are sorted by key_sequence to preserve the constraint's declared order.
 
         same_schemas: set of normalised schema names for which referred_schema
         should be returned as None (same-schema FK, no need to qualify).  See:
@@ -468,7 +488,10 @@ class SnowflakeDialect(default.DefaultDialect):
                 fk_table_name = self.normalize_name(row._mapping["fk_table_name"])
                 fk_map[fk_name] = {
                     "constrained_columns": [
-                        self.normalize_name(row._mapping["fk_column_name"])
+                        (
+                            int(row._mapping["key_sequence"]),
+                            self.normalize_name(row._mapping["fk_column_name"]),
+                        )
                     ],
                     "referred_schema": (
                         None if referred_schema in same_schemas else referred_schema
@@ -477,7 +500,10 @@ class SnowflakeDialect(default.DefaultDialect):
                         row._mapping["pk_table_name"]
                     ),
                     "referred_columns": [
-                        self.normalize_name(row._mapping["pk_column_name"])
+                        (
+                            int(row._mapping["key_sequence"]),
+                            self.normalize_name(row._mapping["pk_column_name"]),
+                        )
                     ],
                     "name": fk_name,
                     "_fk_table_name": fk_table_name,
@@ -494,14 +520,26 @@ class SnowflakeDialect(default.DefaultDialect):
                 fk_map[fk_name]["options"] = options
             else:
                 fk_map[fk_name]["constrained_columns"].append(
-                    self.normalize_name(row._mapping["fk_column_name"])
+                    (
+                        int(row._mapping["key_sequence"]),
+                        self.normalize_name(row._mapping["fk_column_name"]),
+                    )
                 )
                 fk_map[fk_name]["referred_columns"].append(
-                    self.normalize_name(row._mapping["pk_column_name"])
+                    (
+                        int(row._mapping["key_sequence"]),
+                        self.normalize_name(row._mapping["pk_column_name"]),
+                    )
                 )
         result = defaultdict(list)
         for fk_info in fk_map.values():
             fk_table_name = fk_info.pop("_fk_table_name")
+            fk_info["constrained_columns"] = [
+                col for _, col in sorted(fk_info["constrained_columns"])
+            ]
+            fk_info["referred_columns"] = [
+                col for _, col in sorted(fk_info["referred_columns"])
+            ]
             result[fk_table_name].append(fk_info)
         return dict(result)
 
