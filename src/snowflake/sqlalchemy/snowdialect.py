@@ -1320,11 +1320,11 @@ class SnowflakeDialect(default.DefaultDialect):
                 )
             )
 
-        n2i = self.__class__._map_name_to_idx(cursor)
+        name_to_index_map = self.__class__._map_name_to_idx(cursor)
         try:
             ret = cursor.fetchone()
             if ret:
-                return ret[n2i["text"]]
+                return ret[name_to_index_map["text"]]
         except Exception:
             pass
         return None
@@ -1338,10 +1338,10 @@ class SnowflakeDialect(default.DefaultDialect):
         )
 
         ret = []
-        n2i = self.__class__._map_name_to_idx(cursor)
+        name_to_index_map = self.__class__._map_name_to_idx(cursor)
         for row in cursor:
-            if row[n2i["kind"]] == "TEMPORARY":
-                ret.append(self.normalize_name(row[n2i["name"]]))
+            if row[name_to_index_map["kind"]] == "TEMPORARY":
+                ret.append(self.normalize_name(row[name_to_index_map["name"]]))
 
         return ret
 
@@ -1476,23 +1476,30 @@ class SnowflakeDialect(default.DefaultDialect):
         column set (including table), so this helper works for both paths.
         SYS_INDEX primary-key sentinels are filtered out.
         """
-        n2i = self._map_name_to_idx(result)
+        name_to_index_map = self._map_name_to_idx(result)
         indexes = defaultdict(list)
         for row in result.cursor.fetchall():
-            if row[n2i["name"]] == f'SYS_INDEX_{row[n2i["table"]]}_PRIMARY':
+            if (
+                row[name_to_index_map["name"]]
+                == f'SYS_INDEX_{row[name_to_index_map["table"]]}_PRIMARY'
+            ):
                 continue
-            table_name = self.normalize_name(str(row[n2i["table"]]))
+            table_name = self.normalize_name(str(row[name_to_index_map["table"]]))
             indexes[table_name].append(
                 {
-                    "name": row[n2i["name"]],
-                    "unique": row[n2i["is_unique"]] == "Y",
+                    "name": row[name_to_index_map["name"]],
+                    "unique": row[name_to_index_map["is_unique"]] == "Y",
                     "column_names": [
                         self.normalize_name(column)
-                        for column in parse_index_columns(row[n2i["columns"]])
+                        for column in parse_index_columns(
+                            row[name_to_index_map["columns"]]
+                        )
                     ],
                     "include_columns": [
                         self.normalize_name(column)
-                        for column in parse_index_columns(row[n2i["included_columns"]])
+                        for column in parse_index_columns(
+                            row[name_to_index_map["included_columns"]]
+                        )
                     ],
                     "dialect_options": {},
                 }
