@@ -196,6 +196,33 @@ class TestHasObjectNormalization:
             '"mytable"' in sql_text
         ), f"Expected '\"mytable\"' in DESC SQL, got: {sql_text!r}"
 
+    def test_mixed_case_generates_quoted_mixed(self):
+        """_has_object('MyTable') should generate DESC TABLE \"MyTable\" (case-sensitive)."""
+        d, conn = self._dialect_with_mock_connection()
+        d._has_object(conn, "TABLE", "MyTable")
+        call_args = conn.execute.call_args
+        sql_text = str(call_args[0][0])
+        # denormalize_name('MyTable') -> 'MyTable' (mixed case passes through)
+        # _denormalize_quote_join('MyTable') -> '"MyTable"' (quoted because mixed case)
+        assert (
+            '"MyTable"' in sql_text
+        ), f"Expected '\"MyTable\"' in DESC SQL, got: {sql_text!r}"
+
+    def test_with_schema_plain_lowercase(self):
+        """_has_object with schema generates schema.\"MYTABLE\" form."""
+        d, conn = self._dialect_with_mock_connection()
+        d._has_object(conn, "TABLE", "mytable", schema="myschema")
+        call_args = conn.execute.call_args
+        sql_text = str(call_args[0][0])
+        # Schema passes through _denormalize_quote_join directly (not denormalized);
+        # object_name 'mytable' is denormalized to 'MYTABLE' then quoted.
+        assert (
+            '"MYTABLE"' in sql_text
+        ), f"Expected '\"MYTABLE\"' in DESC SQL, got: {sql_text!r}"
+        assert (
+            "myschema" in sql_text
+        ), f"Expected 'myschema' in DESC SQL, got: {sql_text!r}"
+
     def test_programming_error_returns_false(self):
         """_has_object returns False when DESC raises ProgrammingError."""
         import sqlalchemy.exc as sa_exc
@@ -333,6 +360,39 @@ class TestCreateSnowflakeEngineHelper:
             call_url = mock_ce.call_args[0][0]
             assert call_url == base_url
 
+    def test_trailing_slash_stripped_before_schema(self):
+        """Base URL trailing slash must not produce double slashes."""
+        from snowflake.sqlalchemy.util import create_snowflake_engine
+
+        with mock.patch("snowflake.sqlalchemy.util._sa_create_engine") as mock_ce:
+            mock_ce.return_value = mock.MagicMock()
+            create_snowflake_engine(
+                "snowflake://u:p@acct/mydb/",
+                schema="myschema",
+                case_sensitive_schema=True,
+            )
+            call_url = mock_ce.call_args[0][0]
+            assert (
+                "//" not in call_url.split("://", 1)[1]
+            ), f"Double slash in path portion of URL: {call_url!r}"
+            assert "%22myschema%22" in call_url
+
+    def test_kwargs_forwarded_to_create_engine(self):
+        """Extra kwargs must be forwarded to sqlalchemy.create_engine."""
+        from snowflake.sqlalchemy.util import create_snowflake_engine
+
+        with mock.patch("snowflake.sqlalchemy.util._sa_create_engine") as mock_ce:
+            mock_ce.return_value = mock.MagicMock()
+            create_snowflake_engine(
+                "snowflake://u:p@acct/mydb",
+                schema="s",
+                echo=True,
+                pool_size=5,
+            )
+            _, call_kwargs = mock_ce.call_args
+            assert call_kwargs.get("echo") is True
+            assert call_kwargs.get("pool_size") == 5
+
 
 # ---------------------------------------------------------------------------
 # Alembic helper
@@ -367,6 +427,12 @@ class TestAlembicRenderItemHelper:
         ), "render_item should return a string for quoted_name columns"
         assert isinstance(result, str), f"Expected str, got {type(result)}"
         assert "mycol" in result, f"Expected 'mycol' in result, got {result!r}"
+        assert (
+            "quoted_name" in result
+        ), f"Rendered output must contain 'quoted_name': {result!r}"
+        assert (
+            "True" in result
+        ), f"Rendered output must contain 'True' for quote flag: {result!r}"
 
     def test_plain_column_returns_false(self):
         """render_item for a plain (non-quoted) column returns False (delegate to default)."""
@@ -402,7 +468,7 @@ class TestAlembicRenderItemHelper:
 
 
 class TestStructuredTypeCacheKeyNormalization:
-    """Gap 2: _StructuredTypeInfoManager uses consistent normalized cache keys."""
+    """Regression guard: _StructuredTypeInfoManager normalizes column names in cache."""
 
     def _make_manager(self, mock_result=None):
         from snowflake.sqlalchemy.structured_type_info_manager import (

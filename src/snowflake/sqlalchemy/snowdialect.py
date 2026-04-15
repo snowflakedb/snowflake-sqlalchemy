@@ -301,7 +301,9 @@ class SnowflakeDialect(default.DefaultDialect):
         return self._has_object(connection, "SEQUENCE", sequence_name, schema)
 
     def _has_object(self, connection, object_type, object_name, schema=None):
-        full_name = self._denormalize_quote_join(schema, self.denormalize_name(object_name))
+        full_name = self._denormalize_quote_join(
+            schema, self.denormalize_name(object_name)
+        )
         try:
             results = connection.execute(
                 text(f"DESC {object_type} /* sqlalchemy:_has_object */ {full_name}")
