@@ -3,6 +3,7 @@
 
 import re
 
+from sqlalchemy import exc as sa_exc
 from sqlalchemy import util as sa_util
 from sqlalchemy.sql import text
 
@@ -62,17 +63,37 @@ class _StructuredTypeInfoManager:
             result[column["name"]] = column
         return result
 
+    def get_table_columns_by_full_name(self, full_table_name: str):
+        """
+        Get all columns in a table using a fully-qualified table name.
+
+        Args:
+            full_table_name: Fully-qualified table name with proper quoting (e.g., "schema"."table")
+
+        Returns:
+            List of column information dictionaries
+        """
+        result = self._execute_desc(full_table_name)
+        if not result:
+            return []
+
+        return self._parse_desc_result(result)
+
     def get_table_columns(self, table_name: str, schema: str = None):
         """Get all columns in a table in a schema"""
-        ans = []
-
         schema = schema if schema else self.default_schema
 
         table_schema = self.name_utils.denormalize_name(schema)
         table_name = self.name_utils.denormalize_name(table_name)
-        result = self._execute_desc(table_schema, table_name)
+        result = self._execute_desc(f"{table_schema}.{table_name}")
         if not result:
             return []
+
+        return self._parse_desc_result(result)
+
+    def _parse_desc_result(self, result):
+        """Parse DESC TABLE result into column information"""
+        ans = []
 
         for desc_data in result:
             column_name = desc_data[0]
@@ -135,19 +156,30 @@ class _StructuredTypeInfoManager:
             return []
         return ans
 
-    def _execute_desc(self, table_schema: str, table_name: str):
-        """Execute a DESC command handling a possible exception.
-        Exception can be caused by another session dropping the table while
-        once this process has started"""
+    def _execute_desc(self, full_table_name: str):
+        """
+        Execute a DESC TABLE command handling possible exceptions.
+
+        Args:
+            full_table_name: Fully-qualified table name (e.g., schema.table or "schema"."table")
+
+        Returns:
+            Query result or None if the command fails
+
+        Note:
+            Only SQL-level errors (ProgrammingError) are swallowed — e.g. the
+            table was dropped by another session or the object type does not
+            support DESC.  Connection / operational errors propagate so callers
+            fail fast with actionable diagnostics.
+        """
         try:
             return self.connection.execute(
                 text(
-                    "DESC /* sqlalchemy:_get_schema_columns */"
-                    f" TABLE {table_schema}.{table_name} TYPE = COLUMNS"
+                    f"DESC /* sqlalchemy:_get_schema_columns */ TABLE {full_table_name} TYPE = COLUMNS"
                 )
             )
-        except Exception:
+        except sa_exc.ProgrammingError:
             sa_util.warn(
-                f"Failed to reflect '{table_schema}' .'{table_name}' table using sqlalchemy:_get_schema_columns"
+                f"Failed to reflect table '{full_table_name}' using sqlalchemy:_get_schema_columns"
             )
         return None
