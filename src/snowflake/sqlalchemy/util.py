@@ -379,9 +379,9 @@ def create_snowflake_engine(
     """
     if schema is not None:
         if case_sensitive_schema:
-            schema_part = f"%22{_url_quote(schema)}%22"
+            schema_part = f"%22{_url_quote(schema, safe='')}%22"
         else:
-            schema_part = schema
+            schema_part = _url_quote(schema, safe="")
         url = f"{base_url.rstrip('/')}/{schema_part}"
     else:
         url = base_url

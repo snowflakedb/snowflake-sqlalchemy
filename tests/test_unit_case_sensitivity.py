@@ -393,6 +393,96 @@ class TestCreateSnowflakeEngineHelper:
             assert call_kwargs.get("echo") is True
             assert call_kwargs.get("pool_size") == 5
 
+    def test_case_insensitive_schema_with_space_is_url_encoded(self):
+        """Security fix: space in schema must be percent-encoded even when case_sensitive_schema=False."""
+        from snowflake.sqlalchemy.util import create_snowflake_engine
+
+        with mock.patch("snowflake.sqlalchemy.util._sa_create_engine") as mock_ce:
+            mock_ce.return_value = mock.MagicMock()
+            create_snowflake_engine(
+                "snowflake://u:p@acct/mydb",
+                schema="my schema",
+                case_sensitive_schema=False,
+            )
+            call_url = mock_ce.call_args[0][0]
+            assert (
+                " " not in call_url
+            ), f"Raw space must not appear in URL, got: {call_url!r}"
+            assert (
+                "my%20schema" in call_url or "my+schema" in call_url
+            ), f"Expected URL-encoded space in URL, got: {call_url!r}"
+
+    def test_case_insensitive_schema_with_question_mark_is_url_encoded(self):
+        """Security fix: '?' in schema must be percent-encoded to prevent query-string injection."""
+        from snowflake.sqlalchemy.util import create_snowflake_engine
+
+        with mock.patch("snowflake.sqlalchemy.util._sa_create_engine") as mock_ce:
+            mock_ce.return_value = mock.MagicMock()
+            create_snowflake_engine(
+                "snowflake://u:p@acct/mydb",
+                schema="myschema?warehouse=COMPUTE_WH",
+                case_sensitive_schema=False,
+            )
+            call_url = mock_ce.call_args[0][0]
+            # The literal '?' must not appear in the path portion of the URL
+            path_and_query = call_url.split("://", 1)[1]
+            assert (
+                "warehouse=COMPUTE_WH" not in call_url.split("?", 1)[-1]
+                if "?" in path_and_query
+                else True
+            )
+            # More direct check: the raw '?' from the schema must be encoded
+            schema_segment = call_url.split("/mydb/", 1)[1]
+            assert (
+                "?" not in schema_segment
+            ), f"Raw '?' must not appear in URL schema segment, got: {call_url!r}"
+            assert (
+                "%3F" in schema_segment
+            ), f"Expected '%3F' (encoded '?') in schema segment, got: {call_url!r}"
+
+    def test_case_insensitive_schema_with_hash_is_url_encoded(self):
+        """Security fix: '#' in schema must be percent-encoded to prevent fragment injection."""
+        from snowflake.sqlalchemy.util import create_snowflake_engine
+
+        with mock.patch("snowflake.sqlalchemy.util._sa_create_engine") as mock_ce:
+            mock_ce.return_value = mock.MagicMock()
+            create_snowflake_engine(
+                "snowflake://u:p@acct/mydb",
+                schema="myschema#fragment",
+                case_sensitive_schema=False,
+            )
+            call_url = mock_ce.call_args[0][0]
+            schema_segment = call_url.split("/mydb/", 1)[1]
+            assert (
+                "#" not in schema_segment
+            ), f"Raw '#' must not appear in URL schema segment, got: {call_url!r}"
+            assert (
+                "%23" in schema_segment
+            ), f"Expected '%23' (encoded '#') in schema segment, got: {call_url!r}"
+
+    def test_case_sensitive_schema_special_chars_encoded(self):
+        """case_sensitive_schema=True with special chars in schema must also encode them."""
+        from snowflake.sqlalchemy.util import create_snowflake_engine
+
+        with mock.patch("snowflake.sqlalchemy.util._sa_create_engine") as mock_ce:
+            mock_ce.return_value = mock.MagicMock()
+            create_snowflake_engine(
+                "snowflake://u:p@acct/mydb",
+                schema="my schema",
+                case_sensitive_schema=True,
+            )
+            call_url = mock_ce.call_args[0][0]
+            assert (
+                " " not in call_url
+            ), f"Raw space must not appear in URL, got: {call_url!r}"
+            assert (
+                "%22" in call_url
+            ), f"Expected %22 (double-quote encoding) in URL, got: {call_url!r}"
+            # The space in 'my schema' must be encoded
+            assert (
+                "my%20schema" in call_url
+            ), f"Expected URL-encoded schema name, got: {call_url!r}"
+
 
 # ---------------------------------------------------------------------------
 # Alembic helper
