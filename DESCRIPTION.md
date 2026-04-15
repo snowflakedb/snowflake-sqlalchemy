@@ -11,6 +11,14 @@ Source code is also available at:
 
 - Emit `SnowflakeWarning` at DDL compile time when `Identity()` is used on a primary key column, alerting users that ORM flush operations will raise a `FlushError`. The warning is emitted once per unique `(table, column)` pair per Python process. Use `Sequence()` instead.
 - Add support for cross-database schema reflection using `schema='database.schema'` notation. This allows reflecting and joining tables from different databases in a single session without raw SQL. ([#456](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/456))
+- Optimise reflection performance (SNOW-689531, [#656](https://github.com/snowflakedb/snowflake-sqlalchemy/pull/656)):
+  - Add `get_multi_columns`, `get_multi_pk_constraint`, `get_multi_unique_constraints`, `get_multi_foreign_keys` for SQLAlchemy 2.x bulk reflection — each issues one schema-wide query per reflection pass instead of one query per table.
+  - SQLAlchemy 2.x `get_columns` now uses `DESC TABLE` directly (per-table, live) since `get_multi_columns` handles all bulk reflection; temporary tables and dynamic tables are reflected correctly without schema-wide queries.
+  - Fix `SHOW INDEXES IN TABLE` replacing the previous `SHOW TABLES LIKE` approach for single-table index reflection, eliminating SQL `LIKE` wildcard false-positives and case-sensitivity bugs.
+  - Add `_always_quote_join` helper that always quotes denormalised identifiers — ensures correct SQL for case-sensitive table and schema names in per-table reflection paths.
+  - Fix foreign key `referred_schema` resolution to include the explicitly reflected schema in the same-schema set, preventing incorrect cross-schema references when reflecting a non-default schema.
+  - Add shared row-parsing helpers (`_parse_pk_rows`, `_parse_uk_rows`, `_parse_fk_rows`) so correctness fixes propagate to both per-table and schema-wide reflection paths.
+  - `cache_column_metadata=True` opt-in enables per-table `SHOW … IN TABLE` queries for `get_pk_constraint`, `get_unique_constraints`, `get_foreign_keys`, and `get_indexes` on both SQLAlchemy versions.
 
 # Release Notes
 

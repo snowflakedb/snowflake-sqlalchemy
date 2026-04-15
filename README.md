@@ -495,7 +495,7 @@ This also applies when using pandas `to_sql()` with timezone-aware datetime colu
 
 ### Cache Column Metadata
 
-SQLAlchemy provides [the runtime inspection API](http://docs.sqlalchemy.org/en/latest/core/inspection.html) to get the runtime information about the various objects. One of the common use case is get all tables and their column metadata in a schema in order to construct a schema catalog. For example, [alembic](http://alembic.zzzcomputing.com/) on top of SQLAlchemy manages database schema migrations. A pseudo code flow is as follows:
+SQLAlchemy provides [the runtime inspection API](http://docs.sqlalchemy.org/en/latest/core/inspection.html) to get the runtime information about the various objects. One common use case is retrieving all tables and their column metadata in a schema to construct a schema catalog. For example, [alembic](http://alembic.zzzcomputing.com/) manages database schema migrations on top of SQLAlchemy. A typical flow (SQLAlchemy 1.4) is:
 
 ```python
 inspector = inspect(engine)
@@ -507,9 +507,38 @@ for table_name in inspector.get_table_names(schema):
     ...
 ```
 
-In this flow, a potential problem is it may take quite a while as queries run on each table. The results are cached but getting column metadata is expensive.
+In this flow, running a separate query per table can be slow for large schemas. Snowflake SQLAlchemy optimises this with schema-wide cached queries and, where appropriate, fast per-table queries.
 
-To mitigate the problem, Snowflake SQLAlchemy takes a flag `cache_column_metadata=True` such that all of column metadata for all tables are cached when `get_table_names` is called and the rest of `get_columns`, `get_primary_keys` and `get_foreign_keys` can take advantage of the cache.
+#### Single-Table vs Multi-Table Reflection Performance
+
+**SQLAlchemy 2.x (automatic)**
+
+SQLAlchemy 2.x distinguishes bulk reflection from single-table inspection at the framework level:
+
+- **`MetaData.reflect()` / `Table(..., autoload_with=engine)`** — calls `get_multi_columns`, `get_multi_pk_constraint`, `get_multi_foreign_keys`, and `get_multi_unique_constraints`. Each issues one schema-wide `SHOW` or `information_schema` query and caches the result for all tables in the schema.
+- **`inspector.get_columns(table_name)`** — issues a single `DESC TABLE` query directly against that table. This is fast and correct for all table types including temporary tables.
+
+No configuration is needed; the routing is handled automatically by the SA 2.x dispatch layer.
+
+**Note on reflected type representations:** Because `inspector.get_columns()` uses `DESC TABLE`, reflected types always include Snowflake's resolved default sizes (e.g. `BINARY(8388608)` instead of `BINARY`, `VARCHAR(16777216)` instead of `VARCHAR`). The type *objects* are functionally identical; only `str()` output differs. Use `isinstance()` checks rather than string comparison for type introspection.
+
+```python
+from sqlalchemy import MetaData, inspect, create_engine
+
+engine = create_engine('snowflake://...')
+
+# SA 2.x: one schema-wide query per metadata type, all tables cached at once
+metadata = MetaData()
+metadata.reflect(bind=engine, schema='public')
+
+# SA 2.x: direct DESC TABLE, no schema-wide query issued
+inspector = inspect(engine)
+columns = inspector.get_columns('my_table', schema='public')
+```
+
+**SQLAlchemy 1.4 and per-table optimisation (opt-in)**
+
+In SQLAlchemy 1.4, `MetaData.reflect()` calls `get_columns`, `get_pk_constraint`, etc. per table. For schemas with many tables this generates many round-trips. Add `cache_column_metadata=True` to the connection URL to opt in to per-table `SHOW … IN TABLE` and `DESC TABLE` queries for `get_pk_constraint`, `get_unique_constraints`, `get_foreign_keys`, `get_indexes`, and `get_columns`. Each query targets only the requested table and is not cached, so it always reflects the current state.
 
 ```python
 engine = create_engine(URL(
@@ -524,7 +553,26 @@ engine = create_engine(URL(
 ))
 ```
 
-Note that this flag has been deprecated, as our caching now uses the built-in SQLAlchemy reflection cache, the flag has been removed, but caching has been improved and if possible extra data will be fetched and cached.
+This flag also enables the per-table path for the singular `Inspector` methods (`get_pk_constraint`, `get_unique_constraints`, `get_foreign_keys`, `get_indexes`) under SQLAlchemy 2.x.
+
+**Performance Implications**
+
+For schemas with many tables (100+), schema-wide queries issued once during `MetaData.reflect()` are far more efficient than per-table queries in a loop:
+
+- Schema-wide `SHOW PRIMARY KEYS IN SCHEMA` (all tables): < 1 second
+- Per-table loop over 1 000 tables: 1 000+ round-trips
+
+For single-table inspection via `Inspector`, per-table queries (`DESC TABLE`, `SHOW … IN TABLE`) are faster than fetching the entire schema.
+
+**Best Practices**
+
+1. **For bulk reflection**: use `metadata.reflect()` — schema-wide queries are issued once and cached.
+2. **For single-table inspection**: use `inspector.get_columns()` / `inspector.get_pk_constraint()` etc. — per-table queries are used automatically (SA 2.x) or with `cache_column_metadata=True` (SA 1.4).
+3. **For very large schemas**: reflect only the tables you need:
+
+```python
+metadata.reflect(bind=engine, schema='public', only=['table1', 'table2'])
+```
 
 ### Cross-Database Reflection
 
