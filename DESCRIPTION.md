@@ -9,7 +9,7 @@ Source code is also available at:
 
 # Unreleased Notes
 
-- Fix `referred_schema` for same-schema foreign keys in non-default schemas. Foreign keys within the same schema now correctly return `referred_schema=None` instead of the schema name, fixing Alembic autogenerate issues that produced spurious table creation and FK operations ([#610](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/610), SNOW-2313675).
+- Fix foreign key reflection returning wrong `referred_schema` for same-schema FKs in non-default schemas, which caused Alembic to generate spurious migrations ([#610](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/610), SNOW-2313675).
 - Emit `SnowflakeWarning` at DDL compile time when `Identity()` is used on a primary key column, alerting users that ORM flush operations will raise a `FlushError`. The warning is emitted once per unique `(table, column)` pair per Python process. Use `Sequence()` instead.
 
 # Release Notes

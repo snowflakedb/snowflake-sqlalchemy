@@ -742,27 +742,18 @@ def test_get_foreign_keys(engine_testaccount):
 
 
 def test_get_foreign_keys_multi_schema(engine_testaccount, db_parameters):
-    """
-    Tests foreign keys across multiple schemas to verify referred_schema is correctly set.
-
-    This test validates the fix for issue #610 where same-schema FKs in non-default schemas
-    incorrectly returned referred_schema with the schema name instead of None.
-    """
-    schema1_name = f"test_schema1_{str(uuid.uuid4()).replace('-', '_')}"
-    schema2_name = f"test_schema2_{str(uuid.uuid4()).replace('-', '_')}"
+    """Verify referred_schema for cross-schema, same-schema, and default-schema FKs."""
+    schema1_name = f"test_schema1_{uuid.uuid4().hex}"
+    schema2_name = f"test_schema2_{uuid.uuid4().hex}"
     default_schema = db_parameters.get("schema")
 
     with engine_testaccount.connect() as conn:
-        # Create test schemas
         conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema1_name}"))
         conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema2_name}"))
         conn.commit()
 
         try:
-            # Create tables with various FK relationships
             metadata = MetaData()
-
-            # Table in schema1
             Table(
                 "users",
                 metadata,
@@ -770,8 +761,6 @@ def test_get_foreign_keys_multi_schema(engine_testaccount, db_parameters):
                 Column("name", String),
                 schema=schema1_name,
             )
-
-            # Table in schema2 with FK to schema1 (cross-schema FK)
             Table(
                 "orders_cross",
                 metadata,
@@ -782,8 +771,6 @@ def test_get_foreign_keys_multi_schema(engine_testaccount, db_parameters):
                 ),
                 schema=schema2_name,
             )
-
-            # Table in schema2 with FK to same schema (same-schema FK in non-default schema)
             Table(
                 "products",
                 metadata,
@@ -791,7 +778,6 @@ def test_get_foreign_keys_multi_schema(engine_testaccount, db_parameters):
                 Column("name", String),
                 schema=schema2_name,
             )
-
             Table(
                 "orders_same",
                 metadata,
@@ -802,8 +788,6 @@ def test_get_foreign_keys_multi_schema(engine_testaccount, db_parameters):
                 ),
                 schema=schema2_name,
             )
-
-            # Table in default schema
             Table(
                 "categories",
                 metadata,
@@ -811,8 +795,6 @@ def test_get_foreign_keys_multi_schema(engine_testaccount, db_parameters):
                 Column("name", String),
                 schema=default_schema,
             )
-
-            # Table with FK to default schema
             Table(
                 "items",
                 metadata,
@@ -823,45 +805,83 @@ def test_get_foreign_keys_multi_schema(engine_testaccount, db_parameters):
                 ),
                 schema=schema2_name,
             )
-
-            # Create all tables
             metadata.create_all(engine_testaccount)
 
-            # Test FK reflection
             inspector = inspect(engine_testaccount)
 
-            # Test case 1: Cross-schema FK (schema2 -> schema1)
-            fks_cross = inspector.get_foreign_keys("orders_cross", schema=schema2_name)
-            assert len(fks_cross) == 1
-            assert fks_cross[0]["name"] == "fk_cross_schema"
-            assert fks_cross[0]["referred_table"] == "users"
-            assert (
-                fks_cross[0]["referred_schema"] == schema1_name.lower()
-            ), f"Cross-schema FK should have referred_schema={schema1_name.lower()}"
+            # Cross-schema FK (schema2 -> schema1)
+            foreign_keys_cross = inspector.get_foreign_keys(
+                "orders_cross", schema=schema2_name
+            )
+            assert len(foreign_keys_cross) == 1
+            assert foreign_keys_cross[0]["name"] == "fk_cross_schema"
+            assert foreign_keys_cross[0]["referred_table"] == "users"
+            assert foreign_keys_cross[0]["referred_schema"] == schema1_name.lower()
 
-            # Test case 2: Same-schema FK in non-default schema (schema2 -> schema2)
-            fks_same = inspector.get_foreign_keys("orders_same", schema=schema2_name)
-            assert len(fks_same) == 1
-            assert fks_same[0]["name"] == "fk_same_schema"
-            assert fks_same[0]["referred_table"] == "products"
-            assert (
-                fks_same[0]["referred_schema"] is None
-            ), "Same-schema FK should have referred_schema=None"
+            # Same-schema FK in non-default schema (schema2 -> schema2)
+            foreign_keys_same = inspector.get_foreign_keys(
+                "orders_same", schema=schema2_name
+            )
+            assert len(foreign_keys_same) == 1
+            assert foreign_keys_same[0]["name"] == "fk_same_schema"
+            assert foreign_keys_same[0]["referred_table"] == "products"
+            assert foreign_keys_same[0]["referred_schema"] is None
 
-            # Test case 3: FK to default schema
-            fks_default = inspector.get_foreign_keys("items", schema=schema2_name)
-            assert len(fks_default) == 1
-            assert fks_default[0]["name"] == "fk_to_default"
-            assert fks_default[0]["referred_table"] == "categories"
-            assert (
-                fks_default[0]["referred_schema"] is None
-            ), "FK to default schema should have referred_schema=None"
+            # FK to default schema
+            foreign_keys_default = inspector.get_foreign_keys(
+                "items", schema=schema2_name
+            )
+            assert len(foreign_keys_default) == 1
+            assert foreign_keys_default[0]["name"] == "fk_to_default"
+            assert foreign_keys_default[0]["referred_table"] == "categories"
+            assert foreign_keys_default[0]["referred_schema"] is None
 
         finally:
-            # Clean up
             metadata.drop_all(engine_testaccount)
             conn.execute(text(f"DROP SCHEMA IF EXISTS {schema1_name}"))
             conn.execute(text(f"DROP SCHEMA IF EXISTS {schema2_name}"))
+            conn.commit()
+
+
+def test_reflection_same_schema_fk(engine_testaccount):
+    """Same-schema FKs in non-default schemas reflect referred_schema=None."""
+    schema_name = f"test_schema_{uuid.uuid4().hex}"
+
+    with engine_testaccount.connect() as conn:
+        conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema_name}"))
+        conn.commit()
+
+        try:
+            conn.execute(
+                text(
+                    f"""
+                CREATE TABLE {schema_name}.categories (
+                    id INTEGER PRIMARY KEY, name VARCHAR(100))
+            """
+                )
+            )
+            conn.execute(
+                text(
+                    f"""
+                CREATE TABLE {schema_name}.items (
+                    id INTEGER PRIMARY KEY, category_id INTEGER,
+                    CONSTRAINT fk_same_schema_test
+                        FOREIGN KEY (category_id) REFERENCES {schema_name}.categories(id))
+            """
+                )
+            )
+            conn.commit()
+
+            foreign_keys = inspect(engine_testaccount).get_foreign_keys(
+                "items", schema=schema_name
+            )
+            assert len(foreign_keys) == 1
+            assert foreign_keys[0]["name"] == "fk_same_schema_test"
+            assert foreign_keys[0]["referred_table"] == "categories"
+            assert foreign_keys[0]["referred_schema"] is None
+
+        finally:
+            conn.execute(text(f"DROP SCHEMA IF EXISTS {schema_name} CASCADE"))
             conn.commit()
 
 
