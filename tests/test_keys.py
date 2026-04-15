@@ -16,7 +16,7 @@ from sqlalchemy.testing.assertions import eq_
 
 def test_composite_fk_reflects_key_order(engine_testaccount):
     metadata = MetaData()
-    parent = Table(
+    Table(
         "test_keys_fk_parent_decl",
         metadata,
         Column("col_a", Integer),
@@ -24,7 +24,7 @@ def test_composite_fk_reflects_key_order(engine_testaccount):
         Column("col_c", Integer),
         PrimaryKeyConstraint("col_a", "col_b", "col_c"),
     )
-    child = Table(
+    Table(
         "test_keys_fk_child_decl",
         metadata,
         Column("id", Integer, primary_key=True),
@@ -56,13 +56,12 @@ def test_composite_fk_reflects_key_order(engine_testaccount):
         eq_(fks[0]["referred_columns"], ["col_a", "col_b", "col_c"])
         eq_(fks[0]["referred_table"], "test_keys_fk_parent_decl")
     finally:
-        child.drop(engine_testaccount)
-        parent.drop(engine_testaccount)
+        metadata.drop_all(engine_testaccount)
 
 
 def test_composite_unique_reflects_key_order(engine_testaccount):
     metadata = MetaData()
-    table = Table(
+    Table(
         "test_keys_uq_decl",
         metadata,
         Column("id", Integer, primary_key=True),
@@ -80,12 +79,12 @@ def test_composite_unique_reflects_key_order(engine_testaccount):
         eq_(uqs[0]["name"], "uq_test_keys_decl")
         eq_(uqs[0]["column_names"], ["col_x", "col_y", "col_z"])
     finally:
-        table.drop(engine_testaccount)
+        metadata.drop_all(engine_testaccount)
 
 
 def test_composite_pk_key_order_differs_from_table_column_order(engine_testaccount):
     metadata = MetaData()
-    table = Table(
+    Table(
         "test_keys_pk_order",
         metadata,
         Column("col_first", Integer),
@@ -102,12 +101,12 @@ def test_composite_pk_key_order_differs_from_table_column_order(engine_testaccou
         pk = inspector.get_pk_constraint("test_keys_pk_order")
         eq_(pk["constrained_columns"], ["col_last", "col_first", "col_mid"])
     finally:
-        table.drop(engine_testaccount)
+        metadata.drop_all(engine_testaccount)
 
 
 def test_composite_unique_key_order_differs_from_table_column_order(engine_testaccount):
     metadata = MetaData()
-    table = Table(
+    Table(
         "test_keys_uq_order",
         metadata,
         Column("id", Integer, primary_key=True),
@@ -125,12 +124,12 @@ def test_composite_unique_key_order_differs_from_table_column_order(engine_testa
         eq_(uqs[0]["name"], "uq_test_keys_order")
         eq_(uqs[0]["column_names"], ["col_z", "col_x", "col_y"])
     finally:
-        table.drop(engine_testaccount)
+        metadata.drop_all(engine_testaccount)
 
 
 def test_composite_fk_when_parent_pk_order_differs_from_columns(engine_testaccount):
     metadata = MetaData()
-    parent = Table(
+    Table(
         "test_keys_fk_parent_mixed",
         metadata,
         Column("id", Integer),
@@ -138,7 +137,7 @@ def test_composite_fk_when_parent_pk_order_differs_from_columns(engine_testaccou
         Column("name", Integer),
         PrimaryKeyConstraint("name", "id", "attr", name="pk_test_keys_mixed"),
     )
-    child = Table(
+    Table(
         "test_keys_fk_child_mixed",
         metadata,
         Column("cid", Integer, primary_key=True),
@@ -168,5 +167,4 @@ def test_composite_fk_when_parent_pk_order_differs_from_columns(engine_testaccou
         eq_(fks[0]["referred_columns"], ["name", "id", "attr"])
         eq_(fks[0]["constrained_columns"], ["pname", "pid", "pattr"])
     finally:
-        child.drop(engine_testaccount)
-        parent.drop(engine_testaccount)
+        metadata.drop_all(engine_testaccount)
