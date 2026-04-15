@@ -166,12 +166,17 @@ class SnowflakeDialect(default.DefaultDialect):
         force_div_is_floordiv: bool = True,
         isolation_level: Optional[str] = SnowflakeIsolationLevel.READ_COMMITTED.value,
         enable_decfloat: bool = False,
+        case_sensitive_identifiers: bool = False,
         **kwargs: Any,
     ):
         super().__init__(isolation_level=isolation_level, **kwargs)
         self.force_div_is_floordiv = force_div_is_floordiv
         self.div_is_floordiv = force_div_is_floordiv
-        self.name_utils = _NameUtils(self.identifier_preparer)
+        self._case_sensitive_identifiers = case_sensitive_identifiers
+        self.name_utils = _NameUtils(
+            self.identifier_preparer,
+            case_sensitive_identifiers=case_sensitive_identifiers,
+        )
         self._enable_decfloat = enable_decfloat
 
     def initialize(self, connection):
@@ -246,6 +251,13 @@ class SnowflakeDialect(default.DefaultDialect):
         enable_decfloat = query.pop("enable_decfloat", None)
         if enable_decfloat is not None:
             self._enable_decfloat = parse_url_boolean(enable_decfloat)
+
+        # Handle case_sensitive_identifiers URL parameter
+        case_sensitive_identifiers = query.pop("case_sensitive_identifiers", None)
+        if case_sensitive_identifiers is not None:
+            flag = parse_url_boolean(case_sensitive_identifiers)
+            self._case_sensitive_identifiers = flag
+            self.name_utils.case_sensitive_identifiers = flag
 
         # URL sets the query parameter values as strings, we need to cast to expected types when necessary
         for name, value in query.items():
