@@ -82,6 +82,7 @@ from .sql.custom_schema.options import (  # noqa
     TimeUnit,
 )
 from .util import _url as URL  # noqa
+from .util import create_snowflake_engine  # noqa
 
 base.dialect = dialect = snowdialect.dialect
 
@@ -157,10 +158,14 @@ _enums = (
     "TableOptionKey",
     "SnowflakeKeyword",
 )
+
+_helpers = ("create_snowflake_engine",)
+
 __all__ = (
     *_custom_types,
     *_custom_commands,
     *_custom_tables,
     *_custom_table_options,
     *_enums,
+    *_helpers,
 )
