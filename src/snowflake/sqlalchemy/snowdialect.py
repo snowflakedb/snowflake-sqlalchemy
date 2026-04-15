@@ -26,7 +26,7 @@ from snowflake.connector import errors as sf_errors
 from snowflake.connector.connection import DEFAULT_CONFIGURATION, SnowflakeConnection
 from snowflake.connector.constants import UTF8
 from snowflake.connector.telemetry import TelemetryClient, TelemetryData, TelemetryField
-from snowflake.sqlalchemy.compat import returns_unicode
+from snowflake.sqlalchemy.compat import IS_VERSION_20, returns_unicode
 from snowflake.sqlalchemy.name_utils import _NameUtils
 from snowflake.sqlalchemy.structured_type_info_manager import _StructuredTypeInfoManager
 
@@ -316,6 +316,32 @@ class SnowflakeDialect(default.DefaultDialect):
         )
         return ".".join(ip._quote_free_identifiers(*split_idents))
 
+    def _always_quote_join(self, *idents):
+        """Build a dot-joined identifier string that always quotes every part.
+
+        Unlike _denormalize_quote_join (which quotes only when _requires_quotes
+        demands it), this helper denormalizes each segment first and then
+        unconditionally wraps it in double-quotes.  This is safe because quoting
+        a denormalized Snowflake identifier is semantically equivalent to the
+        unquoted form for case-insensitive names, while also being correct for
+        case-sensitive ones.
+
+        IMPORTANT: denormalization must happen before quoting.  Quoting the
+        SA-normalized (lowercase) form would produce "my_table" which Snowflake
+        resolves as a case-sensitive reference to a table literally stored as
+        my_table — different from the stored MY_TABLE.
+
+        Only use this for new, single-table SQL helpers.  Existing callers of
+        _denormalize_quote_join must not be changed to avoid altering SQL output
+        for existing users (backward-compatibility constraint).
+        """
+        ip = self.identifier_preparer
+        split_idents = reduce(
+            operator.add,
+            [ip._split_schema_by_dot(ids) for ids in idents if ids is not None],
+        )
+        return ".".join(ip.quote(self.denormalize_name(i)) for i in split_idents)
+
     def _get_full_schema_name(self, connection, schema=None, **kw):
         """
         Get fully-qualified schema name as database.schema.
@@ -373,102 +399,114 @@ class SnowflakeDialect(default.DefaultDialect):
         # check constraints are not supported by Snowflake
         return []
 
-    @reflection.cache
-    def _get_schema_primary_keys(self, connection, schema, **kw):
-        result = connection.execute(
-            text(
-                f"SHOW /* sqlalchemy:_get_schema_primary_keys */PRIMARY KEYS IN SCHEMA {schema}"
-            )
-        )
-        ans = {}
-        for row in result:
+    # ---------------------------------------------------------------------------
+    # Shared row-parsing helpers
+    # ---------------------------------------------------------------------------
+
+    def _parse_pk_rows(self, rows):
+        """Parse SHOW PRIMARY KEYS rows into {table_name: {constrained_columns, name}}.
+
+        Both SHOW PRIMARY KEYS IN TABLE and SHOW PRIMARY KEYS IN SCHEMA return the
+        same column set (including table_name), so this helper works for both paths.
+        Columns are sorted by key_sequence to preserve the constraint's declared order.
+        """
+        result = {}
+        for row in rows:
             table_name = self.normalize_name(row._mapping["table_name"])
-            if table_name not in ans:
-                ans[table_name] = {
+            if table_name not in result:
+                result[table_name] = {
                     "constrained_columns": [],
                     "name": self.normalize_name(row._mapping["constraint_name"]),
                 }
-            ans[table_name]["constrained_columns"].append(
-                self.normalize_name(row._mapping["column_name"])
+            result[table_name]["constrained_columns"].append(
+                (
+                    int(row._mapping["key_sequence"]),
+                    self.normalize_name(row._mapping["column_name"]),
+                )
             )
-        return ans
+        for entry in result.values():
+            entry["constrained_columns"] = [
+                col for _, col in sorted(entry["constrained_columns"])
+            ]
+        return result
 
-    def get_pk_constraint(self, connection, table_name, schema=None, **kw):
-        schema = schema or self.default_schema_name
-        full_schema_name = self._get_full_schema_name(connection, schema, **kw)
-        return self._get_schema_primary_keys(
-            connection, self.denormalize_name(full_schema_name), **kw
-        ).get(table_name, {"constrained_columns": [], "name": None})
+    def _parse_uk_rows(self, rows):
+        """Parse SHOW UNIQUE KEYS rows into {table_name: [{column_names, name}]}.
 
-    @reflection.cache
-    def _get_schema_unique_constraints(self, connection, schema, **kw):
-        result = connection.execute(
-            text(
-                f"SHOW /* sqlalchemy:_get_schema_unique_constraints */ UNIQUE KEYS IN SCHEMA {schema}"
-            )
-        )
-        unique_constraints = {}
-        for row in result:
-            name = self.normalize_name(row._mapping["constraint_name"])
-            if name not in unique_constraints:
-                unique_constraints[name] = {
-                    "column_names": [self.normalize_name(row._mapping["column_name"])],
-                    "name": name,
-                    "table_name": self.normalize_name(row._mapping["table_name"]),
+        Both SHOW UNIQUE KEYS IN TABLE and SHOW UNIQUE KEYS IN SCHEMA return the
+        same column set, so this helper works for both paths.
+        Columns are sorted by key_sequence to preserve the constraint's declared order.
+        """
+        constraints = {}  # keyed by (table_name, constraint_name)
+        for row in rows:
+            table_name = self.normalize_name(row._mapping["table_name"])
+            constraint_name = self.normalize_name(row._mapping["constraint_name"])
+            key = (table_name, constraint_name)
+            if key not in constraints:
+                constraints[key] = {
+                    "column_names": [
+                        (
+                            int(row._mapping["key_sequence"]),
+                            self.normalize_name(row._mapping["column_name"]),
+                        )
+                    ],
+                    "name": constraint_name,
+                    "_table_name": table_name,
                 }
             else:
-                unique_constraints[name]["column_names"].append(
-                    self.normalize_name(row._mapping["column_name"])
+                constraints[key]["column_names"].append(
+                    (
+                        int(row._mapping["key_sequence"]),
+                        self.normalize_name(row._mapping["column_name"]),
+                    )
                 )
+        result = defaultdict(list)
+        for constraint in constraints.values():
+            table_name = constraint.pop("_table_name")
+            constraint["column_names"] = [
+                col for _, col in sorted(constraint["column_names"])
+            ]
+            result[table_name].append(constraint)
+        return dict(result)
 
-        ans = defaultdict(list)
-        for constraint in unique_constraints.values():
-            table_name = constraint.pop("table_name")
-            ans[table_name].append(constraint)
-        return ans
+    def _parse_fk_rows(self, rows, same_schemas):
+        """Parse SHOW IMPORTED KEYS rows into {fk_table_name: [{...}]}.
 
-    def get_unique_constraints(self, connection, table_name, schema, **kw):
-        schema = schema or self.default_schema_name
-        full_schema_name = self._get_full_schema_name(connection, schema, **kw)
-        return self._get_schema_unique_constraints(
-            connection, self.denormalize_name(full_schema_name), **kw
-        ).get(table_name, [])
+        Both SHOW IMPORTED KEYS IN TABLE and SHOW IMPORTED KEYS IN SCHEMA return
+        the same column set, so this helper works for both paths.
+        Columns are sorted by key_sequence to preserve the constraint's declared order.
 
-    @reflection.cache
-    def _get_schema_foreign_keys(self, connection, schema, **kw):
-        _, current_schema = self._current_database_schema(connection, **kw)
-        current_schema = self.normalize_name(current_schema)
-        result = connection.execute(
-            text(
-                f"SHOW /* sqlalchemy:_get_schema_foreign_keys */ IMPORTED KEYS IN SCHEMA {schema}"
-            )
-        )
-        foreign_key_map = {}
-        for row in result:
-            name = self.normalize_name(row._mapping["fk_name"])
-            if name not in foreign_key_map:
+        same_schemas: set of normalised schema names for which referred_schema
+        should be returned as None (same-schema FK, no need to qualify).  See:
+        https://docs.sqlalchemy.org/en/14/core/reflection.html#reflection-schema-qualified-interaction
+        """
+        fk_map = {}  # keyed by fk_name
+        for row in rows:
+            fk_name = self.normalize_name(row._mapping["fk_name"])
+            if fk_name not in fk_map:
                 referred_schema = self.normalize_name(row._mapping["pk_schema_name"])
-                fk_schema = self.normalize_name(row._mapping["fk_schema_name"])
-                foreign_key_map[name] = {
+                fk_table_name = self.normalize_name(row._mapping["fk_table_name"])
+                fk_map[fk_name] = {
                     "constrained_columns": [
-                        self.normalize_name(row._mapping["fk_column_name"])
+                        (
+                            int(row._mapping["key_sequence"]),
+                            self.normalize_name(row._mapping["fk_column_name"]),
+                        )
                     ],
-                    # referred schema should be None in context where it doesn't need to be specified
-                    # https://docs.sqlalchemy.org/en/14/core/reflection.html#reflection-schema-qualified-interaction
                     "referred_schema": (
-                        None
-                        if referred_schema
-                        in (fk_schema, self.default_schema_name, current_schema)
-                        else referred_schema
+                        None if referred_schema in same_schemas else referred_schema
                     ),
                     "referred_table": self.normalize_name(
                         row._mapping["pk_table_name"]
                     ),
                     "referred_columns": [
-                        self.normalize_name(row._mapping["pk_column_name"])
+                        (
+                            int(row._mapping["key_sequence"]),
+                            self.normalize_name(row._mapping["pk_column_name"]),
+                        )
                     ],
-                    "name": name,
-                    "table_name": self.normalize_name(row._mapping["fk_table_name"]),
+                    "name": fk_name,
+                    "_fk_table_name": fk_table_name,
                 }
                 options = {}
                 if self.normalize_name(row._mapping["delete_rule"]) != "NO ACTION":
@@ -479,36 +517,325 @@ class SnowflakeDialect(default.DefaultDialect):
                     options["onupdate"] = self.normalize_name(
                         row._mapping["update_rule"]
                     )
-                foreign_key_map[name]["options"] = options
+                fk_map[fk_name]["options"] = options
             else:
-                foreign_key_map[name]["constrained_columns"].append(
-                    self.normalize_name(row._mapping["fk_column_name"])
+                fk_map[fk_name]["constrained_columns"].append(
+                    (
+                        int(row._mapping["key_sequence"]),
+                        self.normalize_name(row._mapping["fk_column_name"]),
+                    )
                 )
-                foreign_key_map[name]["referred_columns"].append(
-                    self.normalize_name(row._mapping["pk_column_name"])
+                fk_map[fk_name]["referred_columns"].append(
+                    (
+                        int(row._mapping["key_sequence"]),
+                        self.normalize_name(row._mapping["pk_column_name"]),
+                    )
                 )
+        result = defaultdict(list)
+        for fk_info in fk_map.values():
+            fk_table_name = fk_info.pop("_fk_table_name")
+            fk_info["constrained_columns"] = [
+                col for _, col in sorted(fk_info["constrained_columns"])
+            ]
+            fk_info["referred_columns"] = [
+                col for _, col in sorted(fk_info["referred_columns"])
+            ]
+            result[fk_table_name].append(fk_info)
+        return dict(result)
 
-        ans = {}
+    # ---------------------------------------------------------------------------
+    # Primary key reflection
+    # ---------------------------------------------------------------------------
 
-        for _, v in foreign_key_map.items():
-            if v["table_name"] not in ans:
-                ans[v["table_name"]] = []
-            ans[v["table_name"]].append(
-                {k2: v2 for k2, v2 in v.items() if k2 != "table_name"}
+    def _get_table_primary_keys(self, connection, table_name, schema, **kw):
+        """SHOW PRIMARY KEYS IN TABLE — single-table path (cache_column_metadata=True).
+
+        Results are cached by the calling method's @reflection.cache decorator.
+        """
+        full_name = self._always_quote_join(schema, table_name)
+        try:
+            result = connection.execute(
+                text(
+                    f"SHOW /* sqlalchemy:_get_table_primary_keys */ PRIMARY KEYS IN TABLE {full_name}"
+                )
             )
-        return ans
+            normalized_table_name = self.normalize_name(table_name)
+            return self._parse_pk_rows(result).get(
+                normalized_table_name, {"constrained_columns": [], "name": None}
+            )
+        except sa_exc.ProgrammingError:
+            logger.debug("Failed to reflect primary keys for %s", full_name)
+            return {"constrained_columns": [], "name": None}
 
-    def get_foreign_keys(self, connection, table_name, schema=None, **kw):
+    @reflection.cache
+    def _get_schema_primary_keys(self, connection, schema, **kw):
+        """SHOW PRIMARY KEYS IN SCHEMA — schema-wide path for get_pk_constraint
+        (SA 1.4) and get_multi_pk_constraint (SA 2.x).
+
+        Results are cached for the lifetime of a connection via @reflection.cache.
+        DDL executed mid-session will not be reflected until a new connection is used.
         """
-        Gets all foreign keys for a table
-        """
+        result = connection.execute(
+            text(
+                f"SHOW /* sqlalchemy:_get_schema_primary_keys */ PRIMARY KEYS IN SCHEMA {schema}"
+            )
+        )
+        return self._parse_pk_rows(result)
+
+    def get_pk_constraint(self, connection, table_name, schema=None, **kw):
         schema = schema or self.default_schema_name
+        if self._is_single_table_reflection(schema, **kw):
+            return self._get_table_primary_keys(connection, table_name, schema, **kw)
         full_schema_name = self._get_full_schema_name(connection, schema, **kw)
+        return self._get_schema_primary_keys(
+            connection, self.denormalize_name(full_schema_name), **kw
+        ).get(table_name, {"constrained_columns": [], "name": None})
 
-        foreign_key_map = self._get_schema_foreign_keys(
+    def get_multi_pk_constraint(
+        self,
+        connection,
+        *,
+        schema: Optional[str] = None,
+        filter_names: Optional[Collection[str]] = None,
+        **kw,
+    ):
+        """SA 2.x bulk hook — called during MetaData.reflect() instead of
+        get_pk_constraint.  Always uses SHOW PRIMARY KEYS IN SCHEMA so the
+        result is fetched once and cached for the full reflection pass.
+
+        The return key uses the original ``schema`` value (possibly None) so
+        SA's _reflect_info lookup succeeds when schema was not explicitly set.
+        """
+        effective_schema = schema or self.default_schema_name
+        full_schema_name = self._get_full_schema_name(
+            connection, effective_schema, **kw
+        )
+        all_pks = self._get_schema_primary_keys(
             connection, self.denormalize_name(full_schema_name), **kw
         )
-        return foreign_key_map.get(table_name, [])
+        tables = filter_names if filter_names is not None else list(all_pks.keys())
+        return [
+            (
+                (schema, table_name),
+                all_pks.get(table_name, {"constrained_columns": [], "name": None}),
+            )
+            for table_name in tables
+        ]
+
+    # ---------------------------------------------------------------------------
+    # Unique constraint reflection
+    # ---------------------------------------------------------------------------
+
+    def _get_table_unique_constraints(self, connection, table_name, schema, **kw):
+        """SHOW UNIQUE KEYS IN TABLE — single-table path (cache_column_metadata=True).
+
+        Results are cached by the calling method's @reflection.cache decorator.
+        """
+        full_name = self._always_quote_join(schema, table_name)
+        try:
+            result = connection.execute(
+                text(
+                    f"SHOW /* sqlalchemy:_get_table_unique_constraints */ UNIQUE KEYS IN TABLE {full_name}"
+                )
+            )
+            normalized_table_name = self.normalize_name(table_name)
+            return self._parse_uk_rows(result).get(normalized_table_name, [])
+        except sa_exc.ProgrammingError:
+            logger.debug("Failed to reflect unique constraints for %s", full_name)
+            return []
+
+    @reflection.cache
+    def _get_schema_unique_constraints(self, connection, schema, **kw):
+        """SHOW UNIQUE KEYS IN SCHEMA — schema-wide path for get_unique_constraints
+        (SA 1.4) and get_multi_unique_constraints (SA 2.x).
+
+        Results are cached for the lifetime of a connection via @reflection.cache.
+        DDL executed mid-session will not be reflected until a new connection is used.
+        """
+        result = connection.execute(
+            text(
+                f"SHOW /* sqlalchemy:_get_schema_unique_constraints */ UNIQUE KEYS IN SCHEMA {schema}"
+            )
+        )
+        return self._parse_uk_rows(result)
+
+    def get_unique_constraints(self, connection, table_name, schema, **kw):
+        schema = schema or self.default_schema_name
+        if self._is_single_table_reflection(schema, **kw):
+            return self._get_table_unique_constraints(
+                connection, table_name, schema, **kw
+            )
+        full_schema_name = self._get_full_schema_name(connection, schema, **kw)
+        return self._get_schema_unique_constraints(
+            connection, self.denormalize_name(full_schema_name), **kw
+        ).get(table_name, [])
+
+    def get_multi_unique_constraints(
+        self,
+        connection,
+        *,
+        schema: Optional[str] = None,
+        filter_names: Optional[Collection[str]] = None,
+        **kw,
+    ):
+        """SA 2.x bulk hook — called during MetaData.reflect() instead of
+        get_unique_constraints.  Always uses SHOW UNIQUE KEYS IN SCHEMA.
+
+        The return key uses the original ``schema`` value (possibly None) so
+        SA's _reflect_info lookup succeeds when schema was not explicitly set.
+        """
+        effective_schema = schema or self.default_schema_name
+        full_schema_name = self._get_full_schema_name(
+            connection, effective_schema, **kw
+        )
+        all_uk = self._get_schema_unique_constraints(
+            connection, self.denormalize_name(full_schema_name), **kw
+        )
+        tables = filter_names if filter_names is not None else list(all_uk.keys())
+        return [
+            ((schema, table_name), all_uk.get(table_name, [])) for table_name in tables
+        ]
+
+    # ---------------------------------------------------------------------------
+    # Foreign key reflection
+    # ---------------------------------------------------------------------------
+
+    def _get_table_foreign_keys(self, connection, table_name, schema, **kw):
+        """SHOW IMPORTED KEYS IN TABLE — single-table path (cache_column_metadata=True).
+
+        referred_schema is set to None when the FK target is in the same schema as
+        the table being reflected.  The same-schema set always includes the
+        explicitly-reflected schema so that cross-session-schema scenarios
+        (e.g. USE SCHEMA called after engine creation, or reflecting a non-default
+        schema) are handled correctly.
+
+        Results are cached by the calling method's @reflection.cache decorator.
+        """
+        full_name = self._always_quote_join(schema, table_name)
+        _, current_schema = self._current_database_schema(connection, **kw)
+        same_schemas = {
+            self.normalize_name(schema),
+            self.default_schema_name,
+            current_schema,
+        }
+        try:
+            result = connection.execute(
+                text(
+                    f"SHOW /* sqlalchemy:_get_table_foreign_keys */ IMPORTED KEYS IN TABLE {full_name}"
+                )
+            )
+            normalized_table_name = self.normalize_name(table_name)
+            return self._parse_fk_rows(result, same_schemas).get(
+                normalized_table_name, []
+            )
+        except sa_exc.ProgrammingError:
+            logger.debug("Failed to reflect foreign keys for %s", full_name)
+            return []
+
+    @reflection.cache
+    def _get_schema_foreign_keys(self, connection, schema, **kw):
+        """SHOW IMPORTED KEYS IN SCHEMA — schema-wide path for get_foreign_keys
+        (SA 1.4) and get_multi_foreign_keys (SA 2.x).
+
+        referred_schema is set to None for FKs whose target is in the same
+        schema as the table being reflected.  The same-schema set includes the
+        explicitly-reflected schema so that cross-session-schema scenarios
+        (e.g. USE SCHEMA called after engine creation, or reflecting a
+        non-default schema) are handled correctly.
+
+        See:
+        https://docs.sqlalchemy.org/en/14/core/reflection.html#reflection-schema-qualified-interaction
+
+        Results are cached for the lifetime of a connection via @reflection.cache.
+        DDL executed mid-session will not be reflected until a new connection is used.
+        """
+        _, current_schema = self._current_database_schema(connection, **kw)
+        same_schemas = {
+            self.normalize_name(schema),
+            self.default_schema_name,
+            current_schema,
+        }
+        result = connection.execute(
+            text(
+                f"SHOW /* sqlalchemy:_get_schema_foreign_keys */ IMPORTED KEYS IN SCHEMA {schema}"
+            )
+        )
+        return self._parse_fk_rows(result, same_schemas)
+
+    def get_foreign_keys(self, connection, table_name, schema=None, **kw):
+        """Gets all foreign keys for a table."""
+        schema = schema or self.default_schema_name
+        if self._is_single_table_reflection(schema, **kw):
+            return self._get_table_foreign_keys(connection, table_name, schema, **kw)
+        full_schema_name = self._get_full_schema_name(connection, schema, **kw)
+        return self._get_schema_foreign_keys(
+            connection, self.denormalize_name(full_schema_name), **kw
+        ).get(table_name, [])
+
+    def get_multi_foreign_keys(
+        self,
+        connection,
+        *,
+        schema: Optional[str] = None,
+        filter_names: Optional[Collection[str]] = None,
+        **kw,
+    ):
+        """SA 2.x bulk hook — called during MetaData.reflect() instead of
+        get_foreign_keys.  Always uses SHOW IMPORTED KEYS IN SCHEMA.
+
+        The return key uses the original ``schema`` value (possibly None) so
+        SA's _reflect_info lookup succeeds when schema was not explicitly set.
+        """
+        effective_schema = schema or self.default_schema_name
+        full_schema_name = self._get_full_schema_name(
+            connection, effective_schema, **kw
+        )
+        all_fks = self._get_schema_foreign_keys(
+            connection, self.denormalize_name(full_schema_name), **kw
+        )
+        tables = filter_names if filter_names is not None else list(all_fks.keys())
+        return [
+            ((schema, table_name), all_fks.get(table_name, [])) for table_name in tables
+        ]
+
+    def get_multi_columns(
+        self,
+        connection,
+        *,
+        schema: Optional[str] = None,
+        filter_names: Optional[Collection[str]] = None,
+        **kw,
+    ):
+        """SA 2.x bulk hook — called by reflect_table/_get_reflection_info for
+        every reflection operation (single table and MetaData.reflect() alike).
+
+        Uses the cached schema-wide information_schema query when available.
+        Falls back to DESC TABLE per-table for objects not in information_schema
+        (temp tables, dynamic tables, etc.).
+
+        Important: the return key must use the original ``schema`` value (which
+        may be None), not a normalised substitute, so SA's _reflect_info lookup
+        succeeds when schema was not explicitly provided.
+        """
+        # effective_schema drives the SQL query; original schema drives the key.
+        effective_schema = schema or self.default_schema_name
+        if not effective_schema:
+            _, effective_schema = self._current_database_schema(connection, **kw)
+        all_columns = self._get_schema_columns(connection, effective_schema, **kw)
+        if all_columns is None:
+            all_columns = {}
+        tables = filter_names if filter_names is not None else list(all_columns.keys())
+        mgr = _StructuredTypeInfoManager(
+            connection, self.name_utils, self.default_schema_name
+        )
+        result = []
+        for table_name in tables:
+            cols = all_columns.get(table_name)
+            if cols is None:
+                full_name = self._always_quote_join(effective_schema, table_name)
+                cols = mgr.get_table_columns_by_full_name(full_name)
+            result.append(((schema, table_name), cols))
+        return result
 
     def _get_type_kwargs(
         self, col_type, character_maximum_length, numeric_precision, numeric_scale
@@ -810,6 +1137,46 @@ class SnowflakeDialect(default.DefaultDialect):
 
         return columns_by_table
 
+    def _is_single_table_reflection(self, schema, **kw):
+        """Return True when a single-table SHOW command should be used for PK/UK/FK.
+
+        Opt-in via ``cache_column_metadata=true`` on the engine URL or
+        connect_args.  When disabled (the default) all reflection uses the
+        existing schema-wide queries unchanged, preserving backward compatibility.
+
+        SA 2.x path (IS_VERSION_20=True):
+          ``get_multi_pk_constraint`` / ``get_multi_unique_constraints`` /
+          ``get_multi_foreign_keys`` are used by MetaData.reflect(), so any call
+          to the singular get_pk_constraint / get_unique_constraints /
+          get_foreign_keys is inherently single-table (Inspector,
+          pandas.read_sql_table).  No info_cache inspection required.
+
+        SA 1.4 path (IS_VERSION_20=False):
+          MetaData.reflect() calls the singular methods per-table and populates
+          ``_get_schema_tables_info`` early in the reflection pass.  The
+          presence of that key in info_cache is the signal that multi-table
+          reflection is in progress; fall back to the schema-wide cached query.
+
+        Note: @reflection.cache caches results for the lifetime of a connection.
+        DDL executed mid-session will not be visible in reflection until a new
+        connection is obtained, regardless of which path is used.
+        """
+        if not getattr(self, "_cache_column_metadata", False):
+            return False
+
+        if IS_VERSION_20:
+            # SA 2.x: get_multi_* handles MetaData.reflect(); singular calls
+            # are always single-table at this point.
+            return True
+
+        # SA 1.4: detect whether MetaData.reflect() is in progress.
+        # @reflection.cache stores keys as (fn.__name__, args_tuple, kwargs_tuple).
+        info_cache = kw.get("info_cache")
+        if info_cache is None:
+            return True
+        tables_info_key = (self._get_schema_tables_info.__name__, (schema,), ())
+        return tables_info_key not in info_cache
+
     def get_columns(self, connection, table_name, schema=None, **kw):
         """
         Gets all column info given the table info
@@ -818,6 +1185,22 @@ class SnowflakeDialect(default.DefaultDialect):
         if not schema:
             _, schema = self._current_database_schema(connection, **kw)
 
+        # SA 2.x: get_multi_columns handles MetaData.reflect(); get_columns is
+        # always a single-table call here.  Use DESC TABLE — it works for all
+        # table types including temp tables not visible in information_schema.
+        # SA 1.4: opt-in via cache_column_metadata=True (_is_single_table_reflection
+        # returns True only when single-table); otherwise falls through to the
+        # schema-wide path used by MetaData.reflect() per-table loops.
+        if (
+            IS_VERSION_20 or self._is_single_table_reflection(schema, **kw)
+        ) and table_name:
+            full_table_name = self._always_quote_join(schema, table_name)
+            column_info_manager = _StructuredTypeInfoManager(
+                connection, self.name_utils, self.default_schema_name
+            )
+            return column_info_manager.get_table_columns_by_full_name(full_table_name)
+
+        # Use schema-wide cached query (optimal for multi-table reflection)
         schema_columns = self._get_schema_columns(connection, schema, **kw)
         if schema_columns is None:
             column_info_manager = _StructuredTypeInfoManager(
@@ -937,11 +1320,11 @@ class SnowflakeDialect(default.DefaultDialect):
                 )
             )
 
-        n2i = self.__class__._map_name_to_idx(cursor)
+        name_to_index_map = self.__class__._map_name_to_idx(cursor)
         try:
             ret = cursor.fetchone()
             if ret:
-                return ret[n2i["text"]]
+                return ret[name_to_index_map["text"]]
         except Exception:
             pass
         return None
@@ -955,10 +1338,10 @@ class SnowflakeDialect(default.DefaultDialect):
         )
 
         ret = []
-        n2i = self.__class__._map_name_to_idx(cursor)
+        name_to_index_map = self.__class__._map_name_to_idx(cursor)
         for row in cursor:
-            if row[n2i["kind"]] == "TEMPORARY":
-                ret.append(self.normalize_name(row[n2i["name"]]))
+            if row[name_to_index_map["kind"]] == "TEMPORARY":
+                ret.append(self.normalize_name(row[name_to_index_map["name"]]))
 
         return ret
 
@@ -1071,37 +1454,12 @@ class SnowflakeDialect(default.DefaultDialect):
             )
         )
 
-        n2i = self._map_name_to_idx(result)
-        indexes = {}
-
-        for row in result.cursor.fetchall():
-            table_name = self.normalize_name(str(row[n2i["table"]]))
-            if (
-                row[n2i["name"]] == f'SYS_INDEX_{row[n2i["table"]]}_PRIMARY'
-                or table_name not in filter_names
-                or table_name not in hybrid_table_names
-            ):
-                continue
-            index = {
-                "name": row[n2i["name"]],
-                "unique": row[n2i["is_unique"]] == "Y",
-                "column_names": [
-                    self.normalize_name(column)
-                    for column in parse_index_columns(row[n2i["columns"]])
-                ],
-                "include_columns": [
-                    self.normalize_name(column)
-                    for column in parse_index_columns(row[n2i["included_columns"]])
-                ],
-                "dialect_options": {},
-            }
-
-            if (schema, table_name) in indexes:
-                indexes[(schema, table_name)].append(index)
-            else:
-                indexes[(schema, table_name)] = [index]
-
-        return list(indexes.items())
+        all_indexes = self._parse_index_rows(result)
+        return [
+            ((schema, table_name), table_indexes)
+            for table_name, table_indexes in all_indexes.items()
+            if table_name in filter_names and table_name in hybrid_table_names
+        ]
 
     def _value_or_default(self, data, table, schema):
         table = self.normalize_name(str(table))
@@ -1111,16 +1469,75 @@ class SnowflakeDialect(default.DefaultDialect):
         else:
             return []
 
+    def _parse_index_rows(self, result):
+        """Parse SHOW INDEXES rows into {table_name: [index_dict, ...]}.
+
+        Both SHOW INDEXES IN TABLE and SHOW INDEXES IN SCHEMA return the same
+        column set (including table), so this helper works for both paths.
+        SYS_INDEX primary-key sentinels are filtered out.
+        """
+        name_to_index_map = self._map_name_to_idx(result)
+        indexes = defaultdict(list)
+        for row in result.cursor.fetchall():
+            if (
+                row[name_to_index_map["name"]]
+                == f'SYS_INDEX_{row[name_to_index_map["table"]]}_PRIMARY'
+            ):
+                continue
+            table_name = self.normalize_name(str(row[name_to_index_map["table"]]))
+            indexes[table_name].append(
+                {
+                    "name": row[name_to_index_map["name"]],
+                    "unique": row[name_to_index_map["is_unique"]] == "Y",
+                    "column_names": [
+                        self.normalize_name(column)
+                        for column in parse_index_columns(
+                            row[name_to_index_map["columns"]]
+                        )
+                    ],
+                    "include_columns": [
+                        self.normalize_name(column)
+                        for column in parse_index_columns(
+                            row[name_to_index_map["included_columns"]]
+                        )
+                    ],
+                    "dialect_options": {},
+                }
+            )
+        return dict(indexes)
+
+    def _get_table_indexes(self, connection, table_name, schema, **kw):
+        """SHOW INDEXES IN TABLE — single-table path (cache_column_metadata=True).
+
+        For non-hybrid tables Snowflake returns an empty result set (not an
+        error), so the list will simply be empty.  The SYS_INDEX primary-key
+        sentinel is filtered out, consistent with the schema-wide path.
+
+        Results are cached by the calling method's @reflection.cache decorator.
+        """
+        full_name = self._always_quote_join(schema, table_name)
+        try:
+            result = connection.execute(
+                text(
+                    f"SHOW /* sqlalchemy:_get_table_indexes */ INDEXES IN TABLE {full_name}"
+                )
+            )
+            normalized_table_name = self.normalize_name(table_name)
+            return self._parse_index_rows(result).get(normalized_table_name, [])
+        except sa_exc.ProgrammingError:
+            logger.debug("Failed to reflect indexes for %s", full_name)
+            return []
+
     @reflection.cache
     def get_indexes(self, connection, tablename, schema, **kw):
-        """
-        Gets the indexes definition
-        """
+        """Gets the indexes definition."""
+        schema = schema or self.default_schema_name
         table_name = self.normalize_name(str(tablename))
+        if self._is_single_table_reflection(schema, **kw):
+            return self._get_table_indexes(connection, table_name, schema, **kw)
         data = self.get_multi_indexes(
             connection=connection, schema=schema, filter_names=[table_name], **kw
         )
-
         return self._value_or_default(data, table_name, schema)
 
     def connect(self, *cargs, **cparams):
