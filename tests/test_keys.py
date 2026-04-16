@@ -1,6 +1,7 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
+import pytest
 from sqlalchemy import (
     Column,
     ForeignKeyConstraint,
@@ -11,23 +12,33 @@ from sqlalchemy import (
     UniqueConstraint,
     inspect,
 )
-from sqlalchemy.testing import combinations
 from sqlalchemy.testing.assertions import eq_
 
 
-@combinations(
+@pytest.mark.parametrize(
     (
-        "declared-order",
-        "test_keys_fk_parent_mixed",
-        ["id", "attr", "name"],
-        ["name", "id", "attr"],
-        "test_keys_fk_child_mixed",
-        ["cid", "pname", "pid", "pattr"],
-        ["pname", "pid", "pattr"],
-        "pk_test_keys_mixed",
-        "fk_test_keys_mixed",
+        "parent_table_name",
+        "parent_columns",
+        "parent_pk_order",
+        "child_table_name",
+        "child_columns",
+        "child_fk_order",
+        "pk_name",
+        "fk_name",
     ),
-    id_="iaaaaaaaa",
+    [
+        (
+            "test_keys_fk_parent_mixed",
+            ["id", "attr", "name"],
+            ["name", "id", "attr"],
+            "test_keys_fk_child_mixed",
+            ["cid", "pname", "pid", "pattr"],
+            ["pname", "pid", "pattr"],
+            "pk_test_keys_mixed",
+            "fk_test_keys_mixed",
+        ),
+    ],
+    ids=["declared-order"],
 )
 def test_composite_fk_reflects_key_order(
     engine_testaccount,
@@ -40,7 +51,6 @@ def test_composite_fk_reflects_key_order(
     pk_name,
     fk_name,
 ):
-    """FK + PK column order matches the constraint declaration."""
     metadata = MetaData()
     parent = Table(
         parent_table_name,
@@ -77,25 +87,30 @@ def test_composite_fk_reflects_key_order(
         metadata.drop_all(engine_testaccount)
 
 
-@combinations(
-    (
-        "declared-order",
-        "test_keys_uq_decl",
-        ["id", "col_x", "col_y", "col_z"],
-        ["col_x", "col_y", "col_z"],
-        "uq_test_keys_decl",
-    ),
-    (
-        "column-order-differs",
-        "test_keys_uq_order",
-        ["id", "col_x", "col_y", "col_z"],
-        ["col_z", "col_x", "col_y"],
-        "uq_test_keys_order",
-    ),
-    id_="iaaaaa",
+@pytest.mark.parametrize(
+    ("table_name", "table_columns", "unique_order", "constraint_name"),
+    [
+        (
+            "test_keys_uq_decl",
+            ["id", "col_x", "col_y", "col_z"],
+            ["col_x", "col_y", "col_z"],
+            "uq_test_keys_decl",
+        ),
+        (
+            "test_keys_uq_order",
+            ["id", "col_x", "col_y", "col_z"],
+            ["col_z", "col_x", "col_y"],
+            "uq_test_keys_order",
+        ),
+    ],
+    ids=["declared-order", "column-order-differs"],
 )
 def test_composite_unique_reflects_key_order(
-    engine_testaccount, table_name, table_columns, unique_order, constraint_name
+    engine_testaccount,
+    table_name,
+    table_columns,
+    unique_order,
+    constraint_name,
 ):
     metadata = MetaData()
     Table(
@@ -119,18 +134,24 @@ def test_composite_unique_reflects_key_order(
         metadata.drop_all(engine_testaccount)
 
 
-@combinations(
-    (
-        "column-order-differs",
-        "test_keys_pk_order",
-        ["col_first", "col_mid", "col_last"],
-        ["col_last", "col_first", "col_mid"],
-        "pk_test_keys_order",
-    ),
-    id_="iaaaaa",
+@pytest.mark.parametrize(
+    ("table_name", "table_columns", "pk_order", "constraint_name"),
+    [
+        (
+            "test_keys_pk_order",
+            ["col_first", "col_mid", "col_last"],
+            ["col_last", "col_first", "col_mid"],
+            "pk_test_keys_order",
+        ),
+    ],
+    ids=["column-order-differs"],
 )
 def test_composite_pk_reflects_key_order(
-    engine_testaccount, table_name, table_columns, pk_order, constraint_name
+    engine_testaccount,
+    table_name,
+    table_columns,
+    pk_order,
+    constraint_name,
 ):
     metadata = MetaData()
     Table(
