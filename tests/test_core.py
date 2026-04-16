@@ -780,7 +780,7 @@ def test_naming_convention_constraint_names(engine_testaccount):
         users.drop(engine_testaccount)
 
 
-def test_get_multi_column_primary_key(engine_testaccount):
+def test_get_multiple_column_primary_key(engine_testaccount):
     """
     Tests multicolumn primary key with and without autoincrement
     """
@@ -806,6 +806,8 @@ def test_get_multi_column_primary_key(engine_testaccount):
         assert columns_in_mytable[1]["primary_key"], "primary key"
 
         primary_keys = inspector.get_pk_constraint("mytable")
+
+        # Different from column order, as it seems SQLAlchemy produces the following constraint: PRIMARY KEY (id, gid)
         assert primary_keys["constrained_columns"] == ["id", "gid"]
 
     finally:
