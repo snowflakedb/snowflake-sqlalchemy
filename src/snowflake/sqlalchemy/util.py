@@ -6,7 +6,7 @@ import re
 from itertools import chain
 from typing import Any
 from urllib.parse import quote as _url_quote
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urlsplit, urlunsplit
 
 from sqlalchemy import create_engine as _sa_create_engine
 from sqlalchemy import exc, inspection, sql
@@ -382,7 +382,13 @@ def create_snowflake_engine(
             schema_part = f"%22{_url_quote(schema, safe='')}%22"
         else:
             schema_part = _url_quote(schema, safe="")
-        url = f"{base_url.rstrip('/')}/{schema_part}"
+        # Use urlsplit/urlunsplit to safely insert schema into path before query params
+        parsed = urlsplit(base_url)
+        path = parsed.path.rstrip("/")
+        new_path = f"{path}/{schema_part}"
+        url = urlunsplit(
+            (parsed.scheme, parsed.netloc, new_path, parsed.query, parsed.fragment)
+        )
     else:
         url = base_url
     return _sa_create_engine(url, **kwargs)

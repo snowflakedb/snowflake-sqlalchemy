@@ -69,6 +69,24 @@ class TestDenormalizeColumnName:
         result = compiler.denormalize_column_name(quoted_name("mycol", False))
         assert result == "mycol", f"Expected 'mycol', got {result!r}"
 
+    def test_round_trip_normalize_denormalize_with_flag_on(self):
+        """Round-trip: normalize('TABLE') -> denormalize -> '"table"' with case_sensitive=True."""
+        # When case_sensitive_identifiers=True:
+        # normalize_name('TABLE') returns quoted_name('table', True)
+        # denormalize_column_name(quoted_name('table', True)) should return '"table"'
+        dialect = SnowflakeDialect(case_sensitive_identifiers=True)
+        normalized = dialect.normalize_name("TABLE")
+        # Verify normalize returns quoted_name('table', True)
+        assert isinstance(normalized, quoted_name)
+        assert normalized.quote is True
+        assert str(normalized) == "table"
+
+        # Now denormalize it
+        compiler = self._get_compiler(dialect=dialect)
+        result = compiler.denormalize_column_name(normalized)
+        # Should produce: "table" (the identifier surrounded by double quotes)
+        assert result == '"table"', f"Expected '\"table\"', got {result!r}"
+
 
 # ---------------------------------------------------------------------------
 # Bug 2 — normalize_name reserved-word handling gated behind flag
@@ -483,6 +501,53 @@ class TestCreateSnowflakeEngineHelper:
                 "my%20schema" in call_url
             ), f"Expected URL-encoded schema name, got: {call_url!r}"
 
+    def test_base_url_with_query_params_inserts_schema_correctly(self):
+        """Base URL with query params must have schema inserted into path before '?'."""
+        from snowflake.sqlalchemy.util import create_snowflake_engine
+
+        with mock.patch("snowflake.sqlalchemy.util._sa_create_engine") as mock_ce:
+            mock_ce.return_value = mock.MagicMock()
+            create_snowflake_engine(
+                "snowflake://u:p@acct/mydb?warehouse=COMPUTE_WH",
+                schema="myschema",
+            )
+            call_url = mock_ce.call_args[0][0]
+            # Schema must be in path before the query string
+            assert (
+                "/myschema?" in call_url
+            ), f"Expected '/myschema?' in URL, got: {call_url!r}"
+            assert (
+                "warehouse=COMPUTE_WH" in call_url
+            ), f"Expected query param preserved in URL, got: {call_url!r}"
+            # The schema should NOT appear after the '?'
+            query_part = call_url.split("?", 1)[1]
+            assert (
+                "myschema" not in query_part
+            ), f"Schema should not be in query string: {call_url!r}"
+
+    def test_base_url_with_query_params_case_sensitive_schema(self):
+        """Base URL with query params and case_sensitive_schema=True."""
+        from snowflake.sqlalchemy.util import create_snowflake_engine
+
+        with mock.patch("snowflake.sqlalchemy.util._sa_create_engine") as mock_ce:
+            mock_ce.return_value = mock.MagicMock()
+            create_snowflake_engine(
+                "snowflake://u:p@acct/mydb?warehouse=COMPUTE_WH&role=MYROLE",
+                schema="myschema",
+                case_sensitive_schema=True,
+            )
+            call_url = mock_ce.call_args[0][0]
+            # Schema must be in path before the query string, with %22 encoding
+            assert (
+                "%22myschema%22?" in call_url
+            ), f"Expected '/%22myschema%22?' in URL, got: {call_url!r}"
+            assert (
+                "warehouse=COMPUTE_WH" in call_url
+            ), f"Expected first query param preserved in URL, got: {call_url!r}"
+            assert (
+                "role=MYROLE" in call_url
+            ), f"Expected second query param preserved in URL, got: {call_url!r}"
+
 
 # ---------------------------------------------------------------------------
 # Alembic helper
@@ -506,10 +571,11 @@ class TestAlembicRenderItemHelper:
 
         col = Column(quoted_name("mycol", True), Integer)
 
+        # Mock autogen_context with render_column_type method returning a string
         autogen_ctx = mock.MagicMock()
-        autogen_ctx.opts.__getitem__ = mock.MagicMock(
-            side_effect=lambda k: mock.MagicMock()
-        )
+        autogen_module = mock.MagicMock()
+        autogen_module.render_column_type.return_value = "sa.Integer()"
+        autogen_ctx.opts = {"autogenerate_module": autogen_module}
 
         result = render_item("column", col, autogen_ctx)
         assert (
@@ -550,6 +616,96 @@ class TestAlembicRenderItemHelper:
         col = Column(quoted_name("mycol", False), Integer)
         result = render_item("column", col, mock.MagicMock())
         assert result is False
+
+    def test_quoted_name_column_with_nullable_false(self):
+        """render_item for quoted_name column with nullable=False includes it in output."""
+        from sqlalchemy import Column, Integer
+
+        from snowflake.sqlalchemy.alembic_util import render_item
+
+        col = Column(quoted_name("mycol", True), Integer, nullable=False)
+
+        # Mock autogen_context with render_column_type method returning a string
+        autogen_ctx = mock.MagicMock()
+        autogen_module = mock.MagicMock()
+        autogen_module.render_column_type.return_value = "sa.Integer()"
+        autogen_ctx.opts = {"autogenerate_module": autogen_module}
+
+        result = render_item("column", col, autogen_ctx)
+        assert result is not False
+        assert "nullable=False" in result, f"Expected 'nullable=False' in {result!r}"
+        assert "quoted_name" in result
+        assert "mycol" in result
+
+    def test_quoted_name_column_with_server_default(self):
+        """render_item for quoted_name column with server_default includes it in output."""
+        from sqlalchemy import Column, Integer, text
+
+        from snowflake.sqlalchemy.alembic_util import render_item
+
+        col = Column(quoted_name("mycol", True), Integer, server_default=text("0"))
+
+        # Mock autogen_context with render_server_default method
+        autogen_ctx = mock.MagicMock()
+        autogen_module = mock.MagicMock()
+        autogen_module.render_column_type.return_value = "sa.Integer()"
+        autogen_module.render_server_default.return_value = "sa.text('0')"
+        autogen_ctx.opts = {"autogenerate_module": autogen_module}
+
+        result = render_item("column", col, autogen_ctx)
+        assert result is not False
+        assert "server_default=" in result, f"Expected 'server_default=' in {result!r}"
+        assert "quoted_name" in result
+        assert "mycol" in result
+
+    def test_quoted_name_column_with_primary_key(self):
+        """render_item for quoted_name column with primary_key=True includes it in output."""
+        from sqlalchemy import Column, Integer
+
+        from snowflake.sqlalchemy.alembic_util import render_item
+
+        col = Column(quoted_name("id", True), Integer, primary_key=True)
+
+        # Mock autogen_context with render_column_type method returning a string
+        autogen_ctx = mock.MagicMock()
+        autogen_module = mock.MagicMock()
+        autogen_module.render_column_type.return_value = "sa.Integer()"
+        autogen_ctx.opts = {"autogenerate_module": autogen_module}
+
+        result = render_item("column", col, autogen_ctx)
+        assert result is not False
+        assert (
+            "primary_key=True" in result
+        ), f"Expected 'primary_key=True' in {result!r}"
+        assert "quoted_name" in result
+        assert "'id'" in result
+
+    def test_quoted_name_column_with_multiple_attributes(self):
+        """render_item for quoted_name column with multiple attributes includes all."""
+        from sqlalchemy import Column, Integer, text
+
+        from snowflake.sqlalchemy.alembic_util import render_item
+
+        col = Column(
+            quoted_name("mycol", True),
+            Integer,
+            nullable=False,
+            server_default=text("42"),
+        )
+
+        # Mock autogen_context with render_server_default method
+        autogen_ctx = mock.MagicMock()
+        autogen_module = mock.MagicMock()
+        autogen_module.render_column_type.return_value = "sa.Integer()"
+        autogen_module.render_server_default.return_value = "sa.text('42')"
+        autogen_ctx.opts = {"autogenerate_module": autogen_module}
+
+        result = render_item("column", col, autogen_ctx)
+        assert result is not False
+        assert "nullable=False" in result, f"Expected 'nullable=False' in {result!r}"
+        assert "server_default=" in result, f"Expected 'server_default=' in {result!r}"
+        assert "quoted_name" in result
+        assert "mycol" in result
 
 
 # ---------------------------------------------------------------------------

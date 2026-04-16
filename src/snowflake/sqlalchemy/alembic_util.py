@@ -54,7 +54,9 @@ def render_item(type_, obj, autogen_context):
     """
     if type_ == "column" and isinstance(obj.name, quoted_name) and obj.name.quote:
         col_name = str(obj.name)
-        # Render the column type using Alembic's own type renderer
+        # Render the column type using Alembic's own type renderer.
+        # Note: autogenerate_module.render_column_type is an internal Alembic API
+        # that may change across releases. The fallback to repr() provides safety.
         try:
             rendered_type = autogen_context.opts[
                 "autogenerate_module"
@@ -62,9 +64,30 @@ def render_item(type_, obj, autogen_context):
         except (KeyError, AttributeError):
             # Fall back to plain repr if autogenerate_module not available
             rendered_type = repr(obj.type)
-        return (
-            f"sa.Column("
-            f"sa.sql.elements.quoted_name({col_name!r}, True), "
-            f"{rendered_type})"
-        )
+
+        # Build the column definition starting with name and type
+        parts = [f"sa.sql.elements.quoted_name({col_name!r}, True)", rendered_type]
+
+        # Add important column attributes that differ from defaults
+        # nullable defaults to True, so only emit nullable=False
+        if not obj.nullable:
+            parts.append("nullable=False")
+
+        # Emit primary_key when True
+        if obj.primary_key:
+            parts.append("primary_key=True")
+
+        # Emit server_default when set
+        if obj.server_default is not None:
+            # Render the server_default using Alembic's renderer if available
+            try:
+                rendered_default = autogen_context.opts[
+                    "autogenerate_module"
+                ].render_server_default(obj.server_default, autogen_context)
+                parts.append(f"server_default={rendered_default}")
+            except (KeyError, AttributeError):
+                # Fall back to repr if renderer not available
+                parts.append(f"server_default={repr(obj.server_default)}")
+
+        return f"sa.Column({', '.join(parts)})"
     return False
