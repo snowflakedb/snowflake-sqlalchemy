@@ -2,6 +2,7 @@
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
 
+import uuid
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -109,16 +110,20 @@ class TestCrossDatabaseReflection:
     @pytest.fixture()
     def setup_databases(self, engine_testaccount):
         """Create test databases, schemas, and tables for cross-database tests."""
+        suffix = uuid.uuid4().hex[:8]
+        db_a = f"test_db_a_{suffix}"
+        db_b = f"test_db_b_{suffix}"
+
         with engine_testaccount.connect() as conn:
             # All DDL uses fully-qualified names — no USE DATABASE needed
-            conn.execute(text("CREATE DATABASE IF NOT EXISTS test_db_a"))
-            conn.execute(text("CREATE DATABASE IF NOT EXISTS test_db_b"))
-            conn.execute(text("CREATE SCHEMA IF NOT EXISTS test_db_a.schema_a"))
-            conn.execute(text("CREATE SCHEMA IF NOT EXISTS test_db_b.schema_b"))
+            conn.execute(text(f"CREATE DATABASE IF NOT EXISTS {db_a}"))
+            conn.execute(text(f"CREATE DATABASE IF NOT EXISTS {db_b}"))
+            conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {db_a}.schema_a"))
+            conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {db_b}.schema_b"))
             conn.execute(
                 text(
-                    """
-                    CREATE OR REPLACE TABLE test_db_a.schema_a.apples (
+                    f"""
+                    CREATE OR REPLACE TABLE {db_a}.schema_a.apples (
                         id INTEGER PRIMARY KEY,
                         name VARCHAR(100),
                         color VARCHAR(50)
@@ -128,8 +133,8 @@ class TestCrossDatabaseReflection:
             )
             conn.execute(
                 text(
-                    """
-                    CREATE OR REPLACE TABLE test_db_b.schema_b.bananas (
+                    f"""
+                    CREATE OR REPLACE TABLE {db_b}.schema_b.bananas (
                         id INTEGER PRIMARY KEY,
                         variety VARCHAR(100) UNIQUE,
                         ripeness INTEGER
@@ -139,23 +144,21 @@ class TestCrossDatabaseReflection:
             )
             conn.execute(
                 text(
-                    """
-                    CREATE OR REPLACE TABLE test_db_b.schema_b.banana_ratings (
+                    f"""
+                    CREATE OR REPLACE TABLE {db_b}.schema_b.banana_ratings (
                         rating_id INTEGER PRIMARY KEY,
                         banana_id INTEGER,
                         score INTEGER,
-                        FOREIGN KEY (banana_id) REFERENCES test_db_b.schema_b.bananas(id)
+                        FOREIGN KEY (banana_id) REFERENCES {db_b}.schema_b.bananas(id)
                     )
                     """
                 )
             )
-            conn.execute(
-                text('CREATE SCHEMA IF NOT EXISTS test_db_b."schema.with.dots"')
-            )
+            conn.execute(text(f'CREATE SCHEMA IF NOT EXISTS {db_b}."schema.with.dots"'))
             conn.execute(
                 text(
-                    """
-                    CREATE OR REPLACE TABLE test_db_b."schema.with.dots".oranges (
+                    f"""
+                    CREATE OR REPLACE TABLE {db_b}."schema.with.dots".oranges (
                         id INTEGER,
                         juice_content INTEGER
                     )
@@ -164,44 +167,53 @@ class TestCrossDatabaseReflection:
             )
             conn.commit()
 
-        yield
+        yield {"db_a": db_a, "db_b": db_b}
 
         with engine_testaccount.connect() as conn:
-            conn.execute(text("DROP DATABASE IF EXISTS test_db_a"))
-            conn.execute(text("DROP DATABASE IF EXISTS test_db_b"))
+            conn.execute(text(f"DROP DATABASE IF EXISTS {db_a}"))
+            conn.execute(text(f"DROP DATABASE IF EXISTS {db_b}"))
             conn.commit()
 
-    @pytest.mark.parametrize(
-        "table_name, schema, expected_columns",
-        [
-            ("bananas", "test_db_b.schema_b", ["id", "variety", "ripeness"]),
-            ("oranges", 'test_db_b."schema.with.dots"', ["id", "juice_content"]),
-        ],
-        ids=["cross_database", "quoted_dot_schema"],
-    )
-    def test_reflect_cross_database_table(
-        self, engine_testaccount, setup_databases, table_name, schema, expected_columns
-    ):
+    def test_reflect_cross_database_table(self, engine_testaccount, setup_databases):
         """Test reflecting a table using database.schema notation."""
+        db_b = setup_databases["db_b"]
         metadata = MetaData()
+
         table = Table(
-            table_name,
+            "bananas",
             metadata,
-            schema=schema,
+            schema=f"{db_b}.schema_b",
             autoload_with=engine_testaccount,
         )
-        for col in expected_columns:
+        for col in ["id", "variety", "ripeness"]:
+            assert col in table.columns
+
+    def test_reflect_cross_database_table_quoted_dot_schema(
+        self, engine_testaccount, setup_databases
+    ):
+        """Test reflecting a table with a dot-containing schema name."""
+        db_b = setup_databases["db_b"]
+        metadata = MetaData()
+
+        table = Table(
+            "oranges",
+            metadata,
+            schema=f'{db_b}."schema.with.dots"',
+            autoload_with=engine_testaccount,
+        )
+        for col in ["id", "juice_content"]:
             assert col in table.columns
 
     def test_reflect_cross_database_column_details(
         self, engine_testaccount, setup_databases
     ):
         """Verify reflected column types and primary key from a cross-database table."""
+        db_b = setup_databases["db_b"]
         metadata = MetaData()
         bananas = Table(
             "bananas",
             metadata,
-            schema="test_db_b.schema_b",
+            schema=f"{db_b}.schema_b",
             autoload_with=engine_testaccount,
         )
         assert bananas.columns["variety"].type.length == 100
@@ -209,23 +221,25 @@ class TestCrossDatabaseReflection:
 
     def test_metadata_reflect_cross_database(self, engine_testaccount, setup_databases):
         """Test metadata.reflect() with cross-database schema."""
+        db_b = setup_databases["db_b"]
         metadata = MetaData()
 
         metadata.reflect(
             bind=engine_testaccount,
-            schema="test_db_b.schema_b",
+            schema=f"{db_b}.schema_b",
             views=False,
         )
 
-        table_key = "test_db_b.schema_b.bananas"
+        table_key = f"{db_b}.schema_b.bananas"
         assert table_key in metadata.tables
         assert "variety" in metadata.tables[table_key].columns
 
     def test_get_columns_cross_database(self, engine_testaccount, setup_databases):
         """Test inspector.get_columns with cross-database schema."""
+        db_b = setup_databases["db_b"]
         inspector = inspect(engine_testaccount)
 
-        columns = inspector.get_columns("bananas", schema="test_db_b.schema_b")
+        columns = inspector.get_columns("bananas", schema=f"{db_b}.schema_b")
 
         column_names = [col["name"] for col in columns]
         assert "id" in column_names
@@ -237,13 +251,14 @@ class TestCrossDatabaseReflection:
 
     def test_table_not_found_cross_database(self, engine_testaccount, setup_databases):
         """Test that NoSuchTableError is raised for non-existent cross-database table."""
+        db_b = setup_databases["db_b"]
         metadata = MetaData()
 
         with pytest.raises(NoSuchTableError):
             Table(
                 "nonexistent_table",
                 metadata,
-                schema="test_db_b.schema_b",
+                schema=f"{db_b}.schema_b",
                 autoload_with=engine_testaccount,
             )
 
@@ -251,32 +266,34 @@ class TestCrossDatabaseReflection:
         self, engine_testaccount, setup_databases
     ):
         """Test _get_full_schema_name handles cross-database schemas correctly."""
+        db_b = setup_databases["db_b"]
         dialect = engine_testaccount.dialect
 
         with engine_testaccount.connect() as conn:
-            full_name = dialect._get_full_schema_name(conn, "test_db_b.schema_b")
-            assert "test_db_b" in full_name
+            full_name = dialect._get_full_schema_name(conn, f"{db_b}.schema_b")
+            assert db_b in full_name
             assert "schema_b" in full_name
             result = conn.execute(text("SELECT CURRENT_DATABASE()"))
             current_db = result.scalar()
-            assert not full_name.startswith(f'"{current_db.lower()}"."test_db_b"')
+            assert not full_name.startswith(f'"{current_db.lower()}"."{db_b}"')
 
             full_name = dialect._get_full_schema_name(conn, "some_schema")
             assert current_db.lower() in full_name.lower()
             assert "some_schema" in full_name
 
             quoted_full_name = dialect._get_full_schema_name(
-                conn, '"test_db_b"."schema.with.dots"'
+                conn, f'"{db_b}"."schema.with.dots"'
             )
-            assert quoted_full_name == '"test_db_b"."schema.with.dots"'
+            assert quoted_full_name == f'"{db_b}"."schema.with.dots"'
 
     def test_get_pk_constraint_cross_database(
         self, engine_testaccount, setup_databases
     ):
         """Test inspector.get_pk_constraint with cross-database schema."""
+        db_b = setup_databases["db_b"]
         inspector = inspect(engine_testaccount)
 
-        pk = inspector.get_pk_constraint("bananas", schema="test_db_b.schema_b")
+        pk = inspector.get_pk_constraint("bananas", schema=f"{db_b}.schema_b")
 
         assert "id" in pk["constrained_columns"]
 
@@ -284,18 +301,20 @@ class TestCrossDatabaseReflection:
         self, engine_testaccount, setup_databases
     ):
         """Test inspector.get_unique_constraints with cross-database schema."""
+        db_b = setup_databases["db_b"]
         inspector = inspect(engine_testaccount)
 
-        ucs = inspector.get_unique_constraints("bananas", schema="test_db_b.schema_b")
+        ucs = inspector.get_unique_constraints("bananas", schema=f"{db_b}.schema_b")
 
         uc_columns = [col for uc in ucs for col in uc["column_names"]]
         assert "variety" in uc_columns
 
     def test_get_foreign_keys_cross_database(self, engine_testaccount, setup_databases):
         """Test inspector.get_foreign_keys with cross-database schema."""
+        db_b = setup_databases["db_b"]
         inspector = inspect(engine_testaccount)
 
-        fks = inspector.get_foreign_keys("banana_ratings", schema="test_db_b.schema_b")
+        fks = inspector.get_foreign_keys("banana_ratings", schema=f"{db_b}.schema_b")
 
         assert len(fks) >= 1
         fk = fks[0]
