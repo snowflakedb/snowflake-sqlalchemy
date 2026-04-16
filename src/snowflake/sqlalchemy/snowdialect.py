@@ -360,28 +360,22 @@ class SnowflakeDialect(default.DefaultDialect):
             connection, **kw
         )
 
-        if schema:
-            parts = self.identifier_preparer._split_schema_by_dot(schema)
-            # Quote each part directly — do NOT pass through
-            # _denormalize_quote_join, which would re-split parts
-            # containing literal dots (e.g. "schema.with.dots").
-            if len(parts) == 2:
-                return ".".join(
-                    self.identifier_preparer._quote_free_identifiers(parts[0], parts[1])
-                )
-            elif len(parts) == 1:
-                return ".".join(
-                    self.identifier_preparer._quote_free_identifiers(
-                        current_database, parts[0]
-                    )
-                )
-            else:
-                raise ValueError(
-                    f"Invalid schema notation '{schema}': expected 'schema' or "
-                    f"'database.schema', got {len(parts)} parts"
-                )
-        else:
+        if not schema:
             return self._denormalize_quote_join(current_database, current_schema)
+
+        parts = self.identifier_preparer._split_schema_by_dot(schema)
+        if len(parts) == 1:
+            parts = [current_database, parts[0]]
+        elif len(parts) != 2:
+            raise ValueError(
+                f"Invalid schema notation '{schema}': expected 'schema' or "
+                f"'database.schema', got {len(parts)} parts"
+            )
+
+        # Quote each part directly — do NOT pass through
+        # _denormalize_quote_join, which would re-split parts
+        # containing literal dots (e.g. "schema.with.dots").
+        return ".".join(self.identifier_preparer._quote_free_identifiers(*parts))
 
     @reflection.cache
     def _current_database_schema(self, connection, **kw):
@@ -1250,17 +1244,14 @@ class SnowflakeDialect(default.DefaultDialect):
         # information_schema stores TABLE_SCHEMA in UPPERCASE for case-insensitive
         # identifiers and Snowflake's string comparison is case-sensitive.
         parts = self.identifier_preparer._split_schema_by_dot(schema_name)
+        if len(parts) != 2:
+            raise ValueError(
+                f"Expected fully-qualified schema name 'database.schema', got '{schema_name}'"
+            )
 
-        if len(parts) == 2:
-            database_part = self.identifier_preparer.quote(parts[0])
-            schema_only = self.denormalize_name(str(parts[1]))
-            info_schema_table = f"{database_part}.information_schema.columns"
-        else:
-            # Guard clause: _get_full_schema_name always returns "database.schema"
-            # (2 parts), so this branch is only reachable if the method is called
-            # directly with a single-part schema name.
-            schema_only = self.denormalize_name(str(parts[0]) if parts else schema_name)
-            info_schema_table = "information_schema.columns"
+        database_part = self.identifier_preparer.quote(parts[0])
+        schema_only = self.denormalize_name(str(parts[1]))
+        info_schema_table = f"{database_part}.information_schema.columns"
 
         try:
             return connection.execute(

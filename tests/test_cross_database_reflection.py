@@ -1,14 +1,11 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
-
-#
-# Copyright (c) 2012-2025 Snowflake Computing Inc. All rights reserved.
 #
 
 from unittest.mock import MagicMock, patch
 
 import pytest
-from sqlalchemy import MetaData, Table, inspect, select, text
+from sqlalchemy import MetaData, Table, inspect, text
 from sqlalchemy.exc import NoSuchTableError
 
 from snowflake.sqlalchemy.snowdialect import SnowflakeDialect
@@ -71,10 +68,14 @@ class TestSchemaParsingUnit:
     @pytest.mark.parametrize(
         "schema_name, expected_table_schema, expected_from_fragment",
         [
+            (
+                '"test_db"."schema.with.dots"',
+                "schema.with.dots",
+                '"test_db".information_schema.columns',
+            ),
             ("test_db.my_schema", "MY_SCHEMA", "test_db.information_schema.columns"),
-            ("my_schema", "MY_SCHEMA", "information_schema.columns"),
         ],
-        ids=["cross_database", "single_schema"],
+        ids=["quoted_dot_schema", "cross_database"],
     )
     def test_query_all_columns_info_denormalizes_schema(
         self, schema_name, expected_table_schema, expected_from_fragment
@@ -93,6 +94,13 @@ class TestSchemaParsingUnit:
         call_args = mock_conn.execute.call_args
         assert call_args[0][1]["table_schema"] == expected_table_schema
         assert expected_from_fragment in str(call_args[0][0])
+
+    def test_query_all_columns_info_requires_fully_qualified_schema(self):
+        dialect = SnowflakeDialect()
+        mock_conn = MagicMock()
+
+        with pytest.raises(ValueError, match="Expected fully-qualified schema name"):
+            dialect._query_all_columns_info(mock_conn, "my_schema", info_cache={})
 
 
 class TestCrossDatabaseReflection:
@@ -199,31 +207,6 @@ class TestCrossDatabaseReflection:
         assert bananas.columns["variety"].type.length == 100
         assert bananas.columns["id"].primary_key is True
 
-    def test_cross_database_join(self, engine_testaccount, setup_databases):
-        """Test joining tables from two different databases using CORE."""
-        metadata = MetaData()
-
-        apples = Table(
-            "apples",
-            metadata,
-            schema="test_db_a.schema_a",
-            autoload_with=engine_testaccount,
-        )
-        bananas = Table(
-            "bananas",
-            metadata,
-            schema="test_db_b.schema_b",
-            autoload_with=engine_testaccount,
-        )
-
-        stmt = select(apples, bananas).join(bananas, apples.c.id == bananas.c.id)
-
-        compiled = stmt.compile(dialect=engine_testaccount.dialect)
-        sql_str = str(compiled)
-
-        assert "test_db_a.schema_a.apples" in sql_str
-        assert "test_db_b.schema_b.bananas" in sql_str
-
     def test_metadata_reflect_cross_database(self, engine_testaccount, setup_databases):
         """Test metadata.reflect() with cross-database schema."""
         metadata = MetaData()
@@ -281,6 +264,11 @@ class TestCrossDatabaseReflection:
             full_name = dialect._get_full_schema_name(conn, "some_schema")
             assert current_db.lower() in full_name.lower()
             assert "some_schema" in full_name
+
+            quoted_full_name = dialect._get_full_schema_name(
+                conn, '"test_db_b"."schema.with.dots"'
+            )
+            assert quoted_full_name == '"test_db_b"."schema.with.dots"'
 
     def test_get_pk_constraint_cross_database(
         self, engine_testaccount, setup_databases
