@@ -28,6 +28,7 @@ from sqlalchemy.types import (  # noqa
 )
 
 from . import base, snowdialect  # noqa
+from .compat import IS_VERSION_20
 from .custom_commands import (  # noqa
     AWSBucket,
     AzureContainer,
@@ -64,6 +65,7 @@ from .custom_types import (  # noqa
     VARIANT,
     VECTOR,
 )
+from .orm import SnowflakeSession, snowflake_declarative_base  # noqa
 from .sql.custom_schema import (  # noqa
     DynamicTable,
     HybridTable,
@@ -81,6 +83,10 @@ from .sql.custom_schema.options import (  # noqa
     TargetLagOption,
     TimeUnit,
 )
+
+if IS_VERSION_20:
+    from .orm import SnowflakeBase  # noqa
+
 from .util import _url as URL  # noqa
 
 base.dialect = dialect = snowdialect.dialect
@@ -157,10 +163,20 @@ _enums = (
     "TableOptionKey",
     "SnowflakeKeyword",
 )
+
+_orm = (
+    "SnowflakeSession",
+    "snowflake_declarative_base",
+)
+
+_orm_v20 = ("SnowflakeBase",) if IS_VERSION_20 else ()
+
 __all__ = (
     *_custom_types,
     *_custom_commands,
     *_custom_tables,
     *_custom_table_options,
     *_enums,
+    *_orm,
+    *_orm_v20,
 )
