@@ -14,37 +14,32 @@ from snowflake.sqlalchemy.snowdialect import SnowflakeDialect
 class TestSchemaParsingUnit:
     """Unit tests for schema parsing helpers — no Snowflake account needed."""
 
-    def test_split_schema_by_dot_database_schema(self):
+    @pytest.mark.parametrize(
+        "input_schema, expected_parts",
+        [
+            ("database.schema", ["database", "schema"]),
+            ('"database"."schema"', ["database", "schema"]),
+            ('"schema.with.dots"', ["schema.with.dots"]),
+            ('test_db."schema.with.dots"', ["test_db", "schema.with.dots"]),
+        ],
+        ids=["unquoted", "quoted", "quoted_dots", "mixed"],
+    )
+    def test_split_schema_by_dot(self, input_schema, expected_parts):
         dialect = SnowflakeDialect()
-        parts = dialect.identifier_preparer._split_schema_by_dot("database.schema")
-        assert len(parts) == 2
-        assert str(parts[0]) == "database"
-        assert str(parts[1]) == "schema"
+        parts = dialect.identifier_preparer._split_schema_by_dot(input_schema)
+        assert len(parts) == len(expected_parts)
+        assert [str(p) for p in parts] == expected_parts
 
-    def test_split_schema_by_dot_quoted(self):
-        dialect = SnowflakeDialect()
-        parts = dialect.identifier_preparer._split_schema_by_dot('"database"."schema"')
-        assert len(parts) == 2
-        assert str(parts[0]) == "database"
-        assert str(parts[1]) == "schema"
-
-    def test_split_schema_by_dot_quoted_dots(self):
-        dialect = SnowflakeDialect()
-        parts = dialect.identifier_preparer._split_schema_by_dot('"schema.with.dots"')
-        assert len(parts) == 1
-        assert str(parts[0]) == "schema.with.dots"
-
-    def test_split_schema_by_dot_mixed(self):
-        dialect = SnowflakeDialect()
-        parts = dialect.identifier_preparer._split_schema_by_dot(
-            'test_db."schema.with.dots"'
-        )
-        assert len(parts) == 2
-        assert str(parts[0]) == "test_db"
-        assert str(parts[1]) == "schema.with.dots"
-
-    def test_get_full_schema_name_cross_database(self):
-        """Cross-database schema should use both parts, not prepend current_database."""
+    @pytest.mark.parametrize(
+        "schema, expected_present, expected_absent",
+        [
+            ("test_db.my_schema", ["test_db", "my_schema"], ["current_db"]),
+            ("my_schema", ["current_db", "my_schema"], []),
+            (None, ["current_db", "current_schema"], []),
+        ],
+        ids=["cross_database", "single_schema", "no_schema"],
+    )
+    def test_get_full_schema_name(self, schema, expected_present, expected_absent):
         dialect = SnowflakeDialect()
         mock_conn = MagicMock()
         with patch.object(
@@ -52,36 +47,11 @@ class TestSchemaParsingUnit:
             "_current_database_schema",
             return_value=("current_db", "current_schema"),
         ):
-            result = dialect._get_full_schema_name(mock_conn, "test_db.my_schema")
-            assert "test_db" in result
-            assert "my_schema" in result
-            assert "current_db" not in result
-
-    def test_get_full_schema_name_single_schema(self):
-        """Single-part schema should prepend current_database (backward compatible)."""
-        dialect = SnowflakeDialect()
-        mock_conn = MagicMock()
-        with patch.object(
-            dialect,
-            "_current_database_schema",
-            return_value=("current_db", "current_schema"),
-        ):
-            result = dialect._get_full_schema_name(mock_conn, "my_schema")
-            assert "current_db" in result
-            assert "my_schema" in result
-
-    def test_get_full_schema_name_no_schema(self):
-        """No schema should use current_database and current_schema."""
-        dialect = SnowflakeDialect()
-        mock_conn = MagicMock()
-        with patch.object(
-            dialect,
-            "_current_database_schema",
-            return_value=("current_db", "current_schema"),
-        ):
-            result = dialect._get_full_schema_name(mock_conn, None)
-            assert "current_db" in result
-            assert "current_schema" in result
+            result = dialect._get_full_schema_name(mock_conn, schema)
+            for token in expected_present:
+                assert token in result, f"Expected '{token}' in '{result}'"
+            for token in expected_absent:
+                assert token not in result, f"Expected '{token}' NOT in '{result}'"
 
     def test_get_full_schema_name_invalid_raises(self):
         """Schema with >2 dot-separated parts should raise ValueError."""
@@ -95,7 +65,17 @@ class TestSchemaParsingUnit:
             with pytest.raises(ValueError, match="Invalid schema notation"):
                 dialect._get_full_schema_name(mock_conn, "a.b.c")
 
-    def test_query_all_columns_info_denormalizes_schema(self):
+    @pytest.mark.parametrize(
+        "schema_name, expected_table_schema, expected_from_fragment",
+        [
+            ("test_db.my_schema", "MY_SCHEMA", "test_db.information_schema.columns"),
+            ("my_schema", "MY_SCHEMA", "information_schema.columns"),
+        ],
+        ids=["cross_database", "single_schema"],
+    )
+    def test_query_all_columns_info_denormalizes_schema(
+        self, schema_name, expected_table_schema, expected_from_fragment
+    ):
         """The WHERE clause must use a denormalized (uppercased) schema name.
 
         Snowflake stores TABLE_SCHEMA in UPPERCASE for case-insensitive identifiers
@@ -104,30 +84,12 @@ class TestSchemaParsingUnit:
         dialect = SnowflakeDialect()
         mock_conn = MagicMock()
 
-        # Call with a cross-database schema as _get_full_schema_name would produce
-        dialect._query_all_columns_info(mock_conn, "test_db.my_schema", info_cache={})
-
-        # Verify execute was called with UPPERCASED schema in the WHERE parameter
-        mock_conn.execute.assert_called_once()
-        call_args = mock_conn.execute.call_args
-        params = call_args[0][1]
-        assert params["table_schema"] == "MY_SCHEMA"
-
-        # Verify the FROM clause includes database-qualified information_schema
-        sql_text = str(call_args[0][0])
-        assert "test_db.information_schema.columns" in sql_text
-
-    def test_query_all_columns_info_single_schema_denormalizes(self):
-        """Single-part schema should also be denormalized for the WHERE clause."""
-        dialect = SnowflakeDialect()
-        mock_conn = MagicMock()
-
-        dialect._query_all_columns_info(mock_conn, "my_schema", info_cache={})
+        dialect._query_all_columns_info(mock_conn, schema_name, info_cache={})
 
         mock_conn.execute.assert_called_once()
         call_args = mock_conn.execute.call_args
-        params = call_args[0][1]
-        assert params["table_schema"] == "MY_SCHEMA"
+        assert call_args[0][1]["table_schema"] == expected_table_schema
+        assert expected_from_fragment in str(call_args[0][0])
 
 
 class TestCrossDatabaseReflection:
@@ -186,22 +148,39 @@ class TestCrossDatabaseReflection:
             conn.execute(text("DROP DATABASE IF EXISTS test_db_b"))
             conn.commit()
 
-    def test_reflect_table_from_different_database(
+    @pytest.mark.parametrize(
+        "table_name, schema, expected_columns",
+        [
+            ("bananas", "test_db_b.schema_b", ["id", "variety", "ripeness"]),
+            ("oranges", 'test_db_b."schema.with.dots"', ["id", "juice_content"]),
+        ],
+        ids=["cross_database", "quoted_dot_schema"],
+    )
+    def test_reflect_cross_database_table(
+        self, engine_testaccount, setup_databases, table_name, schema, expected_columns
+    ):
+        """Test reflecting a table using database.schema notation."""
+        metadata = MetaData()
+        table = Table(
+            table_name,
+            metadata,
+            schema=schema,
+            autoload_with=engine_testaccount,
+        )
+        for col in expected_columns:
+            assert col in table.columns
+
+    def test_reflect_cross_database_column_details(
         self, engine_testaccount, setup_databases
     ):
-        """Test reflecting a table from database_b while connected to database_a."""
+        """Verify reflected column types and primary key from a cross-database table."""
         metadata = MetaData()
-
         bananas = Table(
             "bananas",
             metadata,
             schema="test_db_b.schema_b",
             autoload_with=engine_testaccount,
         )
-
-        assert "id" in bananas.columns
-        assert "variety" in bananas.columns
-        assert "ripeness" in bananas.columns
         assert bananas.columns["variety"].type.length == 100
         assert bananas.columns["id"].primary_key is True
 
@@ -242,8 +221,7 @@ class TestCrossDatabaseReflection:
 
         table_key = "test_db_b.schema_b.bananas"
         assert table_key in metadata.tables
-        bananas = metadata.tables[table_key]
-        assert "variety" in bananas.columns
+        assert "variety" in metadata.tables[table_key].columns
 
     def test_get_columns_cross_database(self, engine_testaccount, setup_databases):
         """Test inspector.get_columns with cross-database schema."""
@@ -271,19 +249,6 @@ class TestCrossDatabaseReflection:
                 autoload_with=engine_testaccount,
             )
 
-    def test_schema_with_quoted_dots(self, engine_testaccount, setup_databases):
-        """Test reflecting a table from a schema whose name contains literal dots."""
-        metadata = MetaData()
-        oranges = Table(
-            "oranges",
-            metadata,
-            schema='test_db_b."schema.with.dots"',
-            autoload_with=engine_testaccount,
-        )
-
-        assert "id" in oranges.columns
-        assert "juice_content" in oranges.columns
-
     def test_get_full_schema_name_with_cross_database(
         self, engine_testaccount, setup_databases
     ):
@@ -291,16 +256,13 @@ class TestCrossDatabaseReflection:
         dialect = engine_testaccount.dialect
 
         with engine_testaccount.connect() as conn:
-            # Test with database.schema notation
             full_name = dialect._get_full_schema_name(conn, "test_db_b.schema_b")
             assert "test_db_b" in full_name
             assert "schema_b" in full_name
-            # Should NOT contain the current database prepended
             result = conn.execute(text("SELECT CURRENT_DATABASE()"))
             current_db = result.scalar()
             assert not full_name.startswith(f'"{current_db.lower()}"."test_db_b"')
 
-            # Test with single schema (backward compatibility)
             full_name = dialect._get_full_schema_name(conn, "some_schema")
             assert current_db.lower() in full_name.lower()
             assert "some_schema" in full_name
