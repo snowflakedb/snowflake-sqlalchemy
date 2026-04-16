@@ -1128,11 +1128,50 @@ snowflake://user:pass@account/mydb/%22myschema%22
 
 The dialect decodes `%22` back to a literal `"` before passing the value to the Snowflake connector, which then executes `USE SCHEMA "myschema"` preserving case.
 
-#### Alembic autogenerate and case-sensitive columns
+#### Alembic — hand-written migrations
+
+`quoted_name` works directly in `op.create_table` and `op.add_column`, so hand-written migration files need no special handling:
+
+```python
+import sqlalchemy as sa
+from alembic import op
+from sqlalchemy.sql.elements import quoted_name
+
+def upgrade():
+    op.create_table(
+        "my_table",
+        sa.Column(quoted_name("mycol", True), sa.String()),  # quoted → "mycol" in Snowflake
+        sa.Column("name", sa.String()),                      # unquoted → NAME in Snowflake
+    )
+
+    op.add_column(
+        "my_table",
+        sa.Column(quoted_name("extra", True), sa.Integer()),
+    )
+```
+
+#### Alembic — case-sensitive schema configuration
+
+When the Alembic version table or the migrations themselves target a case-sensitive schema, use the `%22` form in every place Alembic receives a schema string, because these values are passed as plain strings and `create_snowflake_engine` is not available at that point:
+
+```python
+# alembic/env.py
+from sqlalchemy import create_engine
+
+url = "snowflake://user:pass@account/mydb/%22myschema%22"
+
+context.configure(
+    url=url,
+    target_metadata=target_metadata,
+    version_table_schema="%22myschema%22",  # keeps alembic_version table in the same schema
+)
+```
+
+#### Alembic — autogenerate and case-sensitive columns
 
 Alembic's default renderer serialises `quoted_name("mycol", True)` as the plain string `"mycol"`, losing the case-sensitivity signal.  The generated migration would create a case-insensitive `MYCOL` column instead of `"mycol"`.
 
-Use the `render_item` hook from `snowflake.sqlalchemy.alembic_util` in your Alembic `env.py`:
+This also affects the **comparison phase**: when autogenerate detects that a reflected `quoted_name("mycol", True)` column differs from what it would render, it may emit a spurious `alter_column` on every run.  The fix for both problems is the same — register the `render_item` hook in `env.py`:
 
 ```python
 from snowflake.sqlalchemy.alembic_util import render_item as snowflake_render_item
