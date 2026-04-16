@@ -841,7 +841,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         )
 
     def visit_truediv_binary(self, binary, operator, **kw):
-        if self.dialect.div_is_floordiv:
+        if self.dialect.div_is_floordiv and IS_VERSION_20:
             warnings.warn(
                 "div_is_floordiv value will be changed to False in a future release. This will generate a behavior change on true and floor division. Please review https://docs.sqlalchemy.org/en/20/changelog/whatsnew_20.html#python-division-operator-performs-true-division-for-all-backends-added-floor-division",
                 PendingDeprecationWarning,
