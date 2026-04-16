@@ -1106,9 +1106,82 @@ snowflake://user:pass@account/db?case_sensitive_identifiers=True
 
 **Hard limit:** Enabling this flag changes the dict key used by `normalize_name("TABLE")` from `"TABLE"` to `quoted_name("table", True)`.  Because `hash("TABLE") != hash("table")`, any existing code that accesses `metadata.tables["TABLE"]` by the uppercase key will miss after the flag is enabled.  Enabling the flag on an existing codebase requires auditing all string-keyed lookups into `metadata.tables` and `table.c` for names that happen to be reserved words.
 
-#### Case-sensitive schema names
+#### Case-sensitive schema names — table and model definitions
 
-Use `create_snowflake_engine` to connect to a schema whose name is lowercase or mixed-case in Snowflake (i.e. created with double-quotes).  It handles the encoding automatically:
+The most reliable way to declare a case-sensitive schema across multiple tables is `MetaData(schema=quoted_name(..., True))`.  All tables and ORM models that share that `MetaData` object inherit the schema automatically — no repetition per table:
+
+```python
+from sqlalchemy import Column, Integer, MetaData, String, Table
+from sqlalchemy.sql.elements import quoted_name
+
+# Declare once — every Table attached to this MetaData inherits it.
+metadata = MetaData(schema=quoted_name("myschema", True))
+
+orders = Table("orders", metadata, Column("id", Integer, primary_key=True))
+items  = Table("items",  metadata, Column("id", Integer, primary_key=True))
+# Both tables resolve to "myschema"."orders" and "myschema"."items" in SQL.
+```
+
+When tables belong to different schemas, or when the `MetaData` is shared and you need per-table control, pass `schema` explicitly on the first table and reuse its `.schema` attribute on the rest:
+
+```python
+orders = Table("orders", metadata,
+               Column("id", Integer, primary_key=True),
+               schema=quoted_name("myschema", True))
+
+# Reuse the schema object directly — no need to repeat quoted_name.
+items = Table("items", metadata,
+              Column("id", Integer, primary_key=True),
+              schema=orders.schema)
+```
+
+`Table.schema` is always a `quoted_name` instance.  Assigning from another table's `.schema` carries the `quote=True` flag intact.
+
+For ORM declarative models, set the schema on `Base.metadata` so every model inherits it:
+
+```python
+from sqlalchemy import Column, Integer
+from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.sql.elements import quoted_name
+
+class Base(DeclarativeBase):
+    metadata = MetaData(schema=quoted_name("myschema", True))
+
+class Orders(Base):
+    __tablename__ = "orders"
+    id = Column(Integer, primary_key=True)
+
+class Items(Base):
+    __tablename__ = "items"
+    id = Column(Integer, primary_key=True)
+```
+
+For per-model override, use `__table_args__`:
+
+```python
+class Orders(Base):
+    __tablename__ = "orders"
+    __table_args__ = {"schema": quoted_name("myschema", True)}
+    id = Column(Integer, primary_key=True)
+
+class Items(Base):
+    __tablename__ = "items"
+    __table_args__ = {"schema": Orders.__table__.schema}  # reuse — no repetition
+    id = Column(Integer, primary_key=True)
+```
+
+Plain strings with inner double-quotes — `'"myschema"'` — are also accepted and produce the same result as `quoted_name("myschema", True)`:
+
+```python
+Table("orders", metadata, schema='"myschema"')         # also works
+Table("orders", metadata, schema='"mydb"."myschema"')  # dotted form also works
+```
+
+The `"` characters are treated as SQL quoting delimiters by the schema parser, so the extracted name receives `quote=True` automatically.  Prefer `quoted_name` in code that is read often; prefer the quoted-string form when the value comes from a config that already embeds the quotes.
+
+#### Case-sensitive schema names — engine connection
+
+`create_snowflake_engine` sets the *default schema for the connection* (equivalent to `USE SCHEMA` on connect).  Use it when all queries in the session target the same case-sensitive schema and you do not want to qualify every table individually:
 
 ```python
 from snowflake.sqlalchemy import create_snowflake_engine
@@ -1183,3 +1256,32 @@ context.configure(
 ```
 
 **Hard limit:** Alembic has no dialect-level rendering hook.  The `render_item` callback in `env.py` is the only injection point and requires a two-line opt-in **per project**.  This cannot be eliminated without upstream Alembic changes.
+
+#### Patterns that do not work
+
+**Plain unquoted string as a case-sensitive schema**
+
+```python
+# WRONG — "myschema" (no quotes, no quoted_name) is denormalized to MYSCHEMA
+Table("my_table", metadata, schema="myschema")
+
+class MyModel(Base):
+    __tablename__ = "my_table"
+    __table_args__ = {"schema": "myschema"}  # also wrong
+```
+
+A plain lowercase string has no `quote` attribute, so `denormalize_name` converts it to `MYSCHEMA` before it reaches Snowflake.  No error is raised — if a schema named `MYSCHEMA` happens to exist the query succeeds silently against the wrong schema.
+
+Use `quoted_name("myschema", True)`, `'"myschema"'`, or `MetaData(schema=quoted_name(..., True))` as shown in the section above.
+
+---
+
+**Alembic autogenerate without `render_item` for case-sensitive columns**
+
+```python
+# WRONG — generates: sa.Column('mycol', sa.String())
+# which creates MYCOL (case-insensitive) instead of "mycol"
+alembic revision --autogenerate -m "add mycol"
+```
+
+Register the `render_item` hook as shown in the [autogenerate section](#alembic--autogenerate-and-case-sensitive-columns) above.
