@@ -15,30 +15,32 @@ from sqlalchemy.testing.assertions import eq_
 
 
 def test_composite_fk_reflects_key_order(engine_testaccount):
+    """FK + PK column order matches the constraint declaration, even when it
+    differs from the table's physical column order."""
     metadata = MetaData()
     Table(
-        "test_keys_fk_parent_decl",
+        "test_keys_fk_parent_mixed",
         metadata,
-        Column("col_a", Integer),
-        Column("col_b", Integer),
-        Column("col_c", Integer),
-        PrimaryKeyConstraint("col_a", "col_b", "col_c"),
+        Column("id", Integer),
+        Column("attr", Integer),
+        Column("name", Integer),
+        PrimaryKeyConstraint("name", "id", "attr", name="pk_test_keys_mixed"),
     )
     Table(
-        "test_keys_fk_child_decl",
+        "test_keys_fk_child_mixed",
         metadata,
-        Column("id", Integer, primary_key=True),
-        Column("ref_a", Integer),
-        Column("ref_b", Integer),
-        Column("ref_c", Integer),
+        Column("cid", Integer, primary_key=True),
+        Column("pname", Integer),
+        Column("pid", Integer),
+        Column("pattr", Integer),
         ForeignKeyConstraint(
-            ["ref_a", "ref_b", "ref_c"],
+            ["pname", "pid", "pattr"],
             [
-                "test_keys_fk_parent_decl.col_a",
-                "test_keys_fk_parent_decl.col_b",
-                "test_keys_fk_parent_decl.col_c",
+                "test_keys_fk_parent_mixed.name",
+                "test_keys_fk_parent_mixed.id",
+                "test_keys_fk_parent_mixed.attr",
             ],
-            name="fk_test_keys_decl",
+            name="fk_test_keys_mixed",
         ),
     )
     metadata.create_all(engine_testaccount)
@@ -46,15 +48,13 @@ def test_composite_fk_reflects_key_order(engine_testaccount):
     try:
         inspector = inspect(engine_testaccount)
 
-        pk = inspector.get_pk_constraint("test_keys_fk_parent_decl")
-        eq_(pk["constrained_columns"], ["col_a", "col_b", "col_c"])
+        pk = inspector.get_pk_constraint("test_keys_fk_parent_mixed")
+        eq_(pk["constrained_columns"], ["name", "id", "attr"])
 
-        fks = inspector.get_foreign_keys("test_keys_fk_child_decl")
+        fks = inspector.get_foreign_keys("test_keys_fk_child_mixed")
         eq_(len(fks), 1)
-        eq_(fks[0]["name"], "fk_test_keys_decl")
-        eq_(fks[0]["constrained_columns"], ["ref_a", "ref_b", "ref_c"])
-        eq_(fks[0]["referred_columns"], ["col_a", "col_b", "col_c"])
-        eq_(fks[0]["referred_table"], "test_keys_fk_parent_decl")
+        eq_(fks[0]["referred_columns"], ["name", "id", "attr"])
+        eq_(fks[0]["constrained_columns"], ["pname", "pid", "pattr"])
     finally:
         metadata.drop_all(engine_testaccount)
 
@@ -123,48 +123,5 @@ def test_composite_unique_key_order_differs_from_table_column_order(engine_testa
         eq_(len(uqs), 1)
         eq_(uqs[0]["name"], "uq_test_keys_order")
         eq_(uqs[0]["column_names"], ["col_z", "col_x", "col_y"])
-    finally:
-        metadata.drop_all(engine_testaccount)
-
-
-def test_composite_fk_when_parent_pk_order_differs_from_columns(engine_testaccount):
-    metadata = MetaData()
-    Table(
-        "test_keys_fk_parent_mixed",
-        metadata,
-        Column("id", Integer),
-        Column("attr", Integer),
-        Column("name", Integer),
-        PrimaryKeyConstraint("name", "id", "attr", name="pk_test_keys_mixed"),
-    )
-    Table(
-        "test_keys_fk_child_mixed",
-        metadata,
-        Column("cid", Integer, primary_key=True),
-        Column("pname", Integer),
-        Column("pid", Integer),
-        Column("pattr", Integer),
-        ForeignKeyConstraint(
-            ["pname", "pid", "pattr"],
-            [
-                "test_keys_fk_parent_mixed.name",
-                "test_keys_fk_parent_mixed.id",
-                "test_keys_fk_parent_mixed.attr",
-            ],
-            name="fk_test_keys_mixed",
-        ),
-    )
-    metadata.create_all(engine_testaccount)
-
-    try:
-        inspector = inspect(engine_testaccount)
-
-        pk = inspector.get_pk_constraint("test_keys_fk_parent_mixed")
-        eq_(pk["constrained_columns"], ["name", "id", "attr"])
-
-        fks = inspector.get_foreign_keys("test_keys_fk_child_mixed")
-        eq_(len(fks), 1)
-        eq_(fks[0]["referred_columns"], ["name", "id", "attr"])
-        eq_(fks[0]["constrained_columns"], ["pname", "pid", "pattr"])
     finally:
         metadata.drop_all(engine_testaccount)

@@ -82,10 +82,6 @@ class _KeyedColumn(NamedTuple):
     key_sequence: int
     column_name: str
 
-    @classmethod
-    def new(cls, key_sequence, column_name: str) -> "_KeyedColumn":
-        return cls(int(key_sequence), column_name)
-
 
 class SnowflakeDialect(default.DefaultDialect):
     name = DIALECT_NAME
@@ -415,8 +411,7 @@ class SnowflakeDialect(default.DefaultDialect):
     @staticmethod
     def _sort_columns_by_key_sequence(columns: list[_KeyedColumn]) -> list[str]:
         """Sort columns by key_sequence and return column names."""
-        columns.sort(key=lambda c: c.key_sequence)
-        return [c.column_name for c in columns]
+        return [c.column_name for c in sorted(columns, key=lambda c: c.key_sequence)]
 
     def _parse_pk_rows(self, rows):
         """Parse SHOW PRIMARY KEYS rows into {table_name: {constrained_columns, name}}.
@@ -434,8 +429,8 @@ class SnowflakeDialect(default.DefaultDialect):
                     "name": self.normalize_name(row._mapping["constraint_name"]),
                 }
             result[table_name]["constrained_columns"].append(
-                _KeyedColumn.new(
-                    row._mapping["key_sequence"],
+                _KeyedColumn(
+                    int(row._mapping["key_sequence"]),
                     self.normalize_name(row._mapping["column_name"]),
                 )
             )
@@ -460,8 +455,8 @@ class SnowflakeDialect(default.DefaultDialect):
             if key not in constraints:
                 constraints[key] = {
                     "column_names": [
-                        _KeyedColumn.new(
-                            row._mapping["key_sequence"],
+                        _KeyedColumn(
+                            int(row._mapping["key_sequence"]),
                             self.normalize_name(row._mapping["column_name"]),
                         )
                     ],
@@ -470,8 +465,8 @@ class SnowflakeDialect(default.DefaultDialect):
                 }
             else:
                 constraints[key]["column_names"].append(
-                    _KeyedColumn.new(
-                        row._mapping["key_sequence"],
+                    _KeyedColumn(
+                        int(row._mapping["key_sequence"]),
                         self.normalize_name(row._mapping["column_name"]),
                     )
                 )
@@ -503,8 +498,8 @@ class SnowflakeDialect(default.DefaultDialect):
                 fk_table_name = self.normalize_name(row._mapping["fk_table_name"])
                 fk_map[fk_name] = {
                     "constrained_columns": [
-                        _KeyedColumn.new(
-                            row._mapping["key_sequence"],
+                        _KeyedColumn(
+                            int(row._mapping["key_sequence"]),
                             self.normalize_name(row._mapping["fk_column_name"]),
                         )
                     ],
@@ -515,8 +510,8 @@ class SnowflakeDialect(default.DefaultDialect):
                         row._mapping["pk_table_name"]
                     ),
                     "referred_columns": [
-                        _KeyedColumn.new(
-                            row._mapping["key_sequence"],
+                        _KeyedColumn(
+                            int(row._mapping["key_sequence"]),
                             self.normalize_name(row._mapping["pk_column_name"]),
                         )
                     ],
@@ -535,14 +530,14 @@ class SnowflakeDialect(default.DefaultDialect):
                 fk_map[fk_name]["options"] = options
             else:
                 fk_map[fk_name]["constrained_columns"].append(
-                    _KeyedColumn.new(
-                        row._mapping["key_sequence"],
+                    _KeyedColumn(
+                        int(row._mapping["key_sequence"]),
                         self.normalize_name(row._mapping["fk_column_name"]),
                     )
                 )
                 fk_map[fk_name]["referred_columns"].append(
-                    _KeyedColumn.new(
-                        row._mapping["key_sequence"],
+                    _KeyedColumn(
+                        int(row._mapping["key_sequence"]),
                         self.normalize_name(row._mapping["pk_column_name"]),
                     )
                 )
