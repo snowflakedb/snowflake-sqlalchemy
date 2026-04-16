@@ -843,12 +843,13 @@ class SnowflakeCompiler(compiler.SQLCompiler):
     def visit_truediv_binary(self, binary, operator, **kw):
         if self.dialect.div_is_floordiv:
             warnings.warn(
-                "div_is_floordiv value will be changed to False in a future release. This will generate a behavior change on true and floor division. Please review https://docs.sqlalchemy.org/en/20/changelog/whatsnew_20.html#python-division-operator-performs-true-division-for-all-backends-added-floor-division",
+                "div_is_floordiv value will be changed to False in a future release. "
+                "Note: for true division (/), Snowflake already performs true division natively, "
+                "so this flag has no effect on the generated SQL for this operator — it only emits this warning. "
+                "Please review https://docs.sqlalchemy.org/en/20/changelog/whatsnew_20.html#python-division-operator-performs-true-division-for-all-backends-added-floor-division",
                 PendingDeprecationWarning,
                 stacklevel=2,
             )
-            # Delegate to parent to get CAST behavior for backward compatibility
-            return super().visit_truediv_binary(binary, operator, **kw)
         return (
             self.process(binary.left, **kw) + " / " + self.process(binary.right, **kw)
         )
