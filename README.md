@@ -1201,6 +1201,23 @@ snowflake://user:pass@account/mydb/%22myschema%22
 
 The dialect decodes `%22` back to a literal `"` before passing the value to the Snowflake connector, which then executes `USE SCHEMA "myschema"` preserving case.
 
+**When building the URL programmatically** with SQLAlchemy's `URL()` helper, you can pass the schema with embedded double-quotes directly — the helper's percent-encoding handles them automatically:
+
+```python
+from snowflake.sqlalchemy import URL
+from sqlalchemy import create_engine
+
+engine = create_engine(URL(
+    account="abc123",
+    user="testuser1",
+    password="secret",
+    database="mydb",
+    schema='"myschema"',   # literal " characters; URL() encodes them as %22 internally
+))
+```
+
+This is equivalent to the `%22` string form but avoids manual percent-encoding.
+
 #### Alembic — hand-written migrations
 
 `quoted_name` works directly in `op.create_table` and `op.add_column`, so hand-written migration files need no special handling:
@@ -1239,6 +1256,29 @@ context.configure(
     version_table_schema="%22myschema%22",  # keeps alembic_version table in the same schema
 )
 ```
+
+When `include_schemas=True` is enabled, Alembic calls `inspector.get_schema_names()` and passes each result to the `include_name` filter.  The dialect returns case-sensitive schema names as `quoted_name` objects (e.g. `quoted_name("myschema", True)`).  Because `quoted_name` inherits from `str`, a plain string comparison is safe:
+
+```python
+# alembic/env.py
+from sqlalchemy.sql.elements import quoted_name
+
+def include_name(name, type_, parent_names):
+    if type_ == "schema":
+        # quoted_name("myschema", True) == "myschema" → True (str subclass equality)
+        return name in {'"myschema"', "myschema"}
+    return True
+
+context.configure(
+    url="snowflake://user:pass@account/mydb/%22myschema%22",
+    target_metadata=target_metadata,
+    include_schemas=True,
+    include_name=include_name,
+    version_table_schema="%22myschema%22",
+)
+```
+
+**Note:** `inspector.get_schema_names()` returns the schema as Snowflake stores it — lowercase `"myschema"` if it was created quoted, or uppercase `"MYSCHEMA"` if unquoted.  After `normalize_name` this becomes `quoted_name("myschema", True)` or `"myschema"` (plain lowercase) respectively.  Filter against the lowercase value and both cases are covered by the `str` equality of `quoted_name`.
 
 #### Alembic — autogenerate and case-sensitive columns
 
