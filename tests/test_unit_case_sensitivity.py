@@ -4,6 +4,7 @@
 
 """Unit tests for SNOW-1232488 — case-sensitive identifier support."""
 
+import pytest
 from unittest import mock
 
 from sqlalchemy.engine.url import URL as SAUrl
@@ -11,6 +12,110 @@ from sqlalchemy.sql.elements import quoted_name
 
 from snowflake.sqlalchemy import base
 from snowflake.sqlalchemy.snowdialect import SnowflakeDialect
+
+# ---------------------------------------------------------------------------
+# _split_schema_by_dot / quote_schema — plain string with inner double-quotes
+# ---------------------------------------------------------------------------
+
+
+class TestSplitSchemaByDot:
+    """
+    Tests for SnowflakeIdentifierPreparer._split_schema_by_dot and the
+    quote_schema method that drives it.
+
+    Snowflake uses double-quote characters as SQL quoting delimiters.  When a
+    user passes a schema string that already contains literal double-quotes
+    (e.g. '"myschema"' or '"mydb"."myschema"') the parser inside
+    _split_schema_by_dot must preserve the case-sensitive intent by setting
+    quote=True on the extracted parts.
+    """
+
+    @pytest.fixture
+    def ip(self):
+        return SnowflakeDialect().identifier_preparer
+
+    # ------------------------------------------------------------------
+    # Regression — plain strings (no inner quotes) unchanged by fix
+    # ------------------------------------------------------------------
+
+    def test_plain_lowercase_unquoted(self, ip):
+        """Plain lowercase schema → unquoted in SQL (case-insensitive)."""
+        assert ip.quote_schema("myschema") == "myschema"
+
+    def test_plain_uppercase_quoted(self, ip):
+        """Plain uppercase schema → quoted in SQL (preparer requires_quotes)."""
+        assert ip.quote_schema("MYSCHEMA") == '"MYSCHEMA"'
+
+    def test_plain_dotted_both_unquoted(self, ip):
+        """Plain dotted 'mydb.myschema' → both parts unquoted."""
+        assert ip.quote_schema("mydb.myschema") == "mydb.myschema"
+
+    # ------------------------------------------------------------------
+    # quoted_name inputs — already working before fix
+    # ------------------------------------------------------------------
+
+    def test_quoted_name_true_single(self, ip):
+        """quoted_name('myschema', True) → double-quoted in SQL."""
+        assert ip.quote_schema(quoted_name("myschema", True)) == '"myschema"'
+
+    def test_quoted_name_false_single(self, ip):
+        """quoted_name('myschema', False) → unquoted in SQL."""
+        assert ip.quote_schema(quoted_name("myschema", False)) == "myschema"
+
+    def test_quoted_name_true_dotted(self, ip):
+        """quoted_name('mydb.myschema', True) → both parts quoted."""
+        assert ip.quote_schema(quoted_name("mydb.myschema", True)) == '"mydb"."myschema"'
+
+    # ------------------------------------------------------------------
+    # Plain string with inner double-quotes — these FAIL before the fix
+    # ------------------------------------------------------------------
+
+    def test_inner_quoted_single_schema(self, ip):
+        """'"myschema"' must produce '"myschema"' in SQL, not 'myschema'."""
+        assert ip.quote_schema('"myschema"') == '"myschema"'
+
+    def test_inner_quoted_dotted_both(self, ip):
+        """'"mydb"."myschema"' must quote both parts."""
+        assert ip.quote_schema('"mydb"."myschema"') == '"mydb"."myschema"'
+
+    def test_inner_quoted_only_db_part(self, ip):
+        """'"mydb".myschema' — only db part was quoted; schema follows standard rules."""
+        assert ip.quote_schema('"mydb".myschema') == '"mydb".myschema'
+
+    def test_inner_quoted_only_schema_part(self, ip):
+        """'mydb."myschema"' — only schema part was quoted."""
+        assert ip.quote_schema('mydb."myschema"') == 'mydb."myschema"'
+
+    def test_inner_quoted_mixed_case_preserved(self, ip):
+        """'"MySchema"' — mixed-case inside quotes must be preserved exactly."""
+        assert ip.quote_schema('"MySchema"') == '"MySchema"'
+
+    def test_inner_quoted_uppercase_preserved(self, ip):
+        """'"MYSCHEMA"' — all-caps inside quotes must stay quoted (user was explicit)."""
+        assert ip.quote_schema('"MYSCHEMA"') == '"MYSCHEMA"'
+
+    # ------------------------------------------------------------------
+    # split_parts detail — verify quote attribute on returned parts
+    # ------------------------------------------------------------------
+
+    def test_split_parts_inner_quoted_have_quote_true(self, ip):
+        """Parts extracted from inside "..." must have quote=True."""
+        parts = ip._split_schema_by_dot('"myschema"')
+        assert len(parts) == 1
+        assert getattr(parts[0], "quote", None) is True
+
+    def test_split_parts_unquoted_have_quote_none(self, ip):
+        """Parts not inside quotes keep quote=None (standard rules)."""
+        parts = ip._split_schema_by_dot("myschema")
+        assert len(parts) == 1
+        assert getattr(parts[0], "quote", None) is None
+
+    def test_split_parts_dotted_mixed(self, ip):
+        """'"mydb".myschema' → first part quote=True, second quote=None."""
+        parts = ip._split_schema_by_dot('"mydb".myschema')
+        assert len(parts) == 2
+        assert getattr(parts[0], "quote", None) is True
+        assert getattr(parts[1], "quote", None) is None
 
 # ---------------------------------------------------------------------------
 # Bug 1 — denormalize_column_name respects quoted_name.quote

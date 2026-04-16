@@ -489,6 +489,8 @@ class SnowflakeIdentifierPreparer(compiler.IdentifierPreparer):
         )
 
     def _split_schema_by_dot(self, schema):
+        # Each entry is (value, was_quoted) where was_quoted=True means the
+        # value was enclosed in double-quotes in the original string.
         ret = []
         idx = 0
         pre_idx = 0
@@ -496,28 +498,31 @@ class SnowflakeIdentifierPreparer(compiler.IdentifierPreparer):
         while idx < len(schema):
             if not in_quote:
                 if schema[idx] == "." and pre_idx < idx:
-                    ret.append(schema[pre_idx:idx])
+                    ret.append((schema[pre_idx:idx], False))
                     pre_idx = idx + 1
                 elif schema[idx] == '"':
                     in_quote = True
                     pre_idx = idx + 1
             else:
                 if schema[idx] == '"' and pre_idx < idx:
-                    ret.append(schema[pre_idx:idx])
+                    ret.append((schema[pre_idx:idx], True))
                     in_quote = False
                     pre_idx = idx + 1
             idx += 1
             if pre_idx < len(schema) and schema[pre_idx] == ".":
                 pre_idx += 1
         if pre_idx < idx:
-            ret.append(schema[pre_idx:idx])
+            ret.append((schema[pre_idx:idx], False))
 
-        # convert the returning strings back to quoted_name types, and assign the original 'quote' attribute on it
-        quoted_ret = [
-            quoted_name(value, quote=getattr(schema, "quote", None)) for value in ret
+        # Parts found inside "..." get quote=True regardless of the input
+        # schema's quote attribute.  Parts outside quotes fall back to the
+        # input schema's quote attribute (preserving existing behaviour for
+        # quoted_name inputs and plain unquoted strings).
+        schema_quote = getattr(schema, "quote", None)
+        return [
+            quoted_name(value, quote=True if was_quoted else schema_quote)
+            for value, was_quoted in ret
         ]
-
-        return quoted_ret
 
 
 class SnowflakeCompiler(compiler.SQLCompiler):
