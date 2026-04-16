@@ -1108,25 +1108,25 @@ snowflake://user:pass@account/db?case_sensitive_identifiers=True
 
 #### Case-sensitive schema names
 
-To connect to a schema whose name is lowercase or mixed-case in Snowflake (created with double-quotes), use the `create_snowflake_engine` helper:
+Use `create_snowflake_engine` to connect to a schema whose name is lowercase or mixed-case in Snowflake (i.e. created with double-quotes).  It handles the encoding automatically:
 
 ```python
 from snowflake.sqlalchemy import create_snowflake_engine
 
 engine = create_snowflake_engine(
     "snowflake://user:pass@account/mydb",
-    schema="myschema",        # lowercase schema created with quotes in Snowflake
+    schema="myschema",
     case_sensitive_schema=True,
 )
 ```
 
-Alternatively, encode the schema manually using `%22` (URL-encoded double-quote):
+**When the URL is stored outside Python code** (environment variable, `alembic.ini`, Docker/Kubernetes config), `create_snowflake_engine` is not available and the schema must be percent-encoded directly in the URL string.  Wrap the schema name in `%22` (the percent-encoded form of `"`):
 
 ```
 snowflake://user:pass@account/mydb/%22myschema%22
 ```
 
-The dialect's `create_connect_args` decodes `%22` back to a literal `"` before passing it to the Snowflake connector, which then executes `USE SCHEMA "myschema"` preserving case.
+The dialect decodes `%22` back to a literal `"` before passing the value to the Snowflake connector, which then executes `USE SCHEMA "myschema"` preserving case.
 
 #### Alembic autogenerate and case-sensitive columns
 
