@@ -46,7 +46,7 @@ def test_connect_read_commited(engine_testaccount, assert_text_in_buf):
 
 def test_begin_read_commited(engine_testaccount, assert_text_in_buf):
     metadata = MetaData()
-    table_name = "test_begin_read_commited"
+    table_name = "test_begin_read_rc"  # name must not contain "COMMIT" — assert_text_in_buf uses substring match
 
     test_table_1 = SnowflakeTable(
         table_name,
