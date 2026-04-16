@@ -50,6 +50,7 @@ Table of contents:
   * [Support](#support)
   * [Known Limitations](#known-limitations)
     * [Identity columns as primary keys](#identity-columns-as-primary-keys)
+    * [Case-sensitive identifiers](#case-sensitive-identifiers)
 <!-- TOC -->
 
 ## Prerequisites
@@ -1015,6 +1016,47 @@ with Session(engine) as session:
 ### Case-sensitive identifiers
 
 Snowflake stores unquoted identifiers in UPPERCASE and treats them case-insensitively.  SQLAlchemy uses lowercase for case-insensitive identifiers.  The dialect bridges this gap via `normalize_name` / `denormalize_name`, but a few edge cases require explicit opt-in.
+
+#### How reflection maps Snowflake names to SQLAlchemy names
+
+When the dialect reflects a table, each column name passes through `normalize_name`, which produces one of three outcomes depending on how the identifier was stored in Snowflake:
+
+| Snowflake stored form | How it was created | `normalize_name` returns | SQLAlchemy treats it as |
+|---|---|---|---|
+| `MYCOL` (all-uppercase) | `CREATE TABLE t (MYCOL INT)` — unquoted | `"mycol"` (plain `str`) | case-insensitive |
+| `mycol` (lowercase) | `CREATE TABLE t ("mycol" INT)` — quoted | `quoted_name("mycol", True)` | case-sensitive |
+| `MyCol` (mixed-case) | `CREATE TABLE t ("MyCol" INT)` — quoted | `"MyCol"` (plain `str`) | case-sensitive via preparer |
+
+You can observe this directly via the inspector:
+
+```python
+from sqlalchemy import inspect
+from sqlalchemy.sql.elements import quoted_name
+
+inspector = inspect(engine)
+for col in inspector.get_columns("my_table"):
+    name = col["name"]
+    if isinstance(name, quoted_name) and name.quote:
+        print(f"{name!r} — case-sensitive (was created quoted in Snowflake)")
+    else:
+        print(f"{name!r} — case-insensitive (Snowflake stores as {name.upper()})")
+```
+
+This means that after reflection, accessing a case-insensitive column requires the lowercase name:
+
+```python
+metadata.reflect(bind=engine)
+t = metadata.tables["my_table"]
+t.c.mycol      # correct — Snowflake stored MYCOL, reflected as "mycol"
+t.c["MYCOL"]   # KeyError — the reflected key is lowercase
+```
+
+And a case-sensitive column (quoted in Snowflake) is accessed by its exact reflected name:
+
+```python
+t.c[quoted_name("mycol", True)]  # correct — matches the reflected quoted_name key
+t.c.mycol                        # also works — quoted_name.__eq__ compares by value
+```
 
 #### Lowercase column names in CLUSTER BY
 
