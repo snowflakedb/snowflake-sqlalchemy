@@ -198,6 +198,30 @@ def test_boolean_query_argument_parsing():
         engine.dispose()
 
 
+def test_normalize_referred_schema_url_argument_parsing():
+    engine = create_engine(
+        URL(
+            **CONNECTION_PARAMETERS,
+            normalize_referred_schema=True,
+        )
+    )
+    try:
+        assert engine.dialect._normalize_referred_schema is True
+    finally:
+        engine.dispose()
+
+
+def test_normalize_referred_schema_dialect_kwarg_parsing():
+    engine = create_engine(
+        URL(**CONNECTION_PARAMETERS),
+        normalize_referred_schema=True,
+    )
+    try:
+        assert engine.dialect._normalize_referred_schema is True
+    finally:
+        engine.dispose()
+
+
 def test_query_tag_appears_in_query_history():
     """
     Tests that query_tag actually appears in Snowflake's query history.
@@ -741,13 +765,16 @@ def test_get_foreign_keys(engine_testaccount):
         users.drop(engine_testaccount)
 
 
-def test_get_foreign_keys_multi_schema(engine_testaccount, db_parameters):
+def test_get_foreign_keys_multi_schema(
+    engine_testaccount_with_normalize_referred_schema, db_parameters
+):
     """Verify referred_schema for cross-schema, same-schema, and default-schema FKs."""
+    engine = engine_testaccount_with_normalize_referred_schema
     schema1_name = f"test_schema1_{uuid.uuid4().hex}"
     schema2_name = f"test_schema2_{uuid.uuid4().hex}"
     default_schema = db_parameters.get("schema")
 
-    with engine_testaccount.connect() as conn:
+    with engine.connect() as conn:
         conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema1_name}"))
         conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema2_name}"))
         conn.commit()
@@ -805,9 +832,9 @@ def test_get_foreign_keys_multi_schema(engine_testaccount, db_parameters):
                 ),
                 schema=schema2_name,
             )
-            metadata.create_all(engine_testaccount)
+            metadata.create_all(engine)
 
-            inspector = inspect(engine_testaccount)
+            inspector = inspect(engine)
 
             # Cross-schema FK (schema2 -> schema1)
             foreign_keys_cross = inspector.get_foreign_keys(
@@ -837,51 +864,9 @@ def test_get_foreign_keys_multi_schema(engine_testaccount, db_parameters):
             assert foreign_keys_default[0]["referred_schema"] is None
 
         finally:
-            metadata.drop_all(engine_testaccount)
-            conn.execute(text(f"DROP SCHEMA IF EXISTS {schema1_name}"))
-            conn.execute(text(f"DROP SCHEMA IF EXISTS {schema2_name}"))
-            conn.commit()
-
-
-def test_reflection_same_schema_fk(engine_testaccount):
-    """Same-schema FKs in non-default schemas reflect referred_schema=None."""
-    schema_name = f"test_schema_{uuid.uuid4().hex}"
-
-    with engine_testaccount.connect() as conn:
-        conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema_name}"))
-        conn.commit()
-
-        try:
-            conn.execute(
-                text(
-                    f"""
-                CREATE TABLE {schema_name}.categories (
-                    id INTEGER PRIMARY KEY, name VARCHAR(100))
-            """
-                )
-            )
-            conn.execute(
-                text(
-                    f"""
-                CREATE TABLE {schema_name}.items (
-                    id INTEGER PRIMARY KEY, category_id INTEGER,
-                    CONSTRAINT fk_same_schema_test
-                        FOREIGN KEY (category_id) REFERENCES {schema_name}.categories(id))
-            """
-                )
-            )
-            conn.commit()
-
-            foreign_keys = inspect(engine_testaccount).get_foreign_keys(
-                "items", schema=schema_name
-            )
-            assert len(foreign_keys) == 1
-            assert foreign_keys[0]["name"] == "fk_same_schema_test"
-            assert foreign_keys[0]["referred_table"] == "categories"
-            assert foreign_keys[0]["referred_schema"] is None
-
-        finally:
-            conn.execute(text(f"DROP SCHEMA IF EXISTS {schema_name} CASCADE"))
+            metadata.drop_all(engine)
+            conn.execute(text(f"DROP SCHEMA IF EXISTS {schema1_name} CASCADE"))
+            conn.execute(text(f"DROP SCHEMA IF EXISTS {schema2_name} CASCADE"))
             conn.commit()
 
 
