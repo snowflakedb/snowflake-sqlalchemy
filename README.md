@@ -1077,9 +1077,17 @@ t = Table(
 
 Without `quoted_name(..., True)` the column name is treated as case-insensitive and Snowflake resolves it as `MYCOL`.
 
-#### Reserved-word table/column names (e.g. `TABLE`, `SELECT`)
+#### ALL-UPPERCASE identifiers that are SQL reserved words (e.g. `TABLE`, `SELECT`)
 
-When a Snowflake object has a name that is also a SQL reserved word, the dialect's default normalization returns the name unchanged (all-uppercase) instead of lowercasing it.  Enable the `case_sensitive_identifiers` flag to have the dialect instead return `quoted_name("table", True)` — the standard SQLAlchemy convention for case-sensitive names:
+Most identifiers are handled correctly without any flag:
+
+- A quoted lowercase name (`"mycol"` in Snowflake) reflects as `quoted_name("mycol", True)` — already case-sensitive.
+- A quoted mixed-case name (`"MyCol"`) reflects as the plain string `"MyCol"` — already quoted by the preparer.
+- An unquoted name (`MYCOL` stored as all-uppercase) reflects as `"mycol"` — correctly case-insensitive.
+
+The one gap is an identifier whose all-uppercase form is also a SQL reserved word.  For example, a table literally named `TABLE` (created as `CREATE TABLE "TABLE" ...`) stores as `TABLE` in Snowflake.  When the dialect reflects it, `normalize_name("TABLE")` cannot tell whether `TABLE` is a plain uppercase column or the keyword `TABLE`, so by default it returns `"TABLE"` unchanged — an all-uppercase string that SQLAlchemy treats as case-sensitive.  This causes a key mismatch: the table was reflected under the key `"TABLE"` but the same `normalize_name` call made during DDL would produce `"table"`.
+
+Enable `case_sensitive_identifiers` to fix this: the dialect will return `quoted_name("table", True)` for any all-uppercase identifier that is a reserved word, matching the standard SQLAlchemy convention:
 
 ```python
 from sqlalchemy import create_engine
@@ -1096,7 +1104,7 @@ Or via URL:
 snowflake://user:pass@account/db?case_sensitive_identifiers=True
 ```
 
-**Hard limit:** Enabling this flag changes the dict key used by `normalize_name("TABLE")` from `"TABLE"` to `quoted_name("table", True)`.  Because `hash("TABLE") != hash("table")`, any existing code that accesses `metadata.tables["TABLE"]` by uppercase key will miss after the flag is enabled.
+**Hard limit:** Enabling this flag changes the dict key used by `normalize_name("TABLE")` from `"TABLE"` to `quoted_name("table", True)`.  Because `hash("TABLE") != hash("table")`, any existing code that accesses `metadata.tables["TABLE"]` by the uppercase key will miss after the flag is enabled.  Enabling the flag on an existing codebase requires auditing all string-keyed lookups into `metadata.tables` and `table.c` for names that happen to be reserved words.
 
 #### Case-sensitive schema names
 
