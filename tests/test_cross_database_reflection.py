@@ -71,7 +71,7 @@ class TestSchemaParsingUnit:
             (
                 '"test_db"."schema.with.dots"',
                 "schema.with.dots",
-                '"test_db".information_schema.columns',
+                "test_db.information_schema.columns",
             ),
             ("test_db.my_schema", "MY_SCHEMA", "test_db.information_schema.columns"),
         ],
