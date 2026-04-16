@@ -1219,7 +1219,7 @@ class SnowflakeDialect(default.DefaultDialect):
         )
 
         schema_primary_keys = self._get_schema_primary_keys(
-            connection, full_schema_name, **kw
+            connection, self.denormalize_name(full_schema_name), **kw
         )
 
         structured_type_info_manager = _StructuredTypeInfoManager(
@@ -1389,6 +1389,9 @@ class SnowflakeDialect(default.DefaultDialect):
             schema_only = self.denormalize_name(str(parts[1]))
             info_schema_table = f"{database_part}.information_schema.columns"
         else:
+            # Guard clause: _get_full_schema_name always returns "database.schema"
+            # (2 parts), so this branch is only reachable if the method is called
+            # directly with a single-part schema name.
             schema_only = self.denormalize_name(str(parts[0]) if parts else schema_name)
             info_schema_table = "information_schema.columns"
 

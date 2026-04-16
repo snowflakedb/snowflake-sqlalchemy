@@ -120,8 +120,20 @@ class TestCrossDatabaseReflection:
                     """
                     CREATE OR REPLACE TABLE test_db_b.schema_b.bananas (
                         id INTEGER PRIMARY KEY,
-                        variety VARCHAR(100),
+                        variety VARCHAR(100) UNIQUE,
                         ripeness INTEGER
+                    )
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    """
+                    CREATE OR REPLACE TABLE test_db_b.schema_b.banana_ratings (
+                        rating_id INTEGER PRIMARY KEY,
+                        banana_id INTEGER,
+                        score INTEGER,
+                        FOREIGN KEY (banana_id) REFERENCES test_db_b.schema_b.bananas(id)
                     )
                     """
                 )
@@ -266,6 +278,39 @@ class TestCrossDatabaseReflection:
             full_name = dialect._get_full_schema_name(conn, "some_schema")
             assert current_db.lower() in full_name.lower()
             assert "some_schema" in full_name
+
+    def test_get_pk_constraint_cross_database(
+        self, engine_testaccount, setup_databases
+    ):
+        """Test inspector.get_pk_constraint with cross-database schema."""
+        inspector = inspect(engine_testaccount)
+
+        pk = inspector.get_pk_constraint("bananas", schema="test_db_b.schema_b")
+
+        assert "id" in pk["constrained_columns"]
+
+    def test_get_unique_constraints_cross_database(
+        self, engine_testaccount, setup_databases
+    ):
+        """Test inspector.get_unique_constraints with cross-database schema."""
+        inspector = inspect(engine_testaccount)
+
+        ucs = inspector.get_unique_constraints("bananas", schema="test_db_b.schema_b")
+
+        uc_columns = [col for uc in ucs for col in uc["column_names"]]
+        assert "variety" in uc_columns
+
+    def test_get_foreign_keys_cross_database(self, engine_testaccount, setup_databases):
+        """Test inspector.get_foreign_keys with cross-database schema."""
+        inspector = inspect(engine_testaccount)
+
+        fks = inspector.get_foreign_keys("banana_ratings", schema="test_db_b.schema_b")
+
+        assert len(fks) >= 1
+        fk = fks[0]
+        assert fk["constrained_columns"] == ["banana_id"]
+        assert fk["referred_table"] == "bananas"
+        assert "id" in fk["referred_columns"]
 
     def test_backward_compatibility_single_schema(self, engine_testaccount):
         """Verify single-part schema names still work (backward compatibility).
