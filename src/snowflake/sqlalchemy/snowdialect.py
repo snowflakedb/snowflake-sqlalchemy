@@ -366,6 +366,11 @@ class SnowflakeDialect(default.DefaultDialect):
                 return self._denormalize_quote_join(parts[0], parts[1])
             elif len(parts) == 1:
                 return self._denormalize_quote_join(current_database, parts[0])
+            else:
+                raise ValueError(
+                    f"Invalid schema notation '{schema}': expected 'schema' or "
+                    f"'database.schema', got {len(parts)} parts"
+                )
         else:
             return self._denormalize_quote_join(current_database, current_schema)
 
