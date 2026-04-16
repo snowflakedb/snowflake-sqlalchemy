@@ -10,7 +10,7 @@ Source code is also available at:
 # Unreleased Notes
 
 - Emit `SnowflakeWarning` at DDL compile time when `Identity()` is used on a primary key column, alerting users that ORM flush operations will raise a `FlushError`. The warning is emitted once per unique `(table, column)` pair per Python process. Use `Sequence()` instead.
-- Fixed `visit_truediv_binary` to correctly return after emitting the deprecation warning when `div_is_floordiv=True`, preventing silent fall-through ([#618](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/618)). Note: because Snowflake performs true division natively, `div_is_floordiv=True` has no effect on the SQL generated for the `/` operator — it only emits the deprecation warning.
+- Restored backward-compatible SQL generation for true division (`/`) when `div_is_floordiv=True`: the Snowflake compiler now correctly delegates to the SQLAlchemy base implementation, emitting `CAST(col AS NUMERIC)` for integer operands as it did before [#545](https://github.com/snowflakedb/snowflake-sqlalchemy/pull/545) introduced the override ([#618](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/618)).
 
 # Release Notes
 
