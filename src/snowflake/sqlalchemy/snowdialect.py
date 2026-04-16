@@ -397,10 +397,19 @@ class SnowflakeDialect(default.DefaultDialect):
 
         if schema:
             parts = self.identifier_preparer._split_schema_by_dot(schema)
+            # Quote each part directly — do NOT pass through
+            # _denormalize_quote_join, which would re-split parts
+            # containing literal dots (e.g. "schema.with.dots").
             if len(parts) == 2:
-                return self._denormalize_quote_join(parts[0], parts[1])
+                return ".".join(
+                    self.identifier_preparer._quote_free_identifiers(parts[0], parts[1])
+                )
             elif len(parts) == 1:
-                return self._denormalize_quote_join(current_database, parts[0])
+                return ".".join(
+                    self.identifier_preparer._quote_free_identifiers(
+                        current_database, parts[0]
+                    )
+                )
             else:
                 raise ValueError(
                     f"Invalid schema notation '{schema}': expected 'schema' or "
@@ -1219,7 +1228,7 @@ class SnowflakeDialect(default.DefaultDialect):
         )
 
         schema_primary_keys = self._get_schema_primary_keys(
-            connection, self.denormalize_name(full_schema_name), **kw
+            connection, full_schema_name, **kw
         )
 
         structured_type_info_manager = _StructuredTypeInfoManager(
