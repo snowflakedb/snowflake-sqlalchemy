@@ -64,6 +64,7 @@ from .custom_types import (  # noqa
     VARIANT,
     VECTOR,
 )
+from .orm import SnowflakeBase, SnowflakeSession, mapper_uses_snowflake_bulk  # noqa
 from .sql.custom_schema import (  # noqa
     DynamicTable,
     HybridTable,
@@ -157,10 +158,16 @@ _enums = (
     "TableOptionKey",
     "SnowflakeKeyword",
 )
+_orm = (
+    "SnowflakeBase",
+    "SnowflakeSession",
+    "mapper_uses_snowflake_bulk",
+)
 __all__ = (
     *_custom_types,
     *_custom_commands,
     *_custom_tables,
     *_custom_table_options,
     *_enums,
+    *_orm,
 )

@@ -703,6 +703,54 @@ class SnowflakeImpl(DefaultImpl):
 
 See [Alembic Documentation](http://alembic.zzzcomputing.com/) for general usage.
 
+### Bulk ORM inserts (`SnowflakeBase` and `SnowflakeSession`)
+
+SQLAlchemy’s `Session.bulk_save_objects()` can emit many small `INSERT` statements when each row omits a different subset of nullable columns, because the driver batches rows that share the same rendered column list ([issue #441](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/441)). Snowflake SQLAlchemy provides an opt-in pair:
+
+- **`SnowflakeBase`** — declarative base (SQLAlchemy 2.x) or abstract mixin (1.4: `class Model(SnowflakeBase, YourBase):`) that marks mapped classes for bulk tuning.
+- **`SnowflakeSession`** — `Session` subclass that passes **`render_nulls=True`** into bulk **INSERT** paths for those classes so explicit ``None`` is sent as SQL ``NULL`` and executemany batching works for rows that already share the **same parameter keys**. You can also set **`__snowflake_sqlalchemy_bulk__ = True`** on a mapped class instead of inheriting `SnowflakeBase`.
+- **`mapper_uses_snowflake_bulk(mapper)`** — returns whether a class or mapper is opted in.
+
+Use a session factory bound to `SnowflakeSession`:
+
+```python
+from sqlalchemy import Column, Integer, String, create_engine
+from sqlalchemy.orm import sessionmaker
+
+from snowflake.sqlalchemy import SnowflakeBase, SnowflakeSession
+
+
+class Widget(SnowflakeBase):
+    __tablename__ = "widget"
+    id = Column(Integer, primary_key=True)
+    name = Column(String, nullable=False)
+    tag = Column(String, nullable=True)
+
+
+engine = create_engine("snowflake://...")
+Session = sessionmaker(class_=SnowflakeSession, bind=engine)
+
+with Session() as session:
+    session.bulk_save_objects(
+        [
+            Widget(id=1, name="a", tag=None),
+            # Same attribute keys on every row (use explicit ``None`` for “unset”
+            # optional columns) so SQLAlchemy can batch one INSERT.
+            Widget(id=2, name="b", tag=None),
+        ]
+    )
+    session.commit()
+```
+
+SQLAlchemy groups bulk rows by the **set of keys** each row carries (ORM instance `__dict__` / state, or mapping dict keys). **Omitting** an optional column on one row and setting it on another still produces **different INSERT shapes**, even with `SnowflakeSession`, until every row exposes the **same keys** (typically by passing **`None`** for “missing” optional fields). With uniform keys, **`render_nulls=True`** (what `SnowflakeSession` enables for opted-in mappers) keeps explicit `NULL`s in the statement so executemany batching works as intended.
+
+For **`bulk_insert_mappings`**, omitting the `render_nulls` argument on `SnowflakeSession` defaults it to **`True`** for opted-in mappers and **`False`** otherwise. Pass `render_nulls=True` or `False` explicitly to override. Use the **same keys in every mapping dict** (include `None` for absent optional values) if you need a single INSERT batch.
+
+**Important limitations (from SQLAlchemy bulk semantics):**
+
+- With **`render_nulls=True`**, columns inserted as **explicit `NULL` do not invoke server-side SQL defaults** on those columns. If you rely on `server_default` for a nullable column, either use the normal unit-of-work `add()` / flush path for those rows or set the value in Python.
+- Bulk APIs skip most ORM events and relationship handling; see the [SQLAlchemy bulk operations](https://docs.sqlalchemy.org/en/20/orm/queryguide/dml.html#orm-bulk-insert-statements) documentation.
+
 ### Key Pair Authentication Support
 
 Snowflake SQLAlchemy supports key pair authentication by leveraging its Snowflake Connector for Python underpinnings. See [Using Key Pair Authentication](https://docs.snowflake.net/manuals/user-guide/python-connector-example.html#using-key-pair-authentication) for steps to create the private and public keys.

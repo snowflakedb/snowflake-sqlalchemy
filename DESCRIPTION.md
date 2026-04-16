@@ -9,6 +9,7 @@ Source code is also available at:
 
 # Unreleased Notes
 
+- Add `SnowflakeBase`, `SnowflakeSession`, and `mapper_uses_snowflake_bulk` (`snowflake.sqlalchemy.orm`) for ORM bulk INSERT tuning (SNOW-893080, [#441](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/441)). See [README.md](https://github.com/snowflakedb/snowflake-sqlalchemy/blob/main/README.md) — section **Bulk ORM inserts (`SnowflakeBase` and `SnowflakeSession`)**.
 - Emit `SnowflakeWarning` at DDL compile time when `Identity()` is used on a primary key column, alerting users that ORM flush operations will raise a `FlushError`. The warning is emitted once per unique `(table, column)` pair per Python process. Use `Sequence()` instead.
 - Optimise reflection performance (SNOW-689531, [#656](https://github.com/snowflakedb/snowflake-sqlalchemy/pull/656)):
   - Add `get_multi_columns`, `get_multi_pk_constraint`, `get_multi_unique_constraints`, `get_multi_foreign_keys` for SQLAlchemy 2.x bulk reflection — each issues one schema-wide query per reflection pass instead of one query per table.
