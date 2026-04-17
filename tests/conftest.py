@@ -55,6 +55,12 @@ def pytest_addoption(parser):
         default=False,
         help="skip sqlalchemy 2.0 exclusive tests",
     )
+    parser.addoption(
+        "--case-sensitive",
+        action="store_true",
+        default=False,
+        help="run tests with case_sensitive_identifiers=True",
+    )
 
 
 def pytest_collection_modifyitems(config, items):
@@ -209,7 +215,16 @@ def get_engine(url: URL, **engine_kwargs):
 @pytest.fixture()
 def engine_testaccount(request):
     url = url_factory()
-    engine = get_engine(url)
+    cs = request.config.getoption("--case-sensitive")
+    engine = get_engine(url, case_sensitive_identifiers=cs)
+    request.addfinalizer(engine.dispose)
+    yield engine
+
+
+@pytest.fixture()
+def engine_testaccount_case_sensitive(request):
+    url = url_factory()
+    engine = get_engine(url, case_sensitive_identifiers=True)
     request.addfinalizer(engine.dispose)
     yield engine
 
@@ -246,7 +261,8 @@ def assert_text_in_buf():
 @pytest.fixture()
 def engine_testaccount_with_numpy(request):
     url = url_factory(numpy=True)
-    engine = get_engine(url)
+    cs = request.config.getoption("--case-sensitive")
+    engine = get_engine(url, case_sensitive_identifiers=cs)
     request.addfinalizer(engine.dispose)
     yield engine
 
@@ -256,7 +272,8 @@ def engine_testaccount_with_qmark(request):
     snowflake.connector.paramstyle = "qmark"
 
     url = url_factory()
-    engine = get_engine(url)
+    cs = request.config.getoption("--case-sensitive")
+    engine = get_engine(url, case_sensitive_identifiers=cs)
     request.addfinalizer(engine.dispose)
 
     yield engine
