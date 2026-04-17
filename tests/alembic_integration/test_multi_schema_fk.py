@@ -142,12 +142,11 @@ def test_alembic_autogenerate_multi_schema_fk(
 def test_alembic_autogenerate_fk_to_default_schema(
     engine_testaccount_with_normalize_referred_schema, db_parameters
 ):
-    """Default-schema FK currently produces a remove/add diff in Alembic.
+    """Default-schema FK does not produce spurious Alembic diffs.
 
-    Reflection reports referred_schema=None for targets in the default schema.
-    When metadata references the same target table with an explicit schema,
-    Alembic currently detects a remove/add FK change for this scenario.
-    This documents the current behavior raised in PR review.
+    Reflection normalizes referred_schema for targets in the default schema,
+    so metadata that references the same target table with an explicit schema
+    matches the reflected foreign key without remove/add churn.
 
     DDL setup and compare_metadata run on the same connection so that
     SHOW SCHEMAS sees the newly-created schema immediately.
@@ -233,4 +232,4 @@ def test_alembic_autogenerate_fk_to_default_schema(
 
     assert not [op for op in diff if _diff_op_name(op) == "add_table"]
     fk_ops = [op for op in diff if _diff_op_name(op) in ("remove_fk", "add_fk")]
-    assert [op[0] for op in fk_ops] == ["remove_fk", "add_fk"]
+    assert fk_ops == []
