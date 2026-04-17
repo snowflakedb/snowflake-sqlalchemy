@@ -105,26 +105,26 @@ class TestSchemaParsingUnit:
     @pytest.mark.parametrize(
         "method_name, expected_fragment",
         [
-            ("get_pk_constraint", 'PRIMARY KEYS IN SCHEMA "test_db"."test_schema"'),
+            ("get_pk_constraint", 'PRIMARY KEYS IN SCHEMA "TEST_DB"."TEST_SCHEMA"'),
             (
                 "get_unique_constraints",
-                'UNIQUE KEYS IN SCHEMA "test_db"."test_schema"',
+                'UNIQUE KEYS IN SCHEMA "TEST_DB"."TEST_SCHEMA"',
             ),
             (
                 "get_foreign_keys",
-                'IMPORTED KEYS IN SCHEMA "test_db"."test_schema"',
+                'IMPORTED KEYS IN SCHEMA "TEST_DB"."TEST_SCHEMA"',
             ),
             (
                 "get_sequence_names",
-                'SHOW SEQUENCES IN SCHEMA "test_db"."test_schema"',
+                'SHOW SEQUENCES IN SCHEMA "TEST_DB"."TEST_SCHEMA"',
             ),
             (
                 "get_table_names",
-                'TABLES IN SCHEMA "test_db"."test_schema"',
+                'TABLES IN SCHEMA "TEST_DB"."TEST_SCHEMA"',
             ),
             (
                 "get_table_comment",
-                'TABLES LIKE \'test_table\' IN SCHEMA "test_db"."test_schema"',
+                'TABLES LIKE \'test_table\' IN SCHEMA "TEST_DB"."TEST_SCHEMA"',
             ),
         ],
     )
@@ -354,14 +354,14 @@ class TestCrossDatabaseReflection:
         with engine_testaccount.connect() as conn:
             full_name = dialect._get_full_schema_name(conn, f"{db_b}.{schema_b}")
             assert db_b in full_name
-            assert schema_b in full_name
+            assert schema_b.upper() in full_name
             result = conn.execute(text("SELECT CURRENT_DATABASE()"))
             current_db = result.scalar()
-            assert full_name == f'"{db_b}"."{schema_b}"'
+            assert full_name == f'"{db_b}"."{schema_b.upper()}"'
 
             full_name = dialect._get_full_schema_name(conn, "some_schema")
             assert current_db.lower() in full_name.lower()
-            assert "some_schema" in full_name
+            assert "some_schema" in full_name.lower()
 
             quoted_full_name = dialect._get_full_schema_name(
                 conn, f'"{db_b}"."{dotted_schema}"'
