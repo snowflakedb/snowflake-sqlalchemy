@@ -10,6 +10,7 @@ Source code is also available at:
 # Unreleased Notes
 
 - Emit `SnowflakeWarning` at DDL compile time when `Identity()` is used on a primary key column, alerting users that ORM flush operations will raise a `FlushError`. The warning is emitted once per unique `(table, column)` pair per Python process. Use `Sequence()` instead.
+- Restored backward-compatible SQL generation for true division (`/`) when `div_is_floordiv=True`: the Snowflake compiler now correctly delegates to the SQLAlchemy base implementation, emitting `CAST(col AS NUMERIC)` for integer operands as it did before [#545](https://github.com/snowflakedb/snowflake-sqlalchemy/pull/545) introduced the override ([#618](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/618)).
 - Optimise reflection performance (SNOW-689531, [#656](https://github.com/snowflakedb/snowflake-sqlalchemy/pull/656)):
   - Add `get_multi_columns`, `get_multi_pk_constraint`, `get_multi_unique_constraints`, `get_multi_foreign_keys` for SQLAlchemy 2.x bulk reflection — each issues one schema-wide query per reflection pass instead of one query per table.
   - SQLAlchemy 2.x `get_columns` now uses `DESC TABLE` directly (per-table, live) since `get_multi_columns` handles all bulk reflection; temporary tables and dynamic tables are reflected correctly without schema-wide queries.
