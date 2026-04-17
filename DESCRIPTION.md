@@ -9,6 +9,7 @@ Source code is also available at:
 
 # Unreleased Notes
 
+- Add `normalize_referred_schema=true` dialect parameter (URL or dialect keyword argument): opt-in fix for foreign key reflection that returns `referred_schema=None` for same-schema FKs in non-default schemas, preventing Alembic from generating spurious migrations. The previous behavior (returning the schema name) is preserved by default for backward compatibility ([#610](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/610), SNOW-2313675).
 - Emit `SnowflakeWarning` at DDL compile time when `Identity()` is used on a primary key column, alerting users that ORM flush operations will raise a `FlushError`. The warning is emitted once per unique `(table, column)` pair per Python process. Use `Sequence()` instead.
 - Optimise reflection performance (SNOW-689531, [#656](https://github.com/snowflakedb/snowflake-sqlalchemy/pull/656)):
   - Add `get_multi_columns`, `get_multi_pk_constraint`, `get_multi_unique_constraints`, `get_multi_foreign_keys` for SQLAlchemy 2.x bulk reflection — each issues one schema-wide query per reflection pass instead of one query per table.
