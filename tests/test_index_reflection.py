@@ -59,9 +59,9 @@ def test_simple_reflection_hybrid_table_as_table(
 
             metadata.reflect(engine_testaccount, schema=schema)
 
-            database = db_parameters["database"].lower()
+            database = db_parameters["database"].upper()
             assert_text_in_buf(
-                f"SHOW /* sqlalchemy:get_schema_tables_info */ TABLES IN SCHEMA {database}.{schema}",
+                f'SHOW /* sqlalchemy:get_schema_tables_info */ TABLES IN SCHEMA "{database}"."{schema.upper()}"',
                 occurrences=1,
             )
 

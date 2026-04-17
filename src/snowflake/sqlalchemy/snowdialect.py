@@ -361,16 +361,16 @@ class SnowflakeDialect(default.DefaultDialect):
         )
 
         if not schema:
-            return self._denormalize_quote_join(current_database, current_schema)
-
-        parts = self.identifier_preparer._split_schema_by_dot(schema)
-        if len(parts) == 1:
-            parts = [current_database, parts[0]]
-        elif len(parts) != 2:
-            raise ValueError(
-                f"Invalid schema notation '{schema}': expected 'schema' or "
-                f"'database.schema', got {len(parts)} parts"
-            )
+            parts = [current_database, current_schema]
+        else:
+            parts = self.identifier_preparer._split_schema_by_dot(schema)
+            if len(parts) == 1:
+                parts = [current_database, parts[0]]
+            elif len(parts) != 2:
+                raise ValueError(
+                    f"Invalid schema notation '{schema}': expected 'schema' or "
+                    f"'database.schema', got {len(parts)} parts"
+                )
 
         # Quote each part unconditionally and preserve explicit quoted-name
         # boundaries from _split_schema_by_dot. Do NOT pass through
