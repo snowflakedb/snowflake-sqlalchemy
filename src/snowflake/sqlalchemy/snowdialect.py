@@ -376,9 +376,20 @@ class SnowflakeDialect(default.DefaultDialect):
         # boundaries from _split_schema_by_dot. Do NOT pass through
         # _denormalize_quote_join, which would re-split parts containing
         # literal dots (e.g. "schema.with.dots").
-        return ".".join(
-            self.identifier_preparer.quote_identifier(str(part)) for part in parts
-        )
+        quoted_parts = []
+        for part in parts:
+            part_name = str(part)
+            if getattr(part, "quote", None):
+                quoted_parts.append(
+                    self.identifier_preparer.quote_identifier(part_name)
+                )
+            else:
+                quoted_parts.append(
+                    self.identifier_preparer.quote_identifier(
+                        self.denormalize_name(part_name)
+                    )
+                )
+        return ".".join(quoted_parts)
 
     @reflection.cache
     def _current_database_schema(self, connection, **kw):
@@ -612,9 +623,9 @@ class SnowflakeDialect(default.DefaultDialect):
         if self._is_single_table_reflection(schema, **kw):
             return self._get_table_primary_keys(connection, table_name, schema, **kw)
         full_schema_name = self._get_full_schema_name(connection, schema, **kw)
-        return self._get_schema_primary_keys(
-            connection, self.denormalize_name(full_schema_name), **kw
-        ).get(table_name, {"constrained_columns": [], "name": None})
+        return self._get_schema_primary_keys(connection, full_schema_name, **kw).get(
+            table_name, {"constrained_columns": [], "name": None}
+        )
 
     def get_multi_pk_constraint(
         self,
@@ -635,9 +646,7 @@ class SnowflakeDialect(default.DefaultDialect):
         full_schema_name = self._get_full_schema_name(
             connection, effective_schema, **kw
         )
-        all_pks = self._get_schema_primary_keys(
-            connection, self.denormalize_name(full_schema_name), **kw
-        )
+        all_pks = self._get_schema_primary_keys(connection, full_schema_name, **kw)
         tables = filter_names if filter_names is not None else list(all_pks.keys())
         return [
             (
@@ -692,7 +701,7 @@ class SnowflakeDialect(default.DefaultDialect):
             )
         full_schema_name = self._get_full_schema_name(connection, schema, **kw)
         return self._get_schema_unique_constraints(
-            connection, self.denormalize_name(full_schema_name), **kw
+            connection, full_schema_name, **kw
         ).get(table_name, [])
 
     def get_multi_unique_constraints(
@@ -713,9 +722,7 @@ class SnowflakeDialect(default.DefaultDialect):
         full_schema_name = self._get_full_schema_name(
             connection, effective_schema, **kw
         )
-        all_uk = self._get_schema_unique_constraints(
-            connection, self.denormalize_name(full_schema_name), **kw
-        )
+        all_uk = self._get_schema_unique_constraints(connection, full_schema_name, **kw)
         tables = filter_names if filter_names is not None else list(all_uk.keys())
         return [
             ((schema, table_name), all_uk.get(table_name, [])) for table_name in tables
@@ -797,9 +804,9 @@ class SnowflakeDialect(default.DefaultDialect):
         if self._is_single_table_reflection(schema, **kw):
             return self._get_table_foreign_keys(connection, table_name, schema, **kw)
         full_schema_name = self._get_full_schema_name(connection, schema, **kw)
-        return self._get_schema_foreign_keys(
-            connection, self.denormalize_name(full_schema_name), **kw
-        ).get(table_name, [])
+        return self._get_schema_foreign_keys(connection, full_schema_name, **kw).get(
+            table_name, []
+        )
 
     def get_multi_foreign_keys(
         self,
@@ -819,9 +826,7 @@ class SnowflakeDialect(default.DefaultDialect):
         full_schema_name = self._get_full_schema_name(
             connection, effective_schema, **kw
         )
-        all_fks = self._get_schema_foreign_keys(
-            connection, self.denormalize_name(full_schema_name), **kw
-        )
+        all_fks = self._get_schema_foreign_keys(connection, full_schema_name, **kw)
         tables = filter_names if filter_names is not None else list(all_fks.keys())
         return [
             ((schema, table_name), all_fks.get(table_name, [])) for table_name in tables

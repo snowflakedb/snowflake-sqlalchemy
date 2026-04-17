@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from sqlalchemy import MetaData, Table, inspect, text
 from sqlalchemy.exc import NoSuchTableError
+from sqlalchemy.sql.elements import TextClause
 
 from snowflake.sqlalchemy.snowdialect import SnowflakeDialect
 
@@ -32,15 +33,16 @@ class TestSchemaParsingUnit:
         assert [str(p) for p in parts] == expected_parts
 
     @pytest.mark.parametrize(
-        "schema, expected_present, expected_absent",
+        "schema, expected",
         [
-            ("test_db.my_schema", ["test_db", "my_schema"], ["current_db"]),
-            ("my_schema", ["current_db", "my_schema"], []),
-            (None, ["current_db", "current_schema"], []),
+            ("test_db.my_schema", '"TEST_DB"."MY_SCHEMA"'),
+            ('"test_db"."MiXeD"', '"test_db"."MiXeD"'),
+            ("my_schema", '"CURRENT_DB"."MY_SCHEMA"'),
+            (None, '"CURRENT_DB"."CURRENT_SCHEMA"'),
         ],
-        ids=["cross_database", "single_schema", "no_schema"],
+        ids=["cross_database", "quoted_mixed", "single_schema", "no_schema"],
     )
-    def test_get_full_schema_name(self, schema, expected_present, expected_absent):
+    def test_get_full_schema_name(self, schema, expected):
         dialect = SnowflakeDialect()
         mock_conn = MagicMock()
         with patch.object(
@@ -49,10 +51,7 @@ class TestSchemaParsingUnit:
             return_value=("current_db", "current_schema"),
         ):
             result = dialect._get_full_schema_name(mock_conn, schema)
-            for token in expected_present:
-                assert token in result, f"Expected '{token}' in '{result}'"
-            for token in expected_absent:
-                assert token not in result, f"Expected '{token}' NOT in '{result}'"
+        assert result == expected
 
     def test_get_full_schema_name_invalid_raises(self):
         """Schema with >2 dot-separated parts should raise ValueError."""
@@ -102,6 +101,66 @@ class TestSchemaParsingUnit:
 
         with pytest.raises(ValueError, match="Expected fully-qualified schema name"):
             dialect._query_all_columns_info(mock_conn, "my_schema", info_cache={})
+
+    @pytest.mark.parametrize(
+        "method_name, expected_fragment",
+        [
+            ("get_pk_constraint", 'PRIMARY KEYS IN SCHEMA "test_db"."test_schema"'),
+            (
+                "get_unique_constraints",
+                'UNIQUE KEYS IN SCHEMA "test_db"."test_schema"',
+            ),
+            (
+                "get_foreign_keys",
+                'IMPORTED KEYS IN SCHEMA "test_db"."test_schema"',
+            ),
+            (
+                "get_sequence_names",
+                'SHOW SEQUENCES IN SCHEMA "test_db"."test_schema"',
+            ),
+            (
+                "get_table_names",
+                'TABLES IN SCHEMA "test_db"."test_schema"',
+            ),
+            (
+                "get_table_comment",
+                'TABLES LIKE \'test_table\' IN SCHEMA "test_db"."test_schema"',
+            ),
+        ],
+    )
+    def test_reflection_uses_full_schema_name_without_re_denormalizing(
+        self, method_name, expected_fragment
+    ):
+        dialect = SnowflakeDialect()
+        mock_conn = MagicMock()
+        mock_result = MagicMock()
+        mock_result.cursor.description = []
+        mock_result.cursor.fetchall.return_value = []
+        mock_result.fetchone.return_value = None
+        mock_conn.execute.return_value = mock_result
+
+        with patch.object(
+            dialect,
+            "_current_database_schema",
+            return_value=("current_db", "current_schema"),
+        ):
+            method = getattr(dialect, method_name)
+            if method_name in {
+                "get_pk_constraint",
+                "get_unique_constraints",
+                "get_foreign_keys",
+            }:
+                method(mock_conn, "test_table", schema="test_db.test_schema")
+            elif method_name == "get_table_comment":
+                method(mock_conn, "test_table", schema="test_db.test_schema")
+            else:
+                method(mock_conn, schema="test_db.test_schema")
+
+        statements = [call.args[0] for call in mock_conn.execute.call_args_list]
+        assert all(isinstance(statement, TextClause) for statement in statements)
+        rendered = [str(statement) for statement in statements]
+        assert any(expected_fragment in statement for statement in rendered)
+        assert all('"testdb_test_schema"' not in statement for statement in rendered)
 
 
 class TestCrossDatabaseReflection:
