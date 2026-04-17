@@ -4,9 +4,9 @@
 
 """Unit tests for SNOW-1232488 — case-sensitive identifier support."""
 
-import pytest
 from unittest import mock
 
+import pytest
 from sqlalchemy.engine.url import URL as SAUrl
 from sqlalchemy.sql.elements import quoted_name
 
@@ -64,7 +64,9 @@ class TestSplitSchemaByDot:
 
     def test_quoted_name_true_dotted(self, ip):
         """quoted_name('mydb.myschema', True) → both parts quoted."""
-        assert ip.quote_schema(quoted_name("mydb.myschema", True)) == '"mydb"."myschema"'
+        assert (
+            ip.quote_schema(quoted_name("mydb.myschema", True)) == '"mydb"."myschema"'
+        )
 
     # ------------------------------------------------------------------
     # Plain string with inner double-quotes — these FAIL before the fix
@@ -116,6 +118,7 @@ class TestSplitSchemaByDot:
         assert len(parts) == 2
         assert getattr(parts[0], "quote", None) is True
         assert getattr(parts[1], "quote", None) is None
+
 
 # ---------------------------------------------------------------------------
 # Bug 1 — denormalize_column_name respects quoted_name.quote
