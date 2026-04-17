@@ -1266,7 +1266,10 @@ class SnowflakeDialect(default.DefaultDialect):
         if (
             IS_VERSION_20 or self._is_single_table_reflection(schema, **kw)
         ) and table_name:
-            full_table_name = self._always_quote_join(schema, table_name)
+            single_table_name = table_name
+            if "." in str(table_name):
+                _, single_table_name = self._db_plus_schema(str(table_name))
+            full_table_name = self._always_quote_join(schema, single_table_name)
             column_info_manager = _StructuredTypeInfoManager(
                 connection, self.name_utils, self.default_schema_name
             )
@@ -1282,7 +1285,13 @@ class SnowflakeDialect(default.DefaultDialect):
             return column_info_manager.get_table_columns(table_name, schema)
         normalized_table_name = self.normalize_name(table_name)
         if normalized_table_name not in schema_columns:
-            raise sa_exc.NoSuchTableError()
+            column_info_manager = _StructuredTypeInfoManager(
+                connection, self.name_utils, self.default_schema_name
+            )
+            fallback_table_name = table_name
+            if "." in str(table_name):
+                _, fallback_table_name = self._db_plus_schema(str(table_name))
+            return column_info_manager.get_table_columns(fallback_table_name, schema)
         return schema_columns[normalized_table_name]
 
     def get_prefixes_from_data(self, name_to_index_map, row, **kw):

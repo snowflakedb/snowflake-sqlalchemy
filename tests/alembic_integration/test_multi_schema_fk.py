@@ -28,18 +28,21 @@ def _find_added_column(diff, column_name):
 def test_alembic_autogenerate_multi_schema_fk(
     engine_testaccount_with_normalize_referred_schema,
 ):
-    """Autogenerate only detects real changes, not spurious FK/table ops."""
+    """Autogenerate only detects real changes, not spurious FK/table ops.
+
+    DDL setup and compare_metadata run on the same connection so that
+    SHOW SCHEMAS sees the newly-created schemas immediately (avoids
+    metadata-visibility delays on some Snowflake cloud providers).
+    """
     engine = engine_testaccount_with_normalize_referred_schema
     schema1 = f"test_alembic_schema1_{uuid.uuid4().hex}"
     schema2 = f"test_alembic_schema2_{uuid.uuid4().hex}"
 
-    with engine.connect() as conn:
-        conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema1}"))
-        conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema2}"))
-        conn.commit()
-
+    diff = None
     try:
         with engine.connect() as conn:
+            conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema1}"))
+            conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema2}"))
             conn.execute(
                 text(
                     f"""
@@ -71,43 +74,44 @@ def test_alembic_autogenerate_multi_schema_fk(
             )
             conn.commit()
 
-        # Target metadata matches DB but adds one extra column
-        target_metadata = MetaData()
-        Table(
-            "users",
-            target_metadata,
-            Column("id", Integer, primary_key=True),
-            Column("name", String(100)),
-            schema=schema1,
-        )
-        Table(
-            "products",
-            target_metadata,
-            Column("id", Integer, primary_key=True),
-            Column("name", String(100)),
-            schema=schema2,
-        )
-        Table(
-            "orders",
-            target_metadata,
-            Column("id", Integer, primary_key=True),
-            Column(
-                "product_id",
-                Integer,
-                ForeignKey(f"{schema2}.products.id", name="fk_same_schema"),
-            ),
-            Column(
-                "user_id",
-                Integer,
-                ForeignKey(f"{schema1}.users.id", name="fk_cross_schema"),
-            ),
-            Column("status", String(50)),
-            schema=schema2,
-        )
+            # Target metadata matches DB but adds one extra column.
+            # Built after commit so schemas/tables are visible to compare_metadata
+            # running on the same connection.
+            target_metadata = MetaData()
+            Table(
+                "users",
+                target_metadata,
+                Column("id", Integer, primary_key=True),
+                Column("name", String(100)),
+                schema=schema1,
+            )
+            Table(
+                "products",
+                target_metadata,
+                Column("id", Integer, primary_key=True),
+                Column("name", String(100)),
+                schema=schema2,
+            )
+            Table(
+                "orders",
+                target_metadata,
+                Column("id", Integer, primary_key=True),
+                Column(
+                    "product_id",
+                    Integer,
+                    ForeignKey(f"{schema2}.products.id", name="fk_same_schema"),
+                ),
+                Column(
+                    "user_id",
+                    Integer,
+                    ForeignKey(f"{schema1}.users.id", name="fk_cross_schema"),
+                ),
+                Column("status", String(50)),
+                schema=schema2,
+            )
 
-        test_schemas = {schema1, schema2}
+            test_schemas = {schema1, schema2}
 
-        with engine.connect() as conn:
             context = MigrationContext.configure(
                 conn,
                 opts={
@@ -122,17 +126,17 @@ def test_alembic_autogenerate_multi_schema_fk(
             )
             diff = compare_metadata(context, target_metadata)
 
-        add_column_op = _find_added_column(diff, "status")
-        assert add_column_op is not None
-        assert not [op for op in diff if _diff_op_name(op) == "add_table"]
-        fk_ops = [op for op in diff if _diff_op_name(op) in ("remove_fk", "add_fk")]
-        assert [op[0] for op in fk_ops] == ["remove_fk", "add_fk"]
-
     finally:
         with engine.connect() as conn:
             conn.execute(text(f"DROP SCHEMA IF EXISTS {schema2} CASCADE"))
             conn.execute(text(f"DROP SCHEMA IF EXISTS {schema1} CASCADE"))
             conn.commit()
+
+    add_column_op = _find_added_column(diff, "status")
+    assert add_column_op is not None
+    assert not [op for op in diff if _diff_op_name(op) == "add_table"]
+    fk_ops = [op for op in diff if _diff_op_name(op) in ("remove_fk", "add_fk")]
+    assert [op[0] for op in fk_ops] == ["remove_fk", "add_fk"]
 
 
 def test_alembic_autogenerate_fk_to_default_schema(
@@ -144,6 +148,9 @@ def test_alembic_autogenerate_fk_to_default_schema(
     When metadata references the same target table with an explicit schema,
     Alembic currently detects a remove/add FK change for this scenario.
     This documents the current behavior raised in PR review.
+
+    DDL setup and compare_metadata run on the same connection so that
+    SHOW SCHEMAS sees the newly-created schema immediately.
     """
     engine = engine_testaccount_with_normalize_referred_schema
     default_schema = db_parameters.get("schema")
@@ -152,12 +159,10 @@ def test_alembic_autogenerate_fk_to_default_schema(
     categories_table = f"categories_{uuid.uuid4().hex}"
     schema2 = f"test_alembic_fk_default_{uuid.uuid4().hex}"
 
-    with engine.connect() as conn:
-        conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema2}"))
-        conn.commit()
-
+    diff = None
     try:
         with engine.connect() as conn:
+            conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema2}"))
             conn.execute(
                 text(
                     f"""
@@ -178,33 +183,32 @@ def test_alembic_autogenerate_fk_to_default_schema(
             )
             conn.commit()
 
-        # FK defined without schema qualifier — matches what reflection returns
-        # (referred_schema=None for FKs targeting the default schema).
-        target_metadata = MetaData()
-        Table(
-            categories_table,
-            target_metadata,
-            Column("id", Integer, primary_key=True),
-            Column("name", String(100)),
-            schema=default_schema,
-        )
-        Table(
-            "items",
-            target_metadata,
-            Column("id", Integer, primary_key=True),
-            Column(
-                "category_id",
-                Integer,
-                ForeignKey(
-                    f"{default_schema}.{categories_table}.id", name="fk_to_default"
+            # FK defined without schema qualifier — matches what reflection returns
+            # (referred_schema=None for FKs targeting the default schema).
+            target_metadata = MetaData()
+            Table(
+                categories_table,
+                target_metadata,
+                Column("id", Integer, primary_key=True),
+                Column("name", String(100)),
+                schema=default_schema,
+            )
+            Table(
+                "items",
+                target_metadata,
+                Column("id", Integer, primary_key=True),
+                Column(
+                    "category_id",
+                    Integer,
+                    ForeignKey(
+                        f"{default_schema}.{categories_table}.id", name="fk_to_default"
+                    ),
                 ),
-            ),
-            schema=schema2,
-        )
+                schema=schema2,
+            )
 
-        test_schemas = {None, default_schema, schema2}
+            test_schemas = {None, default_schema, schema2}
 
-        with engine.connect() as conn:
             context = MigrationContext.configure(
                 conn,
                 opts={
@@ -219,10 +223,6 @@ def test_alembic_autogenerate_fk_to_default_schema(
             )
             diff = compare_metadata(context, target_metadata)
 
-        assert not [op for op in diff if _diff_op_name(op) == "add_table"]
-        fk_ops = [op for op in diff if _diff_op_name(op) in ("remove_fk", "add_fk")]
-        assert [op[0] for op in fk_ops] == ["remove_fk", "add_fk"]
-
     finally:
         with engine.connect() as conn:
             conn.execute(text(f"DROP SCHEMA IF EXISTS {schema2} CASCADE"))
@@ -230,3 +230,7 @@ def test_alembic_autogenerate_fk_to_default_schema(
                 text(f"DROP TABLE IF EXISTS {default_schema}.{categories_table}")
             )
             conn.commit()
+
+    assert not [op for op in diff if _diff_op_name(op) == "add_table"]
+    fk_ops = [op for op in diff if _diff_op_name(op) in ("remove_fk", "add_fk")]
+    assert [op[0] for op in fk_ops] == ["remove_fk", "add_fk"]
