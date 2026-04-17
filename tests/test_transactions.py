@@ -46,7 +46,7 @@ def test_connect_read_commited(engine_testaccount, assert_text_in_buf):
 
 def test_begin_read_commited(engine_testaccount, assert_text_in_buf):
     metadata = MetaData()
-    table_name = "test_begin_read_commited"
+    table_name = "test_begin_read_rc"  # name must not contain "COMMIT" — assert_text_in_buf uses substring match
 
     test_table_1 = SnowflakeTable(
         table_name,
@@ -58,6 +58,10 @@ def test_begin_read_commited(engine_testaccount, assert_text_in_buf):
 
     metadata.create_all(engine_testaccount)
     try:
+        # Flush buffer so setup COMMITs (from create_all / _has_object)
+        # don't pollute the assertions on test logic below.
+        assert_text_in_buf("CREATE TABLE", occurrences=1)
+
         with engine_testaccount.connect().execution_options(
             isolation_level="READ COMMITTED"
         ) as connection, connection.begin():
@@ -74,7 +78,7 @@ def test_begin_read_commited(engine_testaccount, assert_text_in_buf):
             s = select(test_table_1)
             results = conn.execute(s).fetchall()
             assert len(results) == 1, results  # Insert commited
-            assert_text_in_buf("COMMIT", occurrences=2)
+            assert_text_in_buf("COMMIT", occurrences=1)
     finally:
         metadata.drop_all(engine_testaccount)
 

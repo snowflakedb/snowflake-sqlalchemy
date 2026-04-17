@@ -166,12 +166,17 @@ class SnowflakeDialect(default.DefaultDialect):
         force_div_is_floordiv: bool = True,
         isolation_level: Optional[str] = SnowflakeIsolationLevel.READ_COMMITTED.value,
         enable_decfloat: bool = False,
+        case_sensitive_identifiers: bool = False,
         **kwargs: Any,
     ):
         super().__init__(isolation_level=isolation_level, **kwargs)
         self.force_div_is_floordiv = force_div_is_floordiv
         self.div_is_floordiv = force_div_is_floordiv
-        self.name_utils = _NameUtils(self.identifier_preparer)
+        self._case_sensitive_identifiers = case_sensitive_identifiers
+        self.name_utils = _NameUtils(
+            self.identifier_preparer,
+            case_sensitive_identifiers=case_sensitive_identifiers,
+        )
         self._enable_decfloat = enable_decfloat
 
     def initialize(self, connection):
@@ -247,6 +252,13 @@ class SnowflakeDialect(default.DefaultDialect):
         if enable_decfloat is not None:
             self._enable_decfloat = parse_url_boolean(enable_decfloat)
 
+        # Handle case_sensitive_identifiers URL parameter
+        case_sensitive_identifiers = query.pop("case_sensitive_identifiers", None)
+        if case_sensitive_identifiers is not None:
+            flag = parse_url_boolean(case_sensitive_identifiers)
+            self._case_sensitive_identifiers = flag
+            self.name_utils.case_sensitive_identifiers = flag
+
         # URL sets the query parameter values as strings, we need to cast to expected types when necessary
         for name, value in query.items():
             opts[name] = self.parse_query_param_type(name, value)
@@ -289,7 +301,9 @@ class SnowflakeDialect(default.DefaultDialect):
         return self._has_object(connection, "SEQUENCE", sequence_name, schema)
 
     def _has_object(self, connection, object_type, object_name, schema=None):
-        full_name = self._denormalize_quote_join(schema, object_name)
+        full_name = self._denormalize_quote_join(
+            schema, self.denormalize_name(object_name)
+        )
         try:
             results = connection.execute(
                 text(f"DESC {object_type} /* sqlalchemy:_has_object */ {full_name}")
