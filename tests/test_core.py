@@ -1714,7 +1714,7 @@ def test_for_exception_in_query_all_columns(engine_testaccount, db_parameters):
     with patch.object(engine_testaccount, "connect") as conn:
         conn.return_value = connection
         with patch.object(connection, "execute", side_effect=mock_helper):
-            assert inspector.dialect._query_all_columns_info(connection, "X") is None
+            assert inspector.dialect._query_all_columns_info(connection, "DB.X") is None
 
     # Clean up
     metadata.drop_all(engine_testaccount)
