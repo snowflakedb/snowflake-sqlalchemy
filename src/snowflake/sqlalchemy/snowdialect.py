@@ -1391,7 +1391,8 @@ class SnowflakeDialect(default.DefaultDialect):
                 f"Expected fully-qualified schema name 'database.schema', got '{schema_name}'"
             )
 
-        database_part = self.identifier_preparer.quote(parts[0])
+        # str() strips the quoted_name wrapper so quoting is based solely on _requires_quotes.
+        database_part = self.identifier_preparer.quote(str(parts[0]))
         schema_only = self.denormalize_name(str(parts[1]))
         info_schema_table = f"{database_part}.information_schema.columns"
 
