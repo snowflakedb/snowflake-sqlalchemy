@@ -407,10 +407,13 @@ class SnowflakeDialect(default.DefaultDialect):
                 f"'database.schema', got {len(parts)} parts"
             )
 
-        # Quote each part directly — do NOT pass through
-        # _denormalize_quote_join, which would re-split parts
-        # containing literal dots (e.g. "schema.with.dots").
-        return ".".join(self.identifier_preparer._quote_free_identifiers(*parts))
+        # Quote each part unconditionally and preserve explicit quoted-name
+        # boundaries from _split_schema_by_dot. Do NOT pass through
+        # _denormalize_quote_join, which would re-split parts containing
+        # literal dots (e.g. "schema.with.dots").
+        return ".".join(
+            self.identifier_preparer.quote_identifier(str(part)) for part in parts
+        )
 
     @reflection.cache
     def _current_database_schema(self, connection, **kw):
