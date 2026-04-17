@@ -484,7 +484,7 @@ class SnowflakeDialect(default.DefaultDialect):
             result[table_name].append(constraint)
         return dict(result)
 
-    def _parse_fk_rows(self, rows, same_schemas):
+    def _parse_fk_rows(self, rows, same_schemas, current_database=None):
         """Parse SHOW IMPORTED KEYS rows into {fk_table_name: [{...}]}.
 
         Both SHOW IMPORTED KEYS IN TABLE and SHOW IMPORTED KEYS IN SCHEMA return
@@ -494,12 +494,19 @@ class SnowflakeDialect(default.DefaultDialect):
         same_schemas: set of normalised schema names for which referred_schema
         should be returned as None (same-schema FK, no need to qualify).  See:
         https://docs.sqlalchemy.org/en/14/core/reflection.html#reflection-schema-qualified-interaction
+
+        current_database: if set, qualify referred_schema as "db.schema" for cross-database FKs.
         """
         fk_map = {}  # keyed by fk_name
         for row in rows:
             fk_name = self.normalize_name(row._mapping["fk_name"])
             if fk_name not in fk_map:
-                referred_schema = self.normalize_name(row._mapping["pk_schema_name"])
+                pk_database = self.normalize_name(row._mapping["pk_database_name"])
+                pk_schema = self.normalize_name(row._mapping["pk_schema_name"])
+                if current_database and pk_database != current_database:
+                    referred_schema = f"{pk_database}.{pk_schema}"
+                else:
+                    referred_schema = pk_schema
                 fk_table_name = self.normalize_name(row._mapping["fk_table_name"])
                 fk_map[fk_name] = {
                     "constrained_columns": [
@@ -727,12 +734,14 @@ class SnowflakeDialect(default.DefaultDialect):
         Results are cached by the calling method's @reflection.cache decorator.
         """
         full_name = self._always_quote_join(schema, table_name)
-        _, current_schema = self._current_database_schema(connection, **kw)
-        same_schemas = {
-            self.normalize_name(schema),
-            self.default_schema_name,
-            current_schema,
-        }
+        current_database, current_schema = self._current_database_schema(
+            connection, **kw
+        )
+        normalized_schema = self.normalize_name(schema)
+        # Cross-db schemas contain a dot; omitting them keeps referred_schema qualified.
+        same_schemas = {self.default_schema_name, current_schema}
+        if "." not in normalized_schema:
+            same_schemas.add(normalized_schema)
         try:
             result = connection.execute(
                 text(
@@ -740,7 +749,7 @@ class SnowflakeDialect(default.DefaultDialect):
                 )
             )
             normalized_table_name = self.normalize_name(table_name)
-            return self._parse_fk_rows(result, same_schemas).get(
+            return self._parse_fk_rows(result, same_schemas, current_database).get(
                 normalized_table_name, []
             )
         except sa_exc.ProgrammingError:
@@ -764,18 +773,20 @@ class SnowflakeDialect(default.DefaultDialect):
         Results are cached for the lifetime of a connection via @reflection.cache.
         DDL executed mid-session will not be reflected until a new connection is used.
         """
-        _, current_schema = self._current_database_schema(connection, **kw)
-        same_schemas = {
-            self.normalize_name(schema),
-            self.default_schema_name,
-            current_schema,
-        }
+        current_database, current_schema = self._current_database_schema(
+            connection, **kw
+        )
+        normalized_schema = self.normalize_name(schema)
+        # Cross-db schemas contain a dot; omitting them keeps referred_schema qualified.
+        same_schemas = {self.default_schema_name, current_schema}
+        if "." not in normalized_schema:
+            same_schemas.add(normalized_schema)
         result = connection.execute(
             text(
                 f"SHOW /* sqlalchemy:_get_schema_foreign_keys */ IMPORTED KEYS IN SCHEMA {schema}"
             )
         )
-        return self._parse_fk_rows(result, same_schemas)
+        return self._parse_fk_rows(result, same_schemas, current_database)
 
     def get_foreign_keys(self, connection, table_name, schema=None, **kw):
         """Gets all foreign keys for a table."""
@@ -1249,7 +1260,8 @@ class SnowflakeDialect(default.DefaultDialect):
                 f"Expected fully-qualified schema name 'database.schema', got '{schema_name}'"
             )
 
-        database_part = self.identifier_preparer.quote(parts[0])
+        # str() strips the quoted_name wrapper so quoting is based solely on _requires_quotes.
+        database_part = self.identifier_preparer.quote(str(parts[0]))
         schema_only = self.denormalize_name(str(parts[1]))
         info_schema_table = f"{database_part}.information_schema.columns"
 
