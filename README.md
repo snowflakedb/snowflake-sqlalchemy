@@ -537,9 +537,11 @@ inspector = inspect(engine)
 columns = inspector.get_columns('my_table', schema='public')
 ```
 
-**SQLAlchemy 1.4 and per-table optimisation (opt-in)**
+**Per-table optimisation**
 
-In SQLAlchemy 1.4, `MetaData.reflect()` calls `get_columns`, `get_pk_constraint`, etc. per table. For schemas with many tables this generates many round-trips. Add `cache_column_metadata=True` to the connection URL to opt in to per-table `SHOW … IN TABLE` and `DESC TABLE` queries for `get_pk_constraint`, `get_unique_constraints`, `get_foreign_keys`, `get_indexes`, and `get_columns`. Each query targets only the requested table and is not cached, so it always reflects the current state.
+On **SQLAlchemy 2.x**, `get_pk_constraint`, `get_unique_constraints`, `get_foreign_keys`, `get_indexes`, and `get_columns` automatically use per-table queries (`SHOW … IN TABLE`, `DESC TABLE`) for single-table Inspector calls (e.g. `Inspector.get_pk_constraint()`, `pandas.read_sql_table()`). `MetaData.reflect()` continues to use the schema-wide `get_multi_*` hooks, which issue one query per reflection pass.
+
+On **SQLAlchemy 1.4**, `MetaData.reflect()` calls the singular methods per-table. Add `cache_column_metadata=True` to the connection URL to opt in to per-table queries for `get_pk_constraint`, `get_unique_constraints`, `get_foreign_keys`, `get_indexes`, and `get_columns`. Without this flag, the existing schema-wide queries are used unchanged.
 
 ```python
 engine = create_engine(URL(
@@ -550,11 +552,9 @@ engine = create_engine(URL(
     schema = 'public',
     warehouse = 'testwh',
     role='myrole',
-    cache_column_metadata=True,
+    cache_column_metadata=True,  # SA 1.4 only: enables per-table reflection
 ))
 ```
-
-This flag also enables the per-table path for the singular `Inspector` methods (`get_pk_constraint`, `get_unique_constraints`, `get_foreign_keys`, `get_indexes`) under SQLAlchemy 2.x.
 
 **Performance Implications**
 

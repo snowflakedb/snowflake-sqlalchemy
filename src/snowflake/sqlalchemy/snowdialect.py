@@ -558,9 +558,9 @@ class SnowflakeDialect(default.DefaultDialect):
     # ---------------------------------------------------------------------------
 
     def _get_table_primary_keys(self, connection, table_name, schema, **kw):
-        """SHOW PRIMARY KEYS IN TABLE — single-table path (cache_column_metadata=True).
+        """SHOW PRIMARY KEYS IN TABLE — single-table path.
 
-        Results are cached by the calling method's @reflection.cache decorator.
+        Called by get_pk_constraint when _is_single_table_reflection returns True.
         """
         full_name = self._always_quote_join(schema, table_name)
         try:
@@ -1150,34 +1150,34 @@ class SnowflakeDialect(default.DefaultDialect):
     def _is_single_table_reflection(self, schema, **kw):
         """Return True when a single-table SHOW command should be used for PK/UK/FK.
 
-        Opt-in via ``cache_column_metadata=true`` on the engine URL or
-        connect_args.  When disabled (the default) all reflection uses the
-        existing schema-wide queries unchanged, preserving backward compatibility.
-
         SA 2.x path (IS_VERSION_20=True):
           ``get_multi_pk_constraint`` / ``get_multi_unique_constraints`` /
           ``get_multi_foreign_keys`` are used by MetaData.reflect(), so any call
           to the singular get_pk_constraint / get_unique_constraints /
-          get_foreign_keys is inherently single-table (Inspector,
-          pandas.read_sql_table).  No info_cache inspection required.
+          get_foreign_keys / get_indexes is inherently single-table (Inspector,
+          pandas.read_sql_table).  Always returns True; no opt-in required.
 
         SA 1.4 path (IS_VERSION_20=False):
           MetaData.reflect() calls the singular methods per-table and populates
-          ``_get_schema_tables_info`` early in the reflection pass.  The
-          presence of that key in info_cache is the signal that multi-table
-          reflection is in progress; fall back to the schema-wide cached query.
+          ``_get_schema_tables_info`` early in the reflection pass.  Opt-in via
+          ``cache_column_metadata=true`` on the engine URL or connect_args.
+          When disabled (the default) all reflection uses the existing
+          schema-wide queries unchanged, preserving backward compatibility.
+          The presence of the tables-info key in info_cache signals that
+          multi-table reflection is in progress; fall back to schema-wide query.
 
         Note: @reflection.cache caches results for the lifetime of a connection.
         DDL executed mid-session will not be visible in reflection until a new
         connection is obtained, regardless of which path is used.
         """
-        if not getattr(self, "_cache_column_metadata", False):
-            return False
-
         if IS_VERSION_20:
             # SA 2.x: get_multi_* handles MetaData.reflect(); singular calls
             # are always single-table at this point.
             return True
+
+        # SA 1.4: opt-in required for backward compatibility.
+        if not getattr(self, "_cache_column_metadata", False):
+            return False
 
         # SA 1.4: detect whether MetaData.reflect() is in progress.
         # @reflection.cache stores keys as (fn.__name__, args_tuple, kwargs_tuple).
