@@ -9,17 +9,13 @@ from urllib.parse import quote_plus
 
 from sqlalchemy import exc, inspection, sql
 from sqlalchemy.exc import NoForeignKeysError
-from sqlalchemy.orm.interfaces import MapperProperty
 from sqlalchemy.orm.util import _ORMJoin as sa_orm_util_ORMJoin
-from sqlalchemy.orm.util import attributes
-from sqlalchemy.sql import util as sql_util
 from sqlalchemy.sql.base import _expand_cloned, _from_objects
 from sqlalchemy.sql.elements import _find_columns
-from sqlalchemy.sql.selectable import Join, Lateral, coercions, operators, roles
+from sqlalchemy.sql.selectable import Join, Lateral
 
 from snowflake.connector.compat import IS_STR
 from snowflake.connector.connection import SnowflakeConnection
-from snowflake.sqlalchemy import compat
 
 from ._constants import (
     APPLICATION_NAME,
@@ -196,6 +192,12 @@ def _find_left_clause_to_join_from(clauses, join_to, onclause):
 
 
 class _Snowflake_ORMJoin(sa_orm_util_ORMJoin):
+    """_ORMJoin subclass for Snowflake BCR-1057 (lateral joins without ON clause).
+
+    Delegates to _ORMJoin.__init__ for all standard cases. Only intercepts
+    NoForeignKeysError for Lateral joins without an onclause.
+    """
+
     def __init__(
         self,
         left,
@@ -207,138 +209,75 @@ class _Snowflake_ORMJoin(sa_orm_util_ORMJoin):
         _right_memo=None,
         _extra_criteria=(),
     ):
-        left_info = inspection.inspect(left)
-
-        right_info = inspection.inspect(right)
-        adapt_to = right_info.selectable
-
-        # used by joined eager loader
-        self._left_memo = _left_memo
-        self._right_memo = _right_memo
-
-        # legacy, for string attr name ON clause.  if that's removed
-        # then the "_joined_from_info" concept can go
-        left_orm_info = getattr(left, "_joined_from_info", left_info)
-        self._joined_from_info = right_info
-        if isinstance(onclause, compat.string_types):
-            onclause = getattr(left_orm_info.entity, onclause)
-        # ####
-
-        if isinstance(onclause, attributes.QueryableAttribute):
-            on_selectable = onclause.comparator._source_selectable()
-            prop = onclause.property
-            _extra_criteria += onclause._extra_criteria
-        elif isinstance(onclause, MapperProperty):
-            # used internally by joined eager loader...possibly not ideal
-            prop = onclause
-            on_selectable = prop.parent.selectable
-        else:
-            prop = None
-
-        if prop:
-            left_selectable = left_info.selectable
-
-            if sql_util.clause_is_present(on_selectable, left_selectable):
-                adapt_from = on_selectable
-            else:
-                adapt_from = left_selectable
-
-            (
-                pj,
-                sj,
-                source,
-                dest,
-                secondary,
-                target_adapter,
-            ) = prop._create_joins(
-                source_selectable=adapt_from,
-                dest_selectable=adapt_to,
-                source_polymorphic=True,
-                of_type_entity=right_info,
-                alias_secondary=True,
-                extra_criteria=_extra_criteria,
+        try:
+            super().__init__(
+                left,
+                right,
+                onclause=onclause,
+                isouter=isouter,
+                full=full,
+                _left_memo=_left_memo,
+                _right_memo=_right_memo,
+                _extra_criteria=_extra_criteria,
             )
+        except NoForeignKeysError:
+            right_info = inspection.inspect(right)
+            if onclause is None and isinstance(right_info.selectable, Lateral):
+                # BCR-1057: Lateral join without ON clause.
+                # _ORMJoin.__init__ set self._left_memo, self._right_memo,
+                # and _joined_from_info before calling Join.__init__ which raised.
+                if not hasattr(self, "_left_memo"):
+                    self._left_memo = _left_memo
+                if not hasattr(self, "_right_memo"):
+                    self._right_memo = _right_memo
+                if not hasattr(self, "_joined_from_info"):
+                    self._joined_from_info = right_info
 
-            if sj is not None:
-                if isouter:
-                    # note this is an inner join from secondary->right
-                    right = sql.join(secondary, right, sj)
-                    onclause = pj
-                else:
-                    left = sql.join(left, secondary, pj, isouter)
-                    onclause = sj
-            else:
-                onclause = pj
-
-            self._target_adapter = target_adapter
-
-            # we don't use the normal coercions logic for _ORMJoin
-            # (probably should), so do some gymnastics to get the entity.
-            # logic here is for #8721, which was a major bug in 1.4
-            # for almost two years, not reported/fixed until 1.4.43 (!)
-            if left_info.is_selectable:
-                parententity = left_selectable._annotations.get("parententity", None)
-            elif left_info.is_mapper or left_info.is_aliased_class:
-                parententity = left_info
-            else:
-                parententity = None
-
-            if parententity is not None:
-                self._annotations = self._annotations.union(
-                    {"parententity": parententity}
+                _Snowflake_Selectable_Join.__init__(
+                    self, left, right, onclause, isouter, full
                 )
 
-        augment_onclause = onclause is None and _extra_criteria
-        # handle Snowflake BCR bcr-1057
-        _Snowflake_Selectable_Join.__init__(self, left, right, onclause, isouter, full)
+                if _extra_criteria:
+                    if self.onclause is not None:
+                        self.onclause &= sql.and_(*_extra_criteria)
+                    else:
+                        self.onclause = sql.and_(*_extra_criteria)
 
-        if augment_onclause:
-            self.onclause &= sql.and_(*_extra_criteria)
-
-        if (
-            not prop
-            and getattr(right_info, "mapper", None)
-            and right_info.mapper.single
-        ):
-            # if single inheritance target and we are using a manual
-            # or implicit ON clause, augment it the same way we'd augment the
-            # WHERE.
-            single_crit = right_info.mapper._single_table_criterion
-            if single_crit is not None:
-                if right_info.is_aliased_class:
-                    single_crit = right_info._adapter.traverse(single_crit)
-                self.onclause = self.onclause & single_crit
+                if (
+                    getattr(right_info, "mapper", None)
+                    and right_info.mapper.single
+                ):
+                    single_crit = right_info.mapper._single_table_criterion
+                    if single_crit is not None:
+                        if right_info.is_aliased_class:
+                            single_crit = right_info._adapter.traverse(
+                                single_crit
+                            )
+                        if self.onclause is not None:
+                            self.onclause = self.onclause & single_crit
+                        else:
+                            self.onclause = single_crit
+            else:
+                raise
 
 
 class _Snowflake_Selectable_Join(Join):
+    """Join subclass for Snowflake BCR-1057 (lateral joins without ON clause).
+
+    Delegates to Join.__init__ for all standard cases. Only intercepts
+    NoForeignKeysError for Lateral joins without an onclause.
+    """
+
     def __init__(self, left, right, onclause=None, isouter=False, full=False):
-        """Construct a new :class:`_expression.Join`.
-
-        The usual entrypoint here is the :func:`_expression.join`
-        function or the :meth:`_expression.FromClause.join` method of any
-        :class:`_expression.FromClause` object.
-
-        """
-        self.left = coercions.expect(roles.FromClauseRole, left, deannotate=True)
-        self.right = coercions.expect(
-            roles.FromClauseRole, right, deannotate=True
-        ).self_group()
-
-        if onclause is None:
-            try:
-                self.onclause = self._match_primaries(self.left, self.right)
-            except NoForeignKeysError:
-                # handle Snowflake BCR bcr-1057
-                if isinstance(self.right, Lateral):
-                    self.onclause = None
-                else:
-                    raise
-        else:
-            # note: taken from If91f61527236fd4d7ae3cad1f24c38be921c90ba
-            # not merged yet
-            self.onclause = coercions.expect(roles.OnClauseRole, onclause).self_group(
-                against=operators._asbool
-            )
-
-        self.isouter = isouter
-        self.full = full
+        try:
+            super().__init__(left, right, onclause=onclause, isouter=isouter, full=full)
+        except NoForeignKeysError:
+            # BCR-1057: Snowflake lateral joins don't require ON clause.
+            # Join.__init__ set self.left and self.right before
+            # _match_primaries raised.
+            if onclause is None and isinstance(self.right, Lateral):
+                self.onclause = None
+                self.isouter = isouter
+                self.full = full
+            else:
+                raise
