@@ -41,6 +41,7 @@ Table of contents:
     * [Alembic Support](#alembic-support)
     * [Key Pair Authentication Support](#key-pair-authentication-support)
     * [Merge Command Support](#merge-command-support)
+    * [Bulk Insert Optimization for ORM Models](#bulk-insert-optimization-for-orm-models)
     * [CopyIntoStorage Support](#copyintostorage-support)
     * [Iceberg Table with Snowflake Catalog support](#iceberg-table-with-snowflake-catalog-support)
     * [Hybrid Table support](#hybrid-table-support)
@@ -773,6 +774,90 @@ merge.when_matched_then_update().values(val=t2.c.newval)
 merge.when_not_matched_then_insert().values(val=t2.c.newval, status=t2.c.newstatus)
 connection.execute(merge)
 ```
+
+### Bulk Insert Optimization for ORM Models
+
+When using `Session.bulk_save_objects()` with models that have nullable optional
+columns, SQLAlchemy groups objects into separate INSERT batches based on each
+object's set of non-`None` column keys. If some objects were constructed without
+supplying every nullable column, they produce different key sets and SQLAlchemy
+emits O(N) INSERT statements instead of a single `executemany` batch.
+
+Snowflake SQLAlchemy provides two components that together solve this problem:
+
+- **`SnowflakeBase`** (SQLAlchemy 2.x only) — a `DeclarativeBase` subclass
+  whose constructor pre-populates every plain-nullable column with `None` (or
+  its scalar Python default) at construction time, so all instances share the
+  same column-key set regardless of which kwargs the caller supplied.
+- **`snowflake_declarative_base()`** — a factory function compatible with both
+  SQLAlchemy 1.4 and 2.x that produces a declarative base with the same
+  pre-population behaviour.
+- **`SnowflakeSession`** — a `Session` subclass that passes `render_nulls=True`
+  to the internal bulk-save call, preventing pre-populated `None` values from
+  being stripped before grouping. Must be used together with `SnowflakeBase` or
+  `snowflake_declarative_base()` for full effect.
+
+**SQLAlchemy 2.x example:**
+
+```python
+from sqlalchemy import Column, Integer, String, create_engine
+from snowflake.sqlalchemy import SnowflakeBase, SnowflakeSession
+
+class MyModel(SnowflakeBase):
+    __tablename__ = "my_model"
+    id = Column(Integer, primary_key=True)
+    name = Column(String)       # nullable, no default
+    status = Column(String, default="active")  # scalar default
+
+engine = create_engine("snowflake://...")
+SnowflakeBase.metadata.create_all(engine)
+
+session = SnowflakeSession(bind=engine)
+# All objects share the same column-key set — emits a single executemany INSERT
+session.bulk_save_objects([
+    MyModel(id=1),
+    MyModel(id=2, name="foo"),
+    MyModel(id=3, status="inactive"),
+])
+session.commit()
+```
+
+**SQLAlchemy 1.4 and 2.x compatible example:**
+
+```python
+from sqlalchemy import Column, Integer, String, create_engine
+from snowflake.sqlalchemy import snowflake_declarative_base, SnowflakeSession
+
+Base = snowflake_declarative_base()
+
+class MyModel(Base):
+    __tablename__ = "my_model"
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
+    status = Column(String, default="active")
+
+engine = create_engine("snowflake://...")
+Base.metadata.create_all(engine)
+
+session = SnowflakeSession(bind=engine)
+session.bulk_save_objects([
+    MyModel(id=1),
+    MyModel(id=2, name="foo"),
+])
+session.commit()
+```
+
+**Notes:**
+
+- `SnowflakeBase` is only available in SQLAlchemy 2.x. Use
+  `snowflake_declarative_base()` when your code must run on both SA 1.4 and 2.x.
+- Columns with `server_default`, callable Python defaults (`default=fn`), or
+  SQL-expression defaults (`default=func.now()`) are intentionally left absent
+  from pre-population. Objects that differ on such columns may still be placed in
+  separate INSERT batches — this is the same behaviour as stock SQLAlchemy.
+- `SnowflakeSession` alone (without the matching base class) is not sufficient:
+  the base class is required to unify the column-key sets before `SnowflakeSession`
+  can batch them together.
 
 ### CopyIntoStorage Support
 

@@ -9,8 +9,10 @@ Source code is also available at:
 
 # Unreleased Notes
 
+- Add `SnowflakeBase`, `snowflake_declarative_base()`, and `SnowflakeSession` to enable efficient bulk inserts for ORM models with nullable optional columns (SNOW-893080, [#441](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/441)). When `session.bulk_save_objects()` is used with models that have randomly populated nullable columns, SQLAlchemy normally groups objects by their set of non-None column keys, producing O(N) separate INSERT statements. `SnowflakeBase` / `snowflake_declarative_base()` pre-populate all plain-nullable columns at construction time, and `SnowflakeSession` passes `render_nulls=True` so all objects share the same parameter-key set and are batched into a single `executemany` INSERT.
 - Emit `SnowflakeWarning` at DDL compile time when `Identity()` is used on a primary key column, alerting users that ORM flush operations will raise a `FlushError`. The warning is emitted once per unique `(table, column)` pair per Python process. Use `Sequence()` instead.
 - Restored backward-compatible SQL generation for true division (`/`) when `div_is_floordiv=True`: the Snowflake compiler now correctly delegates to the SQLAlchemy base implementation, emitting `CAST(col AS NUMERIC)` for integer operands as it did before [#545](https://github.com/snowflakedb/snowflake-sqlalchemy/pull/545) introduced the override ([#618](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/618)).
+- Introduce composite key ordering, fixes [#450](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/450)
 - Optimise reflection performance (SNOW-689531, [#656](https://github.com/snowflakedb/snowflake-sqlalchemy/pull/656)):
   - Add `get_multi_columns`, `get_multi_pk_constraint`, `get_multi_unique_constraints`, `get_multi_foreign_keys` for SQLAlchemy 2.x bulk reflection — each issues one schema-wide query per reflection pass instead of one query per table.
   - SQLAlchemy 2.x `get_columns` now uses `DESC TABLE` directly (per-table, live) since `get_multi_columns` handles all bulk reflection; temporary tables and dynamic tables are reflected correctly without schema-wide queries.
