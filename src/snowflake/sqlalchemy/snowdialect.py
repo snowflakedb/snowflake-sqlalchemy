@@ -8,7 +8,7 @@ from enum import Enum
 from functools import reduce
 from logging import getLogger
 from time import time as time_in_seconds
-from typing import Any, Collection, Optional, cast
+from typing import Any, Collection, NamedTuple, Optional, cast
 from urllib.parse import unquote_plus
 
 import sqlalchemy.sql.sqltypes as sqltypes
@@ -76,6 +76,11 @@ class TelemetryEvents(Enum):
 class SnowflakeIsolationLevel(Enum):
     READ_COMMITTED = "READ COMMITTED"
     AUTOCOMMIT = "AUTOCOMMIT"
+
+
+class _KeyedColumn(NamedTuple):
+    key_sequence: int
+    column_name: str
 
 
 class SnowflakeDialect(default.DefaultDialect):
@@ -432,6 +437,11 @@ class SnowflakeDialect(default.DefaultDialect):
     # Shared row-parsing helpers
     # ---------------------------------------------------------------------------
 
+    @staticmethod
+    def _sort_columns_by_key_sequence(columns: list[_KeyedColumn]) -> list[str]:
+        """Sort columns by key_sequence and return column names."""
+        return [c.column_name for c in sorted(columns, key=lambda c: c.key_sequence)]
+
     def _parse_pk_rows(self, rows):
         """Parse SHOW PRIMARY KEYS rows into {table_name: {constrained_columns, name}}.
 
@@ -448,15 +458,15 @@ class SnowflakeDialect(default.DefaultDialect):
                     "name": self.normalize_name(row._mapping["constraint_name"]),
                 }
             result[table_name]["constrained_columns"].append(
-                (
+                _KeyedColumn(
                     int(row._mapping["key_sequence"]),
                     self.normalize_name(row._mapping["column_name"]),
                 )
             )
         for entry in result.values():
-            entry["constrained_columns"] = [
-                col for _, col in sorted(entry["constrained_columns"])
-            ]
+            entry["constrained_columns"] = self._sort_columns_by_key_sequence(
+                entry["constrained_columns"]
+            )
         return result
 
     def _parse_uk_rows(self, rows):
@@ -474,7 +484,7 @@ class SnowflakeDialect(default.DefaultDialect):
             if key not in constraints:
                 constraints[key] = {
                     "column_names": [
-                        (
+                        _KeyedColumn(
                             int(row._mapping["key_sequence"]),
                             self.normalize_name(row._mapping["column_name"]),
                         )
@@ -484,7 +494,7 @@ class SnowflakeDialect(default.DefaultDialect):
                 }
             else:
                 constraints[key]["column_names"].append(
-                    (
+                    _KeyedColumn(
                         int(row._mapping["key_sequence"]),
                         self.normalize_name(row._mapping["column_name"]),
                     )
@@ -492,9 +502,9 @@ class SnowflakeDialect(default.DefaultDialect):
         result = defaultdict(list)
         for constraint in constraints.values():
             table_name = constraint.pop("_table_name")
-            constraint["column_names"] = [
-                col for _, col in sorted(constraint["column_names"])
-            ]
+            constraint["column_names"] = self._sort_columns_by_key_sequence(
+                constraint["column_names"]
+            )
             result[table_name].append(constraint)
         return dict(result)
 
@@ -524,7 +534,7 @@ class SnowflakeDialect(default.DefaultDialect):
                 fk_table_name = self.normalize_name(row._mapping["fk_table_name"])
                 fk_map[fk_name] = {
                     "constrained_columns": [
-                        (
+                        _KeyedColumn(
                             int(row._mapping["key_sequence"]),
                             self.normalize_name(row._mapping["fk_column_name"]),
                         )
@@ -536,7 +546,7 @@ class SnowflakeDialect(default.DefaultDialect):
                         row._mapping["pk_table_name"]
                     ),
                     "referred_columns": [
-                        (
+                        _KeyedColumn(
                             int(row._mapping["key_sequence"]),
                             self.normalize_name(row._mapping["pk_column_name"]),
                         )
@@ -556,13 +566,13 @@ class SnowflakeDialect(default.DefaultDialect):
                 fk_map[fk_name]["options"] = options
             else:
                 fk_map[fk_name]["constrained_columns"].append(
-                    (
+                    _KeyedColumn(
                         int(row._mapping["key_sequence"]),
                         self.normalize_name(row._mapping["fk_column_name"]),
                     )
                 )
                 fk_map[fk_name]["referred_columns"].append(
-                    (
+                    _KeyedColumn(
                         int(row._mapping["key_sequence"]),
                         self.normalize_name(row._mapping["pk_column_name"]),
                     )
@@ -570,12 +580,12 @@ class SnowflakeDialect(default.DefaultDialect):
         result = defaultdict(list)
         for fk_info in fk_map.values():
             fk_table_name = fk_info.pop("_fk_table_name")
-            fk_info["constrained_columns"] = [
-                col for _, col in sorted(fk_info["constrained_columns"])
-            ]
-            fk_info["referred_columns"] = [
-                col for _, col in sorted(fk_info["referred_columns"])
-            ]
+            fk_info["constrained_columns"] = self._sort_columns_by_key_sequence(
+                fk_info["constrained_columns"]
+            )
+            fk_info["referred_columns"] = self._sort_columns_by_key_sequence(
+                fk_info["referred_columns"]
+            )
             result[fk_table_name].append(fk_info)
         return dict(result)
 
@@ -1242,9 +1252,11 @@ class SnowflakeDialect(default.DefaultDialect):
             )
             # Too many results, fall back to only query about single table
             return column_info_manager.get_table_columns(table_name, schema)
+
         normalized_table_name = self.normalize_name(table_name)
         if normalized_table_name not in schema_columns:
             raise sa_exc.NoSuchTableError()
+
         return schema_columns[normalized_table_name]
 
     def get_prefixes_from_data(self, name_to_index_map, row, **kw):
