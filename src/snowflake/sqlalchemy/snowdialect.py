@@ -244,10 +244,12 @@ class SnowflakeDialect(default.DefaultDialect):
             parse_url_boolean(cache_column_metadata) if cache_column_metadata else False
         )
 
-        # Foreign key reflection returns referred_schema=None for targets in the
-        # schema being reflected, the default schema, or the current schema,
-        # conforming to the SQLAlchemy convention where None means no schema
-        # qualifier is needed.
+        # When enabled, foreign key reflection returns referred_schema=None for
+        # targets in the connection's default/current schema, conforming to the
+        # SQLAlchemy convention where None means "the target lives in the
+        # default schema".  Disabled by default: reflected FKs always carry
+        # their actual schema, which preserves backward compatibility and keeps
+        # SA's _reflect_fk autoload pointed at the right schema.
         normalize_referred_schema = query.pop("normalize_referred_schema", None)
         if normalize_referred_schema is not None:
             self._normalize_referred_schema = parse_url_boolean(
@@ -599,20 +601,38 @@ class SnowflakeDialect(default.DefaultDialect):
         current_schema: Optional[str],
         current_database: Optional[str],
     ):
-        schema_database = current_database
-        schema_name = schema
-        if schema:
-            parsed_database, parsed_schema_name = self._db_plus_schema(schema)
-            schema_name = parsed_schema_name
-            if parsed_database is not None:
-                schema_database = parsed_database
+        """Schema targets whose FKs should be reported with ``referred_schema=None``.
 
-        same_schemas = {
+        Per SQLAlchemy's reflection contract, ``referred_schema=None`` means
+        "the target table is in the connection's default schema" — SA's
+        ``Inspector._reflect_fk`` then autoloads the target with
+        ``schema=BLANK_SCHEMA``, which resolves against the connection's current
+        schema.  If we return ``None`` for a target that lives in a *non-default*
+        schema (for example the schema being reflected itself) SA autoloads from
+        the wrong place and either silently builds an empty placeholder table
+        (raising ``NoReferencedColumnError`` later) or finds an unrelated
+        same-named table in the default schema.
+
+        Therefore the "same schema" set contains only the connection's default
+        and current schema.  The opt-in ``normalize_referred_schema`` dialect
+        flag gates this normalization:
+
+        * ``True``  – normalize default-schema targets to ``None`` so Alembic
+          autogenerate can match user metadata that references the default
+          schema implicitly.
+        * ``False`` – no normalization; ``referred_schema`` always carries the
+          actual schema name returned by Snowflake.
+
+        See:
+        https://docs.sqlalchemy.org/en/14/core/reflection.html#reflection-schema-qualified-interaction
+        """
+        if not self._normalize_referred_schema:
+            return set()
+
+        return {
             self._normalize_schema_target(self.default_schema_name),
             self._normalize_schema_target(current_schema, current_database),
-            self._normalize_schema_target(schema_name, schema_database),
         }
-        return same_schemas
 
     # ---------------------------------------------------------------------------
     # Primary key reflection
@@ -774,10 +794,13 @@ class SnowflakeDialect(default.DefaultDialect):
     def _get_table_foreign_keys(self, connection, table_name, schema, **kw):
         """SHOW IMPORTED KEYS IN TABLE — single-table path (cache_column_metadata=True).
 
-        referred_schema is set to None when the FK target is in the reflected
-        schema or the connection's default/current schema, matching the
-        SQLAlchemy convention described in:
+        With ``normalize_referred_schema=True``, referred_schema is set to None
+        only when the FK target is in the connection's default/current schema,
+        matching the SQLAlchemy convention described in:
         https://docs.sqlalchemy.org/en/14/core/reflection.html#reflection-schema-qualified-interaction
+
+        Targets in other (non-default) schemas always keep their actual schema
+        so SA's ``_reflect_fk`` autoloads the target from the correct place.
 
         Results are cached by the calling method's @reflection.cache decorator.
         """
@@ -807,11 +830,13 @@ class SnowflakeDialect(default.DefaultDialect):
         """SHOW IMPORTED KEYS IN SCHEMA — schema-wide path for get_foreign_keys
         (SA 1.4) and get_multi_foreign_keys (SA 2.x).
 
-        referred_schema is set to None for FKs whose target is in the reflected
-        schema or the connection's default/current schema, matching the SQLAlchemy
-        convention described
-        in:
+        With ``normalize_referred_schema=True``, referred_schema is set to None
+        only for FKs whose target is in the connection's default/current schema,
+        matching the SQLAlchemy convention described in:
         https://docs.sqlalchemy.org/en/14/core/reflection.html#reflection-schema-qualified-interaction
+
+        Targets in other (non-default) schemas always keep their actual schema
+        so SA's ``_reflect_fk`` autoloads the target from the correct place.
 
         Results are cached for the lifetime of a connection via @reflection.cache.
         DDL executed mid-session will not be reflected until a new connection is used.

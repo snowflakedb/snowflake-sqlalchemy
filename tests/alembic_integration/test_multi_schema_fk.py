@@ -135,8 +135,11 @@ def test_alembic_autogenerate_multi_schema_fk(
     add_column_op = _find_added_column(diff, "status")
     assert add_column_op is not None
     assert not [op for op in diff if _diff_op_name(op) == "add_table"]
+    # Both FKs are fully qualified in user metadata (schema2.products.id and
+    # schema1.users.id), and the dialect preserves the real schema for FK
+    # targets in non-default schemas, so Alembic sees no FK churn.
     fk_ops = [op for op in diff if _diff_op_name(op) in ("remove_fk", "add_fk")]
-    assert [op[0] for op in fk_ops] == ["remove_fk", "add_fk"]
+    assert fk_ops == []
 
 
 def test_alembic_autogenerate_fk_to_default_schema(

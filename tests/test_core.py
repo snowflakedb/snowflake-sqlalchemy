@@ -845,14 +845,17 @@ def test_get_foreign_keys_multi_schema(
             assert foreign_keys_cross[0]["referred_table"] == "users"
             assert foreign_keys_cross[0]["referred_schema"] == schema1_name.lower()
 
-            # Same-schema FK in non-default schema (schema2 -> schema2)
+            # Same-schema FK in non-default schema (schema2 -> schema2).
+            # referred_schema stays explicit so SQLAlchemy's _reflect_fk
+            # autoloads the target from the right schema.  Returning None here
+            # would send autoload to the connection's default schema.
             foreign_keys_same = inspector.get_foreign_keys(
                 "orders_same", schema=schema2_name
             )
             assert len(foreign_keys_same) == 1
             assert foreign_keys_same[0]["name"] == "fk_same_schema"
             assert foreign_keys_same[0]["referred_table"] == "products"
-            assert foreign_keys_same[0]["referred_schema"] is None
+            assert foreign_keys_same[0]["referred_schema"] == schema2_name.lower()
 
             # FK to default schema
             foreign_keys_default = inspector.get_foreign_keys(
