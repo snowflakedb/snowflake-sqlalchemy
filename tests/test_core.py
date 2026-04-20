@@ -293,6 +293,17 @@ def test_create_dialect():
         engine.dispose()
 
 
+def test_create_dialect():
+    """
+    Tests getting only dialect object through create_engine
+    """
+    engine = create_engine("snowflake://")
+    try:
+        assert engine.dialect
+    finally:
+        engine.dispose()
+
+
 def test_simple_sql(engine_testaccount):
     """
     Simple SQL by SQLAlchemy
