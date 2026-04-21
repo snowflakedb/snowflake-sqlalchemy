@@ -58,8 +58,6 @@ def test_begin_read_commited(engine_testaccount, assert_text_in_buf):
 
     metadata.create_all(engine_testaccount)
     try:
-        # Flush buffer so setup COMMITs (from create_all / _has_object)
-        # don't pollute the assertions on test logic below.
         assert_text_in_buf("CREATE TABLE", occurrences=1)
 
         with engine_testaccount.connect().execution_options(

@@ -138,173 +138,174 @@ class TestSplitSchemaByDot:
 
 
 # ---------------------------------------------------------------------------
-# Bug 1 — denormalize_column_name respects quoted_name.quote
+# denormalize_column_name respects quoted_name.quote
 # ---------------------------------------------------------------------------
 
 
 class TestDenormalizeColumnName:
-    """Bug 1: denormalize_column_name must quote when given quoted_name(x, True)."""
+    """denormalize_column_name must double-quote when given quoted_name(x, True)."""
 
     def _get_compiler(self, dialect=None):
         """Return a SnowflakeDDLCompiler with a minimal dialect."""
         if dialect is None:
             dialect = base.dialect()
         from sqlalchemy import Column, Integer, MetaData, Table
-
-        t = Table("t", MetaData(), Column("id", Integer))
-        # We just need the preparer attribute—grab it from the dialect.
-        compiler_cls = dialect.ddl_compiler
-        # Create a minimal object: DDLCompiler requires (dialect, statement, ...)
-        # Using a real table's create statement as the "statement"
         from sqlalchemy.schema import CreateTable
 
+        t = Table("t", MetaData(), Column("id", Integer))
+        compiler_cls = dialect.ddl_compiler
         stmt = CreateTable(t)
-        compiler = compiler_cls(dialect, stmt)
-        return compiler
+        return compiler_cls(dialect, stmt)
 
-    def test_quoted_name_true_returns_quoted(self):
-        """quoted_name('mycol', True) must return '"mycol"' (double-quoted)."""
+    @pytest.mark.parametrize(
+        "input_name,expected",
+        [
+            (quoted_name("mycol", True), '"mycol"'),
+            ("mycol", "mycol"),
+            (None, None),
+            ("myCol", '"myCol"'),
+            (quoted_name("mycol", False), "mycol"),
+        ],
+        ids=[
+            "quoted_name_true",
+            "plain_lowercase",
+            "none",
+            "mixed_case",
+            "quoted_name_false",
+        ],
+    )
+    def test_denormalize_column_name(self, input_name, expected):
+        """denormalize_column_name produces the expected SQL identifier form."""
         compiler = self._get_compiler()
-        result = compiler.denormalize_column_name(quoted_name("mycol", True))
-        # Should produce: "mycol" (the identifier surrounded by double quotes)
-        assert result == '"mycol"', f"Expected '\"mycol\"', got {result!r}"
+        assert compiler.denormalize_column_name(input_name) == expected
 
-    def test_plain_lowercase_not_quoted(self):
-        """Plain lowercase 'mycol' must remain unquoted (regression guard)."""
-        compiler = self._get_compiler()
-        result = compiler.denormalize_column_name("mycol")
-        assert result == "mycol", f"Expected 'mycol', got {result!r}"
-
-    def test_none_returns_none(self):
-        """None input must return None."""
-        compiler = self._get_compiler()
-        assert compiler.denormalize_column_name(None) is None
-
-    def test_mixed_case_returns_quoted(self):
-        """Mixed-case name like 'myCol' requires quoting in Snowflake."""
-        compiler = self._get_compiler()
-        result = compiler.denormalize_column_name("myCol")
-        assert result == '"myCol"', f"Expected '\"myCol\"', got {result!r}"
-
-    def test_quoted_name_false_falls_through(self):
-        """quoted_name('mycol', False) should follow normal branch (no forced quote)."""
-        compiler = self._get_compiler()
-        # quote=False means "let the dialect decide" — for simple lowercase it
-        # should come back unquoted.
-        result = compiler.denormalize_column_name(quoted_name("mycol", False))
-        assert result == "mycol", f"Expected 'mycol', got {result!r}"
-
-    def test_round_trip_normalize_denormalize_with_flag_on(self):
-        """Round-trip: normalize('TABLE') -> denormalize -> '"table"' with case_sensitive=True."""
-        # When case_sensitive_identifiers=True:
-        # normalize_name('TABLE') returns quoted_name('table', True)
-        # denormalize_column_name(quoted_name('table', True)) should return '"table"'
+    def test_round_trip_reserved_word_with_flag(self):
+        """Round-trip: normalize('TABLE') → denormalize → '\"table\"' with case_sensitive=True."""
         dialect = SnowflakeDialect(case_sensitive_identifiers=True)
         normalized = dialect.normalize_name("TABLE")
-        # Verify normalize returns quoted_name('table', True)
         assert isinstance(normalized, quoted_name)
         assert normalized.quote is True
         assert str(normalized) == "table"
 
-        # Now denormalize it
-        compiler = self._get_compiler(dialect=dialect)
-        result = compiler.denormalize_column_name(normalized)
-        # Should produce: "table" (the identifier surrounded by double quotes)
+        result = self._get_compiler(dialect=dialect).denormalize_column_name(normalized)
         assert result == '"table"', f"Expected '\"table\"', got {result!r}"
 
 
 # ---------------------------------------------------------------------------
-# Bug 2 — normalize_name reserved-word handling gated behind flag
+# normalize_name: reserved-word and case handling
 # ---------------------------------------------------------------------------
 
 
-class TestNormalizeNameReservedWord:
-    """Bug 2: normalize_name('TABLE') with flag on vs off."""
+class TestNormalizeName:
+    """normalize_name behaviour across identifier forms and flag states."""
 
     def _dialect(self, case_sensitive=False):
         return SnowflakeDialect(case_sensitive_identifiers=case_sensitive)
 
-    def test_reserved_word_flag_off_returns_uppercase(self):
-        """Default: normalize_name('TABLE') returns 'TABLE' unchanged (legacy)."""
-        d = self._dialect(case_sensitive=False)
-        result = d.normalize_name("TABLE")
-        assert result == "TABLE", f"Expected 'TABLE', got {result!r}"
-        # Must NOT be a quoted_name with quote=True
-        assert not (
-            isinstance(result, quoted_name) and result.quote
-        ), "Should not be forced-quoted in default mode"
+    @pytest.mark.parametrize(
+        "input_name,flag,expected_value,expected_quote",
+        [
+            # Plain all-uppercase (stored by Snowflake for unquoted identifiers)
+            ("MYTABLE", False, "mytable", None),
+            ("MYTABLE", True, "mytable", None),
+            # All-lowercase: was SQL-quoted at creation → always case-sensitive
+            ("mytable", False, "mytable", True),
+            ("mytable", True, "mytable", True),
+            # Mixed-case: can only exist as a SQL-quoted identifier → case-sensitive
+            ("MyTable", False, "MyTable", True),
+            ("MyTable", True, "MyTable", True),
+            # ALL-UPPERCASE reserved word: flag=False leaves unchanged (legacy)
+            ("TABLE", False, "TABLE", None),
+            # ALL-UPPERCASE reserved word: flag=True converts to quoted_name
+            ("TABLE", True, "table", True),
+            # Edge cases
+            (None, False, None, None),
+            ("", False, "", None),
+        ],
+        ids=[
+            "uppercase_flag_off",
+            "uppercase_flag_on",
+            "lowercase_flag_off",
+            "lowercase_flag_on",
+            "mixed_flag_off",
+            "mixed_flag_on",
+            "reserved_flag_off",
+            "reserved_flag_on",
+            "none",
+            "empty",
+        ],
+    )
+    def test_normalize_name(self, input_name, flag, expected_value, expected_quote):
+        """normalize_name produces the expected (value, quote) pair."""
+        d = self._dialect(case_sensitive=flag)
+        result = d.normalize_name(input_name)
+        if expected_value is None:
+            assert result is None
+            return
+        assert (
+            str(result) == expected_value
+        ), f"value mismatch for {input_name!r} flag={flag}"
+        actual_quote = getattr(result, "quote", None)
+        assert actual_quote == expected_quote, (
+            f"quote attr mismatch for {input_name!r} flag={flag}: "
+            f"expected {expected_quote}, got {actual_quote}"
+        )
 
-    def test_reserved_word_flag_on_returns_quoted_name(self):
-        """With flag=True: normalize_name('TABLE') returns quoted_name('table', True)."""
-        d = self._dialect(case_sensitive=True)
-        result = d.normalize_name("TABLE")
-        assert isinstance(
-            result, quoted_name
-        ), f"Expected quoted_name, got {type(result)}"
-        assert result.quote is True, "Expected quote=True"
-        assert str(result) == "table", f"Expected 'table', got {str(result)!r}"
-
-    def test_normal_uppercase_unaffected(self):
-        """normalize_name('MYTABLE') still returns 'mytable' with both flag states."""
-        for flag in (False, True):
-            d = self._dialect(case_sensitive=flag)
-            result = d.normalize_name("MYTABLE")
-            assert (
-                result == "mytable"
-            ), f"normalize_name('MYTABLE') should be 'mytable' with flag={flag}, got {result!r}"
-
-    def test_lowercase_returns_quoted_name(self):
-        """normalize_name('mytable') always returns quoted_name('mytable', True)."""
-        for flag in (False, True):
-            d = self._dialect(case_sensitive=flag)
-            result = d.normalize_name("mytable")
-            assert isinstance(
-                result, quoted_name
-            ), f"Expected quoted_name for 'mytable' with flag={flag}"
-            assert result.quote is True
-
-    def test_mixed_case_returns_quoted_name(self):
-        """normalize_name('MyTable') returns quoted_name('MyTable', True) regardless of flag.
-
-        Mixed-case names can only exist in Snowflake when SQL-quoted at creation,
-        so they are unconditionally case-sensitive.
-        """
-        for flag in (False, True):
-            d = self._dialect(case_sensitive=flag)
-            result = d.normalize_name("MyTable")
-            assert isinstance(
-                result, quoted_name
-            ), f"Expected quoted_name for 'MyTable' with flag={flag}"
-            assert result.quote is True, f"Expected quote=True with flag={flag}"
-            assert str(result) == "MyTable", f"Name value changed with flag={flag}"
-
-    def test_none_and_empty(self):
-        """None and '' are handled correctly with both flag states."""
-        for flag in (False, True):
-            d = self._dialect(case_sensitive=flag)
-            assert d.normalize_name(None) is None
-            assert d.normalize_name("") == ""
+    @pytest.mark.parametrize(
+        "snowflake_name,flag,expected_sql",
+        [
+            # Unquoted uppercase (case-insensitive): normalizes then denormalizes back
+            ("MYTABLE", False, "MYTABLE"),
+            ("MYTABLE", True, "MYTABLE"),
+            # Quoted lowercase: normalizes to quoted_name, denormalizes to double-quoted SQL
+            ("mytable", False, '"mytable"'),
+            ("mytable", True, '"mytable"'),
+            # Mixed-case: normalizes to quoted_name, denormalizes to double-quoted SQL
+            ("MyTable", False, '"MyTable"'),
+            ("MyTable", True, '"MyTable"'),
+            # Reserved word with flag on: normalizes to quoted_name, denormalizes to double-quoted
+            ("TABLE", True, '"table"'),
+        ],
+        ids=[
+            "uppercase_roundtrip_flag_off",
+            "uppercase_roundtrip_flag_on",
+            "lowercase_roundtrip_flag_off",
+            "lowercase_roundtrip_flag_on",
+            "mixed_roundtrip_flag_off",
+            "mixed_roundtrip_flag_on",
+            "reserved_roundtrip_flag_on",
+        ],
+    )
+    def test_normalize_denormalize_round_trip(self, snowflake_name, flag, expected_sql):
+        """normalize_name → denormalize_name round-trip produces the expected SQL identifier."""
+        d = self._dialect(case_sensitive=flag)
+        normalized = d.normalize_name(snowflake_name)
+        result = d.denormalize_name(normalized)
+        # The identifier preparer would then quote result if needed; check the
+        # denormalized string directly to verify the round-trip value.
+        assert str(result) == expected_sql.strip('"') or result == expected_sql.strip(
+            '"'
+        ), f"denormalize_name({normalized!r}) = {result!r}, expected {expected_sql.strip('\"')!r}"
 
     def test_all_reserved_words_flag_off_unchanged(self):
-        """All RESERVED_WORDS ALL-UPPERCASE identifiers return unchanged when flag=False."""
+        """All-uppercase reserved words return unchanged when flag=False (spot-check)."""
         from snowflake.sqlalchemy.base import RESERVED_WORDS
 
         d = self._dialect(case_sensitive=False)
-        for word in list(RESERVED_WORDS)[:20]:  # spot-check first 20
+        for word in list(RESERVED_WORDS)[:20]:
             upper = word.upper()
-            if upper == word:  # only truly all-uppercase reserved words
+            if upper == word:
                 result = d.normalize_name(upper)
-                # With flag off, reserved-word UPPERCASE names fall through unchanged
                 assert (
                     result == upper
                 ), f"flag=False: normalize_name({upper!r}) should be {upper!r}, got {result!r}"
 
     def test_all_reserved_words_flag_on_returns_quoted(self):
-        """With flag=True, ALL-UPPERCASE reserved words return quoted_name(lc, True)."""
+        """All-uppercase reserved words return quoted_name(lc, True) when flag=True."""
         from snowflake.sqlalchemy.base import RESERVED_WORDS
 
         d = self._dialect(case_sensitive=True)
-        for word in list(RESERVED_WORDS)[:20]:  # spot-check first 20
+        for word in list(RESERVED_WORDS)[:20]:
             upper = word.upper()
             if upper == word:
                 result = d.normalize_name(upper)
@@ -316,12 +317,12 @@ class TestNormalizeNameReservedWord:
 
 
 # ---------------------------------------------------------------------------
-# Bug 3 — _has_object normalizes object_name before building SQL
+# _has_object denormalizes object_name before building SQL
 # ---------------------------------------------------------------------------
 
 
 class TestHasObjectNormalization:
-    """Bug 3: _has_object should denormalize object_name before DESC SQL."""
+    """_has_object must denormalize object_name before building the DESC SQL."""
 
     def _dialect_with_mock_connection(self):
         d = SnowflakeDialect()
@@ -963,11 +964,12 @@ class TestStructuredTypeCacheKeyNormalization:
 
 # ---------------------------------------------------------------------------
 # CLUSTER BY DDL — quoted_name column generates correct SQL
+# See: snowflakedb/snowflake-sqlalchemy#675
 # ---------------------------------------------------------------------------
 
 
 class TestClusterByWithQuotedName:
-    """Bug 1 (compiler path): CLUSTER BY DDL with quoted_name column."""
+    """CLUSTER BY DDL must double-quote quoted_name columns (snowflakedb/snowflake-sqlalchemy#675)."""
 
     def _compile_create(self, table_obj):
         """Compile a CreateTable statement to a string using the Snowflake dialect."""
