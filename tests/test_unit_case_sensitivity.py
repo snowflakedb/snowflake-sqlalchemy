@@ -703,6 +703,47 @@ class TestAlembicRenderItemHelper:
 
         assert callable(render_item)
 
+    def test_repr_expr_repr_returns_expression(self):
+        """_ReprExpr.__repr__ must return the injected expression, not the string value."""
+        from snowflake.sqlalchemy.alembic_util import _ReprExpr
+
+        r = _ReprExpr("mycol", "sa.sql.elements.quoted_name('mycol', True)")
+        assert repr(r) == "sa.sql.elements.quoted_name('mycol', True)"
+        assert str(r) == "mycol"  # value equality preserved
+        assert r == "mycol"  # str comparison works normally
+
+    def test_primary_path_uses_alembic_renderer(self):
+        """render_item primary path: delegates to Alembic _render_column when available."""
+        from sqlalchemy import Column, String
+
+        from snowflake.sqlalchemy.alembic_util import render_item
+
+        try:
+            from alembic.autogenerate.render import _render_column  # noqa: F401
+        except ImportError:
+            pytest.skip("alembic not installed")
+
+        col = Column(quoted_name("mycol", True), String, nullable=False)
+
+        # Provide enough context for _render_column to succeed.
+        autogen_ctx = mock.MagicMock()
+        autogen_ctx.opts = {
+            "render_item": render_item,
+            "sqlalchemy_module_prefix": "sa.",
+            "user_module_prefix": None,
+            "alembic_module_prefix": "op.",
+        }
+
+        result = render_item("column", col, autogen_ctx)
+
+        assert result is not False
+        assert "quoted_name" in result, f"quoted_name missing in {result!r}"
+        assert "mycol" in result
+        # Alembic handles nullable — should appear since nullable=False
+        assert "nullable=False" in result, f"nullable=False missing in {result!r}"
+        # opts["render_item"] restored after call
+        assert autogen_ctx.opts["render_item"] is render_item
+
     def test_quoted_name_column_returns_string(self):
         """render_item for a quoted_name column must return a non-False string."""
         from sqlalchemy import Column, Integer

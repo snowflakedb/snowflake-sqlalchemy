@@ -30,6 +30,29 @@ opt-in per project.
 from sqlalchemy.sql.elements import quoted_name
 
 
+class _ReprExpr(str):
+    """str subclass whose ``repr()`` emits an arbitrary Python expression.
+
+    Alembic's ``_render_column`` renders the column name via the format slot
+    ``%(name)r``, which calls ``repr(_ident(column.name))``.  ``_ident``
+    returns the name as a plain ``str``, so ``repr()`` would produce
+    ``'mycol'`` — losing the ``quote=True`` signal.
+
+    By replacing ``column.name`` with a ``_ReprExpr`` whose ``__repr__``
+    returns the ``quoted_name(...)`` expression, we get the correct output
+    while letting Alembic handle every other column attribute (type, nullable,
+    autoincrement, comment, server_default, column kwargs, …).
+    """
+
+    def __new__(cls, value: str, expr: str):
+        obj = super().__new__(cls, value)
+        obj._expr = expr
+        return obj
+
+    def __repr__(self) -> str:
+        return self._expr
+
+
 def render_item(type_, obj, autogen_context):
     """
     Alembic ``render_item`` hook that preserves case-sensitive (``quoted_name``)
@@ -54,39 +77,55 @@ def render_item(type_, obj, autogen_context):
     """
     if type_ == "column" and isinstance(obj.name, quoted_name) and obj.name.quote:
         col_name = str(obj.name)
-        # Render the column type using Alembic's own type renderer.
-        # Note: autogenerate_module.render_column_type is an internal Alembic API
-        # that may change across releases. The fallback to repr() provides safety.
+        quoted_expr = f"sa.sql.elements.quoted_name({col_name!r}, True)"
+
+        # Primary path: delegate all column attribute rendering to Alembic's
+        # own _render_column, only injecting our quoted_name(...) expression
+        # in place of the plain column name.
+        #
+        # _render_column calls _user_defined_render first, which would invoke
+        # our hook again — infinite recursion.  Setting opts["render_item"]
+        # to None makes _user_defined_render skip it (falsy check).
+        original_name = obj.name
+        had_render_item = "render_item" in autogen_context.opts
+        original_render_item = autogen_context.opts.get("render_item")
+        obj.name = _ReprExpr(col_name, quoted_expr)
+        autogen_context.opts["render_item"] = None
+        try:
+            from alembic.autogenerate.render import _render_column
+
+            return _render_column(obj, autogen_context)
+        except Exception:
+            pass
+        finally:
+            obj.name = original_name
+            if had_render_item:
+                autogen_context.opts["render_item"] = original_render_item
+            else:
+                autogen_context.opts.pop("render_item", None)
+
+        # Fallback: Alembic's internal _render_column is unavailable or raised.
+        # Manually render the most common column attributes.
+        parts = [quoted_expr]
         try:
             rendered_type = autogen_context.opts[
                 "autogenerate_module"
             ].render_column_type(obj.type, autogen_context)
         except (KeyError, AttributeError):
-            # Fall back to plain repr if autogenerate_module not available
             rendered_type = repr(obj.type)
+        parts.append(rendered_type)
 
-        # Build the column definition starting with name and type
-        parts = [f"sa.sql.elements.quoted_name({col_name!r}, True)", rendered_type]
-
-        # Add important column attributes that differ from defaults
-        # nullable defaults to True, so only emit nullable=False
         if not obj.nullable:
             parts.append("nullable=False")
-
-        # Emit primary_key when True
         if obj.primary_key:
             parts.append("primary_key=True")
-
-        # Emit server_default when set
         if obj.server_default is not None:
-            # Render the server_default using Alembic's renderer if available
             try:
                 rendered_default = autogen_context.opts[
                     "autogenerate_module"
                 ].render_server_default(obj.server_default, autogen_context)
                 parts.append(f"server_default={rendered_default}")
             except (KeyError, AttributeError):
-                # Fall back to repr if renderer not available
                 parts.append(f"server_default={repr(obj.server_default)}")
 
         return f"sa.Column({', '.join(parts)})"
