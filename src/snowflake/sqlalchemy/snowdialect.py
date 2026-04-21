@@ -261,6 +261,9 @@ class SnowflakeDialect(default.DefaultDialect):
         case_sensitive_identifiers = query.pop("case_sensitive_identifiers", None)
         if case_sensitive_identifiers is not None:
             flag = parse_url_boolean(case_sensitive_identifiers)
+            # NOTE: dialect instances are shared across connections; mutating
+            # shared state here is a threading hazard if two connections with
+            # different case_sensitive_identifiers values are opened concurrently.
             self._case_sensitive_identifiers = flag
             self.name_utils.case_sensitive_identifiers = flag
 
@@ -307,7 +310,7 @@ class SnowflakeDialect(default.DefaultDialect):
 
     def _has_object(self, connection, object_type, object_name, schema=None):
         full_name = self._denormalize_quote_join(
-            schema, self.denormalize_name(object_name)
+            self.denormalize_name(schema), self.denormalize_name(object_name)
         )
         try:
             results = connection.execute(

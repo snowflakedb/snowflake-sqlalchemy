@@ -106,13 +106,17 @@ def render_item(type_, obj, autogen_context):
 
         # Fallback: Alembic's internal _render_column is unavailable or raised.
         # Manually render the most common column attributes.
+        # NOTE: intentionally omits unique, index, comment, default, and foreign
+        # keys — those attributes are handled separately by Alembic's table-level
+        # renderer and should not be duplicated here.
         parts = [quoted_expr]
         try:
-            rendered_type = autogen_context.opts[
-                "autogenerate_module"
-            ].render_column_type(obj.type, autogen_context)
-        except (KeyError, AttributeError):
-            rendered_type = repr(obj.type)
+            from alembic.autogenerate.render import _repr_type
+
+            rendered_type = _repr_type(obj.type, autogen_context)
+        except Exception:
+            # Last-resort: prefix with sa. so the import resolves in the migration.
+            rendered_type = f"sa.{repr(obj.type)}"
         parts.append(rendered_type)
 
         if not obj.nullable:
@@ -121,12 +125,16 @@ def render_item(type_, obj, autogen_context):
             parts.append("primary_key=True")
         if obj.server_default is not None:
             try:
-                rendered_default = autogen_context.opts[
-                    "autogenerate_module"
-                ].render_server_default(obj.server_default, autogen_context)
+                from alembic.autogenerate.render import _render_server_default
+
+                rendered_default = _render_server_default(
+                    obj.server_default, autogen_context
+                )
                 parts.append(f"server_default={rendered_default}")
-            except (KeyError, AttributeError):
-                parts.append(f"server_default={repr(obj.server_default)}")
+            except Exception:
+                # repr(DefaultClause) is not valid Python; emit a placeholder
+                # that will at least not cause an import-time NameError.
+                parts.append(f"server_default=sa.text({str(obj.server_default.arg)!r})")
 
         return f"sa.Column({', '.join(parts)})"
     return False

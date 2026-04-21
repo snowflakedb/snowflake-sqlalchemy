@@ -940,7 +940,7 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
     def denormalize_column_name(self, name):
         if name is None:
             return None
-        if isinstance(name, quoted_name) and name.quote:
+        if isinstance(name, quoted_name) and name.quote is True:
             # Caller explicitly requested quoting — preserve case by quoting.
             return self.preparer.quote_identifier(name)
         elif name.lower() == name and not self.preparer._requires_quotes(name.lower()):

@@ -368,19 +368,18 @@ class TestHasObjectNormalization:
         ), f"Expected '\"MyTable\"' in DESC SQL, got: {sql_text!r}"
 
     def test_with_schema_plain_lowercase(self):
-        """_has_object with schema generates schema.\"MYTABLE\" form."""
+        """_has_object with schema denormalizes both schema and object_name."""
         d, conn = self._dialect_with_mock_connection()
         d._has_object(conn, "TABLE", "mytable", schema="myschema")
         call_args = conn.execute.call_args
         sql_text = str(call_args[0][0])
-        # Schema passes through _denormalize_quote_join directly (not denormalized);
-        # object_name 'mytable' is denormalized to 'MYTABLE' then quoted.
+        # Both schema and object_name are denormalized: lowercase → UPPERCASE then quoted.
         assert (
             '"MYTABLE"' in sql_text
         ), f"Expected '\"MYTABLE\"' in DESC SQL, got: {sql_text!r}"
         assert (
-            "myschema" in sql_text
-        ), f"Expected 'myschema' in DESC SQL, got: {sql_text!r}"
+            '"MYSCHEMA"' in sql_text
+        ), f"Expected '\"MYSCHEMA\"' in DESC SQL, got: {sql_text!r}"
 
     def test_programming_error_returns_false(self):
         """_has_object returns False when DESC raises ProgrammingError."""
@@ -751,13 +750,20 @@ class TestAlembicRenderItemHelper:
 
         from snowflake.sqlalchemy.alembic_util import render_item
 
+        try:
+            from alembic.autogenerate.render import _render_column  # noqa: F401
+        except ImportError:
+            pytest.skip("alembic not installed")
+
         col = Column(quoted_name("mycol", True), Integer)
 
-        # Mock autogen_context with render_column_type method returning a string
         autogen_ctx = mock.MagicMock()
-        autogen_module = mock.MagicMock()
-        autogen_module.render_column_type.return_value = "sa.Integer()"
-        autogen_ctx.opts = {"autogenerate_module": autogen_module}
+        autogen_ctx.opts = {
+            "render_item": render_item,
+            "sqlalchemy_module_prefix": "sa.",
+            "user_module_prefix": None,
+            "alembic_module_prefix": "op.",
+        }
 
         result = render_item("column", col, autogen_ctx)
         assert (
@@ -805,13 +811,20 @@ class TestAlembicRenderItemHelper:
 
         from snowflake.sqlalchemy.alembic_util import render_item
 
+        try:
+            from alembic.autogenerate.render import _render_column  # noqa: F401
+        except ImportError:
+            pytest.skip("alembic not installed")
+
         col = Column(quoted_name("mycol", True), Integer, nullable=False)
 
-        # Mock autogen_context with render_column_type method returning a string
         autogen_ctx = mock.MagicMock()
-        autogen_module = mock.MagicMock()
-        autogen_module.render_column_type.return_value = "sa.Integer()"
-        autogen_ctx.opts = {"autogenerate_module": autogen_module}
+        autogen_ctx.opts = {
+            "render_item": render_item,
+            "sqlalchemy_module_prefix": "sa.",
+            "user_module_prefix": None,
+            "alembic_module_prefix": "op.",
+        }
 
         result = render_item("column", col, autogen_ctx)
         assert result is not False
@@ -825,14 +838,20 @@ class TestAlembicRenderItemHelper:
 
         from snowflake.sqlalchemy.alembic_util import render_item
 
+        try:
+            from alembic.autogenerate.render import _render_column  # noqa: F401
+        except ImportError:
+            pytest.skip("alembic not installed")
+
         col = Column(quoted_name("mycol", True), Integer, server_default=text("0"))
 
-        # Mock autogen_context with render_server_default method
         autogen_ctx = mock.MagicMock()
-        autogen_module = mock.MagicMock()
-        autogen_module.render_column_type.return_value = "sa.Integer()"
-        autogen_module.render_server_default.return_value = "sa.text('0')"
-        autogen_ctx.opts = {"autogenerate_module": autogen_module}
+        autogen_ctx.opts = {
+            "render_item": render_item,
+            "sqlalchemy_module_prefix": "sa.",
+            "user_module_prefix": None,
+            "alembic_module_prefix": "op.",
+        }
 
         result = render_item("column", col, autogen_ctx)
         assert result is not False
@@ -846,19 +865,26 @@ class TestAlembicRenderItemHelper:
 
         from snowflake.sqlalchemy.alembic_util import render_item
 
+        try:
+            from alembic.autogenerate.render import _render_column  # noqa: F401
+        except ImportError:
+            pytest.skip("alembic not installed")
+
         col = Column(quoted_name("id", True), Integer, primary_key=True)
 
-        # Mock autogen_context with render_column_type method returning a string
         autogen_ctx = mock.MagicMock()
-        autogen_module = mock.MagicMock()
-        autogen_module.render_column_type.return_value = "sa.Integer()"
-        autogen_ctx.opts = {"autogenerate_module": autogen_module}
+        autogen_ctx.opts = {
+            "render_item": render_item,
+            "sqlalchemy_module_prefix": "sa.",
+            "user_module_prefix": None,
+            "alembic_module_prefix": "op.",
+        }
 
         result = render_item("column", col, autogen_ctx)
         assert result is not False
-        assert (
-            "primary_key=True" in result
-        ), f"Expected 'primary_key=True' in {result!r}"
+        # Alembic renders primary key columns as nullable=False at the column level;
+        # primary_key=True itself is expressed at the table level in migrations.
+        assert "nullable=False" in result, f"Expected 'nullable=False' in {result!r}"
         assert "quoted_name" in result
         assert "'id'" in result
 
@@ -868,6 +894,11 @@ class TestAlembicRenderItemHelper:
 
         from snowflake.sqlalchemy.alembic_util import render_item
 
+        try:
+            from alembic.autogenerate.render import _render_column  # noqa: F401
+        except ImportError:
+            pytest.skip("alembic not installed")
+
         col = Column(
             quoted_name("mycol", True),
             Integer,
@@ -875,12 +906,13 @@ class TestAlembicRenderItemHelper:
             server_default=text("42"),
         )
 
-        # Mock autogen_context with render_server_default method
         autogen_ctx = mock.MagicMock()
-        autogen_module = mock.MagicMock()
-        autogen_module.render_column_type.return_value = "sa.Integer()"
-        autogen_module.render_server_default.return_value = "sa.text('42')"
-        autogen_ctx.opts = {"autogenerate_module": autogen_module}
+        autogen_ctx.opts = {
+            "render_item": render_item,
+            "sqlalchemy_module_prefix": "sa.",
+            "user_module_prefix": None,
+            "alembic_module_prefix": "op.",
+        }
 
         result = render_item("column", col, autogen_ctx)
         assert result is not False

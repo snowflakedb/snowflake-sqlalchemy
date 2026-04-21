@@ -44,7 +44,7 @@ def test_connect_read_commited(engine_testaccount, assert_text_in_buf):
         metadata.drop_all(engine_testaccount)
 
 
-def test_begin_read_commited(engine_testaccount, assert_text_in_buf):
+def test_begin_read_committed(engine_testaccount, assert_text_in_buf):
     metadata = MetaData()
     table_name = "test_begin_read_rc"  # name must not contain "COMMIT" — assert_text_in_buf uses substring match
 

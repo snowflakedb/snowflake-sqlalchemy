@@ -119,9 +119,9 @@ def _update_connection_application_name(**conn_kwargs: Any) -> Any:
 
 
 def parse_url_boolean(value: str) -> bool:
-    if value == "True":
+    if value.lower() in ("true", "1"):
         return True
-    elif value == "False":
+    elif value.lower() in ("false", "0"):
         return False
     else:
         raise ValueError(f"Invalid boolean value detected: '{value}'")
@@ -385,6 +385,12 @@ def create_snowflake_engine(
         # Use urlsplit/urlunsplit to safely insert schema into path before query params
         parsed = urlsplit(base_url)
         path = parsed.path.rstrip("/")
+        if path.count("/") >= 2:
+            raise ValueError(
+                f"base_url already contains a schema component: {base_url!r}. "
+                "base_url must be in the form 'snowflake://user:pass@account/database' "
+                "with no trailing schema segment."
+            )
         new_path = f"{path}/{schema_part}"
         url = urlunsplit(
             (parsed.scheme, parsed.netloc, new_path, parsed.query, parsed.fragment)
