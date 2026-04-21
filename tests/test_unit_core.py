@@ -361,3 +361,29 @@ class TestSingleTableDispatchSA2:
 
         tbl_mock.assert_called_once()
         assert result == expected
+
+    @pytest.mark.skipif(not IS_VERSION_20, reason="SA 2.x only")
+    def test_get_indexes_passes_raw_tablename_not_normalized(self):
+        """get_indexes must pass the raw tablename string to _get_table_indexes.
+
+        normalize_name() converts plain lowercase strings to
+        quoted_name(quote=True).  quoted_name.upper() is a deliberate no-op
+        when quote=True, so if the normalized form reaches _always_quote_join
+        the identifier stays lowercase and Snowflake treats it as a
+        case-sensitive lookup — failing to find a table stored as UPPERCASE.
+        """
+        dialect = _make_dialect()
+        connection = mock.Mock()
+        received = {}
+
+        def capture(conn, table_name, schema, **kw):
+            received["table_name"] = table_name
+            return []
+
+        with mock.patch.object(dialect, "_get_table_indexes", side_effect=capture):
+            dialect.get_indexes(connection, "my_table", schema="PUBLIC")
+
+        # Must be a plain str, not a quoted_name, so denormalize_name can
+        # uppercase it correctly inside _always_quote_join.
+        assert received["table_name"] == "my_table"
+        assert type(received["table_name"]) is str

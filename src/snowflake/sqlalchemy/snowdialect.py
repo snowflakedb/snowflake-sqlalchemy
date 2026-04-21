@@ -1544,9 +1544,16 @@ class SnowflakeDialect(default.DefaultDialect):
     def get_indexes(self, connection, tablename, schema, **kw):
         """Gets the indexes definition."""
         schema = schema or self.default_schema_name
-        table_name = self.normalize_name(str(tablename))
         if self._is_single_table_reflection(schema, **kw):
-            return self._get_table_indexes(connection, table_name, schema, **kw)
+            # Pass the raw string so _always_quote_join can correctly
+            # denormalize (uppercase) it.  normalize_name() wraps plain
+            # lowercase strings in quoted_name(quote=True), and
+            # quoted_name.upper() is intentionally a no-op for quote=True
+            # objects, which would cause _always_quote_join to emit
+            # "table_name" (case-sensitive lowercase) instead of the
+            # correct "TABLE_NAME" (case-insensitive uppercase).
+            return self._get_table_indexes(connection, str(tablename), schema, **kw)
+        table_name = self.normalize_name(str(tablename))
         data = self.get_multi_indexes(
             connection=connection, schema=schema, filter_names=[table_name], **kw
         )
