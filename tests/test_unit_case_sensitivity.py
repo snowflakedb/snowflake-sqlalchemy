@@ -96,6 +96,14 @@ class TestSplitSchemaByDot:
         """'"MYSCHEMA"' — all-caps inside quotes must stay quoted (user was explicit)."""
         assert ip.quote_schema('"MYSCHEMA"') == '"MYSCHEMA"'
 
+    def test_inner_quoted_embedded_quote_roundtrip(self, ip):
+        """'"my""schema"' (SQL: identifier named my"schema) must round-trip correctly.
+
+        SQL uses "" as an escape for a literal " inside a quoted identifier.
+        The parser must treat this as a single identifier, not two parts.
+        """
+        assert ip.quote_schema('"my""schema"') == '"my""schema"'
+
     # ------------------------------------------------------------------
     # split_parts detail — verify quote attribute on returned parts
     # ------------------------------------------------------------------
@@ -118,6 +126,15 @@ class TestSplitSchemaByDot:
         assert len(parts) == 2
         assert getattr(parts[0], "quote", None) is True
         assert getattr(parts[1], "quote", None) is None
+
+    def test_split_parts_embedded_quote_single_part(self, ip):
+        """'"my""schema"' must produce exactly one part with unescaped value."""
+        parts = ip._split_schema_by_dot('"my""schema"')
+        assert len(parts) == 1, f"Expected 1 part, got {len(parts)}: {parts}"
+        assert (
+            str(parts[0]) == 'my"schema'
+        ), f"Expected 'my\"schema', got {str(parts[0])!r}"
+        assert getattr(parts[0], "quote", None) is True
 
 
 # ---------------------------------------------------------------------------
@@ -245,6 +262,21 @@ class TestNormalizeNameReservedWord:
                 result, quoted_name
             ), f"Expected quoted_name for 'mytable' with flag={flag}"
             assert result.quote is True
+
+    def test_mixed_case_returns_quoted_name(self):
+        """normalize_name('MyTable') returns quoted_name('MyTable', True) regardless of flag.
+
+        Mixed-case names can only exist in Snowflake when SQL-quoted at creation,
+        so they are unconditionally case-sensitive.
+        """
+        for flag in (False, True):
+            d = self._dialect(case_sensitive=flag)
+            result = d.normalize_name("MyTable")
+            assert isinstance(
+                result, quoted_name
+            ), f"Expected quoted_name for 'MyTable' with flag={flag}"
+            assert result.quote is True, f"Expected quote=True with flag={flag}"
+            assert str(result) == "MyTable", f"Name value changed with flag={flag}"
 
     def test_none_and_empty(self):
         """None and '' are handled correctly with both flag states."""

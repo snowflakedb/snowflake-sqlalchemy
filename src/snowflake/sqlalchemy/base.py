@@ -504,10 +504,16 @@ class SnowflakeIdentifierPreparer(compiler.IdentifierPreparer):
                     in_quote = True
                     pre_idx = idx + 1
             else:
-                if schema[idx] == '"' and pre_idx < idx:
-                    ret.append((schema[pre_idx:idx], True))
-                    in_quote = False
-                    pre_idx = idx + 1
+                if schema[idx] == '"':
+                    # SQL double-quote escape: "" inside a quoted identifier is a
+                    # literal " character (e.g. "my""schema" → my"schema).
+                    if idx + 1 < len(schema) and schema[idx + 1] == '"':
+                        idx += 1  # skip the second quote; keep accumulating
+                    elif pre_idx < idx:
+                        value = schema[pre_idx:idx].replace('""', '"')
+                        ret.append((value, True))
+                        in_quote = False
+                        pre_idx = idx + 1
             idx += 1
             if pre_idx < len(schema) and schema[pre_idx] == ".":
                 pre_idx += 1

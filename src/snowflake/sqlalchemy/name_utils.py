@@ -36,7 +36,10 @@ class _NameUtils:
         elif name.lower() == name:
             return quoted_name(name, quote=True)
         else:
-            return name
+            # Mixed-case names (e.g. "MyTable") can only exist in Snowflake when
+            # the identifier was SQL-quoted at creation time, so they are always
+            # case-sensitive.
+            return quoted_name(name, quote=True)
 
     def denormalize_name(self, name):
         if name is None:
