@@ -26,16 +26,27 @@ class TestSplitSchemaByDot:
     Snowflake uses double-quote characters as SQL quoting delimiters.  When a
     user passes a schema string that already contains literal double-quotes
     (e.g. '"myschema"' or '"mydb"."myschema"') the parser inside
-    _split_schema_by_dot must preserve the case-sensitive intent by setting
-    quote=True on the extracted parts.
+    _split_schema_by_dot preserves the case-sensitive intent by setting
+    ``quote=True`` on the extracted parts *when* the dialect is constructed
+    with ``case_sensitive_identifiers=True``.  With the flag off the extracted
+    parts keep the input schema's ``.quote`` attribute (``None`` for a plain
+    string) so the preparer's ``_requires_quotes`` heuristic decides whether
+    each part is quoted in emitted SQL — preserving pre-PR behaviour for
+    callers who have not opted in.
     """
 
     @pytest.fixture
     def ip(self):
+        """Default dialect — ``case_sensitive_identifiers=False`` (legacy)."""
         return SnowflakeDialect().identifier_preparer
 
+    @pytest.fixture
+    def ip_cs(self):
+        """Case-sensitive dialect — ``case_sensitive_identifiers=True``."""
+        return SnowflakeDialect(case_sensitive_identifiers=True).identifier_preparer
+
     # ------------------------------------------------------------------
-    # Regression — plain strings (no inner quotes) unchanged by fix
+    # Regression — plain strings (no inner quotes) unchanged by gating
     # ------------------------------------------------------------------
 
     def test_plain_lowercase_unquoted(self, ip):
@@ -51,7 +62,7 @@ class TestSplitSchemaByDot:
         assert ip.quote_schema("mydb.myschema") == "mydb.myschema"
 
     # ------------------------------------------------------------------
-    # quoted_name inputs — already working before fix
+    # quoted_name inputs — explicit ``.quote=True/False`` always honoured
     # ------------------------------------------------------------------
 
     def test_quoted_name_true_single(self, ip):
@@ -69,50 +80,81 @@ class TestSplitSchemaByDot:
         )
 
     # ------------------------------------------------------------------
-    # Plain string with inner double-quotes — these FAIL before the fix
+    # Plain string with inner double-quotes — flag=True preserves quoting
     # ------------------------------------------------------------------
 
-    def test_inner_quoted_single_schema(self, ip):
-        """'"myschema"' must produce '"myschema"' in SQL, not 'myschema'."""
-        assert ip.quote_schema('"myschema"') == '"myschema"'
+    def test_inner_quoted_single_schema(self, ip_cs):
+        """'"myschema"' → '"myschema"' in SQL when case_sensitive_identifiers=True."""
+        assert ip_cs.quote_schema('"myschema"') == '"myschema"'
 
-    def test_inner_quoted_dotted_both(self, ip):
-        """'"mydb"."myschema"' must quote both parts."""
-        assert ip.quote_schema('"mydb"."myschema"') == '"mydb"."myschema"'
+    def test_inner_quoted_dotted_both(self, ip_cs):
+        """'"mydb"."myschema"' → both parts quoted when flag is on."""
+        assert ip_cs.quote_schema('"mydb"."myschema"') == '"mydb"."myschema"'
 
-    def test_inner_quoted_only_db_part(self, ip):
-        """'"mydb".myschema' — only db part was quoted; schema follows standard rules."""
-        assert ip.quote_schema('"mydb".myschema') == '"mydb".myschema'
+    def test_inner_quoted_only_db_part(self, ip_cs):
+        """'"mydb".myschema' — db part quoted, schema follows standard rules."""
+        assert ip_cs.quote_schema('"mydb".myschema') == '"mydb".myschema'
 
-    def test_inner_quoted_only_schema_part(self, ip):
-        """'mydb."myschema"' — only schema part was quoted."""
-        assert ip.quote_schema('mydb."myschema"') == 'mydb."myschema"'
+    def test_inner_quoted_only_schema_part(self, ip_cs):
+        """'mydb."myschema"' — only schema part quoted when flag is on."""
+        assert ip_cs.quote_schema('mydb."myschema"') == 'mydb."myschema"'
 
     def test_inner_quoted_mixed_case_preserved(self, ip):
-        """'"MySchema"' — mixed-case inside quotes must be preserved exactly."""
+        """'"MySchema"' → '"MySchema"' — mixed-case is quoted by _requires_quotes regardless of flag."""
         assert ip.quote_schema('"MySchema"') == '"MySchema"'
 
     def test_inner_quoted_uppercase_preserved(self, ip):
-        """'"MYSCHEMA"' — all-caps inside quotes must stay quoted (user was explicit)."""
+        """'"MYSCHEMA"' → '"MYSCHEMA"' — _requires_quotes forces quoting regardless of flag."""
         assert ip.quote_schema('"MYSCHEMA"') == '"MYSCHEMA"'
 
     def test_inner_quoted_embedded_quote_roundtrip(self, ip):
-        """'"my""schema"' (SQL: identifier named my"schema) must round-trip correctly.
+        """'"my""schema"' (identifier named my"schema) round-trips regardless of flag.
 
         SQL uses "" as an escape for a literal " inside a quoted identifier.
-        The parser must treat this as a single identifier, not two parts.
+        The parser treats this as a single identifier, not two parts.  The
+        embedded ``"`` character is not a legal identifier character, so
+        ``_requires_quotes`` forces double-quoting independently of the
+        case-sensitive flag.
         """
         assert ip.quote_schema('"my""schema"') == '"my""schema"'
+
+    # ------------------------------------------------------------------
+    # Legacy (flag=off) — inner quotes are silently stripped by
+    # ``_requires_quotes``.  These assertions pin the pre-PR behaviour that
+    # the gating preserves for users who have not opted in.
+    # ------------------------------------------------------------------
+
+    def test_inner_quoted_single_schema_legacy(self, ip):
+        """Flag off: '"myschema"' → 'myschema' (inner quotes stripped by heuristic)."""
+        assert ip.quote_schema('"myschema"') == "myschema"
+
+    def test_inner_quoted_dotted_both_legacy(self, ip):
+        """Flag off: '"mydb"."myschema"' → 'mydb.myschema'."""
+        assert ip.quote_schema('"mydb"."myschema"') == "mydb.myschema"
+
+    def test_inner_quoted_only_db_part_legacy(self, ip):
+        """Flag off: '"mydb".myschema' → 'mydb.myschema'."""
+        assert ip.quote_schema('"mydb".myschema') == "mydb.myschema"
+
+    def test_inner_quoted_only_schema_part_legacy(self, ip):
+        """Flag off: 'mydb."myschema"' → 'mydb.myschema'."""
+        assert ip.quote_schema('mydb."myschema"') == "mydb.myschema"
 
     # ------------------------------------------------------------------
     # split_parts detail — verify quote attribute on returned parts
     # ------------------------------------------------------------------
 
-    def test_split_parts_inner_quoted_have_quote_true(self, ip):
-        """Parts extracted from inside "..." must have quote=True."""
-        parts = ip._split_schema_by_dot('"myschema"')
+    def test_split_parts_inner_quoted_have_quote_true(self, ip_cs):
+        """Flag on: parts extracted from inside "..." carry quote=True."""
+        parts = ip_cs._split_schema_by_dot('"myschema"')
         assert len(parts) == 1
         assert getattr(parts[0], "quote", None) is True
+
+    def test_split_parts_inner_quoted_have_quote_none_legacy(self, ip):
+        """Flag off: parts from inside "..." inherit the input's quote=None."""
+        parts = ip._split_schema_by_dot('"myschema"')
+        assert len(parts) == 1
+        assert getattr(parts[0], "quote", None) is None
 
     def test_split_parts_unquoted_have_quote_none(self, ip):
         """Parts not inside quotes keep quote=None (standard rules)."""
@@ -120,16 +162,16 @@ class TestSplitSchemaByDot:
         assert len(parts) == 1
         assert getattr(parts[0], "quote", None) is None
 
-    def test_split_parts_dotted_mixed(self, ip):
-        """'"mydb".myschema' → first part quote=True, second quote=None."""
-        parts = ip._split_schema_by_dot('"mydb".myschema')
+    def test_split_parts_dotted_mixed(self, ip_cs):
+        """Flag on: '"mydb".myschema' → first part quote=True, second quote=None."""
+        parts = ip_cs._split_schema_by_dot('"mydb".myschema')
         assert len(parts) == 2
         assert getattr(parts[0], "quote", None) is True
         assert getattr(parts[1], "quote", None) is None
 
-    def test_split_parts_embedded_quote_single_part(self, ip):
-        """'"my""schema"' must produce exactly one part with unescaped value."""
-        parts = ip._split_schema_by_dot('"my""schema"')
+    def test_split_parts_embedded_quote_single_part(self, ip_cs):
+        """Flag on: '"my""schema"' parses to one part with unescaped value and quote=True."""
+        parts = ip_cs._split_schema_by_dot('"my""schema"')
         assert len(parts) == 1, f"Expected 1 part, got {len(parts)}: {parts}"
         assert (
             str(parts[0]) == 'my"schema'
@@ -211,8 +253,11 @@ class TestNormalizeName:
             # All-lowercase: was SQL-quoted at creation → always case-sensitive
             ("mytable", False, "mytable", True),
             ("mytable", True, "mytable", True),
-            # Mixed-case: can only exist as a SQL-quoted identifier → case-sensitive
-            ("MyTable", False, "MyTable", True),
+            # Mixed-case: only marked quote=True when case_sensitive_identifiers=True.
+            # With the flag off the name is returned as plain str — emitted SQL is
+            # still '"MyTable"' because the preparer's _requires_quotes heuristic
+            # forces quoting for any name containing uppercase chars.
+            ("MyTable", False, "MyTable", None),
             ("MyTable", True, "MyTable", True),
             # ALL-UPPERCASE reserved word: flag=False leaves unchanged (legacy)
             ("TABLE", False, "TABLE", None),

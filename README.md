@@ -1106,11 +1106,13 @@ Snowflake stores unquoted identifiers in UPPERCASE and treats them case-insensit
 
 When the dialect reflects a table, each column name passes through `normalize_name`, which produces one of three outcomes depending on how the identifier was stored in Snowflake:
 
-| Snowflake stored form | How it was created | `normalize_name` returns | SQLAlchemy treats it as |
-|---|---|---|---|
-| `MYCOL` (all-uppercase) | `CREATE TABLE t (MYCOL INT)` — unquoted | `"mycol"` (plain `str`) | case-insensitive |
-| `mycol` (lowercase) | `CREATE TABLE t ("mycol" INT)` — quoted | `quoted_name("mycol", True)` | case-sensitive |
-| `MyCol` (mixed-case) | `CREATE TABLE t ("MyCol" INT)` — quoted | `quoted_name("MyCol", True)` | case-sensitive |
+| Snowflake stored form | How it was created | `normalize_name` returns (default) | `normalize_name` returns (`case_sensitive_identifiers=True`) | SQLAlchemy treats it as |
+|---|---|---|---|---|
+| `MYCOL` (all-uppercase) | `CREATE TABLE t (MYCOL INT)` — unquoted | `"mycol"` (plain `str`) | `"mycol"` (plain `str`) | case-insensitive |
+| `mycol` (lowercase) | `CREATE TABLE t ("mycol" INT)` — quoted | `quoted_name("mycol", True)` | `quoted_name("mycol", True)` | case-sensitive |
+| `MyCol` (mixed-case) | `CREATE TABLE t ("MyCol" INT)` — quoted | `"MyCol"` (plain `str`) | `quoted_name("MyCol", True)` | case-sensitive — emitted SQL is `"MyCol"` in both modes (`_requires_quotes` forces quoting for any uppercase character) |
+
+With the flag off, the only observable difference for mixed-case names is the Python type: `isinstance(name, quoted_name)` is `False` and `.quote` is `None`.  Emitted SQL, dict key equality, and hashing are identical because `quoted_name` is a `str` subclass.  Enable the flag when downstream code (e.g. an Alembic `render_item` hook or a custom preparer subclass) needs to distinguish case-sensitive reflected names by type.
 
 You can observe this directly via the inspector:
 
@@ -1168,10 +1170,10 @@ Without `quoted_name(..., True)` the column name is treated as case-insensitive 
 
 #### ALL-UPPERCASE identifiers that are SQL reserved words (e.g. `TABLE`, `SELECT`)
 
-Most identifiers are handled correctly without any flag:
+Most identifiers are handled correctly without any flag at the SQL layer:
 
-- A quoted lowercase name (`"mycol"` in Snowflake) reflects as `quoted_name("mycol", True)` — already case-sensitive.
-- A quoted mixed-case name (`"MyCol"`) reflects as `quoted_name("MyCol", True)` — already case-sensitive.
+- A quoted lowercase name (`"mycol"` in Snowflake) reflects as `quoted_name("mycol", True)` — already case-sensitive, in both flag modes.
+- A quoted mixed-case name (`"MyCol"`) reflects as a plain `str` `"MyCol"` by default; with `case_sensitive_identifiers=True` it reflects as `quoted_name("MyCol", True)`.  Emitted SQL is `"MyCol"` either way because the preparer's `_requires_quotes` heuristic force-quotes any name containing uppercase characters, so only code that inspects `.quote` or `isinstance(..., quoted_name)` observes a difference.
 - An unquoted name (`MYCOL` stored as all-uppercase) reflects as `"mycol"` — correctly case-insensitive.
 
 The one gap is an identifier whose all-uppercase form is also a SQL reserved word.  For example, a table literally named `TABLE` (created as `CREATE TABLE "TABLE" ...`) stores as `TABLE` in Snowflake.  When the dialect reflects it, `normalize_name("TABLE")` cannot tell whether `TABLE` is a plain uppercase column or the keyword `TABLE`, so by default it returns `"TABLE"` unchanged — an all-uppercase string that SQLAlchemy treats as case-sensitive.  This causes a key mismatch: the table was reflected under the key `"TABLE"` but the same `normalize_name` call made during DDL would produce `"table"`.
@@ -1270,16 +1272,28 @@ class Items(Base):
     id = Column(Integer, primary_key=True)
 ```
 
-Plain strings with inner double-quotes — `'"myschema"'` — are also accepted and produce the same result as `quoted_name("myschema", True)`:
+Plain strings with inner double-quotes — `'"myschema"'` — are also accepted and produce the same result as `quoted_name("myschema", True)` **when the dialect is built with `case_sensitive_identifiers=True`**:
 
 ```python
-Table("orders", metadata, schema='"myschema"')         # also works
-Table("orders", metadata, schema='"mydb"."myschema"')  # dotted form also works
+engine = create_engine(
+    "snowflake://user:pass@account/db",
+    case_sensitive_identifiers=True,
+)
+Table("orders", metadata, schema='"myschema"')         # → "myschema".ORDERS
+Table("orders", metadata, schema='"mydb"."myschema"')  # → "mydb"."myschema".ORDERS
 ```
 
-The `"` characters are treated as SQL quoting delimiters by the schema parser, so the extracted name receives `quote=True` automatically.  Prefer `quoted_name` in code that is read often; prefer the quoted-string form when the value comes from a config that already embeds the quotes.
+Without the flag, the schema parser extracts the inner value but leaves the `quote` attribute at its default (`None`), so the preparer's `_requires_quotes` heuristic decides whether to re-quote it — and for an all-lowercase value like `myschema` the heuristic returns `False`, stripping the quotes from the emitted SQL:
 
-Identifiers that contain a literal double-quote character use the standard SQL escape `""`.  The parser handles this correctly — `'"my""schema"'` is treated as a single identifier named `my"schema` and round-trips to the SQL form `"my""schema"`:
+```python
+# Flag off (default):
+Table("orders", metadata, schema='"myschema"')
+# SQL: myschema.ORDERS   ← Snowflake resolves this to MYSCHEMA (case-insensitive)
+```
+
+When case-sensitivity matters, either enable the flag or use `quoted_name("myschema", True)` / `MetaData(schema=quoted_name(..., True))` explicitly — those forms carry `quote=True` on the value itself and are honoured regardless of the flag.  Prefer `quoted_name` in code that is read often; prefer the quoted-string form together with the flag when the value comes from a config that already embeds the quotes.
+
+Identifiers that contain a literal double-quote character use the standard SQL escape `""`.  The parser handles this correctly — `'"my""schema"'` is treated as a single identifier named `my"schema` and round-trips to the SQL form `"my""schema"` in both flag modes (the embedded `"` is not a legal identifier character, so `_requires_quotes` forces quoting regardless of the flag):
 
 ```python
 Table("orders", metadata, schema='"my""schema"')   # schema name: my"schema

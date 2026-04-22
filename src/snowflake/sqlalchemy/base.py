@@ -520,13 +520,20 @@ class SnowflakeIdentifierPreparer(compiler.IdentifierPreparer):
         if pre_idx < idx:
             ret.append((schema[pre_idx:idx], False))
 
-        # Parts found inside "..." get quote=True regardless of the input
-        # schema's quote attribute.  Parts outside quotes fall back to the
-        # input schema's quote attribute (preserving existing behaviour for
-        # quoted_name inputs and plain unquoted strings).
+        # Parts found inside "..." get ``quote=True`` only when the dialect
+        # was constructed with ``case_sensitive_identifiers=True``.  Without
+        # that opt-in we fall back to the input schema's ``.quote`` attribute
+        # (``None`` for a plain str) so the preparer's ``_requires_quotes``
+        # heuristic keeps its pre-existing behaviour — avoids a silent BCR
+        # for users who pass ``'"myschema"'`` and previously saw the inner
+        # quotes stripped by the heuristic.
         schema_quote = getattr(schema, "quote", None)
+        case_sensitive = getattr(self.dialect, "_case_sensitive_identifiers", False)
         return [
-            quoted_name(value, quote=True if was_quoted else schema_quote)
+            quoted_name(
+                value,
+                quote=True if (was_quoted and case_sensitive) else schema_quote,
+            )
             for value, was_quoted in ret
         ]
 

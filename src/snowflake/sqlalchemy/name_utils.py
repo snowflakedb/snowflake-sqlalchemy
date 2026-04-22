@@ -35,11 +35,21 @@ class _NameUtils:
                 return name
         elif name.lower() == name:
             return quoted_name(name, quote=True)
-        else:
-            # Mixed-case names (e.g. "MyTable") can only exist in Snowflake when
-            # the identifier was SQL-quoted at creation time, so they are always
-            # case-sensitive.
+        elif self.case_sensitive_identifiers:
+            # Opt-in: mixed-case names (e.g. "MyTable") can only exist in
+            # Snowflake when the identifier was SQL-quoted at creation time.
+            # Marking them quote=True makes the case-sensitivity signal
+            # explicit so MetaData.tables keyed lookups stay consistent with
+            # emitted SQL and with tools that inspect .quote (e.g. Alembic
+            # render_item).
             return quoted_name(name, quote=True)
+        else:
+            # Legacy (default): return mixed-case as a plain str.  The
+            # preparer's _requires_quotes heuristic forces double-quoting at
+            # SQL-render time because the name contains uppercase chars, so
+            # emitted SQL is unchanged from the flag-on branch — the only
+            # observable difference is the Python type and .quote attribute.
+            return name
 
     def denormalize_name(self, name):
         if name is None:
