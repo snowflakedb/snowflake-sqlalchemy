@@ -132,8 +132,8 @@ def render_item(type_, obj, autogen_context):
                 )
                 parts.append(f"server_default={rendered_default}")
             except Exception:
-                # repr(DefaultClause) is not valid Python; emit a placeholder
-                # that will at least not cause an import-time NameError.
+                # Emit sa.text(...) — the minimum valid Python expression for a
+                # server default when _render_server_default is unavailable.
                 parts.append(f"server_default=sa.text({str(obj.server_default.arg)!r})")
 
         return f"sa.Column({', '.join(parts)})"

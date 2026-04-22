@@ -218,9 +218,11 @@ class TestNormalizeName:
             ("TABLE", False, "TABLE", None),
             # ALL-UPPERCASE reserved word: flag=True converts to quoted_name
             ("TABLE", True, "table", True),
-            # Edge cases
+            # Edge cases (both flag states)
             (None, False, None, None),
+            (None, True, None, None),
             ("", False, "", None),
+            ("", True, "", None),
         ],
         ids=[
             "uppercase_flag_off",
@@ -231,8 +233,10 @@ class TestNormalizeName:
             "mixed_flag_on",
             "reserved_flag_off",
             "reserved_flag_on",
-            "none",
-            "empty",
+            "none_flag_off",
+            "none_flag_on",
+            "empty_flag_off",
+            "empty_flag_on",
         ],
     )
     def test_normalize_name(self, input_name, flag, expected_value, expected_quote):
@@ -252,19 +256,21 @@ class TestNormalizeName:
         )
 
     @pytest.mark.parametrize(
-        "snowflake_name,flag,expected_sql",
+        "snowflake_name,flag,expected_raw",
         [
-            # Unquoted uppercase (case-insensitive): normalizes then denormalizes back
+            # Unquoted uppercase (case-insensitive): round-trips as-is
             ("MYTABLE", False, "MYTABLE"),
             ("MYTABLE", True, "MYTABLE"),
-            # Quoted lowercase: normalizes to quoted_name, denormalizes to double-quoted SQL
-            ("mytable", False, '"mytable"'),
-            ("mytable", True, '"mytable"'),
-            # Mixed-case: normalizes to quoted_name, denormalizes to double-quoted SQL
-            ("MyTable", False, '"MyTable"'),
-            ("MyTable", True, '"MyTable"'),
-            # Reserved word with flag on: normalizes to quoted_name, denormalizes to double-quoted
-            ("TABLE", True, '"table"'),
+            # Quoted lowercase: normalize → quoted_name, denormalize → same lowercase value
+            ("mytable", False, "mytable"),
+            ("mytable", True, "mytable"),
+            # Mixed-case: normalize → quoted_name, denormalize → same mixed-case value
+            ("MyTable", False, "MyTable"),
+            ("MyTable", True, "MyTable"),
+            # Reserved word with flag on: normalizes to quoted_name("table"), denormalizes to "table"
+            ("TABLE", True, "table"),
+            # Reserved word with flag off: unchanged throughout
+            ("TABLE", False, "TABLE"),
         ],
         ids=[
             "uppercase_roundtrip_flag_off",
@@ -274,18 +280,17 @@ class TestNormalizeName:
             "mixed_roundtrip_flag_off",
             "mixed_roundtrip_flag_on",
             "reserved_roundtrip_flag_on",
+            "reserved_roundtrip_flag_off",
         ],
     )
-    def test_normalize_denormalize_round_trip(self, snowflake_name, flag, expected_sql):
-        """normalize_name → denormalize_name round-trip produces the expected SQL identifier."""
+    def test_normalize_denormalize_round_trip(self, snowflake_name, flag, expected_raw):
+        """normalize_name → denormalize_name round-trip produces the expected raw value."""
         d = self._dialect(case_sensitive=flag)
         normalized = d.normalize_name(snowflake_name)
         result = d.denormalize_name(normalized)
-        # The identifier preparer would then quote result if needed; check the
-        # denormalized string directly to verify the round-trip value.
-        assert str(result) == expected_sql.strip('"') or result == expected_sql.strip(
-            '"'
-        ), f"denormalize_name({normalized!r}) = {result!r}, expected {expected_sql.strip('\"')!r}"
+        assert (
+            result == expected_raw
+        ), f"denormalize_name({normalized!r}) = {result!r}, expected {expected_raw!r}"
 
     def test_all_reserved_words_flag_off_unchanged(self):
         """All-uppercase reserved words return unchanged when flag=False (spot-check)."""
@@ -714,14 +719,10 @@ class TestAlembicRenderItemHelper:
 
     def test_primary_path_uses_alembic_renderer(self):
         """render_item primary path: delegates to Alembic _render_column when available."""
+        from alembic.autogenerate.render import _render_column  # noqa: F401
         from sqlalchemy import Column, String
 
         from snowflake.sqlalchemy.alembic_util import render_item
-
-        try:
-            from alembic.autogenerate.render import _render_column  # noqa: F401
-        except ImportError:
-            pytest.skip("alembic not installed")
 
         col = Column(quoted_name("mycol", True), String, nullable=False)
 
@@ -746,14 +747,10 @@ class TestAlembicRenderItemHelper:
 
     def test_quoted_name_column_returns_string(self):
         """render_item for a quoted_name column must return a non-False string."""
+        from alembic.autogenerate.render import _render_column  # noqa: F401
         from sqlalchemy import Column, Integer
 
         from snowflake.sqlalchemy.alembic_util import render_item
-
-        try:
-            from alembic.autogenerate.render import _render_column  # noqa: F401
-        except ImportError:
-            pytest.skip("alembic not installed")
 
         col = Column(quoted_name("mycol", True), Integer)
 
@@ -807,14 +804,10 @@ class TestAlembicRenderItemHelper:
 
     def test_quoted_name_column_with_nullable_false(self):
         """render_item for quoted_name column with nullable=False includes it in output."""
+        from alembic.autogenerate.render import _render_column  # noqa: F401
         from sqlalchemy import Column, Integer
 
         from snowflake.sqlalchemy.alembic_util import render_item
-
-        try:
-            from alembic.autogenerate.render import _render_column  # noqa: F401
-        except ImportError:
-            pytest.skip("alembic not installed")
 
         col = Column(quoted_name("mycol", True), Integer, nullable=False)
 
@@ -834,14 +827,10 @@ class TestAlembicRenderItemHelper:
 
     def test_quoted_name_column_with_server_default(self):
         """render_item for quoted_name column with server_default includes it in output."""
+        from alembic.autogenerate.render import _render_column  # noqa: F401
         from sqlalchemy import Column, Integer, text
 
         from snowflake.sqlalchemy.alembic_util import render_item
-
-        try:
-            from alembic.autogenerate.render import _render_column  # noqa: F401
-        except ImportError:
-            pytest.skip("alembic not installed")
 
         col = Column(quoted_name("mycol", True), Integer, server_default=text("0"))
 
@@ -861,14 +850,10 @@ class TestAlembicRenderItemHelper:
 
     def test_quoted_name_column_with_primary_key(self):
         """render_item for quoted_name column with primary_key=True includes it in output."""
+        from alembic.autogenerate.render import _render_column  # noqa: F401
         from sqlalchemy import Column, Integer
 
         from snowflake.sqlalchemy.alembic_util import render_item
-
-        try:
-            from alembic.autogenerate.render import _render_column  # noqa: F401
-        except ImportError:
-            pytest.skip("alembic not installed")
 
         col = Column(quoted_name("id", True), Integer, primary_key=True)
 
@@ -890,14 +875,10 @@ class TestAlembicRenderItemHelper:
 
     def test_quoted_name_column_with_multiple_attributes(self):
         """render_item for quoted_name column with multiple attributes includes all."""
+        from alembic.autogenerate.render import _render_column  # noqa: F401
         from sqlalchemy import Column, Integer, text
 
         from snowflake.sqlalchemy.alembic_util import render_item
-
-        try:
-            from alembic.autogenerate.render import _render_column  # noqa: F401
-        except ImportError:
-            pytest.skip("alembic not installed")
 
         col = Column(
             quoted_name("mycol", True),
