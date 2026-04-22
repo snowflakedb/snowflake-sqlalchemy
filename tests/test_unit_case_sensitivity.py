@@ -468,6 +468,46 @@ class TestCaseSensitiveIdentifiersFlag:
             "case_sensitive_identifiers" not in opts
         ), "case_sensitive_identifiers must not be forwarded to connector opts"
 
+    def test_url_param_replaces_name_utils_atomically(self):
+        """URL-driven flip must swap ``name_utils`` rather than mutate it.
+
+        ``create_connect_args`` runs per DBAPI connection; mutating a live
+        ``_NameUtils`` attribute in place would let concurrent readers on
+        other threads observe a torn state where the flag has flipped but
+        the cached preparer has not.  Replacing the whole instance is
+        atomic at the bytecode level, so a reader sees either the old
+        instance or the new one and never a partially-updated object.
+        """
+        d = SnowflakeDialect()
+        original_nu = d.name_utils
+        url = SAUrl.create(
+            "snowflake",
+            username="u",
+            password="p",
+            host="testaccount",
+            query={"case_sensitive_identifiers": "True"},
+        )
+        d.create_connect_args(url)
+        assert d.name_utils is not original_nu
+        assert d.name_utils.case_sensitive_identifiers is True
+        # The original instance is untouched, proving no in-place mutation.
+        assert original_nu.case_sensitive_identifiers is False
+
+    def test_url_param_idempotent_when_unchanged(self):
+        """Re-applying the same flag is a no-op — ``name_utils`` is kept."""
+        d = SnowflakeDialect(case_sensitive_identifiers=True)
+        original_nu = d.name_utils
+        url = SAUrl.create(
+            "snowflake",
+            username="u",
+            password="p",
+            host="testaccount",
+            query={"case_sensitive_identifiers": "True"},
+        )
+        d.create_connect_args(url)
+        assert d.name_utils is original_nu
+        assert d._case_sensitive_identifiers is True
+
 
 # ---------------------------------------------------------------------------
 # URL encoding helper — create_snowflake_engine

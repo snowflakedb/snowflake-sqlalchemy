@@ -261,11 +261,18 @@ class SnowflakeDialect(default.DefaultDialect):
         case_sensitive_identifiers = query.pop("case_sensitive_identifiers", None)
         if case_sensitive_identifiers is not None:
             flag = parse_url_boolean(case_sensitive_identifiers)
-            # NOTE: dialect instances are shared across connections; mutating
-            # shared state here is a threading hazard if two connections with
-            # different case_sensitive_identifiers values are opened concurrently.
-            self._case_sensitive_identifiers = flag
-            self.name_utils.case_sensitive_identifiers = flag
+            if flag != self._case_sensitive_identifiers:
+                # Replace ``name_utils`` atomically rather than mutating the
+                # live instance's attribute.  Python attribute assignment is
+                # atomic at the bytecode level, so concurrent readers on
+                # other threads observe either the old ``_NameUtils`` or the
+                # new one — never a torn update where the flag and the
+                # cached preparer are briefly inconsistent.
+                self._case_sensitive_identifiers = flag
+                self.name_utils = _NameUtils(
+                    self.identifier_preparer,
+                    case_sensitive_identifiers=flag,
+                )
 
         # URL sets the query parameter values as strings, we need to cast to expected types when necessary
         for name, value in query.items():
