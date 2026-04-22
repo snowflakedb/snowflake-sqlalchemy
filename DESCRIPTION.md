@@ -20,7 +20,8 @@ Source code is also available at:
   - Add `_always_quote_join` helper that always quotes denormalised identifiers — ensures correct SQL for case-sensitive table and schema names in per-table reflection paths.
   - Fix foreign key `referred_schema` resolution to include the explicitly reflected schema in the same-schema set, preventing incorrect cross-schema references when reflecting a non-default schema.
   - Add shared row-parsing helpers (`_parse_pk_rows`, `_parse_uk_rows`, `_parse_fk_rows`) so correctness fixes propagate to both per-table and schema-wide reflection paths.
-  - `cache_column_metadata=True` opt-in enables per-table `SHOW … IN TABLE` queries for `get_pk_constraint`, `get_unique_constraints`, `get_foreign_keys`, and `get_indexes` on both SQLAlchemy versions.
+  - `cache_column_metadata=True` opt-in enables per-table `SHOW … IN TABLE` queries for `get_pk_constraint`, `get_unique_constraints`, `get_foreign_keys`, and `get_indexes` on SQLAlchemy 1.4.
+  - On SQLAlchemy 2.x, `get_pk_constraint`, `get_unique_constraints`, `get_foreign_keys`, and `get_indexes` now automatically use per-table `SHOW … IN TABLE` queries without any opt-in flag. Previously these methods always issued `SHOW … IN SCHEMA` even for single-table Inspector calls (e.g. `pandas.read_sql_table()`), causing ~20-second delays on schemas with thousands of tables (SNOW-689531).
 
 # Release Notes
 

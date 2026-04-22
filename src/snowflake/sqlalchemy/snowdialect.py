@@ -558,9 +558,9 @@ class SnowflakeDialect(default.DefaultDialect):
     # ---------------------------------------------------------------------------
 
     def _get_table_primary_keys(self, connection, table_name, schema, **kw):
-        """SHOW PRIMARY KEYS IN TABLE — single-table path (cache_column_metadata=True).
+        """SHOW PRIMARY KEYS IN TABLE — single-table path.
 
-        Results are cached by the calling method's @reflection.cache decorator.
+        Called by get_pk_constraint when _is_single_table_reflection returns True.
         """
         full_name = self._always_quote_join(schema, table_name)
         try:
@@ -637,9 +637,9 @@ class SnowflakeDialect(default.DefaultDialect):
     # ---------------------------------------------------------------------------
 
     def _get_table_unique_constraints(self, connection, table_name, schema, **kw):
-        """SHOW UNIQUE KEYS IN TABLE — single-table path (cache_column_metadata=True).
+        """SHOW UNIQUE KEYS IN TABLE — single-table path.
 
-        Results are cached by the calling method's @reflection.cache decorator.
+        Called by get_unique_constraints when _is_single_table_reflection returns True.
         """
         full_name = self._always_quote_join(schema, table_name)
         try:
@@ -711,15 +711,15 @@ class SnowflakeDialect(default.DefaultDialect):
     # ---------------------------------------------------------------------------
 
     def _get_table_foreign_keys(self, connection, table_name, schema, **kw):
-        """SHOW IMPORTED KEYS IN TABLE — single-table path (cache_column_metadata=True).
+        """SHOW IMPORTED KEYS IN TABLE — single-table path.
+
+        Called by get_foreign_keys when _is_single_table_reflection returns True.
 
         referred_schema is set to None when the FK target is in the same schema as
         the table being reflected.  The same-schema set always includes the
         explicitly-reflected schema so that cross-session-schema scenarios
         (e.g. USE SCHEMA called after engine creation, or reflecting a non-default
         schema) are handled correctly.
-
-        Results are cached by the calling method's @reflection.cache decorator.
         """
         full_name = self._always_quote_join(schema, table_name)
         _, current_schema = self._current_database_schema(connection, **kw)
@@ -1150,34 +1150,34 @@ class SnowflakeDialect(default.DefaultDialect):
     def _is_single_table_reflection(self, schema, **kw):
         """Return True when a single-table SHOW command should be used for PK/UK/FK.
 
-        Opt-in via ``cache_column_metadata=true`` on the engine URL or
-        connect_args.  When disabled (the default) all reflection uses the
-        existing schema-wide queries unchanged, preserving backward compatibility.
-
         SA 2.x path (IS_VERSION_20=True):
           ``get_multi_pk_constraint`` / ``get_multi_unique_constraints`` /
           ``get_multi_foreign_keys`` are used by MetaData.reflect(), so any call
           to the singular get_pk_constraint / get_unique_constraints /
-          get_foreign_keys is inherently single-table (Inspector,
-          pandas.read_sql_table).  No info_cache inspection required.
+          get_foreign_keys / get_indexes is inherently single-table (Inspector,
+          pandas.read_sql_table).  Always returns True; no opt-in required.
 
         SA 1.4 path (IS_VERSION_20=False):
           MetaData.reflect() calls the singular methods per-table and populates
-          ``_get_schema_tables_info`` early in the reflection pass.  The
-          presence of that key in info_cache is the signal that multi-table
-          reflection is in progress; fall back to the schema-wide cached query.
+          ``_get_schema_tables_info`` early in the reflection pass.  Opt-in via
+          ``cache_column_metadata=true`` on the engine URL or connect_args.
+          When disabled (the default) all reflection uses the existing
+          schema-wide queries unchanged, preserving backward compatibility.
+          The presence of the tables-info key in info_cache signals that
+          multi-table reflection is in progress; fall back to schema-wide query.
 
         Note: @reflection.cache caches results for the lifetime of a connection.
         DDL executed mid-session will not be visible in reflection until a new
         connection is obtained, regardless of which path is used.
         """
-        if not getattr(self, "_cache_column_metadata", False):
-            return False
-
         if IS_VERSION_20:
             # SA 2.x: get_multi_* handles MetaData.reflect(); singular calls
             # are always single-table at this point.
             return True
+
+        # SA 1.4: opt-in required for backward compatibility.
+        if not getattr(self, "_cache_column_metadata", False):
+            return False
 
         # SA 1.4: detect whether MetaData.reflect() is in progress.
         # @reflection.cache stores keys as (fn.__name__, args_tuple, kwargs_tuple).
@@ -1519,13 +1519,13 @@ class SnowflakeDialect(default.DefaultDialect):
         return dict(indexes)
 
     def _get_table_indexes(self, connection, table_name, schema, **kw):
-        """SHOW INDEXES IN TABLE — single-table path (cache_column_metadata=True).
+        """SHOW INDEXES IN TABLE — single-table path.
+
+        Called by get_indexes when _is_single_table_reflection returns True.
 
         For non-hybrid tables Snowflake returns an empty result set (not an
         error), so the list will simply be empty.  The SYS_INDEX primary-key
         sentinel is filtered out, consistent with the schema-wide path.
-
-        Results are cached by the calling method's @reflection.cache decorator.
         """
         full_name = self._always_quote_join(schema, table_name)
         try:
@@ -1544,9 +1544,16 @@ class SnowflakeDialect(default.DefaultDialect):
     def get_indexes(self, connection, tablename, schema, **kw):
         """Gets the indexes definition."""
         schema = schema or self.default_schema_name
-        table_name = self.normalize_name(str(tablename))
         if self._is_single_table_reflection(schema, **kw):
-            return self._get_table_indexes(connection, table_name, schema, **kw)
+            # Pass the raw string so _always_quote_join can correctly
+            # denormalize (uppercase) it.  normalize_name() wraps plain
+            # lowercase strings in quoted_name(quote=True), and
+            # quoted_name.upper() is intentionally a no-op for quote=True
+            # objects, which would cause _always_quote_join to emit
+            # "table_name" (case-sensitive lowercase) instead of the
+            # correct "TABLE_NAME" (case-insensitive uppercase).
+            return self._get_table_indexes(connection, str(tablename), schema, **kw)
+        table_name = self.normalize_name(str(tablename))
         data = self.get_multi_indexes(
             connection=connection, schema=schema, filter_names=[table_name], **kw
         )
