@@ -637,9 +637,9 @@ class SnowflakeDialect(default.DefaultDialect):
     # ---------------------------------------------------------------------------
 
     def _get_table_unique_constraints(self, connection, table_name, schema, **kw):
-        """SHOW UNIQUE KEYS IN TABLE — single-table path (cache_column_metadata=True).
+        """SHOW UNIQUE KEYS IN TABLE — single-table path.
 
-        Results are cached by the calling method's @reflection.cache decorator.
+        Called by get_unique_constraints when _is_single_table_reflection returns True.
         """
         full_name = self._always_quote_join(schema, table_name)
         try:
@@ -711,15 +711,15 @@ class SnowflakeDialect(default.DefaultDialect):
     # ---------------------------------------------------------------------------
 
     def _get_table_foreign_keys(self, connection, table_name, schema, **kw):
-        """SHOW IMPORTED KEYS IN TABLE — single-table path (cache_column_metadata=True).
+        """SHOW IMPORTED KEYS IN TABLE — single-table path.
+
+        Called by get_foreign_keys when _is_single_table_reflection returns True.
 
         referred_schema is set to None when the FK target is in the same schema as
         the table being reflected.  The same-schema set always includes the
         explicitly-reflected schema so that cross-session-schema scenarios
         (e.g. USE SCHEMA called after engine creation, or reflecting a non-default
         schema) are handled correctly.
-
-        Results are cached by the calling method's @reflection.cache decorator.
         """
         full_name = self._always_quote_join(schema, table_name)
         _, current_schema = self._current_database_schema(connection, **kw)
@@ -1519,13 +1519,13 @@ class SnowflakeDialect(default.DefaultDialect):
         return dict(indexes)
 
     def _get_table_indexes(self, connection, table_name, schema, **kw):
-        """SHOW INDEXES IN TABLE — single-table path (cache_column_metadata=True).
+        """SHOW INDEXES IN TABLE — single-table path.
+
+        Called by get_indexes when _is_single_table_reflection returns True.
 
         For non-hybrid tables Snowflake returns an empty result set (not an
         error), so the list will simply be empty.  The SYS_INDEX primary-key
         sentinel is filtered out, consistent with the schema-wide path.
-
-        Results are cached by the calling method's @reflection.cache decorator.
         """
         full_name = self._always_quote_join(schema, table_name)
         try:

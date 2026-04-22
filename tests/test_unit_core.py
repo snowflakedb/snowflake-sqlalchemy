@@ -290,74 +290,49 @@ class TestSingleTableDispatchSA2:
     without requiring cache_column_metadata=True."""
 
     @pytest.mark.skipif(not IS_VERSION_20, reason="SA 2.x only")
-    def test_get_pk_constraint_uses_table_path(self):
+    @pytest.mark.parametrize(
+        "public_method,table_method,schema_method,expected",
+        [
+            (
+                "get_pk_constraint",
+                "_get_table_primary_keys",
+                "_get_schema_primary_keys",
+                {"constrained_columns": ["id"], "name": "pk_foo"},
+            ),
+            (
+                "get_unique_constraints",
+                "_get_table_unique_constraints",
+                "_get_schema_unique_constraints",
+                [{"column_names": ["email"], "name": "uq_email"}],
+            ),
+            (
+                "get_foreign_keys",
+                "_get_table_foreign_keys",
+                "_get_schema_foreign_keys",
+                [{"referred_table": "bar", "constrained_columns": ["bar_id"]}],
+            ),
+            (
+                "get_indexes",
+                "_get_table_indexes",
+                "get_multi_indexes",
+                [{"name": "idx_foo", "column_names": ["col1"], "unique": False}],
+            ),
+        ],
+    )
+    def test_uses_table_path(
+        self, public_method, table_method, schema_method, expected
+    ):
         dialect = _make_dialect()
         connection = mock.Mock()
-        expected = {"constrained_columns": ["id"], "name": "pk_foo"}
 
         with mock.patch.object(
-            dialect, "_get_table_primary_keys", return_value=expected
+            dialect, table_method, return_value=expected
         ) as tbl_mock, mock.patch.object(
             dialect,
-            "_get_schema_primary_keys",
-            side_effect=AssertionError("schema-wide PK query must not be called"),
-        ) as schema_mock:
-            result = dialect.get_pk_constraint(connection, "foo", schema="PUBLIC")
-
-        tbl_mock.assert_called_once()
-        schema_mock.assert_not_called()
-        assert result == expected
-
-    @pytest.mark.skipif(not IS_VERSION_20, reason="SA 2.x only")
-    def test_get_unique_constraints_uses_table_path(self):
-        dialect = _make_dialect()
-        connection = mock.Mock()
-        expected = [{"column_names": ["email"], "name": "uq_email"}]
-
-        with mock.patch.object(
-            dialect, "_get_table_unique_constraints", return_value=expected
-        ) as tbl_mock, mock.patch.object(
-            dialect,
-            "_get_schema_unique_constraints",
-            side_effect=AssertionError("schema-wide UK query must not be called"),
+            schema_method,
+            side_effect=AssertionError(f"{schema_method} must not be called"),
         ):
-            result = dialect.get_unique_constraints(connection, "foo", schema="PUBLIC")
-
-        tbl_mock.assert_called_once()
-        assert result == expected
-
-    @pytest.mark.skipif(not IS_VERSION_20, reason="SA 2.x only")
-    def test_get_foreign_keys_uses_table_path(self):
-        dialect = _make_dialect()
-        connection = mock.Mock()
-        expected = [{"referred_table": "bar", "constrained_columns": ["bar_id"]}]
-
-        with mock.patch.object(
-            dialect, "_get_table_foreign_keys", return_value=expected
-        ) as tbl_mock, mock.patch.object(
-            dialect,
-            "_get_schema_foreign_keys",
-            side_effect=AssertionError("schema-wide FK query must not be called"),
-        ):
-            result = dialect.get_foreign_keys(connection, "foo", schema="PUBLIC")
-
-        tbl_mock.assert_called_once()
-        assert result == expected
-
-    @pytest.mark.skipif(not IS_VERSION_20, reason="SA 2.x only")
-    def test_get_indexes_uses_table_path(self):
-        dialect = _make_dialect()
-        connection = mock.Mock()
-        expected = [{"name": "idx_foo", "column_names": ["col1"], "unique": False}]
-
-        with mock.patch.object(
-            dialect, "_get_table_indexes", return_value=expected
-        ) as tbl_mock, mock.patch.object(
-            dialect,
-            "get_multi_indexes",
-            side_effect=AssertionError("schema-wide index query must not be called"),
-        ):
-            result = dialect.get_indexes(connection, "foo", schema="PUBLIC")
+            result = getattr(dialect, public_method)(connection, "foo", schema="PUBLIC")
 
         tbl_mock.assert_called_once()
         assert result == expected

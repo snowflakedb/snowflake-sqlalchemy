@@ -6,17 +6,18 @@ from sqlalchemy import MetaData, inspect
 from sqlalchemy.sql.ddl import CreateSchema, DropSchema
 
 from tests.conftest import poll_until
+from tests.util import random_string
 
 
 @pytest.mark.aws
 def test_indexes_reflection(engine_testaccount, db_parameters, sql_compiler):
-    table_name = "test_hybrid_table_2"
-    index_name = "INDEX_NAME_2"
+    table_name = "test_hybrid_table_" + random_string(6)
+    index_name = "INDEX_NAME_" + random_string(6).upper()
     schema = db_parameters["schema"]
     index_columns = ["name", "name2"]
 
     create_table_sql = f"""
-   CREATE OR REPLACE HYBRID TABLE {schema}.{table_name} (
+   CREATE HYBRID TABLE {schema}.{table_name} (
         id INT primary key,
         name VARCHAR,
         name2 VARCHAR,
@@ -33,8 +34,8 @@ def test_indexes_reflection(engine_testaccount, db_parameters, sql_compiler):
         # to propagate before SHOW INDEXES IN TABLE reflects the new index.
         indexes = poll_until(
             lambda: inspect(engine_testaccount).get_indexes(table_name, schema),
-            timeout=15,
-            interval=1,
+            timeout=10,
+            interval=0.5,
         )
 
         assert len(indexes) == 1
