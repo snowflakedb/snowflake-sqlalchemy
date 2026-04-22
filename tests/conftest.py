@@ -343,3 +343,24 @@ def _ensure_optional_dependencies(item):
     """Skip optional-dependency tests when the dependency is unavailable."""
     if "pandas" in item.keywords:
         pytest.importorskip("pandas")
+
+
+def poll_until(fn, *, timeout: float = 15, interval: float = 1):
+    """Poll ``fn()`` every *interval* seconds until it returns a truthy value.
+
+    Returns the first truthy result, or the last (falsy) result once *timeout*
+    is exceeded.
+
+    Use this instead of ``pytest.mark.flaky(reruns=N)`` when the test creates
+    Snowflake objects (tables, indexes, etc.) that should not be torn down and
+    recreated on every retry attempt.  Re-running the whole test via
+    ``pytest-rerunfailures`` would execute the fixture teardown and re-run
+    setup DDL on each attempt, which is wasteful and can hit object-already-
+    exists errors.  Polling within the test body avoids touching the data.
+    """
+    deadline = time.monotonic() + timeout
+    while True:
+        result = fn()
+        if result or time.monotonic() > deadline:
+            return result
+        time.sleep(interval)

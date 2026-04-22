@@ -11,9 +11,6 @@ from sqlalchemy.testing.suite import BizarroCharacterTest as _BizarroCharacterTe
 from sqlalchemy.testing.suite import (
     ComponentReflectionTestExtra as _ComponentReflectionTestExtra,
 )
-from sqlalchemy.testing.suite import (
-    CompositeKeyReflectionTest as _CompositeKeyReflectionTest,
-)
 from sqlalchemy.testing.suite import DateTimeHistoricTest as _DateTimeHistoricTest
 from sqlalchemy.testing.suite import FetchLimitOffsetTest as _FetchLimitOffsetTest
 from sqlalchemy.testing.suite import HasSequenceTest as _HasSequenceTest
@@ -178,18 +175,6 @@ class SimpleUpdateDeleteTest(_SimpleUpdateDeleteTest):
             connection.execute(t.select().order_by(t.c.id)).fetchall(),
             [(1, "d1"), (3, "d3")],
         )
-
-
-class CompositeKeyReflectionTest(_CompositeKeyReflectionTest):
-    @pytest.mark.xfail(reason="Fixing this would require behavior breaking change.")
-    def test_fk_column_order(self):
-        # Check https://snowflakecomputing.atlassian.net/browse/SNOW-640134 for details on breaking changes discussion.
-        super().test_fk_column_order()
-
-    @pytest.mark.xfail(reason="Fixing this would require behavior breaking change.")
-    def test_pk_column_order(self):
-        # Check https://snowflakecomputing.atlassian.net/browse/SNOW-640134 for details on breaking changes discussion.
-        super().test_pk_column_order()
 
 
 class BizarroCharacterTest(_BizarroCharacterTest):

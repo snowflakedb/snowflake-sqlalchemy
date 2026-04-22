@@ -8,6 +8,17 @@ import pytest
 from sqlalchemy.engine.url import URL
 
 from snowflake.sqlalchemy import base
+from snowflake.sqlalchemy.compat import IS_VERSION_20
+from snowflake.sqlalchemy.snowdialect import SnowflakeDialect
+
+
+def _make_dialect(**attrs):
+    """Return a SnowflakeDialect instance without a live connection."""
+    dialect = SnowflakeDialect()
+    dialect.default_schema_name = "PUBLIC"
+    for k, v in attrs.items():
+        setattr(dialect, k, v)
+    return dialect
 
 
 def test_create_connect_args():
@@ -217,3 +228,137 @@ def test_get_server_version_info_parsing(raw_value, expected):
         assert result is None
     else:
         assert result == expected
+
+
+# ---------------------------------------------------------------------------
+# _is_single_table_reflection (SNOW-689531)
+# ---------------------------------------------------------------------------
+
+
+class TestIsSingleTableReflection:
+    """Unit tests for the _is_single_table_reflection heuristic."""
+
+    @pytest.mark.skipif(not IS_VERSION_20, reason="SA 2.x only")
+    def test_sa2_returns_true_without_opt_in(self):
+        """SA 2.x: singular calls are always single-table; no flag required."""
+        assert _make_dialect()._is_single_table_reflection("PUBLIC") is True
+
+    @pytest.mark.skipif(not IS_VERSION_20, reason="SA 2.x only")
+    def test_sa2_returns_true_with_info_cache_present(self):
+        """SA 2.x: info_cache presence is irrelevant — get_multi_* handles bulk."""
+        assert (
+            _make_dialect()._is_single_table_reflection("PUBLIC", info_cache={}) is True
+        )
+
+    @mock.patch("snowflake.sqlalchemy.snowdialect.IS_VERSION_20", False)
+    def test_sa14_returns_false_without_opt_in(self):
+        """SA 1.4: defaults to schema-wide queries for backward compatibility."""
+        assert _make_dialect()._is_single_table_reflection("PUBLIC") is False
+
+    @mock.patch("snowflake.sqlalchemy.snowdialect.IS_VERSION_20", False)
+    def test_sa14_returns_true_with_opt_in_no_info_cache(self):
+        """SA 1.4 + cache_column_metadata=True + no info_cache → single-table path."""
+        dialect = _make_dialect(_cache_column_metadata=True)
+        assert dialect._is_single_table_reflection("PUBLIC", info_cache=None) is True
+
+    @mock.patch("snowflake.sqlalchemy.snowdialect.IS_VERSION_20", False)
+    def test_sa14_returns_false_when_metadata_reflect_in_progress(self):
+        """SA 1.4 + MetaData.reflect() in progress → fall back to schema-wide query."""
+        dialect = _make_dialect(_cache_column_metadata=True)
+        tables_info_key = (dialect._get_schema_tables_info.__name__, ("PUBLIC",), ())
+        assert (
+            dialect._is_single_table_reflection(
+                "PUBLIC", info_cache={tables_info_key: {}}
+            )
+            is False
+        )
+
+    @mock.patch("snowflake.sqlalchemy.snowdialect.IS_VERSION_20", False)
+    def test_sa14_returns_true_when_schema_tables_not_yet_cached(self):
+        """SA 1.4 + cache_column_metadata=True + empty cache → single-table path."""
+        dialect = _make_dialect(_cache_column_metadata=True)
+        assert dialect._is_single_table_reflection("PUBLIC", info_cache={}) is True
+
+
+# ---------------------------------------------------------------------------
+# Single-table dispatch on SA 2.x (SNOW-689531)
+# ---------------------------------------------------------------------------
+
+
+class TestSingleTableDispatchSA2:
+    """SA 2.x: singular reflection methods must route to table-specific queries
+    without requiring cache_column_metadata=True."""
+
+    @pytest.mark.skipif(not IS_VERSION_20, reason="SA 2.x only")
+    @pytest.mark.parametrize(
+        "public_method,table_method,schema_method,expected",
+        [
+            (
+                "get_pk_constraint",
+                "_get_table_primary_keys",
+                "_get_schema_primary_keys",
+                {"constrained_columns": ["id"], "name": "pk_foo"},
+            ),
+            (
+                "get_unique_constraints",
+                "_get_table_unique_constraints",
+                "_get_schema_unique_constraints",
+                [{"column_names": ["email"], "name": "uq_email"}],
+            ),
+            (
+                "get_foreign_keys",
+                "_get_table_foreign_keys",
+                "_get_schema_foreign_keys",
+                [{"referred_table": "bar", "constrained_columns": ["bar_id"]}],
+            ),
+            (
+                "get_indexes",
+                "_get_table_indexes",
+                "get_multi_indexes",
+                [{"name": "idx_foo", "column_names": ["col1"], "unique": False}],
+            ),
+        ],
+    )
+    def test_uses_table_path(
+        self, public_method, table_method, schema_method, expected
+    ):
+        dialect = _make_dialect()
+        connection = mock.Mock()
+
+        with mock.patch.object(
+            dialect, table_method, return_value=expected
+        ) as tbl_mock, mock.patch.object(
+            dialect,
+            schema_method,
+            side_effect=AssertionError(f"{schema_method} must not be called"),
+        ):
+            result = getattr(dialect, public_method)(connection, "foo", schema="PUBLIC")
+
+        tbl_mock.assert_called_once()
+        assert result == expected
+
+    @pytest.mark.skipif(not IS_VERSION_20, reason="SA 2.x only")
+    def test_get_indexes_passes_raw_tablename_not_normalized(self):
+        """get_indexes must pass the raw tablename string to _get_table_indexes.
+
+        normalize_name() converts plain lowercase strings to
+        quoted_name(quote=True).  quoted_name.upper() is a deliberate no-op
+        when quote=True, so if the normalized form reaches _always_quote_join
+        the identifier stays lowercase and Snowflake treats it as a
+        case-sensitive lookup — failing to find a table stored as UPPERCASE.
+        """
+        dialect = _make_dialect()
+        connection = mock.Mock()
+        received = {}
+
+        def capture(conn, table_name, schema, **kw):
+            received["table_name"] = table_name
+            return []
+
+        with mock.patch.object(dialect, "_get_table_indexes", side_effect=capture):
+            dialect.get_indexes(connection, "my_table", schema="PUBLIC")
+
+        # Must be a plain str, not a quoted_name, so denormalize_name can
+        # uppercase it correctly inside _always_quote_join.
+        assert received["table_name"] == "my_table"
+        assert type(received["table_name"]) is str

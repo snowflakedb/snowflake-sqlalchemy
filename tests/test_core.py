@@ -913,7 +913,7 @@ def test_naming_convention_constraint_names(engine_testaccount):
         users.drop(engine_testaccount)
 
 
-def test_get_multi_column_primary_key(engine_testaccount):
+def test_get_multiple_column_primary_key(engine_testaccount):
     """
     Tests multicolumn primary key with and without autoincrement
     """
@@ -939,6 +939,8 @@ def test_get_multi_column_primary_key(engine_testaccount):
         assert columns_in_mytable[1]["primary_key"], "primary key"
 
         primary_keys = inspector.get_pk_constraint("mytable")
+
+        # Different from column order, as it seems SQLAlchemy produces the following constraint: PRIMARY KEY (id, gid)
         assert primary_keys["constrained_columns"] == ["id", "gid"]
 
     finally:
@@ -2330,15 +2332,16 @@ def test_snowflake_sqlalchemy_as_valid_client_type():
             literal(10),
             0.5,
         ],
-        [literal(5), func.sqrt(literal(10)), 1.5811388300841895],
+        [literal(5), func.sqrt(literal(10)), decimal.Decimal("1.666667")],
         [literal(4), literal(5), decimal.Decimal("0.800000")],
         [literal(2), literal(2), 1.0],
         [literal(3), literal(2), 1.5],
-        [literal(4), literal(1.5), 2.666667],
-        [literal(5.5), literal(10.7), 0.5140187],
+        [literal(4), literal(1.5), 2.6666666666666665],
+        [literal(5.5), literal(10.7), 0.5140186915887851],
         [literal(5.5), literal(8), 0.6875],
     ],
 )
+@pytest.mark.feature_v20
 def test_true_division_operation(engine_testaccount, operation):
     # expected_warning = "div_is_floordiv value will be changed to False in a future release. This will generate a behavior change on true and floor division. Please review https://docs.sqlalchemy.org/en/20/changelog/whatsnew_20.html#python-division-operator-performs-true-division-for-all-backends-added-floor-division"
     # with pytest.warns(PendingDeprecationWarning, match=expected_warning):
@@ -2353,7 +2356,7 @@ def test_true_division_operation(engine_testaccount, operation):
     "operation",
     [
         [literal(5), literal(10), 0.5, 0.5],
-        [literal(5), func.sqrt(literal(10)), 1.5811388300841895, 1.0],
+        [literal(5), func.sqrt(literal(10)), decimal.Decimal("1.666667"), 1.0],
         [
             literal(4),
             literal(5),
@@ -2362,8 +2365,8 @@ def test_true_division_operation(engine_testaccount, operation):
         ],
         [literal(2), literal(2), 1.0, 1.0],
         [literal(3), literal(2), 1.5, 1.5],
-        [literal(4), literal(1.5), 2.666667, 2.0],
-        [literal(5.5), literal(10.7), 0.5140187, 0],
+        [literal(4), literal(1.5), 2.6666666666666665, 2.0],
+        [literal(5.5), literal(10.7), 0.5140186915887851, 0],
         [literal(5.5), literal(8), 0.6875, 0.6875],
     ],
 )

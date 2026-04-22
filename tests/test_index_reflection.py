@@ -5,18 +5,19 @@ import pytest
 from sqlalchemy import MetaData, inspect
 from sqlalchemy.sql.ddl import CreateSchema, DropSchema
 
+from tests.conftest import poll_until
+from tests.util import random_string
+
 
 @pytest.mark.aws
 def test_indexes_reflection(engine_testaccount, db_parameters, sql_compiler):
-    metadata = MetaData()
-
-    table_name = "test_hybrid_table_2"
-    index_name = "INDEX_NAME_2"
+    table_name = "test_hybrid_table_" + random_string(6)
+    index_name = "INDEX_NAME_" + random_string(6).upper()
     schema = db_parameters["schema"]
     index_columns = ["name", "name2"]
 
     create_table_sql = f"""
-   CREATE HYBRID TABLE {table_name} (
+   CREATE HYBRID TABLE {schema}.{table_name} (
         id INT primary key,
         name VARCHAR,
         name2 VARCHAR,
@@ -26,19 +27,25 @@ def test_indexes_reflection(engine_testaccount, db_parameters, sql_compiler):
 
     with engine_testaccount.connect() as connection:
         connection.exec_driver_sql(create_table_sql)
-
-    insp = inspect(engine_testaccount)
+        connection.commit()
 
     try:
-        with engine_testaccount.connect():
-            # Prefixes reflection not supported, example: "HYBRID, DYNAMIC"
-            indexes = insp.get_indexes(table_name, schema)
-            assert len(indexes) == 1
-            assert indexes[0].get("name") == index_name
-            assert indexes[0].get("column_names") == index_columns
+        # On AWS, Hybrid Table (Unistore) index metadata can take a few seconds
+        # to propagate before SHOW INDEXES IN TABLE reflects the new index.
+        indexes = poll_until(
+            lambda: inspect(engine_testaccount).get_indexes(table_name, schema),
+            timeout=10,
+            interval=0.5,
+        )
+
+        assert len(indexes) == 1
+        assert indexes[0].get("name") == index_name
+        assert indexes[0].get("column_names") == index_columns
 
     finally:
-        metadata.drop_all(engine_testaccount)
+        with engine_testaccount.connect() as connection:
+            connection.exec_driver_sql(f"DROP TABLE IF EXISTS {schema}.{table_name}")
+            connection.commit()
 
 
 @pytest.mark.aws
