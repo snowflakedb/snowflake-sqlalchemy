@@ -171,7 +171,7 @@ class SnowflakeDialect(default.DefaultDialect):
         force_div_is_floordiv: bool = True,
         isolation_level: Optional[str] = SnowflakeIsolationLevel.READ_COMMITTED.value,
         enable_decfloat: bool = False,
-        normalize_referred_schema: bool = False,
+        normalize_referred_schema: bool = True,
         **kwargs: Any,
     ):
         super().__init__(isolation_level=isolation_level, **kwargs)
@@ -252,9 +252,8 @@ class SnowflakeDialect(default.DefaultDialect):
         # When enabled, foreign key reflection returns referred_schema=None for
         # targets in the connection's default/current schema, conforming to the
         # SQLAlchemy convention where None means "the target lives in the
-        # default schema".  Disabled by default: reflected FKs always carry
-        # their actual schema, which preserves backward compatibility and keeps
-        # SA's _reflect_fk autoload pointed at the right schema.
+        # default schema".  Enabled by default; set to false to have reflected
+        # FKs always carry their actual schema.
         normalize_referred_schema = query.pop("normalize_referred_schema", None)
         if normalize_referred_schema is not None:
             self._normalize_referred_schema = parse_url_boolean(
@@ -607,7 +606,6 @@ class SnowflakeDialect(default.DefaultDialect):
 
     def _get_same_schemas_for_fk_reflection(
         self,
-        schema: str,
         current_schema: Optional[str],
         current_database: Optional[str],
     ):
@@ -623,13 +621,17 @@ class SnowflakeDialect(default.DefaultDialect):
         (raising ``NoReferencedColumnError`` later) or finds an unrelated
         same-named table in the default schema.
 
-        Therefore the "same schema" set contains only the connection's default
-        and current schema.  The opt-in ``normalize_referred_schema`` dialect
-        flag gates this normalization:
+        Therefore the "same schema" set contains only the dialect's configured
+        default schema (set once at dialect init and stable across the session).
+        We intentionally avoid using ``current_schema`` here because Snowflake's
+        ``CREATE SCHEMA`` automatically switches the session schema, which would
+        cause newly-created schemas to be incorrectly treated as "same schema".
 
-        * ``True``  – normalize default-schema targets to ``None`` so Alembic
-          autogenerate can match user metadata that references the default
-          schema implicitly.
+        The ``normalize_referred_schema`` dialect flag gates this normalization:
+
+        * ``True``  (default) – normalize default-schema targets to ``None`` so
+          Alembic autogenerate can match user metadata that references the
+          default schema implicitly.
         * ``False`` – no normalization; ``referred_schema`` always carries the
           actual schema name returned by Snowflake.
 
@@ -641,7 +643,7 @@ class SnowflakeDialect(default.DefaultDialect):
 
         return {
             self._normalize_schema_target(self.default_schema_name),
-            self._normalize_schema_target(current_schema, current_database),
+            self._normalize_schema_target(self.default_schema_name, current_database),
         }
 
     # ---------------------------------------------------------------------------
@@ -825,7 +827,7 @@ class SnowflakeDialect(default.DefaultDialect):
             connection, **kw
         )
         same_schemas = self._get_same_schemas_for_fk_reflection(
-            schema, current_schema, current_database
+            current_schema, current_database
         )
         try:
             result = connection.execute(
@@ -861,7 +863,7 @@ class SnowflakeDialect(default.DefaultDialect):
             connection, **kw
         )
         same_schemas = self._get_same_schemas_for_fk_reflection(
-            schema, current_schema, current_database
+            current_schema, current_database
         )
         result = connection.execute(
             text(
@@ -1309,6 +1311,9 @@ class SnowflakeDialect(default.DefaultDialect):
         ) and table_name:
             single_table_name = table_name
             if "." in str(table_name):
+                # table_name may arrive as "schema.table" when callers pass a
+                # fully-qualified name.  Strip the schema prefix so that
+                # _always_quote_join does not double-qualify the identifier.
                 _, single_table_name = self._db_plus_schema(str(table_name))
             full_table_name = self._always_quote_join(schema, single_table_name)
             column_info_manager = _StructuredTypeInfoManager(

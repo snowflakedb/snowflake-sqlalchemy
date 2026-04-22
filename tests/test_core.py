@@ -772,6 +772,7 @@ def test_get_foreign_keys_multi_schema(
     engine = engine_testaccount_with_normalize_referred_schema
     schema1_name = f"test_schema1_{uuid.uuid4().hex}"
     schema2_name = f"test_schema2_{uuid.uuid4().hex}"
+    categories_table = f"categories_{uuid.uuid4().hex}"
     default_schema = db_parameters.get("schema")
 
     with engine.connect() as conn:
@@ -816,7 +817,7 @@ def test_get_foreign_keys_multi_schema(
                 schema=schema2_name,
             )
             Table(
-                "categories",
+                categories_table,
                 metadata,
                 Column("id", Integer, primary_key=True),
                 Column("name", String),
@@ -828,7 +829,9 @@ def test_get_foreign_keys_multi_schema(
                 Column("id", Integer, primary_key=True),
                 Column(
                     "category_id",
-                    ForeignKey(f"{default_schema}.categories.id", name="fk_to_default"),
+                    ForeignKey(
+                        f"{default_schema}.{categories_table}.id", name="fk_to_default"
+                    ),
                 ),
                 schema=schema2_name,
             )
@@ -863,7 +866,7 @@ def test_get_foreign_keys_multi_schema(
             )
             assert len(foreign_keys_default) == 1
             assert foreign_keys_default[0]["name"] == "fk_to_default"
-            assert foreign_keys_default[0]["referred_table"] == "categories"
+            assert foreign_keys_default[0]["referred_table"] == categories_table
             assert foreign_keys_default[0]["referred_schema"] is None
 
         finally:

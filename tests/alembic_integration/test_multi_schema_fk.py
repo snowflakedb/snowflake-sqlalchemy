@@ -74,6 +74,12 @@ def test_alembic_autogenerate_multi_schema_fk(
             )
             conn.commit()
 
+            # Prime Snowflake metadata cache for newly created schemas so
+            # SHOW TABLES sees them immediately (avoids visibility latency on
+            # some cloud providers like AWS).
+            conn.execute(text(f"SHOW TABLES IN SCHEMA {schema1}"))
+            conn.execute(text(f"SHOW TABLES IN SCHEMA {schema2}"))
+
             # Target metadata matches DB but adds one extra column.
             # Built after commit so schemas/tables are visible to compare_metadata
             # running on the same connection.
@@ -185,8 +191,15 @@ def test_alembic_autogenerate_fk_to_default_schema(
             )
             conn.commit()
 
-            # FK defined without schema qualifier — matches what reflection returns
-            # (referred_schema=None for FKs targeting the default schema).
+            # Prime Snowflake metadata cache for newly created schemas so
+            # SHOW TABLES sees them immediately (avoids visibility latency on
+            # some cloud providers like AWS).
+            conn.execute(text(f"SHOW TABLES IN SCHEMA {default_schema}"))
+            conn.execute(text(f"SHOW TABLES IN SCHEMA {schema2}"))
+
+            # FK defined without schema qualifier — matches what reflection
+            # returns (referred_schema=None for FKs targeting the default
+            # schema).
             target_metadata = MetaData()
             Table(
                 categories_table,
@@ -202,9 +215,7 @@ def test_alembic_autogenerate_fk_to_default_schema(
                 Column(
                     "category_id",
                     Integer,
-                    ForeignKey(
-                        f"{default_schema}.{categories_table}.id", name="fk_to_default"
-                    ),
+                    ForeignKey(f"{categories_table}.id", name="fk_to_default"),
                 ),
                 schema=schema2,
             )
