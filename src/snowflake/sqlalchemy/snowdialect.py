@@ -172,6 +172,7 @@ class SnowflakeDialect(default.DefaultDialect):
         isolation_level: Optional[str] = SnowflakeIsolationLevel.READ_COMMITTED.value,
         enable_decfloat: bool = False,
         case_sensitive_identifiers: bool = False,
+        cache_column_metadata: bool = False,
         **kwargs: Any,
     ):
         super().__init__(isolation_level=isolation_level, **kwargs)
@@ -183,6 +184,11 @@ class SnowflakeDialect(default.DefaultDialect):
             case_sensitive_identifiers=case_sensitive_identifiers,
         )
         self._enable_decfloat = enable_decfloat
+        # Initialised here so ``_log_new_connection_event`` and any other
+        # pre-connect code path can read the attribute unconditionally.
+        # ``create_connect_args`` may later overwrite it when the URL query
+        # string carries ``cache_column_metadata=...``.
+        self._cache_column_metadata = cache_column_metadata
 
     def initialize(self, connection):
         super().initialize(connection)
@@ -1610,6 +1616,23 @@ class SnowflakeDialect(default.DefaultDialect):
                 telemetry_value["pandas"] = PANDAS_VERSION
             except ImportError:
                 pass
+
+            # Dialect-level configuration flags.  These are user-chosen
+            # booleans that do not contain PII but meaningfully change how
+            # the dialect normalises identifiers, generates SQL, and
+            # reflects schemas.  Recording them on the NEW_CONNECTION event
+            # lets us answer adoption questions ("how many users have
+            # enabled case_sensitive_identifiers?") without separate
+            # instrumentation, and gives support engineers visibility into
+            # a customer's configuration when diagnosing issues.  Values
+            # are read from ``self`` so they reflect the final post-plugin
+            # / post-URL state regardless of how they were configured.
+            telemetry_value["case_sensitive_identifiers"] = (
+                self._case_sensitive_identifiers
+            )
+            telemetry_value["enable_decfloat"] = self._enable_decfloat
+            telemetry_value["cache_column_metadata"] = self._cache_column_metadata
+            telemetry_value["force_div_is_floordiv"] = self.force_div_is_floordiv
 
             snowflake_telemetry_client.add_log_to_batch(
                 TelemetryData.from_telemetry_data_dict(
