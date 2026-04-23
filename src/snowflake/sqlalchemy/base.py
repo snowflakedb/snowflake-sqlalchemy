@@ -489,6 +489,8 @@ class SnowflakeIdentifierPreparer(compiler.IdentifierPreparer):
         )
 
     def _split_schema_by_dot(self, schema):
+        # Each entry is (value, was_quoted) where was_quoted=True means the
+        # value was enclosed in double-quotes in the original string.
         ret = []
         idx = 0
         pre_idx = 0
@@ -496,28 +498,44 @@ class SnowflakeIdentifierPreparer(compiler.IdentifierPreparer):
         while idx < len(schema):
             if not in_quote:
                 if schema[idx] == "." and pre_idx < idx:
-                    ret.append(schema[pre_idx:idx])
+                    ret.append((schema[pre_idx:idx], False))
                     pre_idx = idx + 1
                 elif schema[idx] == '"':
                     in_quote = True
                     pre_idx = idx + 1
             else:
-                if schema[idx] == '"' and pre_idx < idx:
-                    ret.append(schema[pre_idx:idx])
-                    in_quote = False
-                    pre_idx = idx + 1
+                if schema[idx] == '"':
+                    # SQL double-quote escape: "" inside a quoted identifier is a
+                    # literal " character (e.g. "my""schema" → my"schema).
+                    if idx + 1 < len(schema) and schema[idx + 1] == '"':
+                        idx += 1  # skip the second quote; keep accumulating
+                    elif pre_idx < idx:
+                        value = schema[pre_idx:idx].replace('""', '"')
+                        ret.append((value, True))
+                        in_quote = False
+                        pre_idx = idx + 1
             idx += 1
             if pre_idx < len(schema) and schema[pre_idx] == ".":
                 pre_idx += 1
         if pre_idx < idx:
-            ret.append(schema[pre_idx:idx])
+            ret.append((schema[pre_idx:idx], False))
 
-        # convert the returning strings back to quoted_name types, and assign the original 'quote' attribute on it
-        quoted_ret = [
-            quoted_name(value, quote=getattr(schema, "quote", None)) for value in ret
+        # Parts found inside "..." get ``quote=True`` only when the dialect
+        # was constructed with ``case_sensitive_identifiers=True``.  Without
+        # that opt-in we fall back to the input schema's ``.quote`` attribute
+        # (``None`` for a plain str) so the preparer's ``_requires_quotes``
+        # heuristic keeps its pre-existing behaviour — avoids a silent BCR
+        # for users who pass ``'"myschema"'`` and previously saw the inner
+        # quotes stripped by the heuristic.
+        schema_quote = getattr(schema, "quote", None)
+        case_sensitive = getattr(self.dialect, "_case_sensitive_identifiers", False)
+        return [
+            quoted_name(
+                value,
+                quote=True if (was_quoted and case_sensitive) else schema_quote,
+            )
+            for value, was_quoted in ret
         ]
-
-        return quoted_ret
 
 
 class SnowflakeCompiler(compiler.SQLCompiler):
@@ -929,6 +947,9 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
     def denormalize_column_name(self, name):
         if name is None:
             return None
+        if isinstance(name, quoted_name) and name.quote is True:
+            # Caller explicitly requested quoting — preserve case by quoting.
+            return self.preparer.quote_identifier(name)
         elif name.lower() == name and not self.preparer._requires_quotes(name.lower()):
             # no quote as case insensitive
             return name
