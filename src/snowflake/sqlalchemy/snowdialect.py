@@ -171,7 +171,7 @@ class SnowflakeDialect(default.DefaultDialect):
         force_div_is_floordiv: bool = True,
         isolation_level: Optional[str] = SnowflakeIsolationLevel.READ_COMMITTED.value,
         enable_decfloat: bool = False,
-        normalize_referred_schema: bool = True,
+        normalize_referred_schema: bool = False,
         **kwargs: Any,
     ):
         super().__init__(isolation_level=isolation_level, **kwargs)
@@ -252,8 +252,8 @@ class SnowflakeDialect(default.DefaultDialect):
         # When enabled, foreign key reflection returns referred_schema=None for
         # targets in the connection's default/current schema, conforming to the
         # SQLAlchemy convention where None means "the target lives in the
-        # default schema".  Enabled by default; set to false to have reflected
-        # FKs always carry their actual schema.
+        # default schema".  Disabled by default: reflected FKs always carry
+        # their actual schema, which preserves backward compatibility.
         normalize_referred_schema = query.pop("normalize_referred_schema", None)
         if normalize_referred_schema is not None:
             self._normalize_referred_schema = parse_url_boolean(
@@ -629,9 +629,9 @@ class SnowflakeDialect(default.DefaultDialect):
 
         The ``normalize_referred_schema`` dialect flag gates this normalization:
 
-        * ``True``  (default) – normalize default-schema targets to ``None`` so
-          Alembic autogenerate can match user metadata that references the
-          default schema implicitly.
+        * ``True``  – normalize default-schema targets to ``None`` so Alembic
+          autogenerate can match user metadata that references the default
+          schema implicitly.
         * ``False`` – no normalization; ``referred_schema`` always carries the
           actual schema name returned by Snowflake.
 
