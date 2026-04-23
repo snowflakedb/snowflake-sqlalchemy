@@ -171,7 +171,6 @@ class SnowflakeDialect(default.DefaultDialect):
         force_div_is_floordiv: bool = True,
         isolation_level: Optional[str] = SnowflakeIsolationLevel.READ_COMMITTED.value,
         enable_decfloat: bool = False,
-        normalize_referred_schema: bool = False,
         **kwargs: Any,
     ):
         super().__init__(isolation_level=isolation_level, **kwargs)
@@ -179,7 +178,6 @@ class SnowflakeDialect(default.DefaultDialect):
         self.div_is_floordiv = force_div_is_floordiv
         self.name_utils = _NameUtils(self.identifier_preparer)
         self._enable_decfloat = enable_decfloat
-        self._normalize_referred_schema = normalize_referred_schema
 
     def initialize(self, connection):
         super().initialize(connection)
@@ -248,17 +246,6 @@ class SnowflakeDialect(default.DefaultDialect):
         self._cache_column_metadata = (
             parse_url_boolean(cache_column_metadata) if cache_column_metadata else False
         )
-
-        # When enabled, foreign key reflection returns referred_schema=None for
-        # targets in the connection's default/current schema, conforming to the
-        # SQLAlchemy convention where None means "the target lives in the
-        # default schema".  Disabled by default: reflected FKs always carry
-        # their actual schema, which preserves backward compatibility.
-        normalize_referred_schema = query.pop("normalize_referred_schema", None)
-        if normalize_referred_schema is not None:
-            self._normalize_referred_schema = parse_url_boolean(
-                normalize_referred_schema
-            )
 
         # Handle enable_decfloat URL parameter
         enable_decfloat = query.pop("enable_decfloat", None)
@@ -606,7 +593,7 @@ class SnowflakeDialect(default.DefaultDialect):
 
     def _get_same_schemas_for_fk_reflection(
         self,
-        current_schema: Optional[str],
+        schema: str,
         current_database: Optional[str],
     ):
         """Schema targets whose FKs should be reported with ``referred_schema=None``.
@@ -621,26 +608,28 @@ class SnowflakeDialect(default.DefaultDialect):
         (raising ``NoReferencedColumnError`` later) or finds an unrelated
         same-named table in the default schema.
 
-        Therefore the "same schema" set contains only the dialect's configured
-        default schema (set once at dialect init and stable across the session).
-        We intentionally avoid using ``current_schema`` here because Snowflake's
-        ``CREATE SCHEMA`` automatically switches the session schema, which would
-        cause newly-created schemas to be incorrectly treated as "same schema".
+        Normalization is applied only when reflecting the default schema itself.
+        In that case a same-schema FK (default → default) is reported with
+        ``referred_schema=None``, matching SQLAlchemy's convention used by the
+        upstream reflection tests and by applications that define their
+        ``ForeignKey(...)`` without a schema qualifier for default-schema targets.
 
-        The ``normalize_referred_schema`` dialect flag gates this normalization:
+        When reflecting a non-default schema we return an empty set so every FK
+        keeps its actual ``referred_schema``.  This has two consequences:
 
-        * ``True``  – normalize default-schema targets to ``None`` so Alembic
-          autogenerate can match user metadata that references the default
-          schema implicitly.
-        * ``False`` – no normalization; ``referred_schema`` always carries the
-          actual schema name returned by Snowflake.
-
-        See:
-        https://docs.sqlalchemy.org/en/14/core/reflection.html#reflection-schema-qualified-interaction
+        * Same non-default-schema FKs (schema2 → schema2) report
+          ``referred_schema='schema2'`` rather than ``None``, fixing
+          `#610 <https://github.com/snowflakedb/snowflake-sqlalchemy/issues/610>`_
+          where Alembic autogenerate saw a mismatch against user metadata that
+          qualified the target schema explicitly.
+        * Cross-schema FKs whose target happens to be the default schema
+          (schema2 → default) also report the actual default schema name,
+          so user metadata that qualifies the default schema explicitly does
+          not produce spurious diff operations.
         """
-        if not self._normalize_referred_schema:
+        _, schema_only = self._db_plus_schema(schema)
+        if self.normalize_name(schema_only) != self.default_schema_name:
             return set()
-
         return {
             self._normalize_schema_target(self.default_schema_name),
             self._normalize_schema_target(self.default_schema_name, current_database),
@@ -808,26 +797,20 @@ class SnowflakeDialect(default.DefaultDialect):
 
         Called by get_foreign_keys when _is_single_table_reflection returns True.
 
-        With ``normalize_referred_schema=True``, referred_schema is set to None
-        when the FK target is in the same schema as the table being reflected.
-        The same-schema set always includes the explicitly-reflected schema, so that
-        cross-session-schema scenarios (e.g. USE SCHEMA called after engine creation,
-        or reflecting a non-default schema) are handled correctly.
-
-        This matches the SQLAlchemy convention described in:
+        When reflecting the default schema, same-schema FKs (default → default)
+        are reported with ``referred_schema=None`` per SQLAlchemy's convention:
         https://docs.sqlalchemy.org/en/14/core/reflection.html#reflection-schema-qualified-interaction
 
-        Targets in other (non-default) schemas always keep their actual schema
-        so SA's ``_reflect_fk`` autoloads the target from the correct place.
+        When reflecting a non-default schema every FK keeps its actual
+        ``referred_schema`` so SA's ``_reflect_fk`` autoloads the target from
+        the correct place.
 
         Results are cached by the calling method's @reflection.cache decorator.
         """
         full_name = self._always_quote_join(schema, table_name)
-        current_database, current_schema = self._current_database_schema(
-            connection, **kw
-        )
+        current_database, _ = self._current_database_schema(connection, **kw)
         same_schemas = self._get_same_schemas_for_fk_reflection(
-            current_schema, current_database
+            schema, current_database
         )
         try:
             result = connection.execute(
@@ -848,22 +831,22 @@ class SnowflakeDialect(default.DefaultDialect):
         """SHOW IMPORTED KEYS IN SCHEMA — schema-wide path for get_foreign_keys
         (SA 1.4) and get_multi_foreign_keys (SA 2.x).
 
-        With ``normalize_referred_schema=True``, referred_schema is set to None
-        only for FKs whose target is in the connection's default/current schema,
-        matching the SQLAlchemy convention described in:
+        When reflecting the default schema, same-schema FKs (default → default)
+        are reported with ``referred_schema=None`` per SQLAlchemy's convention
+        described in:
         https://docs.sqlalchemy.org/en/14/core/reflection.html#reflection-schema-qualified-interaction
 
-        Targets in other (non-default) schemas always keep their actual schema
-        so SA's ``_reflect_fk`` autoloads the target from the correct place.
+        When reflecting a non-default schema every FK keeps its actual
+        ``referred_schema`` so SA's ``_reflect_fk`` autoloads the target from
+        the correct place and so user metadata that qualifies the target schema
+        explicitly matches the reflected value.
 
         Results are cached for the lifetime of a connection via @reflection.cache.
         DDL executed mid-session will not be reflected until a new connection is used.
         """
-        current_database, current_schema = self._current_database_schema(
-            connection, **kw
-        )
+        current_database, _ = self._current_database_schema(connection, **kw)
         same_schemas = self._get_same_schemas_for_fk_reflection(
-            current_schema, current_database
+            schema, current_database
         )
         result = connection.execute(
             text(

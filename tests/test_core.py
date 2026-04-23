@@ -198,30 +198,6 @@ def test_boolean_query_argument_parsing():
         engine.dispose()
 
 
-def test_normalize_referred_schema_url_argument_parsing():
-    engine = create_engine(
-        URL(
-            **CONNECTION_PARAMETERS,
-            normalize_referred_schema=True,
-        )
-    )
-    try:
-        assert engine.dialect._normalize_referred_schema is True
-    finally:
-        engine.dispose()
-
-
-def test_normalize_referred_schema_dialect_kwarg_parsing():
-    engine = create_engine(
-        URL(**CONNECTION_PARAMETERS),
-        normalize_referred_schema=True,
-    )
-    try:
-        assert engine.dialect._normalize_referred_schema is True
-    finally:
-        engine.dispose()
-
-
 def test_query_tag_appears_in_query_history():
     """
     Tests that query_tag actually appears in Snowflake's query history.
@@ -765,11 +741,9 @@ def test_get_foreign_keys(engine_testaccount):
         users.drop(engine_testaccount)
 
 
-def test_get_foreign_keys_multi_schema(
-    engine_testaccount_with_normalize_referred_schema, db_parameters
-):
+def test_get_foreign_keys_multi_schema(engine_testaccount, db_parameters):
     """Verify referred_schema for cross-schema, same-schema, and default-schema FKs."""
-    engine = engine_testaccount_with_normalize_referred_schema
+    engine = engine_testaccount
     schema1_name = f"test_schema1_{uuid.uuid4().hex}"
     schema2_name = f"test_schema2_{uuid.uuid4().hex}"
     categories_table = f"categories_{uuid.uuid4().hex}"
@@ -860,14 +834,18 @@ def test_get_foreign_keys_multi_schema(
             assert foreign_keys_same[0]["referred_table"] == "products"
             assert foreign_keys_same[0]["referred_schema"] == schema2_name.lower()
 
-            # FK to default schema
+            # Cross-schema FK to the default schema (schema2 -> default).
+            # Reflection returns the real default schema name rather than
+            # ``None`` so that application metadata which qualifies the default
+            # schema explicitly matches the reflected value and Alembic
+            # autogenerate does not produce spurious diff operations.
             foreign_keys_default = inspector.get_foreign_keys(
                 "items", schema=schema2_name
             )
             assert len(foreign_keys_default) == 1
             assert foreign_keys_default[0]["name"] == "fk_to_default"
             assert foreign_keys_default[0]["referred_table"] == categories_table
-            assert foreign_keys_default[0]["referred_schema"] is None
+            assert foreign_keys_default[0]["referred_schema"] == default_schema.lower()
 
         finally:
             metadata.drop_all(engine)

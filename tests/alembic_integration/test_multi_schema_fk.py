@@ -25,16 +25,14 @@ def _find_added_column(diff, column_name):
     return None
 
 
-def test_alembic_autogenerate_multi_schema_fk(
-    engine_testaccount_with_normalize_referred_schema,
-):
+def test_alembic_autogenerate_multi_schema_fk(engine_testaccount):
     """Autogenerate only detects real changes, not spurious FK/table ops.
 
     DDL setup and compare_metadata run on the same connection so that
     SHOW SCHEMAS sees the newly-created schemas immediately (avoids
     metadata-visibility delays on some Snowflake cloud providers).
     """
-    engine = engine_testaccount_with_normalize_referred_schema
+    engine = engine_testaccount
     schema1 = f"test_alembic_schema1_{uuid.uuid4().hex}"
     schema2 = f"test_alembic_schema2_{uuid.uuid4().hex}"
 
@@ -74,9 +72,12 @@ def test_alembic_autogenerate_multi_schema_fk(
             )
             conn.commit()
 
-            # Prime Snowflake metadata cache for newly created schemas so
-            # SHOW TABLES sees them immediately (avoids visibility latency on
-            # some cloud providers like AWS).
+            # Prime Snowflake metadata cache for newly created schemas/tables
+            # so that SHOW SCHEMAS and SHOW TABLES see them immediately.
+            # AWS has higher metadata propagation latency than Azure/GCP:
+            # SHOW SCHEMAS and SHOW TABLES each have their own server-side
+            # metadata cache, so both must be primed separately.
+            conn.execute(text("SHOW SCHEMAS"))
             conn.execute(text(f"SHOW TABLES IN SCHEMA {schema1}"))
             conn.execute(text(f"SHOW TABLES IN SCHEMA {schema2}"))
 
@@ -144,106 +145,5 @@ def test_alembic_autogenerate_multi_schema_fk(
     # Both FKs are fully qualified in user metadata (schema2.products.id and
     # schema1.users.id), and the dialect preserves the real schema for FK
     # targets in non-default schemas, so Alembic sees no FK churn.
-    fk_ops = [op for op in diff if _diff_op_name(op) in ("remove_fk", "add_fk")]
-    assert fk_ops == []
-
-
-def test_alembic_autogenerate_fk_to_default_schema(
-    engine_testaccount_with_normalize_referred_schema, db_parameters
-):
-    """Default-schema FK does not produce spurious Alembic diffs.
-
-    Reflection normalizes referred_schema for targets in the default schema,
-    so metadata that references the same target table with an explicit schema
-    matches the reflected foreign key without remove/add churn.
-
-    DDL setup and compare_metadata run on the same connection so that
-    SHOW SCHEMAS sees the newly-created schema immediately.
-    """
-    engine = engine_testaccount_with_normalize_referred_schema
-    default_schema = db_parameters.get("schema")
-    # Use a UUID suffix to avoid collisions with existing tables in the shared
-    # default schema.
-    categories_table = f"categories_{uuid.uuid4().hex}"
-    schema2 = f"test_alembic_fk_default_{uuid.uuid4().hex}"
-
-    diff = None
-    try:
-        with engine.connect() as conn:
-            conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema2}"))
-            conn.execute(
-                text(
-                    f"""
-                CREATE TABLE {default_schema}.{categories_table} (
-                    id INTEGER PRIMARY KEY, name VARCHAR(100))
-            """
-                )
-            )
-            conn.execute(
-                text(
-                    f"""
-                CREATE TABLE {schema2}.items (
-                    id INTEGER PRIMARY KEY, category_id INTEGER,
-                    CONSTRAINT fk_to_default
-                        FOREIGN KEY (category_id) REFERENCES {default_schema}.{categories_table}(id))
-            """
-                )
-            )
-            conn.commit()
-
-            # Prime Snowflake metadata cache for newly created schemas so
-            # SHOW TABLES sees them immediately (avoids visibility latency on
-            # some cloud providers like AWS).
-            conn.execute(text(f"SHOW TABLES IN SCHEMA {default_schema}"))
-            conn.execute(text(f"SHOW TABLES IN SCHEMA {schema2}"))
-
-            # FK defined without schema qualifier — matches what reflection
-            # returns (referred_schema=None for FKs targeting the default
-            # schema).
-            target_metadata = MetaData()
-            Table(
-                categories_table,
-                target_metadata,
-                Column("id", Integer, primary_key=True),
-                Column("name", String(100)),
-                schema=default_schema,
-            )
-            Table(
-                "items",
-                target_metadata,
-                Column("id", Integer, primary_key=True),
-                Column(
-                    "category_id",
-                    Integer,
-                    ForeignKey(f"{categories_table}.id", name="fk_to_default"),
-                ),
-                schema=schema2,
-            )
-
-            test_schemas = {None, default_schema, schema2}
-
-            context = MigrationContext.configure(
-                conn,
-                opts={
-                    "compare_type": True,
-                    "compare_server_default": True,
-                    "include_schemas": True,
-                    "include_object": lambda obj, name, type_, reflected, compare_to: True,
-                    "include_name": lambda name, type_, parent_names: (
-                        name in test_schemas if type_ == "schema" else True
-                    ),
-                },
-            )
-            diff = compare_metadata(context, target_metadata)
-
-    finally:
-        with engine.connect() as conn:
-            conn.execute(text(f"DROP SCHEMA IF EXISTS {schema2} CASCADE"))
-            conn.execute(
-                text(f"DROP TABLE IF EXISTS {default_schema}.{categories_table}")
-            )
-            conn.commit()
-
-    assert not [op for op in diff if _diff_op_name(op) == "add_table"]
     fk_ops = [op for op in diff if _diff_op_name(op) in ("remove_fk", "add_fk")]
     assert fk_ops == []

@@ -264,14 +264,6 @@ def engine_testaccount_with_qmark(request):
     snowflake.connector.paramstyle = "pyformat"
 
 
-@pytest.fixture()
-def engine_testaccount_with_normalize_referred_schema(request):
-    url = url_factory(normalize_referred_schema=True)
-    engine = get_engine(url)
-    request.addfinalizer(engine.dispose)
-    yield engine
-
-
 @pytest.fixture(scope="session", autouse=True)
 def init_test_schema(request, db_parameters):
     ret = db_parameters
