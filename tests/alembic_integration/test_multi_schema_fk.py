@@ -8,6 +8,29 @@ import uuid
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
 from sqlalchemy import Column, ForeignKey, Integer, MetaData, String, Table, text
+from sqlalchemy.engine.reflection import Inspector
+
+
+class _CatalogSchemaInspector(Inspector):
+    """Inspector that discovers schemas via information_schema.schemata.
+
+    Snowflake's ``SHOW SCHEMAS`` uses a service-level metadata cache that
+    can take minutes to reflect newly created schemas on AWS.
+    ``information_schema.schemata`` reads from the catalog directly and
+    sees committed DDL changes immediately.
+
+    SQLAlchemy's ``inspect(connection)`` uses ``dialect.inspector`` when
+    present (see ``Inspector._construct``), so setting this class on the
+    dialect before calling Alembic's ``compare_metadata`` is enough to
+    redirect schema discovery without monkey-patching.
+    """
+
+    def get_schema_names(self, **kw):
+        with self._operation_context() as conn:
+            rows = conn.execute(
+                text("SELECT schema_name FROM information_schema.schemata")
+            )
+            return [conn.dialect.normalize_name(row[0]) for row in rows]
 
 
 def _diff_op_name(diff_entry):
@@ -26,40 +49,34 @@ def _find_added_column(diff, column_name):
 
 
 def test_alembic_autogenerate_multi_schema_fk(engine_testaccount):
-    """Autogenerate only detects real changes, not spurious FK/table ops.
-
-    DDL setup and compare_metadata run on the same connection so that
-    SHOW SCHEMAS sees the newly-created schemas immediately (avoids
-    metadata-visibility delays on some Snowflake cloud providers).
-    """
+    """Autogenerate only detects real changes, not spurious FK/table ops."""
     engine = engine_testaccount
+    dialect = engine.dialect
     schema1 = f"test_alembic_schema1_{uuid.uuid4().hex}"
     schema2 = f"test_alembic_schema2_{uuid.uuid4().hex}"
 
-    diff = None
-    try:
-        with engine.connect() as conn:
-            conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema1}"))
-            conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema2}"))
-            conn.execute(
-                text(
-                    f"""
+    with engine.connect() as conn:
+        conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema1}"))
+        conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema2}"))
+        conn.execute(
+            text(
+                f"""
                 CREATE TABLE {schema1}.users (
                     id INTEGER PRIMARY KEY, name VARCHAR(100))
             """
-                )
             )
-            conn.execute(
-                text(
-                    f"""
+        )
+        conn.execute(
+            text(
+                f"""
                 CREATE TABLE {schema2}.products (
                     id INTEGER PRIMARY KEY, name VARCHAR(100))
             """
-                )
             )
-            conn.execute(
-                text(
-                    f"""
+        )
+        conn.execute(
+            text(
+                f"""
                 CREATE TABLE {schema2}.orders (
                     id INTEGER PRIMARY KEY,
                     product_id INTEGER, user_id INTEGER,
@@ -68,59 +85,55 @@ def test_alembic_autogenerate_multi_schema_fk(engine_testaccount):
                     CONSTRAINT fk_cross_schema
                         FOREIGN KEY (user_id) REFERENCES {schema1}.users(id))
             """
-                )
             )
-            conn.commit()
+        )
+        conn.commit()
 
-            # Prime Snowflake metadata cache for newly created schemas/tables
-            # so that SHOW SCHEMAS and SHOW TABLES see them immediately.
-            # AWS has higher metadata propagation latency than Azure/GCP:
-            # SHOW SCHEMAS and SHOW TABLES each have their own server-side
-            # metadata cache, so both must be primed separately.
-            conn.execute(text("SHOW SCHEMAS"))
-            conn.execute(text(f"SHOW TABLES IN SCHEMA {schema1}"))
-            conn.execute(text(f"SHOW TABLES IN SCHEMA {schema2}"))
+    # Target metadata matches DB but adds one extra column.
+    target_metadata = MetaData()
+    Table(
+        "users",
+        target_metadata,
+        Column("id", Integer, primary_key=True),
+        Column("name", String(100)),
+        schema=schema1,
+    )
+    Table(
+        "products",
+        target_metadata,
+        Column("id", Integer, primary_key=True),
+        Column("name", String(100)),
+        schema=schema2,
+    )
+    Table(
+        "orders",
+        target_metadata,
+        Column("id", Integer, primary_key=True),
+        Column(
+            "product_id",
+            Integer,
+            ForeignKey(f"{schema2}.products.id", name="fk_same_schema"),
+        ),
+        Column(
+            "user_id",
+            Integer,
+            ForeignKey(f"{schema1}.users.id", name="fk_cross_schema"),
+        ),
+        Column("status", String(50)),
+        schema=schema2,
+    )
 
-            # Target metadata matches DB but adds one extra column.
-            # Built after commit so schemas/tables are visible to compare_metadata
-            # running on the same connection.
-            target_metadata = MetaData()
-            Table(
-                "users",
-                target_metadata,
-                Column("id", Integer, primary_key=True),
-                Column("name", String(100)),
-                schema=schema1,
-            )
-            Table(
-                "products",
-                target_metadata,
-                Column("id", Integer, primary_key=True),
-                Column("name", String(100)),
-                schema=schema2,
-            )
-            Table(
-                "orders",
-                target_metadata,
-                Column("id", Integer, primary_key=True),
-                Column(
-                    "product_id",
-                    Integer,
-                    ForeignKey(f"{schema2}.products.id", name="fk_same_schema"),
-                ),
-                Column(
-                    "user_id",
-                    Integer,
-                    ForeignKey(f"{schema1}.users.id", name="fk_cross_schema"),
-                ),
-                Column("status", String(50)),
-                schema=schema2,
-            )
+    test_schemas = {schema1, schema2}
 
-            test_schemas = {schema1, schema2}
-
-            context = MigrationContext.configure(
-                conn,
+    # Use a custom Inspector that queries information_schema.schemata
+    # for schema discovery.  SQLAlchemy's inspect(connection) checks
+    # dialect.inspector and uses it when present (Inspector._construct).
+    original_inspector = getattr(dialect, "inspector", None)
+    dialect.inspector = _CatalogSchemaInspector
+    try:
+        with engine.connect() as cmp_conn:
+            ctx = MigrationContext.configure(
+                cmp_conn,
                 opts={
                     "compare_type": True,
                     "compare_server_default": True,
@@ -131,9 +144,12 @@ def test_alembic_autogenerate_multi_schema_fk(engine_testaccount):
                     ),
                 },
             )
-            diff = compare_metadata(context, target_metadata)
-
+            diff = compare_metadata(ctx, target_metadata)
     finally:
+        if original_inspector is None:
+            del dialect.inspector
+        else:
+            dialect.inspector = original_inspector
         with engine.connect() as conn:
             conn.execute(text(f"DROP SCHEMA IF EXISTS {schema2} CASCADE"))
             conn.execute(text(f"DROP SCHEMA IF EXISTS {schema1} CASCADE"))
