@@ -1,7 +1,7 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
-"""Tests for Alembic autogenerate with multi-schema foreign keys (#610)."""
+"""Tests for Alembic autogenerate with foreign key reflection (#145, #610)."""
 
 import uuid
 
@@ -163,3 +163,85 @@ def test_alembic_autogenerate_multi_schema_fk(engine_testaccount):
     # targets in non-default schemas, so Alembic sees no FK churn.
     fk_ops = [op for op in diff if _diff_op_name(op) in ("remove_fk", "add_fk")]
     assert fk_ops == []
+
+
+def test_alembic_autogenerate_default_schema_fk(engine_testaccount):
+    """Autogenerate produces no spurious FK ops for default-schema tables (#145).
+
+    Mirrors the scenario from GitHub #145 / SNOW-133298: two tables in
+    the connection's default schema with a FK between them, defined in
+    user metadata WITHOUT an explicit ``schema=`` parameter.  Alembic
+    must see ``referred_schema=None`` for the reflected FK so it matches
+    the user metadata and does not emit a drop-then-recreate migration.
+    """
+    engine = engine_testaccount
+    users_name = f"test145_users_{uuid.uuid4().hex[:8]}"
+    actions_name = f"test145_user_actions_{uuid.uuid4().hex[:8]}"
+
+    with engine.connect() as conn:
+        conn.execute(
+            text(
+                f"""
+                CREATE TABLE {users_name} (
+                    username VARCHAR(100) PRIMARY KEY)
+            """
+            )
+        )
+        conn.execute(
+            text(
+                f"""
+                CREATE TABLE {actions_name} (
+                    id INTEGER PRIMARY KEY,
+                    "user" VARCHAR(100),
+                    CONSTRAINT fk_user_actions_user_user
+                        FOREIGN KEY ("user") REFERENCES {users_name}(username))
+            """
+            )
+        )
+        conn.commit()
+
+    # Target metadata mirrors the DB — no schema= on Table or MetaData,
+    # exactly how the #145 reporter defined their models.
+    target_metadata = MetaData()
+    Table(
+        users_name,
+        target_metadata,
+        Column("username", String(100), primary_key=True),
+    )
+    Table(
+        actions_name,
+        target_metadata,
+        Column("id", Integer, primary_key=True),
+        Column(
+            "user",
+            String(100),
+            ForeignKey(f"{users_name}.username", name="fk_user_actions_user_user"),
+        ),
+        # One extra column so we can confirm autogenerate actually ran.
+        Column("action_type", String(50)),
+    )
+
+    try:
+        with engine.connect() as cmp_conn:
+            ctx = MigrationContext.configure(
+                cmp_conn,
+                opts={
+                    "compare_type": True,
+                    "compare_server_default": True,
+                },
+            )
+            diff = compare_metadata(ctx, target_metadata)
+    finally:
+        with engine.connect() as conn:
+            conn.execute(text(f"DROP TABLE IF EXISTS {actions_name}"))
+            conn.execute(text(f"DROP TABLE IF EXISTS {users_name}"))
+            conn.commit()
+
+    # The extra column proves autogenerate actually ran.
+    add_column_op = _find_added_column(diff, "action_type")
+    assert (
+        add_column_op is not None
+    ), f"Expected 'add_column action_type' but got: {diff}"
+    # The key assertion: no spurious FK drop/create (#145).
+    fk_ops = [op for op in diff if _diff_op_name(op) in ("remove_fk", "add_fk")]
+    assert fk_ops == [], f"Spurious FK operations detected (#145): {fk_ops}"
