@@ -1393,15 +1393,14 @@ class SnowflakeDialect(default.DefaultDialect):
         # (for the WHERE clause).  The schema part must be denormalized because
         # information_schema stores TABLE_SCHEMA in UPPERCASE for case-insensitive
         # identifiers and Snowflake's string comparison is case-sensitive.
-        parts = self.identifier_preparer._split_schema_by_dot(schema_name)
-        if len(parts) != 2:
+        database_raw, schema_raw = self._db_plus_schema(schema_name)
+        if database_raw is None:
             raise ValueError(
                 f"Expected fully-qualified schema name 'database.schema', got '{schema_name}'"
             )
 
-        # str() strips the quoted_name wrapper so quoting is based solely on _requires_quotes.
-        database_part = self.identifier_preparer.quote(str(parts[0]))
-        schema_only = self.denormalize_name(str(parts[1]))
+        database_part = self.identifier_preparer.quote(database_raw)
+        schema_only = self.denormalize_name(schema_raw)
         info_schema_table = f"{database_part}.information_schema.columns"
 
         try:

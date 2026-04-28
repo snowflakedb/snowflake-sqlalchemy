@@ -36,7 +36,7 @@ class TestSchemaParsingUnit:
         "schema, expected",
         [
             ("test_db.my_schema", '"TEST_DB"."MY_SCHEMA"'),
-            ('"test_db"."MiXeD"', '"test_db"."MiXeD"'),
+            ('"test_db"."MiXeD"', '"TEST_DB"."MiXeD"'),
             ("my_schema", '"CURRENT_DB"."MY_SCHEMA"'),
             (None, '"CURRENT_DB"."CURRENT_SCHEMA"'),
         ],
@@ -105,13 +105,16 @@ class TestSchemaParsingUnit:
     @pytest.mark.parametrize(
         "method_name, expected_fragment",
         [
-            ("get_pk_constraint", 'PRIMARY KEYS IN SCHEMA "TEST_DB"."TEST_SCHEMA"'),
             (
-                "get_unique_constraints",
+                "get_multi_pk_constraint",
+                'PRIMARY KEYS IN SCHEMA "TEST_DB"."TEST_SCHEMA"',
+            ),
+            (
+                "get_multi_unique_constraints",
                 'UNIQUE KEYS IN SCHEMA "TEST_DB"."TEST_SCHEMA"',
             ),
             (
-                "get_foreign_keys",
+                "get_multi_foreign_keys",
                 'IMPORTED KEYS IN SCHEMA "TEST_DB"."TEST_SCHEMA"',
             ),
             (
@@ -145,12 +148,8 @@ class TestSchemaParsingUnit:
             return_value=("current_db", "current_schema"),
         ):
             method = getattr(dialect, method_name)
-            if method_name in {
-                "get_pk_constraint",
-                "get_unique_constraints",
-                "get_foreign_keys",
-            }:
-                method(mock_conn, "test_table", schema="test_db.test_schema")
+            if method_name.startswith("get_multi_"):
+                method(mock_conn, schema="test_db.test_schema")
             elif method_name == "get_table_comment":
                 method(mock_conn, "test_table", schema="test_db.test_schema")
             else:

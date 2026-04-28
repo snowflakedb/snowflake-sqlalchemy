@@ -32,6 +32,7 @@ Table of contents:
       * [DECFLOAT Precision](#decfloat-precision)
     * [VECTOR Data Type Support](#vector-data-type-support)
     * [Cache Column Metadata](#cache-column-metadata)
+    * [Cross-Database Reflection](#cross-database-reflection)
     * [VARIANT, ARRAY and OBJECT Support](#variant-array-and-object-support)
     * [Structured Data Types Support](#structured-data-types-support)
       * [MAP](#map)
@@ -611,8 +612,8 @@ stmt = select(apples, bananas).join(
     apples.c.id == bananas.c.id
 )
 
-# The generated SQL will use fully-qualified names:
-# SELECT ... FROM database_a.schema_a.apples
+# The generated SQL will use fully-qualified names for cross-database tables:
+# SELECT ... FROM schema_a.apples
 # JOIN database_b.schema_b.bananas ON ...
 ```
 
