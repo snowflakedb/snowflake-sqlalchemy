@@ -32,6 +32,7 @@ Table of contents:
       * [DECFLOAT Precision](#decfloat-precision)
     * [VECTOR Data Type Support](#vector-data-type-support)
     * [Cache Column Metadata](#cache-column-metadata)
+    * [Cross-Database Reflection](#cross-database-reflection)
     * [VARIANT, ARRAY and OBJECT Support](#variant-array-and-object-support)
     * [Structured Data Types Support](#structured-data-types-support)
       * [MAP](#map)
@@ -575,6 +576,64 @@ For single-table inspection via `Inspector`, per-table queries (`DESC TABLE`, `S
 ```python
 metadata.reflect(bind=engine, schema='public', only=['table1', 'table2'])
 ```
+
+### Cross-Database Reflection
+
+Snowflake SQLAlchemy supports reflecting tables from different databases using the `database.schema` notation in the `schema` parameter. This allows you to work with tables from multiple databases in a single session without using raw SQL.
+
+To reflect a table from a different database, use the `database.schema` notation:
+
+```python
+from sqlalchemy import create_engine, MetaData, Table, select
+
+# Connect to database_a
+engine = create_engine('snowflake://user:pass@account/database_a')
+metadata = MetaData()
+
+# Reflect a table from database_b using database.schema notation
+bananas = Table(
+    'bananas',
+    metadata,
+    schema='database_b.schema_b',  # Cross-database schema
+    autoload_with=engine
+)
+
+# Reflect a table from the current database
+apples = Table(
+    'apples',
+    metadata,
+    schema='schema_a',  # Uses current database (database_a)
+    autoload_with=engine
+)
+
+# Create a cross-database join
+stmt = select(apples, bananas).join(
+    bananas,
+    apples.c.id == bananas.c.id
+)
+
+# The generated SQL will use fully-qualified names for cross-database tables:
+# SELECT ... FROM schema_a.apples
+# JOIN database_b.schema_b.bananas ON ...
+```
+
+You can also reflect all tables from a different database:
+
+```python
+metadata.reflect(
+    bind=engine,
+    schema='database_b.schema_b'
+)
+```
+
+**Note about schema names containing dots**: If your Snowflake schema name literally contains a dot character (e.g., created with `CREATE SCHEMA "my.schema"`), you must quote it in the Python string:
+
+```python
+# For schema literally named "my.schema" in database_b
+table = Table('mytable', metadata, schema='database_b."my.schema"', autoload_with=engine)
+```
+
+The SQL compilation layer already treats unquoted dots as separators. This cross-database reflection feature makes the reflection layer consistent with that existing behavior.
 
 ### VARIANT, ARRAY and OBJECT Support
 
