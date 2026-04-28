@@ -498,6 +498,11 @@ class SnowflakeDialect(default.DefaultDialect):
             fk_name = self.normalize_name(row._mapping["fk_name"])
             if fk_name not in fk_map:
                 referred_schema = self.normalize_name(row._mapping["pk_schema_name"])
+                # .get() is intentional: pk_database_name is present in
+                # current Snowflake SHOW IMPORTED KEYS output but is not
+                # guaranteed by older drivers.  When absent, the target
+                # falls back to a bare schema string (no database
+                # qualifier), which is the pre-existing behaviour.
                 referred_database = self.normalize_name(
                     row._mapping.get("pk_database_name")
                 )
@@ -1294,10 +1299,12 @@ class SnowflakeDialect(default.DefaultDialect):
         ) and table_name:
             single_table_name = table_name
             if "." in str(table_name):
-                # table_name may arrive as "schema.table" when callers pass a
-                # fully-qualified name.  Strip the schema prefix so that
-                # _always_quote_join does not double-qualify the identifier.
-                _, single_table_name = self._db_plus_schema(str(table_name))
+                # table_name may arrive as "schema.table" or even
+                # "database.schema.table" when callers pass a qualified
+                # name.  Take the last component so _always_quote_join
+                # does not double-qualify the identifier.
+                parts = self.identifier_preparer._split_schema_by_dot(str(table_name))
+                single_table_name = str(parts[-1])
             full_table_name = self._always_quote_join(schema, single_table_name)
             column_info_manager = _StructuredTypeInfoManager(
                 connection, self.name_utils, self.default_schema_name
