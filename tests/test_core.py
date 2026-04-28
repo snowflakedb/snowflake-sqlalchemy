@@ -8,6 +8,7 @@ import re
 import string
 import textwrap
 import time
+import uuid
 from datetime import date, datetime
 from unittest.mock import patch
 
@@ -738,6 +739,221 @@ def test_get_foreign_keys(engine_testaccount):
     finally:
         addresses.drop(engine_testaccount)
         users.drop(engine_testaccount)
+
+
+def test_get_foreign_keys_multi_schema(engine_testaccount, db_parameters):
+    """Verify referred_schema for cross-schema, same-schema, and default-schema FKs."""
+    engine = engine_testaccount
+    schema1_name = f"test_schema1_{uuid.uuid4().hex}"
+    schema2_name = f"test_schema2_{uuid.uuid4().hex}"
+    categories_table = f"categories_{uuid.uuid4().hex}"
+    default_schema = db_parameters.get("schema")
+
+    with engine.connect() as conn:
+        conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema1_name}"))
+        conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema2_name}"))
+        conn.commit()
+
+        try:
+            metadata = MetaData()
+            Table(
+                "users",
+                metadata,
+                Column("id", Integer, primary_key=True),
+                Column("name", String),
+                schema=schema1_name,
+            )
+            Table(
+                "orders_cross",
+                metadata,
+                Column("id", Integer, primary_key=True),
+                Column(
+                    "user_id",
+                    ForeignKey(f"{schema1_name}.users.id", name="fk_cross_schema"),
+                ),
+                schema=schema2_name,
+            )
+            Table(
+                "products",
+                metadata,
+                Column("id", Integer, primary_key=True),
+                Column("name", String),
+                schema=schema2_name,
+            )
+            Table(
+                "orders_same",
+                metadata,
+                Column("id", Integer, primary_key=True),
+                Column(
+                    "product_id",
+                    ForeignKey(f"{schema2_name}.products.id", name="fk_same_schema"),
+                ),
+                schema=schema2_name,
+            )
+            Table(
+                categories_table,
+                metadata,
+                Column("id", Integer, primary_key=True),
+                Column("name", String),
+                schema=default_schema,
+            )
+            Table(
+                "items",
+                metadata,
+                Column("id", Integer, primary_key=True),
+                Column(
+                    "category_id",
+                    ForeignKey(
+                        f"{default_schema}.{categories_table}.id", name="fk_to_default"
+                    ),
+                ),
+                schema=schema2_name,
+            )
+            metadata.create_all(engine)
+
+            inspector = inspect(engine)
+
+            # Cross-schema FK (schema2 -> schema1)
+            foreign_keys_cross = inspector.get_foreign_keys(
+                "orders_cross", schema=schema2_name
+            )
+            assert len(foreign_keys_cross) == 1
+            assert foreign_keys_cross[0]["name"] == "fk_cross_schema"
+            assert foreign_keys_cross[0]["referred_table"] == "users"
+            assert foreign_keys_cross[0]["referred_schema"] == schema1_name.lower()
+
+            # Same-schema FK in non-default schema (schema2 -> schema2).
+            # referred_schema stays explicit so SQLAlchemy's _reflect_fk
+            # autoloads the target from the right schema.  Returning None here
+            # would send autoload to the connection's default schema.
+            foreign_keys_same = inspector.get_foreign_keys(
+                "orders_same", schema=schema2_name
+            )
+            assert len(foreign_keys_same) == 1
+            assert foreign_keys_same[0]["name"] == "fk_same_schema"
+            assert foreign_keys_same[0]["referred_table"] == "products"
+            assert foreign_keys_same[0]["referred_schema"] == schema2_name.lower()
+
+            # Cross-schema FK to the default schema (schema2 -> default).
+            # Reflection returns the real default schema name rather than
+            # ``None`` so that application metadata which qualifies the default
+            # schema explicitly matches the reflected value and Alembic
+            # autogenerate does not produce spurious diff operations.
+            foreign_keys_default = inspector.get_foreign_keys(
+                "items", schema=schema2_name
+            )
+            assert len(foreign_keys_default) == 1
+            assert foreign_keys_default[0]["name"] == "fk_to_default"
+            assert foreign_keys_default[0]["referred_table"] == categories_table
+            assert foreign_keys_default[0]["referred_schema"] == default_schema.lower()
+
+        finally:
+            metadata.drop_all(engine)
+            conn.execute(text(f"DROP SCHEMA IF EXISTS {schema1_name} CASCADE"))
+            conn.execute(text(f"DROP SCHEMA IF EXISTS {schema2_name} CASCADE"))
+            conn.commit()
+
+
+@pytest.mark.feature_v20
+def test_get_multi_foreign_keys_multi_schema(engine_testaccount, db_parameters):
+    """Verify get_multi_foreign_keys (SA 2.x bulk path) returns correct referred_schema."""
+    engine = engine_testaccount
+    schema1_name = f"test_schema1_{uuid.uuid4().hex}"
+    schema2_name = f"test_schema2_{uuid.uuid4().hex}"
+    categories_table = f"categories_{uuid.uuid4().hex}"
+    default_schema = db_parameters.get("schema")
+
+    with engine.connect() as conn:
+        conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema1_name}"))
+        conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema2_name}"))
+        conn.commit()
+
+        try:
+            metadata = MetaData()
+            Table(
+                "users",
+                metadata,
+                Column("id", Integer, primary_key=True),
+                Column("name", String),
+                schema=schema1_name,
+            )
+            Table(
+                "orders_cross",
+                metadata,
+                Column("id", Integer, primary_key=True),
+                Column(
+                    "user_id",
+                    ForeignKey(f"{schema1_name}.users.id", name="fk_cross_schema"),
+                ),
+                schema=schema2_name,
+            )
+            Table(
+                "products",
+                metadata,
+                Column("id", Integer, primary_key=True),
+                Column("name", String),
+                schema=schema2_name,
+            )
+            Table(
+                "orders_same",
+                metadata,
+                Column("id", Integer, primary_key=True),
+                Column(
+                    "product_id",
+                    ForeignKey(f"{schema2_name}.products.id", name="fk_same_schema"),
+                ),
+                schema=schema2_name,
+            )
+            Table(
+                categories_table,
+                metadata,
+                Column("id", Integer, primary_key=True),
+                Column("name", String),
+                schema=default_schema,
+            )
+            Table(
+                "items",
+                metadata,
+                Column("id", Integer, primary_key=True),
+                Column(
+                    "category_id",
+                    ForeignKey(
+                        f"{default_schema}.{categories_table}.id", name="fk_to_default"
+                    ),
+                ),
+                schema=schema2_name,
+            )
+            metadata.create_all(engine)
+
+            inspector = inspect(engine)
+            multi_fks = dict(inspector.get_multi_foreign_keys(schema=schema2_name))
+
+            # Cross-schema FK (schema2 -> schema1)
+            fks_cross = multi_fks[(schema2_name, "orders_cross")]
+            assert len(fks_cross) == 1
+            assert fks_cross[0]["name"] == "fk_cross_schema"
+            assert fks_cross[0]["referred_table"] == "users"
+            assert fks_cross[0]["referred_schema"] == schema1_name.lower()
+
+            # Same non-default schema FK (schema2 -> schema2)
+            fks_same = multi_fks[(schema2_name, "orders_same")]
+            assert len(fks_same) == 1
+            assert fks_same[0]["name"] == "fk_same_schema"
+            assert fks_same[0]["referred_table"] == "products"
+            assert fks_same[0]["referred_schema"] == schema2_name.lower()
+
+            # Non-default -> default schema FK (schema2 -> default)
+            fks_default = multi_fks[(schema2_name, "items")]
+            assert len(fks_default) == 1
+            assert fks_default[0]["name"] == "fk_to_default"
+            assert fks_default[0]["referred_table"] == categories_table
+            assert fks_default[0]["referred_schema"] == default_schema.lower()
+
+        finally:
+            metadata.drop_all(engine)
+            conn.execute(text(f"DROP SCHEMA IF EXISTS {schema1_name} CASCADE"))
+            conn.execute(text(f"DROP SCHEMA IF EXISTS {schema2_name} CASCADE"))
+            conn.commit()
 
 
 def test_naming_convention_constraint_names(engine_testaccount):
