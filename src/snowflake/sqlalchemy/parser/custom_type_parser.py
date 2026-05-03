@@ -17,6 +17,7 @@ from sqlalchemy.sql.sqltypes import (
     SMALLINT,
     TIME,
     TIMESTAMP,
+    UUID,
     VARCHAR,
     NullType,
 )
@@ -76,6 +77,7 @@ ischema_names = {
     "ARRAY": ARRAY,
     "GEOGRAPHY": GEOGRAPHY,
     "GEOMETRY": GEOMETRY,
+    "UUID": UUID,
 }
 
 NOT_NULL_STR = "NOT NULL"
