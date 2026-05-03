@@ -78,6 +78,7 @@ def test_extract_parameters():
         ("GEOMETRY", "GEOMETRY"),
         ("VECTOR(FLOAT, 3)", "VECTOR(FLOAT, 3)"),
         ("VECTOR(INT, 256)", "VECTOR(INT, 256)"),
+        ("UUID", "UUID"),
     ],
 )
 def test_snowflake_data_types(input_type, expected_type):
