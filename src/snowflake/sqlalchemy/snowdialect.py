@@ -1012,7 +1012,7 @@ class SnowflakeDialect(default.DefaultDialect):
             return {"precision": numeric_precision, "scale": numeric_scale}
         elif issubclass(col_type, (sqltypes.String, sqltypes.BINARY)):
             return {"length": character_maximum_length}
-        elif issubclass(col_type, sqltypes.Uuid):
+        elif IS_VERSION_20 and issubclass(col_type, sqltypes.Uuid):
             return {"as_uuid": False}
         return {}
 

@@ -6,7 +6,9 @@ from sqlalchemy.sql.sqltypes import Float, Integer, Text
 
 from snowflake.sqlalchemy import NUMBER
 from snowflake.sqlalchemy.custom_types import MAP, TEXT, VECTOR
+from snowflake.sqlalchemy.snowdialect import SnowflakeDialect
 from src.snowflake.sqlalchemy.parser.custom_type_parser import (
+    ischema_names,
     parse_type,
     tokenize_parameters,
 )
@@ -78,7 +80,6 @@ def test_extract_parameters():
         ("GEOMETRY", "GEOMETRY"),
         ("VECTOR(FLOAT, 3)", "VECTOR(FLOAT, 3)"),
         ("VECTOR(INT, 256)", "VECTOR(INT, 256)"),
-        ("UUID", "UUID"),
     ],
 )
 def test_snowflake_data_types(input_type, expected_type):
@@ -110,3 +111,52 @@ def test_vector_rejects_invalid_element_type():
         VECTOR("STRING", 10)
     with pytest.raises(TypeError):
         VECTOR(Text(), 10)
+
+
+# ---------------------------------------------------------------------------
+# UUID type mapping (SA 2.x only)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.feature_v20
+def test_uuid_parse_type_roundtrip():
+    """parse_type('UUID') returns a UUID instance that compiles back to 'UUID'."""
+    result = parse_type("UUID")
+    assert result.compile() == "UUID"
+
+
+@pytest.mark.feature_v20
+def test_uuid_in_ischema_names():
+    """ischema_names maps 'UUID' to sqlalchemy.sql.sqltypes.UUID on SA 2.x."""
+    from sqlalchemy.sql.sqltypes import UUID
+
+    assert "UUID" in ischema_names
+    assert issubclass(ischema_names["UUID"], UUID)
+
+
+@pytest.mark.feature_v20
+def test_get_type_kwargs_uuid_returns_as_uuid_false():
+    """_get_type_kwargs returns {'as_uuid': False} for UUID so values are reflected as strings."""
+    from sqlalchemy.sql.sqltypes import UUID
+
+    dialect = SnowflakeDialect()
+    result = dialect._get_type_kwargs(UUID, None, None, None)
+    assert result == {"as_uuid": False}
+
+
+@pytest.mark.feature_v20
+def test_resolve_column_type_uuid_produces_string_uuid():
+    """_resolve_column_type for 'UUID' returns UUID(as_uuid=False), not NullType."""
+    from sqlalchemy.sql.sqltypes import UUID
+
+    dialect = SnowflakeDialect()
+    col_type = dialect._resolve_column_type(
+        "UUID",
+        character_maximum_length=None,
+        numeric_precision=None,
+        numeric_scale=None,
+        data_type_alias="UUID",
+        column_name="id",
+    )
+    assert isinstance(col_type, UUID)
+    assert col_type.as_uuid is False
