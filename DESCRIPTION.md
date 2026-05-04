@@ -9,6 +9,8 @@ Source code is also available at:
 
 # Unreleased Notes
 
+- Add GCS bucket support for `CopyIntoStorage` (SNOW-721174, [#368](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/368)).
+
 - Scope `referred_schema=None` normalization in foreign key reflection to the default schema only ([#610](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/610), SNOW-2313675):
   - When reflecting the default schema, same-schema FKs (default → default) keep the established SQLAlchemy convention of `referred_schema=None`, preserving compatibility with the upstream reflection test suite and with applications that do not qualify default-schema FK targets.
   - When reflecting a non-default schema every FK keeps its actual `referred_schema`, which prevents SQLAlchemy's `_reflect_fk` from autoloading a non-default-schema target from the wrong place (the bug behind #610) and avoids the Alembic autogenerate mismatch that previously occurred when user metadata explicitly qualified a cross-schema FK that happened to target the default schema.

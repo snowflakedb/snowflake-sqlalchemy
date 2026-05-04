@@ -2,6 +2,7 @@
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
 
+from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from typing import List
 
@@ -160,6 +161,10 @@ class CopyInto(UpdateBase):
 
     def pattern(self, pattern):
         self.copy_options.update({"PATTERN": pattern})
+        return self
+
+    def storage_integration(self, integration_name):
+        self.copy_options.update({"STORAGE_INTEGRATION": integration_name})
         return self
 
 
@@ -498,7 +503,16 @@ class CreateStage(DDLElement):
         self.replace_if_exists = replace_if_exists
 
 
-class AWSBucket(ClauseElement):
+class CloudStorageLocation(ClauseElement, ABC):
+    """Abstract base for cloud storage URI locations used in COPY INTO statements."""
+
+    @classmethod
+    @abstractmethod
+    def from_uri(cls, uri):
+        pass
+
+
+class AWSBucket(CloudStorageLocation):
     """AWS S3 bucket descriptor"""
 
     __visit_name__ = "aws_bucket"
@@ -570,7 +584,7 @@ class AWSBucket(ClauseElement):
         return self
 
 
-class AzureContainer(ClauseElement):
+class AzureContainer(CloudStorageLocation):
     """Microsoft Azure Container descriptor"""
 
     __visit_name__ = "azure_container"
@@ -621,6 +635,48 @@ class AzureContainer(ClauseElement):
 
     def encryption_azure_cse(self, master_key):
         self.encryption_used = {"TYPE": "AZURE_CSE", "MASTER_KEY": master_key}
+        return self
+
+
+class GCSBucket(CloudStorageLocation):
+    """Google Cloud Storage bucket descriptor"""
+
+    __visit_name__ = "gcs_bucket"
+
+    def __init__(self, bucket, path=None):
+        self.bucket = bucket
+        self.path = path
+        self.encryption_used = {}
+
+    @classmethod
+    def from_uri(cls, uri):
+        if uri[0:6] != "gcs://":
+            raise ValueError(f"Invalid GCS bucket URI: {uri}")
+        b = uri[6:].split("/", 1)
+        if len(b) == 1:
+            bucket, path = b[0], None
+        else:
+            bucket, path = b
+        return cls(bucket, path)
+
+    def __repr__(self):
+        encryption = "ENCRYPTION=({})".format(
+            " ".join(
+                f"{n}='{v}'" if isinstance(v, string_types) else f"{n}={v}"
+                for n, v in self.encryption_used.items()
+            )
+        )
+        uri = "'gcs://{}{}'".format(self.bucket, f"/{self.path}" if self.path else "")
+        return "{}{}".format(uri, f" {encryption}" if self.encryption_used else "")
+
+    def encryption_gcs_sse_kms(self, kms_key_id=None):
+        self.encryption_used = {"TYPE": "GCS_SSE_KMS"}
+        if kms_key_id:
+            self.encryption_used["KMS_KEY_ID"] = kms_key_id
+        return self
+
+    def encryption_none(self):
+        self.encryption_used = {"TYPE": "NONE"}
         return self
 
 
