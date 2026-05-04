@@ -2,7 +2,6 @@
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
 
-from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from typing import List
 
@@ -503,13 +502,12 @@ class CreateStage(DDLElement):
         self.replace_if_exists = replace_if_exists
 
 
-class CloudStorageLocation(ClauseElement, ABC):
-    """Abstract base for cloud storage URI locations used in COPY INTO statements."""
+class CloudStorageLocation(ClauseElement):
+    """Base class for cloud storage URI locations used in COPY INTO statements."""
 
     @classmethod
-    @abstractmethod
     def from_uri(cls, uri):
-        pass
+        raise NotImplementedError
 
 
 class AWSBucket(CloudStorageLocation):
