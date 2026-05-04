@@ -86,6 +86,7 @@ from .sql.custom_schema.options import (  # noqa
 
 if IS_VERSION_20:
     from .orm import SnowflakeBase  # noqa
+    from sqlalchemy.sql.sqltypes import UUID  # noqa
 
 from .util import _url as URL  # noqa
 from .util import create_snowflake_engine  # noqa
@@ -171,11 +172,13 @@ _orm = (
 )
 
 _orm_v20 = ("SnowflakeBase",) if IS_VERSION_20 else ()
+_sa20_types = ("UUID",) if IS_VERSION_20 else ()
 
 _helpers = ("create_snowflake_engine",)
 
 __all__ = (
     *_custom_types,
+    *_sa20_types,
     *_custom_commands,
     *_custom_tables,
     *_custom_table_options,
