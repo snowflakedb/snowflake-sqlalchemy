@@ -137,7 +137,7 @@ https://docs.snowflake.com/en/release-notes/bcr-bundles/2023_04/bcr-1057
 class SnowflakeSelectState(SelectState):
     def __init__(self, statement, compiler, **kw):
         self._is_snowflake = (
-            compiler is not None and compiler.dialect.name == "snowflake"
+            compiler is not None and compiler.dialect.name == DIALECT_NAME
         )
         super().__init__(statement, compiler, **kw)
 
@@ -246,11 +246,18 @@ class SnowflakeSelectState(SelectState):
 # handle Snowflake BCR bcr-1057
 @sql.base.CompileState.plugin_for("orm", "select")
 class SnowflakeORMSelectCompileState(context.ORMSelectCompileState):
-    _is_snowflake = False
+    # Default must be True on SA 1.4 (no _init_global_attributes hook there)
+    # so that the BCR-1057 code paths remain active as they were pre-PR.
+    # On SA 2.0 this default is overwritten by _init_global_attributes.
+    _is_snowflake = not IS_VERSION_20
 
     def _init_global_attributes(self, statement, compiler, **kw):
+        # SA 2.0 entrypoint for setting _is_snowflake. SA 1.4 does not call
+        # this hook; on SA 1.4 _is_snowflake defaults to True below so the
+        # pre-PR BCR-1057 code paths remain active (the with_loader_criteria
+        # regression fixed by this PR is an SA 2.0-only scenario).
         self._is_snowflake = (
-            compiler is not None and compiler.dialect.name == "snowflake"
+            compiler is not None and compiler.dialect.name == DIALECT_NAME
         )
         super()._init_global_attributes(statement, compiler, **kw)
 

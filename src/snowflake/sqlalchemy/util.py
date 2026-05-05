@@ -13,7 +13,7 @@ from sqlalchemy import exc, inspection, sql
 from sqlalchemy.exc import NoForeignKeysError
 from sqlalchemy.orm.util import _ORMJoin as sa_orm_util_ORMJoin
 from sqlalchemy.sql.base import _expand_cloned, _from_objects
-from sqlalchemy.sql.elements import _find_columns
+from sqlalchemy.sql.elements import AsBoolean, True_, _find_columns
 from sqlalchemy.sql.selectable import Join, Lateral
 
 from snowflake.connector.compat import IS_STR
@@ -193,11 +193,31 @@ def _find_left_clause_to_join_from(clauses, join_to, onclause):
         return idx
 
 
-class _Snowflake_ORMJoin(sa_orm_util_ORMJoin):
+class _Snowflake_Selectable_Join(Join):
+    """Join subclass for Snowflake BCR-1057 (lateral joins without ON clause)."""
+
+    def _match_primaries(self, left, right):
+        try:
+            return super()._match_primaries(left, right)
+        except NoForeignKeysError:
+            if isinstance(right, Lateral):
+                # BCR-1057: lateral joins don't require FK relationships
+                return None
+            raise
+
+
+class _Snowflake_ORMJoin(_Snowflake_Selectable_Join, sa_orm_util_ORMJoin):
     """_ORMJoin subclass for Snowflake BCR-1057 (lateral joins without ON clause).
 
-    Delegates to _ORMJoin.__init__ for all standard cases. Only intercepts
-    NoForeignKeysError for Lateral joins without an onclause.
+    Inherits ``_match_primaries`` from ``_Snowflake_Selectable_Join`` via MRO so
+    lateral joins without FK relationships don't raise ``NoForeignKeysError``.
+
+    ``_ORMJoin.__init__`` asserts ``self.onclause is not None`` immediately after
+    calling ``Join.__init__``, so for the lateral-without-ON case we pass a
+    ``sql.true()`` placeholder to satisfy the assertion. If no other criteria
+    are applied, ``self.onclause`` still holds just the placeholder and we reset
+    it to ``None`` so compilation emits ``JOIN LATERAL ...`` without an ON
+    clause as Snowflake's BCR-1057 requires.
     """
 
     def __init__(
@@ -211,73 +231,37 @@ class _Snowflake_ORMJoin(sa_orm_util_ORMJoin):
         _right_memo=None,
         _extra_criteria=(),
     ):
-        try:
-            super().__init__(
-                left,
-                right,
-                onclause=onclause,
-                isouter=isouter,
-                full=full,
-                _left_memo=_left_memo,
-                _right_memo=_right_memo,
-                _extra_criteria=_extra_criteria,
-            )
-        except NoForeignKeysError:
-            right_info = inspection.inspect(right)
-            if onclause is None and isinstance(right_info.selectable, Lateral):
-                # BCR-1057: Lateral join without ON clause.
-                # _ORMJoin.__init__ set self._left_memo, self._right_memo,
-                # and _joined_from_info before calling Join.__init__ which raised.
-                if not hasattr(self, "_left_memo"):
-                    self._left_memo = _left_memo
-                if not hasattr(self, "_right_memo"):
-                    self._right_memo = _right_memo
-                if not hasattr(self, "_joined_from_info"):
-                    self._joined_from_info = right_info
+        is_lateral_without_onclause = onclause is None and isinstance(
+            inspection.inspect(right).selectable, Lateral
+        )
+        super().__init__(
+            left,
+            right,
+            onclause=sql.true() if is_lateral_without_onclause else onclause,
+            isouter=isouter,
+            full=full,
+            _left_memo=_left_memo,
+            _right_memo=_right_memo,
+            _extra_criteria=_extra_criteria,
+        )
 
-                _Snowflake_Selectable_Join.__init__(
-                    self, left, right, onclause, isouter, full
-                )
-
-                if _extra_criteria:
-                    if self.onclause is not None:
-                        self.onclause &= sql.and_(*_extra_criteria)
-                    else:
-                        self.onclause = sql.and_(*_extra_criteria)
-
-                if getattr(right_info, "mapper", None) and right_info.mapper.single:
-                    single_crit = right_info.mapper._single_table_criterion
-                    if single_crit is not None:
-                        if right_info.is_aliased_class:
-                            single_crit = right_info._adapter.traverse(single_crit)
-                        if self.onclause is not None:
-                            self.onclause = self.onclause & single_crit
-                        else:
-                            self.onclause = single_crit
-            else:
-                raise
+        if is_lateral_without_onclause and _is_true_placeholder(self.onclause):
+            self.onclause = None
 
 
-class _Snowflake_Selectable_Join(Join):
-    """Join subclass for Snowflake BCR-1057 (lateral joins without ON clause).
+def _is_true_placeholder(onclause):
+    """Return True if ``onclause`` is only the ``sql.true()`` placeholder that
+    ``_Snowflake_ORMJoin`` passes through ``_ORMJoin.__init__`` to satisfy its
+    ``onclause is not None`` assertion.
 
-    Delegates to Join.__init__ for all standard cases. Only intercepts
-    NoForeignKeysError for Lateral joins without an onclause.
+    Join coercions wrap ``sql.true()`` in an :class:`AsBoolean` envelope, so the
+    placeholder shows up as ``AsBoolean(True_)`` rather than a bare ``True_``.
     """
-
-    def __init__(self, left, right, onclause=None, isouter=False, full=False):
-        try:
-            super().__init__(left, right, onclause=onclause, isouter=isouter, full=full)
-        except NoForeignKeysError:
-            # BCR-1057: Snowflake lateral joins don't require ON clause.
-            # Join.__init__ set self.left and self.right before
-            # _match_primaries raised.
-            if onclause is None and isinstance(self.right, Lateral):
-                self.onclause = None
-                self.isouter = isouter
-                self.full = full
-            else:
-                raise
+    if isinstance(onclause, True_):
+        return True
+    if isinstance(onclause, AsBoolean) and isinstance(onclause.element, True_):
+        return True
+    return False
 
 
 def create_snowflake_engine(
