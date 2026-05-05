@@ -83,6 +83,12 @@ class _StructuredTypeInfoManager:
         """Get all columns in a table in a schema"""
         schema = schema if schema else self.default_schema
 
+        if "." in str(table_name):
+            parts = self.name_utils.identifier_preparer._split_schema_by_dot(
+                str(table_name)
+            )
+            table_name = str(parts[-1])
+
         table_schema = self.name_utils.denormalize_name(schema)
         table_name = self.name_utils.denormalize_name(table_name)
         result = self._execute_desc(f"{table_schema}.{table_name}")

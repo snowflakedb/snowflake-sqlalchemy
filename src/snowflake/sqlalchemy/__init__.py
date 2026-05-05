@@ -88,6 +88,7 @@ if IS_VERSION_20:
     from .orm import SnowflakeBase  # noqa
 
 from .util import _url as URL  # noqa
+from .util import create_snowflake_engine  # noqa
 
 base.dialect = dialect = snowdialect.dialect
 
@@ -171,6 +172,8 @@ _orm = (
 
 _orm_v20 = ("SnowflakeBase",) if IS_VERSION_20 else ()
 
+_helpers = ("create_snowflake_engine",)
+
 __all__ = (
     *_custom_types,
     *_custom_commands,
@@ -179,4 +182,5 @@ __all__ = (
     *_enums,
     *_orm,
     *_orm_v20,
+    *_helpers,
 )

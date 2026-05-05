@@ -1,0 +1,1112 @@
+#
+# Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
+#
+
+"""Unit tests for SNOW-1232488 — case-sensitive identifier support."""
+
+from unittest import mock
+
+import pytest
+from sqlalchemy.engine.url import URL as SAUrl
+from sqlalchemy.sql.elements import quoted_name
+
+from snowflake.sqlalchemy import base
+from snowflake.sqlalchemy.snowdialect import SnowflakeDialect
+
+# ---------------------------------------------------------------------------
+# _split_schema_by_dot / quote_schema — plain string with inner double-quotes
+# ---------------------------------------------------------------------------
+
+
+class TestSplitSchemaByDot:
+    """
+    Tests for SnowflakeIdentifierPreparer._split_schema_by_dot and the
+    quote_schema method that drives it.
+
+    Snowflake uses double-quote characters as SQL quoting delimiters.  When a
+    user passes a schema string that already contains literal double-quotes
+    (e.g. '"myschema"' or '"mydb"."myschema"') the parser inside
+    _split_schema_by_dot preserves the case-sensitive intent by setting
+    ``quote=True`` on the extracted parts *when* the dialect is constructed
+    with ``case_sensitive_identifiers=True``.  With the flag off the extracted
+    parts keep the input schema's ``.quote`` attribute (``None`` for a plain
+    string) so the preparer's ``_requires_quotes`` heuristic decides whether
+    each part is quoted in emitted SQL — preserving pre-PR behaviour for
+    callers who have not opted in.
+    """
+
+    @pytest.fixture
+    def ip(self):
+        """Default dialect — ``case_sensitive_identifiers=False`` (legacy)."""
+        return SnowflakeDialect().identifier_preparer
+
+    @pytest.fixture
+    def ip_cs(self):
+        """Case-sensitive dialect — ``case_sensitive_identifiers=True``."""
+        return SnowflakeDialect(case_sensitive_identifiers=True).identifier_preparer
+
+    # ------------------------------------------------------------------
+    # Regression — plain strings (no inner quotes) unchanged by gating
+    # ------------------------------------------------------------------
+
+    def test_plain_lowercase_unquoted(self, ip):
+        """Plain lowercase schema → unquoted in SQL (case-insensitive)."""
+        assert ip.quote_schema("myschema") == "myschema"
+
+    def test_plain_uppercase_quoted(self, ip):
+        """Plain uppercase schema → quoted in SQL (preparer requires_quotes)."""
+        assert ip.quote_schema("MYSCHEMA") == '"MYSCHEMA"'
+
+    def test_plain_dotted_both_unquoted(self, ip):
+        """Plain dotted 'mydb.myschema' → both parts unquoted."""
+        assert ip.quote_schema("mydb.myschema") == "mydb.myschema"
+
+    # ------------------------------------------------------------------
+    # quoted_name inputs — explicit ``.quote=True/False`` always honoured
+    # ------------------------------------------------------------------
+
+    def test_quoted_name_true_single(self, ip):
+        """quoted_name('myschema', True) → double-quoted in SQL."""
+        assert ip.quote_schema(quoted_name("myschema", True)) == '"myschema"'
+
+    def test_quoted_name_false_single(self, ip):
+        """quoted_name('myschema', False) → unquoted in SQL."""
+        assert ip.quote_schema(quoted_name("myschema", False)) == "myschema"
+
+    def test_quoted_name_true_dotted(self, ip):
+        """quoted_name('mydb.myschema', True) → both parts quoted."""
+        assert (
+            ip.quote_schema(quoted_name("mydb.myschema", True)) == '"mydb"."myschema"'
+        )
+
+    # ------------------------------------------------------------------
+    # Plain string with inner double-quotes — flag=True preserves quoting
+    # ------------------------------------------------------------------
+
+    def test_inner_quoted_single_schema(self, ip_cs):
+        """'"myschema"' → '"myschema"' in SQL when case_sensitive_identifiers=True."""
+        assert ip_cs.quote_schema('"myschema"') == '"myschema"'
+
+    def test_inner_quoted_dotted_both(self, ip_cs):
+        """'"mydb"."myschema"' → both parts quoted when flag is on."""
+        assert ip_cs.quote_schema('"mydb"."myschema"') == '"mydb"."myschema"'
+
+    def test_inner_quoted_only_db_part(self, ip_cs):
+        """'"mydb".myschema' — db part quoted, schema follows standard rules."""
+        assert ip_cs.quote_schema('"mydb".myschema') == '"mydb".myschema'
+
+    def test_inner_quoted_only_schema_part(self, ip_cs):
+        """'mydb."myschema"' — only schema part quoted when flag is on."""
+        assert ip_cs.quote_schema('mydb."myschema"') == 'mydb."myschema"'
+
+    def test_inner_quoted_mixed_case_preserved(self, ip):
+        """'"MySchema"' → '"MySchema"' — mixed-case is quoted by _requires_quotes regardless of flag."""
+        assert ip.quote_schema('"MySchema"') == '"MySchema"'
+
+    def test_inner_quoted_uppercase_preserved(self, ip):
+        """'"MYSCHEMA"' → '"MYSCHEMA"' — _requires_quotes forces quoting regardless of flag."""
+        assert ip.quote_schema('"MYSCHEMA"') == '"MYSCHEMA"'
+
+    def test_inner_quoted_embedded_quote_roundtrip(self, ip):
+        """'"my""schema"' (identifier named my"schema) round-trips regardless of flag.
+
+        SQL uses "" as an escape for a literal " inside a quoted identifier.
+        The parser treats this as a single identifier, not two parts.  The
+        embedded ``"`` character is not a legal identifier character, so
+        ``_requires_quotes`` forces double-quoting independently of the
+        case-sensitive flag.
+        """
+        assert ip.quote_schema('"my""schema"') == '"my""schema"'
+
+    # ------------------------------------------------------------------
+    # Legacy (flag=off) — inner quotes are silently stripped by
+    # ``_requires_quotes``.  These assertions pin the pre-PR behaviour that
+    # the gating preserves for users who have not opted in.
+    # ------------------------------------------------------------------
+
+    def test_inner_quoted_single_schema_legacy(self, ip):
+        """Flag off: '"myschema"' → 'myschema' (inner quotes stripped by heuristic)."""
+        assert ip.quote_schema('"myschema"') == "myschema"
+
+    def test_inner_quoted_dotted_both_legacy(self, ip):
+        """Flag off: '"mydb"."myschema"' → 'mydb.myschema'."""
+        assert ip.quote_schema('"mydb"."myschema"') == "mydb.myschema"
+
+    def test_inner_quoted_only_db_part_legacy(self, ip):
+        """Flag off: '"mydb".myschema' → 'mydb.myschema'."""
+        assert ip.quote_schema('"mydb".myschema') == "mydb.myschema"
+
+    def test_inner_quoted_only_schema_part_legacy(self, ip):
+        """Flag off: 'mydb."myschema"' → 'mydb.myschema'."""
+        assert ip.quote_schema('mydb."myschema"') == "mydb.myschema"
+
+    # ------------------------------------------------------------------
+    # split_parts detail — verify quote attribute on returned parts
+    # ------------------------------------------------------------------
+
+    def test_split_parts_inner_quoted_have_quote_true(self, ip_cs):
+        """Flag on: parts extracted from inside "..." carry quote=True."""
+        parts = ip_cs._split_schema_by_dot('"myschema"')
+        assert len(parts) == 1
+        assert getattr(parts[0], "quote", None) is True
+
+    def test_split_parts_inner_quoted_have_quote_none_legacy(self, ip):
+        """Flag off: parts from inside "..." inherit the input's quote=None."""
+        parts = ip._split_schema_by_dot('"myschema"')
+        assert len(parts) == 1
+        assert getattr(parts[0], "quote", None) is None
+
+    def test_split_parts_unquoted_have_quote_none(self, ip):
+        """Parts not inside quotes keep quote=None (standard rules)."""
+        parts = ip._split_schema_by_dot("myschema")
+        assert len(parts) == 1
+        assert getattr(parts[0], "quote", None) is None
+
+    def test_split_parts_dotted_mixed(self, ip_cs):
+        """Flag on: '"mydb".myschema' → first part quote=True, second quote=None."""
+        parts = ip_cs._split_schema_by_dot('"mydb".myschema')
+        assert len(parts) == 2
+        assert getattr(parts[0], "quote", None) is True
+        assert getattr(parts[1], "quote", None) is None
+
+    def test_split_parts_embedded_quote_single_part(self, ip_cs):
+        """Flag on: '"my""schema"' parses to one part with unescaped value and quote=True."""
+        parts = ip_cs._split_schema_by_dot('"my""schema"')
+        assert len(parts) == 1, f"Expected 1 part, got {len(parts)}: {parts}"
+        assert (
+            str(parts[0]) == 'my"schema'
+        ), f"Expected 'my\"schema', got {str(parts[0])!r}"
+        assert getattr(parts[0], "quote", None) is True
+
+
+# ---------------------------------------------------------------------------
+# denormalize_column_name respects quoted_name.quote
+# ---------------------------------------------------------------------------
+
+
+class TestDenormalizeColumnName:
+    """denormalize_column_name must double-quote when given quoted_name(x, True)."""
+
+    def _get_compiler(self, dialect=None):
+        """Return a SnowflakeDDLCompiler with a minimal dialect."""
+        if dialect is None:
+            dialect = base.dialect()
+        from sqlalchemy import Column, Integer, MetaData, Table
+        from sqlalchemy.schema import CreateTable
+
+        t = Table("t", MetaData(), Column("id", Integer))
+        compiler_cls = dialect.ddl_compiler
+        stmt = CreateTable(t)
+        return compiler_cls(dialect, stmt)
+
+    @pytest.mark.parametrize(
+        "input_name,expected",
+        [
+            (quoted_name("mycol", True), '"mycol"'),
+            ("mycol", "mycol"),
+            (None, None),
+            ("myCol", '"myCol"'),
+            (quoted_name("mycol", False), "mycol"),
+        ],
+        ids=[
+            "quoted_name_true",
+            "plain_lowercase",
+            "none",
+            "mixed_case",
+            "quoted_name_false",
+        ],
+    )
+    def test_denormalize_column_name(self, input_name, expected):
+        """denormalize_column_name produces the expected SQL identifier form."""
+        compiler = self._get_compiler()
+        assert compiler.denormalize_column_name(input_name) == expected
+
+    def test_round_trip_reserved_word_with_flag(self):
+        """Round-trip: normalize('TABLE') → denormalize → '\"table\"' with case_sensitive=True."""
+        dialect = SnowflakeDialect(case_sensitive_identifiers=True)
+        normalized = dialect.normalize_name("TABLE")
+        assert isinstance(normalized, quoted_name)
+        assert normalized.quote is True
+        assert str(normalized) == "table"
+
+        result = self._get_compiler(dialect=dialect).denormalize_column_name(normalized)
+        assert result == '"table"', f"Expected '\"table\"', got {result!r}"
+
+
+# ---------------------------------------------------------------------------
+# normalize_name: reserved-word and case handling
+# ---------------------------------------------------------------------------
+
+
+class TestNormalizeName:
+    """normalize_name behaviour across identifier forms and flag states."""
+
+    def _dialect(self, case_sensitive=False):
+        return SnowflakeDialect(case_sensitive_identifiers=case_sensitive)
+
+    @pytest.mark.parametrize(
+        "input_name,flag,expected_value,expected_quote",
+        [
+            # Plain all-uppercase (stored by Snowflake for unquoted identifiers)
+            ("MYTABLE", False, "mytable", None),
+            ("MYTABLE", True, "mytable", None),
+            # All-lowercase: was SQL-quoted at creation → always case-sensitive
+            ("mytable", False, "mytable", True),
+            ("mytable", True, "mytable", True),
+            # Mixed-case: only marked quote=True when case_sensitive_identifiers=True.
+            # With the flag off the name is returned as plain str — emitted SQL is
+            # still '"MyTable"' because the preparer's _requires_quotes heuristic
+            # forces quoting for any name containing uppercase chars.
+            ("MyTable", False, "MyTable", None),
+            ("MyTable", True, "MyTable", True),
+            # ALL-UPPERCASE reserved word: flag=False leaves unchanged (legacy)
+            ("TABLE", False, "TABLE", None),
+            # ALL-UPPERCASE reserved word: flag=True converts to quoted_name
+            ("TABLE", True, "table", True),
+            # Edge cases (both flag states)
+            (None, False, None, None),
+            (None, True, None, None),
+            ("", False, "", None),
+            ("", True, "", None),
+        ],
+        ids=[
+            "uppercase_flag_off",
+            "uppercase_flag_on",
+            "lowercase_flag_off",
+            "lowercase_flag_on",
+            "mixed_flag_off",
+            "mixed_flag_on",
+            "reserved_flag_off",
+            "reserved_flag_on",
+            "none_flag_off",
+            "none_flag_on",
+            "empty_flag_off",
+            "empty_flag_on",
+        ],
+    )
+    def test_normalize_name(self, input_name, flag, expected_value, expected_quote):
+        """normalize_name produces the expected (value, quote) pair."""
+        d = self._dialect(case_sensitive=flag)
+        result = d.normalize_name(input_name)
+        if expected_value is None:
+            assert result is None
+            return
+        assert (
+            str(result) == expected_value
+        ), f"value mismatch for {input_name!r} flag={flag}"
+        actual_quote = getattr(result, "quote", None)
+        assert actual_quote == expected_quote, (
+            f"quote attr mismatch for {input_name!r} flag={flag}: "
+            f"expected {expected_quote}, got {actual_quote}"
+        )
+
+    @pytest.mark.parametrize(
+        "snowflake_name,flag,expected_raw",
+        [
+            # Unquoted uppercase (case-insensitive): round-trips as-is
+            ("MYTABLE", False, "MYTABLE"),
+            ("MYTABLE", True, "MYTABLE"),
+            # Quoted lowercase: normalize → quoted_name, denormalize → same lowercase value
+            ("mytable", False, "mytable"),
+            ("mytable", True, "mytable"),
+            # Mixed-case: normalize → quoted_name, denormalize → same mixed-case value
+            ("MyTable", False, "MyTable"),
+            ("MyTable", True, "MyTable"),
+            # Reserved word with flag on: normalizes to quoted_name("table"), denormalizes to "table"
+            ("TABLE", True, "table"),
+            # Reserved word with flag off: unchanged throughout
+            ("TABLE", False, "TABLE"),
+        ],
+        ids=[
+            "uppercase_roundtrip_flag_off",
+            "uppercase_roundtrip_flag_on",
+            "lowercase_roundtrip_flag_off",
+            "lowercase_roundtrip_flag_on",
+            "mixed_roundtrip_flag_off",
+            "mixed_roundtrip_flag_on",
+            "reserved_roundtrip_flag_on",
+            "reserved_roundtrip_flag_off",
+        ],
+    )
+    def test_normalize_denormalize_round_trip(self, snowflake_name, flag, expected_raw):
+        """normalize_name → denormalize_name round-trip produces the expected raw value."""
+        d = self._dialect(case_sensitive=flag)
+        normalized = d.normalize_name(snowflake_name)
+        result = d.denormalize_name(normalized)
+        assert (
+            result == expected_raw
+        ), f"denormalize_name({normalized!r}) = {result!r}, expected {expected_raw!r}"
+
+    def test_all_reserved_words_flag_off_unchanged(self):
+        """All-uppercase reserved words return unchanged when flag=False (spot-check)."""
+        from snowflake.sqlalchemy.base import RESERVED_WORDS
+
+        d = self._dialect(case_sensitive=False)
+        for word in list(RESERVED_WORDS)[:20]:
+            upper = word.upper()
+            if upper == word:
+                result = d.normalize_name(upper)
+                assert (
+                    result == upper
+                ), f"flag=False: normalize_name({upper!r}) should be {upper!r}, got {result!r}"
+
+    def test_all_reserved_words_flag_on_returns_quoted(self):
+        """All-uppercase reserved words return quoted_name(lc, True) when flag=True."""
+        from snowflake.sqlalchemy.base import RESERVED_WORDS
+
+        d = self._dialect(case_sensitive=True)
+        for word in list(RESERVED_WORDS)[:20]:
+            upper = word.upper()
+            if upper == word:
+                result = d.normalize_name(upper)
+                assert isinstance(
+                    result, quoted_name
+                ), f"flag=True: normalize_name({upper!r}) should be quoted_name, got {result!r}"
+                assert result.quote is True
+                assert str(result) == upper.lower()
+
+
+# ---------------------------------------------------------------------------
+# _has_object denormalizes object_name before building SQL
+# ---------------------------------------------------------------------------
+
+
+class TestHasObjectNormalization:
+    """_has_object must denormalize object_name before building the DESC SQL."""
+
+    def _dialect_with_mock_connection(self):
+        d = SnowflakeDialect()
+        conn = mock.MagicMock()
+        # Make the execute call return a result with one row so has_object=True
+        result_mock = mock.MagicMock()
+        result_mock.fetchone.return_value = ("some_row",)
+        conn.execute.return_value = result_mock
+        return d, conn
+
+    def test_plain_lowercase_generates_quoted_uppercase(self):
+        """_has_object('mytable') should generate DESC TABLE \"MYTABLE\" (quoted uppercase)."""
+        d, conn = self._dialect_with_mock_connection()
+        d._has_object(conn, "TABLE", "mytable")
+        call_args = conn.execute.call_args
+        sql_text = str(call_args[0][0])
+        # denormalize_name('mytable') -> 'MYTABLE'
+        # _denormalize_quote_join('MYTABLE') -> '"MYTABLE"'
+        assert (
+            '"MYTABLE"' in sql_text
+        ), f"Expected '\"MYTABLE\"' in DESC SQL, got: {sql_text!r}"
+
+    def test_quoted_name_generates_quoted_lowercase(self):
+        """_has_object(quoted_name('mytable', True)) should generate DESC TABLE \"mytable\"."""
+        d, conn = self._dialect_with_mock_connection()
+        d._has_object(conn, "TABLE", quoted_name("mytable", True))
+        call_args = conn.execute.call_args
+        sql_text = str(call_args[0][0])
+        assert (
+            '"mytable"' in sql_text
+        ), f"Expected '\"mytable\"' in DESC SQL, got: {sql_text!r}"
+
+    def test_mixed_case_generates_quoted_mixed(self):
+        """_has_object('MyTable') should generate DESC TABLE \"MyTable\" (case-sensitive)."""
+        d, conn = self._dialect_with_mock_connection()
+        d._has_object(conn, "TABLE", "MyTable")
+        call_args = conn.execute.call_args
+        sql_text = str(call_args[0][0])
+        # denormalize_name('MyTable') -> 'MyTable' (mixed case passes through)
+        # _denormalize_quote_join('MyTable') -> '"MyTable"' (quoted because mixed case)
+        assert (
+            '"MyTable"' in sql_text
+        ), f"Expected '\"MyTable\"' in DESC SQL, got: {sql_text!r}"
+
+    def test_with_schema_plain_lowercase(self):
+        """_has_object with schema denormalizes both schema and object_name."""
+        d, conn = self._dialect_with_mock_connection()
+        d._has_object(conn, "TABLE", "mytable", schema="myschema")
+        call_args = conn.execute.call_args
+        sql_text = str(call_args[0][0])
+        # Both schema and object_name are denormalized: lowercase → UPPERCASE then quoted.
+        assert (
+            '"MYTABLE"' in sql_text
+        ), f"Expected '\"MYTABLE\"' in DESC SQL, got: {sql_text!r}"
+        assert (
+            '"MYSCHEMA"' in sql_text
+        ), f"Expected '\"MYSCHEMA\"' in DESC SQL, got: {sql_text!r}"
+
+    def test_programming_error_returns_false(self):
+        """_has_object returns False when DESC raises ProgrammingError."""
+        import sqlalchemy.exc as sa_exc
+
+        from snowflake.connector import errors as sf_errors
+
+        d = SnowflakeDialect()
+        conn = mock.MagicMock()
+        orig_exc = sf_errors.ProgrammingError()
+        conn.execute.side_effect = sa_exc.DBAPIError(
+            statement="DESC TABLE mytable",
+            params={},
+            orig=orig_exc,
+            hide_parameters=False,
+        )
+        result = d._has_object(conn, "TABLE", "mytable")
+        assert result is False
+
+
+# ---------------------------------------------------------------------------
+# Feature flag — case_sensitive_identifiers constructor and URL wiring
+# ---------------------------------------------------------------------------
+
+
+class TestCaseSensitiveIdentifiersFlag:
+    """Feature flag wiring via constructor and URL."""
+
+    def test_constructor_default_false(self):
+        """Default SnowflakeDialect() has case_sensitive_identifiers=False."""
+        d = SnowflakeDialect()
+        assert d._case_sensitive_identifiers is False
+        assert d.name_utils.case_sensitive_identifiers is False
+
+    def test_constructor_true(self):
+        """SnowflakeDialect(case_sensitive_identifiers=True) propagates to name_utils."""
+        d = SnowflakeDialect(case_sensitive_identifiers=True)
+        assert d._case_sensitive_identifiers is True
+        assert d.name_utils.case_sensitive_identifiers is True
+
+    def test_url_param_true(self):
+        """URL ?case_sensitive_identifiers=True propagates to both dialect and name_utils."""
+        d = SnowflakeDialect()
+        url = SAUrl.create(
+            "snowflake",
+            username="u",
+            password="p",
+            host="testaccount",
+            query={"case_sensitive_identifiers": "True"},
+        )
+        d.create_connect_args(url)
+        assert d._case_sensitive_identifiers is True
+        assert d.name_utils.case_sensitive_identifiers is True
+
+    def test_url_param_false(self):
+        """URL ?case_sensitive_identifiers=False keeps both at False."""
+        d = SnowflakeDialect(case_sensitive_identifiers=True)  # start True
+        url = SAUrl.create(
+            "snowflake",
+            username="u",
+            password="p",
+            host="testaccount",
+            query={"case_sensitive_identifiers": "False"},
+        )
+        d.create_connect_args(url)
+        assert d._case_sensitive_identifiers is False
+        assert d.name_utils.case_sensitive_identifiers is False
+
+    def test_url_param_not_forwarded_to_connector(self):
+        """case_sensitive_identifiers must be popped and not forwarded to connector."""
+        d = SnowflakeDialect()
+        url = SAUrl.create(
+            "snowflake",
+            username="u",
+            password="p",
+            host="testaccount",
+            query={"case_sensitive_identifiers": "True"},
+        )
+        _, opts = d.create_connect_args(url)
+        assert (
+            "case_sensitive_identifiers" not in opts
+        ), "case_sensitive_identifiers must not be forwarded to connector opts"
+
+    def test_url_param_replaces_name_utils_atomically(self):
+        """URL-driven flip must swap ``name_utils`` rather than mutate it.
+
+        ``create_connect_args`` runs per DBAPI connection; mutating a live
+        ``_NameUtils`` attribute in place would let concurrent readers on
+        other threads observe a torn state where the flag has flipped but
+        the cached preparer has not.  Replacing the whole instance is
+        atomic at the bytecode level, so a reader sees either the old
+        instance or the new one and never a partially-updated object.
+        """
+        d = SnowflakeDialect()
+        original_nu = d.name_utils
+        url = SAUrl.create(
+            "snowflake",
+            username="u",
+            password="p",
+            host="testaccount",
+            query={"case_sensitive_identifiers": "True"},
+        )
+        d.create_connect_args(url)
+        assert d.name_utils is not original_nu
+        assert d.name_utils.case_sensitive_identifiers is True
+        # The original instance is untouched, proving no in-place mutation.
+        assert original_nu.case_sensitive_identifiers is False
+
+    def test_url_param_idempotent_when_unchanged(self):
+        """Re-applying the same flag is a no-op — ``name_utils`` is kept."""
+        d = SnowflakeDialect(case_sensitive_identifiers=True)
+        original_nu = d.name_utils
+        url = SAUrl.create(
+            "snowflake",
+            username="u",
+            password="p",
+            host="testaccount",
+            query={"case_sensitive_identifiers": "True"},
+        )
+        d.create_connect_args(url)
+        assert d.name_utils is original_nu
+        assert d._case_sensitive_identifiers is True
+
+
+# ---------------------------------------------------------------------------
+# URL encoding helper — create_snowflake_engine
+# ---------------------------------------------------------------------------
+
+
+class TestCreateSnowflakeEngineHelper:
+    """Tests for the create_snowflake_engine URL-encoding helper."""
+
+    def test_case_sensitive_schema_encodes_with_percent22(self):
+        """case_sensitive_schema=True should encode schema as %22schema%22."""
+        from snowflake.sqlalchemy.util import create_snowflake_engine
+
+        # Use create_engine=False so we just get back the URL we'd use
+        # We'll test the URL by creating a mock engine
+        with mock.patch("snowflake.sqlalchemy.util._sa_create_engine") as mock_ce:
+            mock_ce.return_value = mock.MagicMock()
+            create_snowflake_engine(
+                "snowflake://u:p@acct/mydb",
+                schema="myschema",
+                case_sensitive_schema=True,
+            )
+            call_url = mock_ce.call_args[0][0]
+            assert (
+                "%22myschema%22" in call_url
+            ), f"Expected %22myschema%22 in URL, got: {call_url!r}"
+
+    def test_case_insensitive_schema_no_encoding(self):
+        """case_sensitive_schema=False (default) should not encode schema."""
+        from snowflake.sqlalchemy.util import create_snowflake_engine
+
+        with mock.patch("snowflake.sqlalchemy.util._sa_create_engine") as mock_ce:
+            mock_ce.return_value = mock.MagicMock()
+            create_snowflake_engine(
+                "snowflake://u:p@acct/mydb",
+                schema="myschema",
+                case_sensitive_schema=False,
+            )
+            call_url = mock_ce.call_args[0][0]
+            assert (
+                "%22" not in call_url
+            ), f"Should not have percent-encoded quotes in URL, got: {call_url!r}"
+            assert "myschema" in call_url
+
+    def test_no_schema(self):
+        """Without schema, the base URL is passed through unchanged."""
+        from snowflake.sqlalchemy.util import create_snowflake_engine
+
+        base_url = "snowflake://u:p@acct/mydb"
+        with mock.patch("snowflake.sqlalchemy.util._sa_create_engine") as mock_ce:
+            mock_ce.return_value = mock.MagicMock()
+            create_snowflake_engine(base_url)
+            call_url = mock_ce.call_args[0][0]
+            assert call_url == base_url
+
+    def test_trailing_slash_stripped_before_schema(self):
+        """Base URL trailing slash must not produce double slashes."""
+        from snowflake.sqlalchemy.util import create_snowflake_engine
+
+        with mock.patch("snowflake.sqlalchemy.util._sa_create_engine") as mock_ce:
+            mock_ce.return_value = mock.MagicMock()
+            create_snowflake_engine(
+                "snowflake://u:p@acct/mydb/",
+                schema="myschema",
+                case_sensitive_schema=True,
+            )
+            call_url = mock_ce.call_args[0][0]
+            assert (
+                "//" not in call_url.split("://", 1)[1]
+            ), f"Double slash in path portion of URL: {call_url!r}"
+            assert "%22myschema%22" in call_url
+
+    def test_kwargs_forwarded_to_create_engine(self):
+        """Extra kwargs must be forwarded to sqlalchemy.create_engine."""
+        from snowflake.sqlalchemy.util import create_snowflake_engine
+
+        with mock.patch("snowflake.sqlalchemy.util._sa_create_engine") as mock_ce:
+            mock_ce.return_value = mock.MagicMock()
+            create_snowflake_engine(
+                "snowflake://u:p@acct/mydb",
+                schema="s",
+                echo=True,
+                pool_size=5,
+            )
+            _, call_kwargs = mock_ce.call_args
+            assert call_kwargs.get("echo") is True
+            assert call_kwargs.get("pool_size") == 5
+
+    def test_case_insensitive_schema_with_space_is_url_encoded(self):
+        """Security fix: space in schema must be percent-encoded even when case_sensitive_schema=False."""
+        from snowflake.sqlalchemy.util import create_snowflake_engine
+
+        with mock.patch("snowflake.sqlalchemy.util._sa_create_engine") as mock_ce:
+            mock_ce.return_value = mock.MagicMock()
+            create_snowflake_engine(
+                "snowflake://u:p@acct/mydb",
+                schema="my schema",
+                case_sensitive_schema=False,
+            )
+            call_url = mock_ce.call_args[0][0]
+            assert (
+                " " not in call_url
+            ), f"Raw space must not appear in URL, got: {call_url!r}"
+            assert (
+                "my%20schema" in call_url or "my+schema" in call_url
+            ), f"Expected URL-encoded space in URL, got: {call_url!r}"
+
+    def test_case_insensitive_schema_with_question_mark_is_url_encoded(self):
+        """Security fix: '?' in schema must be percent-encoded to prevent query-string injection."""
+        from snowflake.sqlalchemy.util import create_snowflake_engine
+
+        with mock.patch("snowflake.sqlalchemy.util._sa_create_engine") as mock_ce:
+            mock_ce.return_value = mock.MagicMock()
+            create_snowflake_engine(
+                "snowflake://u:p@acct/mydb",
+                schema="myschema?warehouse=COMPUTE_WH",
+                case_sensitive_schema=False,
+            )
+            call_url = mock_ce.call_args[0][0]
+            # The literal '?' must not appear in the path portion of the URL
+            path_and_query = call_url.split("://", 1)[1]
+            assert (
+                "warehouse=COMPUTE_WH" not in call_url.split("?", 1)[-1]
+                if "?" in path_and_query
+                else True
+            )
+            # More direct check: the raw '?' from the schema must be encoded
+            schema_segment = call_url.split("/mydb/", 1)[1]
+            assert (
+                "?" not in schema_segment
+            ), f"Raw '?' must not appear in URL schema segment, got: {call_url!r}"
+            assert (
+                "%3F" in schema_segment
+            ), f"Expected '%3F' (encoded '?') in schema segment, got: {call_url!r}"
+
+    def test_case_insensitive_schema_with_hash_is_url_encoded(self):
+        """Security fix: '#' in schema must be percent-encoded to prevent fragment injection."""
+        from snowflake.sqlalchemy.util import create_snowflake_engine
+
+        with mock.patch("snowflake.sqlalchemy.util._sa_create_engine") as mock_ce:
+            mock_ce.return_value = mock.MagicMock()
+            create_snowflake_engine(
+                "snowflake://u:p@acct/mydb",
+                schema="myschema#fragment",
+                case_sensitive_schema=False,
+            )
+            call_url = mock_ce.call_args[0][0]
+            schema_segment = call_url.split("/mydb/", 1)[1]
+            assert (
+                "#" not in schema_segment
+            ), f"Raw '#' must not appear in URL schema segment, got: {call_url!r}"
+            assert (
+                "%23" in schema_segment
+            ), f"Expected '%23' (encoded '#') in schema segment, got: {call_url!r}"
+
+    def test_case_sensitive_schema_special_chars_encoded(self):
+        """case_sensitive_schema=True with special chars in schema must also encode them."""
+        from snowflake.sqlalchemy.util import create_snowflake_engine
+
+        with mock.patch("snowflake.sqlalchemy.util._sa_create_engine") as mock_ce:
+            mock_ce.return_value = mock.MagicMock()
+            create_snowflake_engine(
+                "snowflake://u:p@acct/mydb",
+                schema="my schema",
+                case_sensitive_schema=True,
+            )
+            call_url = mock_ce.call_args[0][0]
+            assert (
+                " " not in call_url
+            ), f"Raw space must not appear in URL, got: {call_url!r}"
+            assert (
+                "%22" in call_url
+            ), f"Expected %22 (double-quote encoding) in URL, got: {call_url!r}"
+            # The space in 'my schema' must be encoded
+            assert (
+                "my%20schema" in call_url
+            ), f"Expected URL-encoded schema name, got: {call_url!r}"
+
+    def test_base_url_with_query_params_inserts_schema_correctly(self):
+        """Base URL with query params must have schema inserted into path before '?'."""
+        from snowflake.sqlalchemy.util import create_snowflake_engine
+
+        with mock.patch("snowflake.sqlalchemy.util._sa_create_engine") as mock_ce:
+            mock_ce.return_value = mock.MagicMock()
+            create_snowflake_engine(
+                "snowflake://u:p@acct/mydb?warehouse=COMPUTE_WH",
+                schema="myschema",
+            )
+            call_url = mock_ce.call_args[0][0]
+            # Schema must be in path before the query string
+            assert (
+                "/myschema?" in call_url
+            ), f"Expected '/myschema?' in URL, got: {call_url!r}"
+            assert (
+                "warehouse=COMPUTE_WH" in call_url
+            ), f"Expected query param preserved in URL, got: {call_url!r}"
+            # The schema should NOT appear after the '?'
+            query_part = call_url.split("?", 1)[1]
+            assert (
+                "myschema" not in query_part
+            ), f"Schema should not be in query string: {call_url!r}"
+
+    def test_base_url_with_query_params_case_sensitive_schema(self):
+        """Base URL with query params and case_sensitive_schema=True."""
+        from snowflake.sqlalchemy.util import create_snowflake_engine
+
+        with mock.patch("snowflake.sqlalchemy.util._sa_create_engine") as mock_ce:
+            mock_ce.return_value = mock.MagicMock()
+            create_snowflake_engine(
+                "snowflake://u:p@acct/mydb?warehouse=COMPUTE_WH&role=MYROLE",
+                schema="myschema",
+                case_sensitive_schema=True,
+            )
+            call_url = mock_ce.call_args[0][0]
+            # Schema must be in path before the query string, with %22 encoding
+            assert (
+                "%22myschema%22?" in call_url
+            ), f"Expected '/%22myschema%22?' in URL, got: {call_url!r}"
+            assert (
+                "warehouse=COMPUTE_WH" in call_url
+            ), f"Expected first query param preserved in URL, got: {call_url!r}"
+            assert (
+                "role=MYROLE" in call_url
+            ), f"Expected second query param preserved in URL, got: {call_url!r}"
+
+
+# ---------------------------------------------------------------------------
+# Alembic helper
+# ---------------------------------------------------------------------------
+
+
+class TestAlembicRenderItemHelper:
+    """Tests for alembic_util.render_item."""
+
+    def test_importable(self):
+        """render_item should be importable from snowflake.sqlalchemy.alembic_util."""
+        from snowflake.sqlalchemy.alembic_util import render_item
+
+        assert callable(render_item)
+
+    def test_repr_expr_repr_returns_expression(self):
+        """_ReprExpr.__repr__ must return the injected expression, not the string value."""
+        from snowflake.sqlalchemy.alembic_util import _ReprExpr
+
+        r = _ReprExpr("mycol", "sa.sql.elements.quoted_name('mycol', True)")
+        assert repr(r) == "sa.sql.elements.quoted_name('mycol', True)"
+        assert str(r) == "mycol"  # value equality preserved
+        assert r == "mycol"  # str comparison works normally
+
+    def test_primary_path_uses_alembic_renderer(self):
+        """render_item primary path: delegates to Alembic _render_column when available."""
+        from alembic.autogenerate.render import _render_column  # noqa: F401
+        from sqlalchemy import Column, String
+
+        from snowflake.sqlalchemy.alembic_util import render_item
+
+        col = Column(quoted_name("mycol", True), String, nullable=False)
+
+        # Provide enough context for _render_column to succeed.
+        autogen_ctx = mock.MagicMock()
+        autogen_ctx.opts = {
+            "render_item": render_item,
+            "sqlalchemy_module_prefix": "sa.",
+            "user_module_prefix": None,
+            "alembic_module_prefix": "op.",
+        }
+
+        result = render_item("column", col, autogen_ctx)
+
+        assert result is not False
+        assert "quoted_name" in result, f"quoted_name missing in {result!r}"
+        assert "mycol" in result
+        # Alembic handles nullable — should appear since nullable=False
+        assert "nullable=False" in result, f"nullable=False missing in {result!r}"
+        # opts["render_item"] restored after call
+        assert autogen_ctx.opts["render_item"] is render_item
+
+    def test_quoted_name_column_returns_string(self):
+        """render_item for a quoted_name column must return a non-False string."""
+        from alembic.autogenerate.render import _render_column  # noqa: F401
+        from sqlalchemy import Column, Integer
+
+        from snowflake.sqlalchemy.alembic_util import render_item
+
+        col = Column(quoted_name("mycol", True), Integer)
+
+        autogen_ctx = mock.MagicMock()
+        autogen_ctx.opts = {
+            "render_item": render_item,
+            "sqlalchemy_module_prefix": "sa.",
+            "user_module_prefix": None,
+            "alembic_module_prefix": "op.",
+        }
+
+        result = render_item("column", col, autogen_ctx)
+        assert (
+            result is not False
+        ), "render_item should return a string for quoted_name columns"
+        assert isinstance(result, str), f"Expected str, got {type(result)}"
+        assert "mycol" in result, f"Expected 'mycol' in result, got {result!r}"
+        assert (
+            "quoted_name" in result
+        ), f"Rendered output must contain 'quoted_name': {result!r}"
+        assert (
+            "True" in result
+        ), f"Rendered output must contain 'True' for quote flag: {result!r}"
+
+    def test_plain_column_returns_false(self):
+        """render_item for a plain (non-quoted) column returns False (delegate to default)."""
+        from sqlalchemy import Column, Integer
+
+        from snowflake.sqlalchemy.alembic_util import render_item
+
+        col = Column("mycol", Integer)
+        result = render_item("column", col, mock.MagicMock())
+        assert result is False, f"Expected False for plain column, got {result!r}"
+
+    def test_non_column_type_returns_false(self):
+        """render_item for non-column types always returns False."""
+        from snowflake.sqlalchemy.alembic_util import render_item
+
+        result = render_item("table", mock.MagicMock(), mock.MagicMock())
+        assert result is False
+
+    def test_quoted_name_false_returns_false(self):
+        """render_item for quoted_name('mycol', False) returns False (no forced quoting)."""
+        from sqlalchemy import Column, Integer
+
+        from snowflake.sqlalchemy.alembic_util import render_item
+
+        col = Column(quoted_name("mycol", False), Integer)
+        result = render_item("column", col, mock.MagicMock())
+        assert result is False
+
+    def test_quoted_name_column_with_nullable_false(self):
+        """render_item for quoted_name column with nullable=False includes it in output."""
+        from alembic.autogenerate.render import _render_column  # noqa: F401
+        from sqlalchemy import Column, Integer
+
+        from snowflake.sqlalchemy.alembic_util import render_item
+
+        col = Column(quoted_name("mycol", True), Integer, nullable=False)
+
+        autogen_ctx = mock.MagicMock()
+        autogen_ctx.opts = {
+            "render_item": render_item,
+            "sqlalchemy_module_prefix": "sa.",
+            "user_module_prefix": None,
+            "alembic_module_prefix": "op.",
+        }
+
+        result = render_item("column", col, autogen_ctx)
+        assert result is not False
+        assert "nullable=False" in result, f"Expected 'nullable=False' in {result!r}"
+        assert "quoted_name" in result
+        assert "mycol" in result
+
+    def test_quoted_name_column_with_server_default(self):
+        """render_item for quoted_name column with server_default includes it in output."""
+        from alembic.autogenerate.render import _render_column  # noqa: F401
+        from sqlalchemy import Column, Integer, text
+
+        from snowflake.sqlalchemy.alembic_util import render_item
+
+        col = Column(quoted_name("mycol", True), Integer, server_default=text("0"))
+
+        autogen_ctx = mock.MagicMock()
+        autogen_ctx.opts = {
+            "render_item": render_item,
+            "sqlalchemy_module_prefix": "sa.",
+            "user_module_prefix": None,
+            "alembic_module_prefix": "op.",
+        }
+
+        result = render_item("column", col, autogen_ctx)
+        assert result is not False
+        assert "server_default=" in result, f"Expected 'server_default=' in {result!r}"
+        assert "quoted_name" in result
+        assert "mycol" in result
+
+    def test_quoted_name_column_with_primary_key(self):
+        """render_item for quoted_name column with primary_key=True includes it in output."""
+        from alembic.autogenerate.render import _render_column  # noqa: F401
+        from sqlalchemy import Column, Integer
+
+        from snowflake.sqlalchemy.alembic_util import render_item
+
+        col = Column(quoted_name("id", True), Integer, primary_key=True)
+
+        autogen_ctx = mock.MagicMock()
+        autogen_ctx.opts = {
+            "render_item": render_item,
+            "sqlalchemy_module_prefix": "sa.",
+            "user_module_prefix": None,
+            "alembic_module_prefix": "op.",
+        }
+
+        result = render_item("column", col, autogen_ctx)
+        assert result is not False
+        # Alembic renders primary key columns as nullable=False at the column level;
+        # primary_key=True itself is expressed at the table level in migrations.
+        assert "nullable=False" in result, f"Expected 'nullable=False' in {result!r}"
+        assert "quoted_name" in result
+        assert "'id'" in result
+
+    def test_quoted_name_column_with_multiple_attributes(self):
+        """render_item for quoted_name column with multiple attributes includes all."""
+        from alembic.autogenerate.render import _render_column  # noqa: F401
+        from sqlalchemy import Column, Integer, text
+
+        from snowflake.sqlalchemy.alembic_util import render_item
+
+        col = Column(
+            quoted_name("mycol", True),
+            Integer,
+            nullable=False,
+            server_default=text("42"),
+        )
+
+        autogen_ctx = mock.MagicMock()
+        autogen_ctx.opts = {
+            "render_item": render_item,
+            "sqlalchemy_module_prefix": "sa.",
+            "user_module_prefix": None,
+            "alembic_module_prefix": "op.",
+        }
+
+        result = render_item("column", col, autogen_ctx)
+        assert result is not False
+        assert "nullable=False" in result, f"Expected 'nullable=False' in {result!r}"
+        assert "server_default=" in result, f"Expected 'server_default=' in {result!r}"
+        assert "quoted_name" in result
+        assert "mycol" in result
+
+
+# ---------------------------------------------------------------------------
+# Structured type info manager cache key normalization (Gap 2)
+# ---------------------------------------------------------------------------
+
+
+class TestStructuredTypeCacheKeyNormalization:
+    """Regression guard: _StructuredTypeInfoManager normalizes column names in cache."""
+
+    def _make_manager(self, mock_result=None):
+        from snowflake.sqlalchemy.structured_type_info_manager import (
+            _StructuredTypeInfoManager,
+        )
+
+        d = SnowflakeDialect()
+        name_utils = d.name_utils
+
+        conn = mock.MagicMock()
+        if mock_result is not None:
+            conn.execute.return_value = mock_result
+        else:
+            conn.execute.return_value = iter([])
+
+        manager = _StructuredTypeInfoManager(conn, name_utils, "PUBLIC")
+        return manager, conn
+
+    def test_uppercase_key_found_after_normalized_population(self):
+        """After populating via get_column_info (normalized key), lookup must succeed."""
+        # Simulates: Snowflake returns column name 'MYCOL' (uppercase = case-insensitive)
+        # After normalize_name('MYCOL') -> 'mycol'
+        # The cache key should be consistent so a second lookup doesn't miss.
+        from snowflake.sqlalchemy.structured_type_info_manager import (
+            _StructuredTypeInfoManager,
+        )
+
+        d = SnowflakeDialect()
+        name_utils = d.name_utils
+
+        # Simulate DESC TABLE returning one row: (col_name, type, ...)
+        row = ("MYCOL", "VARCHAR(255)", None, "Y", None, "N", None, None, None, "")
+        result_mock = mock.MagicMock()
+        result_mock.__iter__ = mock.MagicMock(return_value=iter([row]))
+
+        conn = mock.MagicMock()
+        conn.execute.return_value = result_mock
+
+        manager = _StructuredTypeInfoManager(conn, name_utils, "PUBLIC")
+
+        # Populate the cache via get_column_info
+        # schema='PUBLIC', table='MYTABLE' (both uppercase from Snowflake)
+        # normalize_name('MYTABLE') -> 'mytable', normalize_name('MYCOL') -> 'mycol'
+        # The cache key should be ('PUBLIC', 'MYTABLE') for the outer manager key
+        # and inner dict key should be 'mycol'
+
+        # Force population via _load_structured_type_info
+        manager._load_structured_type_info("PUBLIC", "MYTABLE")
+
+        # The key stored internally uses the names as passed; let's verify
+        # the column lookup normalizes correctly.
+        # After DESC, column_name 'MYCOL' is normalized to 'mycol' in _parse_desc_result.
+        assert (
+            "PUBLIC",
+            "MYTABLE",
+        ) in manager.full_columns_descriptions, (
+            "Cache should be populated for ('PUBLIC', 'MYTABLE')"
+        )
+        inner = manager.full_columns_descriptions[("PUBLIC", "MYTABLE")]
+        # The column name is normalized
+        assert (
+            "mycol" in inner
+        ), f"Expected 'mycol' in inner dict, got keys: {list(inner.keys())}"
+
+
+# ---------------------------------------------------------------------------
+# CLUSTER BY DDL — quoted_name column generates correct SQL
+# See: snowflakedb/snowflake-sqlalchemy#675
+# ---------------------------------------------------------------------------
+
+
+class TestClusterByWithQuotedName:
+    """CLUSTER BY DDL must double-quote quoted_name columns (snowflakedb/snowflake-sqlalchemy#675)."""
+
+    def _compile_create(self, table_obj):
+        """Compile a CreateTable statement to a string using the Snowflake dialect."""
+        from sqlalchemy.schema import CreateTable
+
+        dialect = SnowflakeDialect()
+        stmt = CreateTable(table_obj)
+        return stmt.compile(dialect=dialect).string
+
+    def test_cluster_by_quoted_name_column_emits_double_quotes(self):
+        """CLUSTER BY with quoted_name('mycol', True) must emit CLUSTER BY (\"mycol\")."""
+        from sqlalchemy import Column, Integer, MetaData, Table
+
+        metadata = MetaData()
+        t = Table(
+            "mytest",
+            metadata,
+            Column("id", Integer, primary_key=True),
+            Column(quoted_name("mycol", True), Integer),
+            snowflake_clusterby=[quoted_name("mycol", True)],
+        )
+        sql = self._compile_create(t)
+        assert (
+            'CLUSTER BY ("mycol")' in sql
+        ), f"Expected 'CLUSTER BY (\"mycol\")' in CREATE TABLE, got: {sql!r}"
+
+    def test_cluster_by_plain_column_unquoted(self):
+        """CLUSTER BY with plain 'mycol' remains unquoted (regression guard)."""
+        from sqlalchemy import Column, Integer, MetaData, Table
+
+        metadata = MetaData()
+        t = Table(
+            "mytest",
+            metadata,
+            Column("id", Integer, primary_key=True),
+            Column("mycol", Integer),
+            snowflake_clusterby=["mycol"],
+        )
+        sql = self._compile_create(t)
+        assert (
+            "CLUSTER BY (mycol)" in sql
+        ), f"Expected 'CLUSTER BY (mycol)' in CREATE TABLE, got: {sql!r}"

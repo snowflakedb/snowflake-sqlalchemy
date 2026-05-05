@@ -46,6 +46,7 @@ path = "src/snowflake/sqlalchemy/version.py"
 
 [project.optional-dependencies]
 development = [
+  "alembic",
   "pre-commit",
   "pytest",
   "setuptools",
@@ -56,6 +57,7 @@ development = [
   "pytz",
   "numpy",
   "syrupy",
+  "alembic",
 ]
 pandas = ["snowflake-connector-python[pandas]"]
 
