@@ -9,6 +9,7 @@ Source code is also available at:
 
 # Unreleased Notes
 
+- Fix `with_loader_criteria` silently dropping filters on non-Snowflake dialects ([#676](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/676)). Importing `snowflake-sqlalchemy` previously altered SQLAlchemy's ORM compilation for every dialect in the process, causing loader-criteria filters to be omitted inside sealed subqueries when using PostgreSQL, MySQL, SQLite, etc. Snowflake dialect behavior is unchanged; the BCR-1057 lateral-join workaround is now scoped to Snowflake connections only.
 - Scope `referred_schema=None` normalization in foreign key reflection to the default schema only ([#610](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/610), SNOW-2313675):
   - When reflecting the default schema, same-schema FKs (default → default) keep the established SQLAlchemy convention of `referred_schema=None`, preserving compatibility with the upstream reflection test suite and with applications that do not qualify default-schema FK targets.
   - When reflecting a non-default schema every FK keeps its actual `referred_schema`, which prevents SQLAlchemy's `_reflect_fk` from autoloading a non-default-schema target from the wrong place (the bug behind #610) and avoids the Alembic autogenerate mismatch that previously occurred when user metadata explicitly qualified a cross-schema FK that happened to target the default schema.
