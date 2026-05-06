@@ -24,11 +24,7 @@ from sqlalchemy.sql.selectable import Lateral, SelectState
 
 from snowflake.sqlalchemy._constants import DIALECT_NAME
 from snowflake.sqlalchemy.compat import IS_VERSION_20, args_reducer, string_types
-from snowflake.sqlalchemy.custom_commands import (
-    AWSBucket,
-    AzureContainer,
-    ExternalStage,
-)
+from snowflake.sqlalchemy.custom_commands import CloudStorageLocation, ExternalStage
 
 from ._constants import NOT_NULL
 from .exc import (
@@ -607,12 +603,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         from_ = None
         if isinstance(copy_into.from_, Table):
             from_ = copy_into.from_.name
-        # this is intended to catch AWSBucket and AzureContainer
-        elif (
-            isinstance(copy_into.from_, AWSBucket)
-            or isinstance(copy_into.from_, AzureContainer)
-            or isinstance(copy_into.from_, ExternalStage)
-        ):
+        elif isinstance(copy_into.from_, (CloudStorageLocation, ExternalStage)):
             from_ = copy_into.from_._compiler_dispatch(self, **kw)
         # everything else (selects, etc.)
         else:
@@ -743,6 +734,25 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             uri,
             credentials if azure_container.credentials_used else "",
             encryption if azure_container.encryption_used else "",
+        )
+
+    def visit_gcs_bucket(self, gcs_bucket, **kw):
+        encryption_list = list(gcs_bucket.encryption_used.items())
+        if kw.get("deterministic", False):
+            encryption_list.sort(key=operator.itemgetter(0))
+        encryption = "ENCRYPTION=({})".format(
+            " ".join(
+                f"{n}='{v}'" if isinstance(v, string_types) else f"{n}={v}"
+                for n, v in encryption_list
+            )
+        )
+        uri = "'gcs://{}{}'".format(
+            gcs_bucket.bucket, f"/{gcs_bucket.path}" if gcs_bucket.path else ""
+        )
+        return (
+            uri,
+            "",
+            encryption if gcs_bucket.encryption_used else "",
         )
 
     def visit_external_stage(self, external_stage, **kw):
