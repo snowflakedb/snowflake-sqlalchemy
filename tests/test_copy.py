@@ -9,10 +9,12 @@ from sqlalchemy.sql import functions, select, text
 from snowflake.sqlalchemy import (
     AWSBucket,
     AzureContainer,
+    CloudStorageLocation,
     CopyFormatter,
     CopyIntoStorage,
     CSVFormatter,
     ExternalStage,
+    GCSBucket,
     JSONFormatter,
     PARQUETFormatter,
 )
@@ -385,6 +387,78 @@ def test_copy_into_storage_parquet_files(sql_compiler):
         "FORCE = true"
     )
     assert result == expected
+
+
+def test_gcs_bucket(sql_compiler):
+    metadata = MetaData()
+    food_items = Table(
+        "python_tests_foods",
+        metadata,
+        Column("id", Integer, Sequence("new_user_id_seq"), primary_key=True),
+        Column("name", String),
+        Column("quantity", Integer),
+    )
+
+    # basic URI round-trip
+    assert GCSBucket.from_uri("gcs://my-bucket").bucket == "my-bucket"
+    assert GCSBucket.from_uri("gcs://my-bucket").path is None
+    assert GCSBucket.from_uri("gcs://my-bucket/exports").path == "exports"
+    with pytest.raises(ValueError):
+        GCSBucket.from_uri("s3://wrong")
+
+    # table into GCS with storage integration
+    stmt = CopyIntoStorage(
+        from_=food_items,
+        into=GCSBucket.from_uri("gcs://my-bucket/exports/"),
+        formatter=PARQUETFormatter(),
+    ).storage_integration("my_gcs_integration")
+    assert sql_compiler(stmt) == (
+        "COPY INTO 'gcs://my-bucket/exports/' FROM python_tests_foods"
+        "  FILE_FORMAT=(TYPE=parquet) STORAGE_INTEGRATION = my_gcs_integration"
+    )
+
+    # select into GCS with KMS encryption
+    stmt2 = CopyIntoStorage(
+        from_=select(food_items),
+        into=GCSBucket.from_uri("gcs://my-bucket").encryption_gcs_sse_kms(
+            "projects/my-project/locations/global/keyRings/my-ring/cryptoKeys/my-key"
+        ),
+        formatter=PARQUETFormatter(),
+    )
+    assert sql_compiler(stmt2) == (
+        "COPY INTO 'gcs://my-bucket' FROM (SELECT python_tests_foods.id, "
+        "python_tests_foods.name, python_tests_foods.quantity FROM python_tests_foods)"
+        "  FILE_FORMAT=(TYPE=parquet)  ENCRYPTION=(KMS_KEY_ID='projects/my-project/"
+        "locations/global/keyRings/my-ring/cryptoKeys/my-key' TYPE='GCS_SSE_KMS')"
+    )
+
+    # encryption_none
+    stmt3 = CopyIntoStorage(
+        from_=food_items,
+        into=GCSBucket("my-bucket").encryption_none(),
+        formatter=PARQUETFormatter(),
+    )
+    assert sql_compiler(stmt3) == (
+        "COPY INTO 'gcs://my-bucket' FROM python_tests_foods"
+        "  FILE_FORMAT=(TYPE=parquet)  ENCRYPTION=(TYPE='NONE')"
+    )
+
+    # load from GCS into table
+    stmt4 = CopyIntoStorage(
+        from_=GCSBucket.from_uri("gcs://my-bucket/data/").encryption_gcs_sse_kms(),
+        into=food_items,
+        formatter=CSVFormatter().field_delimiter(","),
+    )
+    assert sql_compiler(stmt4) == (
+        "COPY INTO python_tests_foods FROM 'gcs://my-bucket/data/'"
+        "  FILE_FORMAT=(TYPE=csv FIELD_DELIMITER=',')  ENCRYPTION=(TYPE='GCS_SSE_KMS')"
+    )
+
+    # CloudStorageLocation ABC: all three providers are subclasses
+    assert issubclass(AWSBucket, CloudStorageLocation)
+    assert issubclass(AzureContainer, CloudStorageLocation)
+    assert issubclass(GCSBucket, CloudStorageLocation)
+    assert isinstance(GCSBucket("bucket"), CloudStorageLocation)
 
 
 def test_copy_into_storage_parquet_pattern(sql_compiler):
