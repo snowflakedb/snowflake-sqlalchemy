@@ -9,8 +9,8 @@ Source code is also available at:
 
 # Unreleased Notes
 
+- Map Snowflake `UUID` column type to `sqlalchemy.sql.sqltypes.UUID` for reflection on SQLAlchemy 2.x ([#681](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/681)). Previously reflected as `NullType`. Values are returned as plain strings (`as_uuid=False`) rather than `uuid.UUID` instances. No change on SQLAlchemy 1.4 where the generic `UUID` type does not exist.
 - Add GCS bucket support for `CopyIntoStorage` (SNOW-721174, [#368](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/368)).
-
 - Scope `referred_schema=None` normalization in foreign key reflection to the default schema only ([#610](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/610), SNOW-2313675):
   - When reflecting the default schema, same-schema FKs (default → default) keep the established SQLAlchemy convention of `referred_schema=None`, preserving compatibility with the upstream reflection test suite and with applications that do not qualify default-schema FK targets.
   - When reflecting a non-default schema every FK keeps its actual `referred_schema`, which prevents SQLAlchemy's `_reflect_fk` from autoloading a non-default-schema target from the wrong place (the bug behind #610) and avoids the Alembic autogenerate mismatch that previously occurred when user metadata explicitly qualified a cross-schema FK that happened to target the default schema.
