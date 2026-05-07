@@ -31,6 +31,7 @@ Table of contents:
     * [DECFLOAT Data Type Support](#decfloat-data-type-support)
       * [DECFLOAT Precision](#decfloat-precision)
     * [VECTOR Data Type Support](#vector-data-type-support)
+    * [UUID Data Type Support](#uuid-data-type-support)
     * [Cache Column Metadata](#cache-column-metadata)
     * [Cross-Database Reflection](#cross-database-reflection)
     * [VARIANT, ARRAY and OBJECT Support](#variant-array-and-object-support)
@@ -454,6 +455,41 @@ t = Table('my_table', metadata,
 )
 metadata.create_all(engine)
 ```
+
+### UUID Data Type Support
+
+> **SQLAlchemy 2.x only.** The generic `UUID` type does not exist in SQLAlchemy 1.4; on that version Snowflake `UUID` columns are reflected as `NullType`.
+
+Snowflake stores UUID values internally as text strings. When a `UUID` column is reflected, snowflake-sqlalchemy maps it to `sqlalchemy.sql.sqltypes.UUID` with `as_uuid=False`, so query results are returned as plain hyphenated strings (e.g. `"6ba7b810-9dad-11d1-80b4-00c04fd430c8"`) rather than `uuid.UUID` objects.
+
+```python
+from sqlalchemy import Column, MetaData, Table, text
+from sqlalchemy.sql.sqltypes import UUID  # SA 2.x
+
+metadata = MetaData()
+
+# Define a table with a UUID primary key
+t = Table(
+    "my_table",
+    metadata,
+    Column("id", UUID, primary_key=True),
+)
+metadata.create_all(engine)
+
+# Reflected UUID columns come back as strings by default
+with engine.connect() as conn:
+    row = conn.execute(text("SELECT id FROM my_table LIMIT 1")).fetchone()
+    print(type(row[0]))   # <class 'str'>
+    print(row[0])         # "6ba7b810-9dad-11d1-80b4-00c04fd430c8"
+```
+
+If you prefer `uuid.UUID` objects in query results, pass `as_uuid=True` explicitly:
+
+```python
+Column("id", UUID(as_uuid=True), primary_key=True)
+```
+
+Note that Alembic autogenerate will render the column as `UUID(as_uuid=True)` in generated migration files, whereas the default (`as_uuid=False`) renders as `UUID()`.
 
 ### Timestamp and Timezone Support
 
