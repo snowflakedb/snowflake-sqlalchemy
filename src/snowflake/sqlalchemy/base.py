@@ -131,7 +131,15 @@ https://docs.snowflake.com/en/release-notes/bcr-bundles/2023_04/bcr-1057
 # handle Snowflake BCR bcr-1057
 @CompileState.plugin_for("default", "select")
 class SnowflakeSelectState(SelectState):
+    def __init__(self, statement, compiler, **kw):
+        self._is_snowflake = (
+            compiler is not None and compiler.dialect.name == DIALECT_NAME
+        )
+        super().__init__(statement, compiler, **kw)
+
     def _setup_joins(self, args, raw_columns):
+        if not self._is_snowflake:
+            return super()._setup_joins(args, raw_columns)
         for right, onclause, left, flags in args:
             isouter = flags["isouter"]
             full = flags["full"]
@@ -174,11 +182,10 @@ class SnowflakeSelectState(SelectState):
 
     @sa_util.preload_module("sqlalchemy.sql.util")
     def _join_determine_implicit_left_side(self, raw_columns, left, right, onclause):
-        """When join conditions don't express the left side explicitly,
-        determine if an existing FROM or entity in this query
-        can serve as the left hand side.
-
-        """
+        if not self._is_snowflake:
+            return super()._join_determine_implicit_left_side(
+                raw_columns, left, right, onclause
+            )
 
         replace_from_obj_index = None
 
@@ -235,24 +242,28 @@ class SnowflakeSelectState(SelectState):
 # handle Snowflake BCR bcr-1057
 @sql.base.CompileState.plugin_for("orm", "select")
 class SnowflakeORMSelectCompileState(context.ORMSelectCompileState):
+    # Default must be True on SA 1.4 (no _init_global_attributes hook there)
+    # so that the BCR-1057 code paths remain active as they were pre-PR.
+    # On SA 2.0 this default is overwritten by _init_global_attributes.
+    _is_snowflake = not IS_VERSION_20
+
+    def _init_global_attributes(self, statement, compiler, **kw):
+        # SA 2.0 entrypoint for setting _is_snowflake. SA 1.4 does not call
+        # this hook; on SA 1.4 _is_snowflake defaults to True below so the
+        # pre-PR BCR-1057 code paths remain active (the with_loader_criteria
+        # regression fixed by this PR is an SA 2.0-only scenario).
+        self._is_snowflake = (
+            compiler is not None and compiler.dialect.name == DIALECT_NAME
+        )
+        super()._init_global_attributes(statement, compiler, **kw)
+
     def _join_determine_implicit_left_side(
         self, entities_collection, left, right, onclause
     ):
-        """When join conditions don't express the left side explicitly,
-        determine if an existing FROM or entity in this query
-        can serve as the left hand side.
-
-        """
-
-        # when we are here, it means join() was called without an ORM-
-        # specific way of telling us what the "left" side is, e.g.:
-        #
-        # join(RightEntity)
-        #
-        # or
-        #
-        # join(RightEntity, RightEntity.foo == LeftEntity.bar)
-        #
+        if not self._is_snowflake:
+            return super()._join_determine_implicit_left_side(
+                entities_collection, left, right, onclause
+            )
 
         r_info = inspect(right)
 
@@ -347,11 +358,10 @@ class SnowflakeORMSelectCompileState(context.ORMSelectCompileState):
     def _join_left_to_right(
         self, entities_collection, left, right, onclause, prop, outerjoin, full
     ):
-        """given raw "left", "right", "onclause" parameters consumed from
-        a particular key within _join(), add a real ORMJoin object to
-        our _from_obj list (or augment an existing one)
-
-        """
+        if not self._is_snowflake:
+            return super()._join_left_to_right(
+                entities_collection, left, right, onclause, prop, outerjoin, full
+            )
 
         if left is None:
             # left not given (e.g. no relationship object/name specified)
