@@ -20,11 +20,10 @@ jobs:
   verify-test-run:
     runs-on: ubuntu-latest
     outputs:
-      fork-full-path: ${{ steps.extract-pr-info.outputs.FORK_FULL_PATH }}
       got-testable-changes: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.changes.outputs.run_tests }}
     steps:
-      - name: Extract PR info and validate head commit SHA
-        id: extract-pr-info
+      - name: Validate head commit SHA
+        id: validate-sha
         if: github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -34,24 +33,14 @@ jobs:
         run: |
           echo "Fetching details for PR #$PR_NUMBER..."
 
-          # Fetch PR data as JSON
-          PR_JSON=$(gh pr view "$PR_NUMBER" \
+          # Fetch PR head SHA
+          ACTUAL_SHA=$(gh pr view "$PR_NUMBER" \
             --repo "$REPO" \
-            --json headRepository,headRefOid)
+            --json headRefOid \
+            --jq '.headRefOid')
 
-          # Extract variables using jq
-          ACTUAL_SHA=$(echo "$PR_JSON" | jq -r '.headRefOid')
-          FORK_OWNER=$(echo "$PR_JSON" | jq -r '.headRepository.owner.login')
-          FORK_REPO_NAME=$(echo "$PR_JSON" | jq -r '.headRepository.name')
-
-          # Construct the full repository string (e.g., "octocat/Hello-World")
-          FORK_FULL_PATH="$FORK_OWNER/$FORK_REPO_NAME"
-
-          echo "--- PR Details ---"
-          echo "Fork Repository: $FORK_FULL_PATH"
           echo "Actual Head SHA: $ACTUAL_SHA"
           echo "Expected SHA:    $COMMIT_SHA"
-          echo "------------------"
 
           # Validate head commit SHA
           if [ "$ACTUAL_SHA" != "$COMMIT_SHA" ]; then
@@ -59,16 +48,12 @@ jobs:
             exit 1
           fi
 
-          echo "✅ Validation passed!"
-
-          # Export fork repository path for the checkout step
-          echo "FORK_FULL_PATH=$FORK_FULL_PATH" >> $GITHUB_OUTPUT
+          echo "Validation passed!"
 
       - name: Checkout Code
         id: checkout_code
         uses: actions/checkout@v6
         with:
-          repository: ${{ github.event_name == 'workflow_dispatch' && steps.extract-pr-info.outputs.FORK_FULL_PATH || github.repository }}
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.commit-sha || '' }}
           persist-credentials: false
 
@@ -105,7 +90,6 @@ jobs:
         id: checkout_code
         uses: actions/checkout@v6
         with:
-          repository: ${{ github.event_name == 'workflow_dispatch' && needs.verify-test-run.outputs.fork-full-path || github.repository }}
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.commit-sha || '' }}
           persist-credentials: false
 
@@ -158,7 +142,6 @@ jobs:
         id: checkout_code
         uses: actions/checkout@v6
         with:
-          repository: ${{ github.event_name == 'workflow_dispatch' && needs.verify-test-run.outputs.fork-full-path || github.repository }}
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.commit-sha || '' }}
           persist-credentials: false
 
@@ -206,7 +189,6 @@ jobs:
         id: checkout_code
         uses: actions/checkout@v6
         with:
-          repository: ${{ github.event_name == 'workflow_dispatch' && needs.verify-test-run.outputs.fork-full-path || github.repository }}
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.commit-sha || '' }}
           persist-credentials: false
 
@@ -280,7 +262,6 @@ jobs:
         id: checkout_code
         uses: actions/checkout@v6
         with:
-          repository: ${{ github.event_name == 'workflow_dispatch' && needs.verify-test-run.outputs.fork-full-path || github.repository }}
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.commit-sha || '' }}
           persist-credentials: false
 
@@ -346,7 +327,6 @@ jobs:
         id: checkout_code
         uses: actions/checkout@v6
         with:
-          repository: ${{ github.event_name == 'workflow_dispatch' && needs.verify-test-run.outputs.fork-full-path || github.repository }}
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.commit-sha || '' }}
           persist-credentials: false
 
@@ -411,7 +391,6 @@ jobs:
         id: checkout_code
         uses: actions/checkout@v6
         with:
-          repository: ${{ github.event_name == 'workflow_dispatch' && needs.verify-test-run.outputs.fork-full-path || github.repository }}
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.commit-sha || '' }}
           persist-credentials: false
 
@@ -466,7 +445,6 @@ jobs:
         id: checkout_code
         uses: actions/checkout@v6
         with:
-          repository: ${{ github.event_name == 'workflow_dispatch' && needs.verify-test-run.outputs.fork-full-path || github.repository }}
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.commit-sha || '' }}
           persist-credentials: false
 

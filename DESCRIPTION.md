@@ -10,6 +10,7 @@ Source code is also available at:
 # Unreleased Notes
 
 - Fix `with_loader_criteria` silently dropping filters on non-Snowflake dialects ([#676](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/676)). Importing `snowflake-sqlalchemy` previously altered SQLAlchemy's ORM compilation for every dialect in the process, causing loader-criteria filters to be omitted inside sealed subqueries when using PostgreSQL, MySQL, SQLite, etc. Snowflake dialect behavior is unchanged; the BCR-1057 lateral-join workaround is now scoped to Snowflake connections only.
+- Map Snowflake `UUID` column type to `sqlalchemy.sql.sqltypes.UUID` for reflection on SQLAlchemy 2.x ([#681](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/681)). Previously reflected as `NullType`. Values are returned as plain strings (`as_uuid=False`) rather than `uuid.UUID` instances. No change on SQLAlchemy 1.4 where the generic `UUID` type does not exist.
 - Add GCS bucket support for `CopyIntoStorage` (SNOW-721174, [#368](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/368)).
 - Scope `referred_schema=None` normalization in foreign key reflection to the default schema only ([#610](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/610), SNOW-2313675):
   - When reflecting the default schema, same-schema FKs (default → default) keep the established SQLAlchemy convention of `referred_schema=None`, preserving compatibility with the upstream reflection test suite and with applications that do not qualify default-schema FK targets.
