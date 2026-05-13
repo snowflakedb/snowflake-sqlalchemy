@@ -58,9 +58,9 @@ class Requirements(SuiteRequirements):
     note: not sure whether these to be supported
 
     - collate: TODO: order_by_collation
-    - datetime_timezone: TODO: default for datetime type, snowflake uses TIMESTAMP_NTZ which
-                          contains no time zone info consider creating a new column type TIMESTAMP_TZ for the
-                          the time zone info
+    - datetime_timezone: supported via TIMESTAMP_TZ (DateTime(timezone=True) and TIMESTAMP(timezone=True)
+                          compile to TIMESTAMP_TZ; Snowflake-specific TIMESTAMP_TZ/TIMESTAMP_LTZ/TIMESTAMP_NTZ
+                          types are also available directly)
       - ref: https://docs.snowflake.com/en/sql-reference/data-types-datetime.html#timestamp-ltz-timestamp-ntz-timestamp-tz
     """
 
@@ -162,6 +162,10 @@ class Requirements(SuiteRequirements):
 
     @property
     def unicode_ddl(self):
+        return exclusions.open()
+
+    @property
+    def datetime_timezone(self):
         return exclusions.open()
 
     @property
