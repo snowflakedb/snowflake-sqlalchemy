@@ -8,6 +8,12 @@
 
 Snowflake SQLAlchemy runs on the top of the Snowflake Connector for Python as a [dialect](http://docs.sqlalchemy.org/en/latest/dialects/) to bridge a Snowflake database and SQLAlchemy applications.
 
+---
+
+**SQLAlchemy** version 1.4 is a legacy version (see [reference](https://docs.sqlalchemy.org/en/14/)), which is why we are working on a version that supports only **SQLAlchemy 2.x**. The version will be available as a _"release candidate"_ to enable earlier testing. We will publish more details together with its release. The current version will still be supported for two years in accordance with <https://docs.snowflake.com/en/release-notes/requirements#recommended-client-versions>
+
+---
+
 Table of contents:
 <!-- TOC -->
 * [Snowflake SQLAlchemy](#snowflake-sqlalchemy)
@@ -130,9 +136,9 @@ Snowflake SQLAlchemy uses the following syntax for the connection string used to
 
 Where:
 
-- `<user_login_name>` is the login name for your Snowflake user.
-- `<password>` is the password for your Snowflake user.
-- `<account_name>` is the name of your Snowflake account.
+* `<user_login_name>` is the login name for your Snowflake user.
+* `<password>` is the password for your Snowflake user.
+* `<account_name>` is the name of your Snowflake account.
 
 Include the region in the `<account_name>` if applicable, more info is available [here](https://docs.snowflake.com/en/user-guide/connecting.html#your-snowflake-account-name).
 
@@ -383,9 +389,9 @@ with engine.connect() as connection:
 
 The following `NumPy` data types are supported:
 
-- numpy.int64
-- numpy.float64
-- numpy.datatime64
+* numpy.int64
+* numpy.float64
+* numpy.datatime64
 
 ### DECFLOAT Data Type Support
 
@@ -554,8 +560,8 @@ In this flow, running a separate query per table can be slow for large schemas. 
 
 SQLAlchemy 2.x distinguishes bulk reflection from single-table inspection at the framework level:
 
-- **`MetaData.reflect()` / `Table(..., autoload_with=engine)`** — calls `get_multi_columns`, `get_multi_pk_constraint`, `get_multi_foreign_keys`, and `get_multi_unique_constraints`. Each issues one schema-wide `SHOW` or `information_schema` query and caches the result for all tables in the schema.
-- **`inspector.get_columns(table_name)`** — issues a single `DESC TABLE` query directly against that table. This is fast and correct for all table types including temporary tables.
+* **`MetaData.reflect()` / `Table(..., autoload_with=engine)`** — calls `get_multi_columns`, `get_multi_pk_constraint`, `get_multi_foreign_keys`, and `get_multi_unique_constraints`. Each issues one schema-wide `SHOW` or `information_schema` query and caches the result for all tables in the schema.
+* **`inspector.get_columns(table_name)`** — issues a single `DESC TABLE` query directly against that table. This is fast and correct for all table types including temporary tables.
 
 No configuration is needed; the routing is handled automatically by the SA 2.x dispatch layer.
 
@@ -598,8 +604,8 @@ engine = create_engine(URL(
 
 For schemas with many tables (100+), schema-wide queries issued once during `MetaData.reflect()` are far more efficient than per-table queries in a loop:
 
-- Schema-wide `SHOW PRIMARY KEYS IN SCHEMA` (all tables): < 1 second
-- Per-table loop over 1 000 tables: 1 000+ round-trips
+* Schema-wide `SHOW PRIMARY KEYS IN SCHEMA` (all tables): < 1 second
+* Per-table loop over 1 000 tables: 1 000+ round-trips
 
 For single-table inspection via `Inspector`, per-table queries (`DESC TABLE`, `SHOW … IN TABLE`) are faster than fetching the entire schema.
 
@@ -711,9 +717,9 @@ For detailed information, refer to the Snowflake [Structured data types](https:/
 
 The `MAP` type represents a collection of key-value pairs, where each key and value can have different types.
 
-- **Key Type**: The type of the keys (e.g., `TEXT`, `NUMBER`).
-- **Value Type**: The type of the values (e.g., `TEXT`, `NUMBER`).
-- **Not Null**: Whether `NULL` values are allowed (default is `False`).
+* **Key Type**: The type of the keys (e.g., `TEXT`, `NUMBER`).
+* **Value Type**: The type of the values (e.g., `TEXT`, `NUMBER`).
+* **Not Null**: Whether `NULL` values are allowed (default is `False`).
 
 *Example Usage*
 
@@ -732,7 +738,7 @@ IcebergTable(
 
 The `OBJECT` type represents a semi-structured object with named fields. Each field can have a specific type, and you can also specify whether each field is nullable.
 
-- **Items Types**: A dictionary of field names and their types. The type can optionally include a nullable flag (`True` for not nullable, `False` for nullable, default is `False`).
+* **Items Types**: A dictionary of field names and their types. The type can optionally include a nullable flag (`True` for not nullable, `False` for nullable, default is `False`).
 
 *Example Usage*
 
@@ -755,8 +761,8 @@ IcebergTable(
 
 The `ARRAY` type represents an ordered list of values, where each element has the same type. The type of the elements is defined when creating the array.
 
-- **Value Type**: The type of the elements in the array (e.g., `TEXT`, `NUMBER`).
-- **Not Null**: Whether `NULL` values are allowed (default is `False`).
+* **Value Type**: The type of the elements in the array (e.g., `TEXT`, `NUMBER`).
+* **Not Null**: Whether `NULL` values are allowed (default is `False`).
 
 *Example Usage*
 
@@ -770,7 +776,6 @@ IcebergTable(
     base_location="base_location",
 )
 ```
-
 
 ### CLUSTER BY Support
 
@@ -881,14 +886,14 @@ emits O(N) INSERT statements instead of a single `executemany` batch.
 
 Snowflake SQLAlchemy provides two components that together solve this problem:
 
-- **`SnowflakeBase`** (SQLAlchemy 2.x only) — a `DeclarativeBase` subclass
+* **`SnowflakeBase`** (SQLAlchemy 2.x only) — a `DeclarativeBase` subclass
   whose constructor pre-populates every plain-nullable column with `None` (or
   its scalar Python default) at construction time, so all instances share the
   same column-key set regardless of which kwargs the caller supplied.
-- **`snowflake_declarative_base()`** — a factory function compatible with both
+* **`snowflake_declarative_base()`** — a factory function compatible with both
   SQLAlchemy 1.4 and 2.x that produces a declarative base with the same
   pre-population behaviour.
-- **`SnowflakeSession`** — a `Session` subclass that passes `render_nulls=True`
+* **`SnowflakeSession`** — a `Session` subclass that passes `render_nulls=True`
   to the internal bulk-save call, preventing pre-populated `None` values from
   being stripped before grouping. Must be used together with `SnowflakeBase` or
   `snowflake_declarative_base()` for full effect.
@@ -945,13 +950,13 @@ session.commit()
 
 **Notes:**
 
-- `SnowflakeBase` is only available in SQLAlchemy 2.x. Use
+* `SnowflakeBase` is only available in SQLAlchemy 2.x. Use
   `snowflake_declarative_base()` when your code must run on both SA 1.4 and 2.x.
-- Columns with `server_default`, callable Python defaults (`default=fn`), or
+* Columns with `server_default`, callable Python defaults (`default=fn`), or
   SQL-expression defaults (`default=func.now()`) are intentionally left absent
   from pre-population. Objects that differ on such columns may still be placed in
   separate INSERT batches — this is the same behaviour as stock SQLAlchemy.
-- `SnowflakeSession` alone (without the matching base class) is not sufficient:
+* `SnowflakeSession` alone (without the matching base class) is not sufficient:
   the base class is required to unify the column-key sets before `SnowflakeSession`
   can batch them together.
 
@@ -1088,23 +1093,24 @@ dynamic_test_table_1 = DynamicTable(
 
 ### Notes
 
-- Defining a primary key in a Dynamic Table is not supported, meaning declarative tables don’t support Dynamic Tables.
-- When using the `as_query` parameter with a string, you must explicitly define the columns. However, if you use the SQLAlchemy `select()` construct, you don’t need to explicitly define the columns.
-- Direct data insertion into Dynamic Tables is not supported.
-
+* Defining a primary key in a Dynamic Table is not supported, meaning declarative tables don’t support Dynamic Tables.
+* When using the `as_query` parameter with a string, you must explicitly define the columns. However, if you use the SQLAlchemy `select()` construct, you don’t need to explicitly define the columns.
+* Direct data insertion into Dynamic Tables is not supported.
 
 ## Verifying Package Signatures
 
 To ensure the authenticity and integrity of the Python package, follow the steps below to verify the package signature using `cosign`.
 
 **Steps to verify the signature:**
-- Install cosign:
-  - This example is using golang installation: [installing-cosign-with-go](https://edu.chainguard.dev/open-source/sigstore/cosign/how-to-install-cosign/#installing-cosign-with-go)
-- Download the file from the repository like pypi:
-  - https://pypi.org/project/snowflake-sqlalchemy/#files
-- Download the signature files from the release tag, replace the version number with the version you are verifying:
-  - https://github.com/snowflakedb/snowflake-sqlalchemy/releases/tag/v1.7.3
-- Verify signature:
+
+* Install cosign:
+  * This example is using golang installation: [installing-cosign-with-go](https://edu.chainguard.dev/open-source/sigstore/cosign/how-to-install-cosign/#installing-cosign-with-go)
+* Download the file from the repository like pypi:
+  * <https://pypi.org/project/snowflake-sqlalchemy/#files>
+* Download the signature files from the release tag, replace the version number with the version you are verifying:
+  * <https://github.com/snowflakedb/snowflake-sqlalchemy/releases/tag/v1.7.3>
+* Verify signature:
+
   ````bash
   # replace the version number with the version you are verifying
   ./cosign verify-blob snowflake_sqlalchemy-1.7.3-py3-none-any.whl  \
@@ -1267,9 +1273,9 @@ Without `quoted_name(..., True)` the column name is treated as case-insensitive 
 
 Most identifiers are handled correctly without any flag at the SQL layer:
 
-- A quoted lowercase name (`"mycol"` in Snowflake) reflects as `quoted_name("mycol", True)` — already case-sensitive, in both flag modes.
-- A quoted mixed-case name (`"MyCol"`) reflects as a plain `str` `"MyCol"` by default; with `case_sensitive_identifiers=True` it reflects as `quoted_name("MyCol", True)`.  Emitted SQL is `"MyCol"` either way because the preparer's `_requires_quotes` heuristic force-quotes any name containing uppercase characters, so only code that inspects `.quote` or `isinstance(..., quoted_name)` observes a difference.
-- An unquoted name (`MYCOL` stored as all-uppercase) reflects as `"mycol"` — correctly case-insensitive.
+* A quoted lowercase name (`"mycol"` in Snowflake) reflects as `quoted_name("mycol", True)` — already case-sensitive, in both flag modes.
+* A quoted mixed-case name (`"MyCol"`) reflects as a plain `str` `"MyCol"` by default; with `case_sensitive_identifiers=True` it reflects as `quoted_name("MyCol", True)`.  Emitted SQL is `"MyCol"` either way because the preparer's `_requires_quotes` heuristic force-quotes any name containing uppercase characters, so only code that inspects `.quote` or `isinstance(..., quoted_name)` observes a difference.
+* An unquoted name (`MYCOL` stored as all-uppercase) reflects as `"mycol"` — correctly case-insensitive.
 
 The one gap is an identifier whose all-uppercase form is also a SQL reserved word.  For example, a table literally named `TABLE` (created as `CREATE TABLE "TABLE" ...`) stores as `TABLE` in Snowflake.  When the dialect reflects it, `normalize_name("TABLE")` cannot tell whether `TABLE` is a plain uppercase column or the keyword `TABLE`, so by default it returns `"TABLE"` unchanged — an all-uppercase string that SQLAlchemy treats as case-sensitive.  This causes a key mismatch: the table was reflected under the key `"TABLE"` but the same `normalize_name` call made during DDL would produce `"table"`.
 
