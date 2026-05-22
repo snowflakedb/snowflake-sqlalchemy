@@ -1,7 +1,7 @@
 exclude: '^(.*egg.info.*|.*/parameters.py).*$'
 repos:
 -   repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.5.0
+    rev: v6.0.0
     hooks:
     -   id: trailing-whitespace
         exclude: '\.ambr$'
@@ -10,7 +10,7 @@ repos:
         exclude: .github/repo_meta.yaml
     -   id: debug-statements
 -   repo: https://github.com/PyCQA/isort
-    rev: 5.13.2
+    rev: 9.0.0a3
     hooks:
         - id: isort
 -   repo: https://github.com/asottile/pyupgrade
@@ -19,7 +19,7 @@ repos:
     -   id: pyupgrade
         args: [--py37-plus]
 -   repo: https://github.com/psf/black
-    rev: 26.3.1
+    rev: 26.5.1
     hooks:
         - id: black
           args:
@@ -28,7 +28,7 @@ repos:
               - py38
           language_version: python3
 -   repo: https://github.com/Lucas-C/pre-commit-hooks.git
-    rev: v1.5.5
+    rev: v1.5.6
     hooks:
     -   id: insert-license
         name: insert-py-license
