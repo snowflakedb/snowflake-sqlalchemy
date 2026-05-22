@@ -29,7 +29,7 @@ class AsQueryOption(TableOption):
 
     @staticmethod
     def create(
-        value: Optional[Union["AsQueryOption", str, Selectable]]
+        value: Optional[Union["AsQueryOption", str, Selectable]],
     ) -> "TableOption":
         if isinstance(value, (NoneType, AsQueryOption)):
             return value
