@@ -2442,7 +2442,7 @@ def test_true_division_operation(engine_testaccount, operation):
         [literal(3), literal(2), 1.5, 1.5],
         [literal(4), literal(1.5), 2.6666666666666665, 2.0],
         [literal(5.5), literal(10.7), 0.5140186915887851, 0],
-        [literal(5.5), literal(8), 0.6875, 0.0],
+        [literal(5.5), literal(8), 0.6875, 0],
     ],
 )
 def test_division_force_div_is_floordiv_default(engine_testaccount, operation):
