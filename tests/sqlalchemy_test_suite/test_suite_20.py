@@ -11,14 +11,12 @@ from sqlalchemy.testing.suite import BizarroCharacterTest as _BizarroCharacterTe
 from sqlalchemy.testing.suite import (
     ComponentReflectionTestExtra as _ComponentReflectionTestExtra,
 )
-from sqlalchemy.testing.suite import DateTimeHistoricTest as _DateTimeHistoricTest
 from sqlalchemy.testing.suite import FetchLimitOffsetTest as _FetchLimitOffsetTest
 from sqlalchemy.testing.suite import HasSequenceTest as _HasSequenceTest
 from sqlalchemy.testing.suite import InsertBehaviorTest as _InsertBehaviorTest
 from sqlalchemy.testing.suite import LikeFunctionsTest as _LikeFunctionsTest
 from sqlalchemy.testing.suite import LongNameBlowoutTest as _LongNameBlowoutTest
 from sqlalchemy.testing.suite import SimpleUpdateDeleteTest as _SimpleUpdateDeleteTest
-from sqlalchemy.testing.suite import TimeMicrosecondsTest as _TimeMicrosecondsTest
 from sqlalchemy.testing.suite import TrueDivTest as _TrueDivTest
 from sqlalchemy.testing.suite import *  # noqa
 
@@ -96,16 +94,6 @@ class TrueDivTest(_TrueDivTest):
         https://docs.snowflake.com/en/sql-reference/operators-arithmetic.
         """
         pass
-
-
-class TimeMicrosecondsTest(_TimeMicrosecondsTest):
-    def __init__(self):
-        super().__init__()
-
-
-class DateTimeHistoricTest(_DateTimeHistoricTest):
-    def __init__(self):
-        super().__init__()
 
 
 # 2. Patched Tests
