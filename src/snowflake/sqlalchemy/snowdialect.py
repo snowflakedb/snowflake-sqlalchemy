@@ -730,7 +730,7 @@ class SnowflakeDialect(default.DefaultDialect):
     def _get_table_primary_keys(self, connection, table_name, schema, **kw):
         """SHOW PRIMARY KEYS IN TABLE — single-table path.
 
-        Called by get_pk_constraint when _is_single_table_reflection returns True.
+        Called by get_pk_constraint.
         """
         full_name = self._always_quote_join(schema, table_name)
         try:
@@ -764,12 +764,7 @@ class SnowflakeDialect(default.DefaultDialect):
 
     def get_pk_constraint(self, connection, table_name, schema=None, **kw):
         schema = schema or self.default_schema_name
-        if self._is_single_table_reflection(schema, **kw):
-            return self._get_table_primary_keys(connection, table_name, schema, **kw)
-        full_schema_name = self._get_full_schema_name(connection, schema, **kw)
-        return self._get_schema_primary_keys(connection, full_schema_name, **kw).get(
-            table_name, {"constrained_columns": [], "name": None}
-        )
+        return self._get_table_primary_keys(connection, table_name, schema, **kw)
 
     def get_multi_pk_constraint(
         self,
@@ -807,7 +802,7 @@ class SnowflakeDialect(default.DefaultDialect):
     def _get_table_unique_constraints(self, connection, table_name, schema, **kw):
         """SHOW UNIQUE KEYS IN TABLE — single-table path.
 
-        Called by get_unique_constraints when _is_single_table_reflection returns True.
+        Called by get_unique_constraints.
         """
         full_name = self._always_quote_join(schema, table_name)
         try:
@@ -839,14 +834,7 @@ class SnowflakeDialect(default.DefaultDialect):
 
     def get_unique_constraints(self, connection, table_name, schema, **kw):
         schema = schema or self.default_schema_name
-        if self._is_single_table_reflection(schema, **kw):
-            return self._get_table_unique_constraints(
-                connection, table_name, schema, **kw
-            )
-        full_schema_name = self._get_full_schema_name(connection, schema, **kw)
-        return self._get_schema_unique_constraints(
-            connection, full_schema_name, **kw
-        ).get(table_name, [])
+        return self._get_table_unique_constraints(connection, table_name, schema, **kw)
 
     def get_multi_unique_constraints(
         self,
@@ -879,7 +867,7 @@ class SnowflakeDialect(default.DefaultDialect):
     def _get_table_foreign_keys(self, connection, table_name, schema, **kw):
         """SHOW IMPORTED KEYS IN TABLE — single-table path.
 
-        Called by get_foreign_keys when _is_single_table_reflection returns True.
+        Called by get_foreign_keys.
 
         When reflecting the default schema, same-schema FKs (default → default)
         are reported with ``referred_schema=None`` per SQLAlchemy's convention:
@@ -942,12 +930,7 @@ class SnowflakeDialect(default.DefaultDialect):
     def get_foreign_keys(self, connection, table_name, schema=None, **kw):
         """Gets all foreign keys for a table."""
         schema = schema or self.default_schema_name
-        if self._is_single_table_reflection(schema, **kw):
-            return self._get_table_foreign_keys(connection, table_name, schema, **kw)
-        full_schema_name = self._get_full_schema_name(connection, schema, **kw)
-        return self._get_schema_foreign_keys(connection, full_schema_name, **kw).get(
-            table_name, []
-        )
+        return self._get_table_foreign_keys(connection, table_name, schema, **kw)
 
     def get_multi_foreign_keys(
         self,
@@ -1358,22 +1341,6 @@ class SnowflakeDialect(default.DefaultDialect):
             columns_by_table.setdefault(normalized_table_name, []).append(column_info)
 
         return columns_by_table
-
-    def _is_single_table_reflection(self, schema, **kw):
-        """Return True when a single-table SHOW command should be used for PK/UK/FK.
-
-        With SQLAlchemy 2.x, ``get_multi_pk_constraint`` /
-        ``get_multi_unique_constraints`` / ``get_multi_foreign_keys`` are used
-        by ``MetaData.reflect()``, so any call to the singular
-        ``get_pk_constraint`` / ``get_unique_constraints`` / ``get_foreign_keys``
-        / ``get_indexes`` is inherently single-table (Inspector,
-        pandas.read_sql_table). Always returns True.
-
-        Note: ``@reflection.cache`` caches results for the lifetime of a
-        connection. DDL executed mid-session will not be visible in reflection
-        until a new connection is obtained, regardless of which path is used.
-        """
-        return True
 
     def get_columns(self, connection, table_name, schema=None, **kw):
         """
@@ -1808,7 +1775,7 @@ class SnowflakeDialect(default.DefaultDialect):
     def _get_table_indexes(self, connection, table_name, schema, **kw):
         """SHOW INDEXES IN TABLE — single-table path.
 
-        Called by get_indexes when _is_single_table_reflection returns True.
+        Called by get_indexes.
 
         For non-hybrid tables Snowflake returns an empty result set (not an
         error), so the list will simply be empty.  The SYS_INDEX primary-key
@@ -1831,20 +1798,14 @@ class SnowflakeDialect(default.DefaultDialect):
     def get_indexes(self, connection, tablename, schema, **kw):
         """Gets the indexes definition."""
         schema = schema or self.default_schema_name
-        if self._is_single_table_reflection(schema, **kw):
-            # Pass the raw string so _always_quote_join can correctly
-            # denormalize (uppercase) it.  normalize_name() wraps plain
-            # lowercase strings in quoted_name(quote=True), and
-            # quoted_name.upper() is intentionally a no-op for quote=True
-            # objects, which would cause _always_quote_join to emit
-            # "table_name" (case-sensitive lowercase) instead of the
-            # correct "TABLE_NAME" (case-insensitive uppercase).
-            return self._get_table_indexes(connection, str(tablename), schema, **kw)
-        table_name = self.normalize_name(str(tablename))
-        data = self.get_multi_indexes(
-            connection=connection, schema=schema, filter_names=[table_name], **kw
-        )
-        return self._value_or_default(data, table_name, schema)
+        # Pass the raw string so _always_quote_join can correctly
+        # denormalize (uppercase) it.  normalize_name() wraps plain
+        # lowercase strings in quoted_name(quote=True), and
+        # quoted_name.upper() is intentionally a no-op for quote=True
+        # objects, which would cause _always_quote_join to emit
+        # "table_name" (case-sensitive lowercase) instead of the
+        # correct "TABLE_NAME" (case-insensitive uppercase).
+        return self._get_table_indexes(connection, str(tablename), schema, **kw)
 
     def connect(self, *cargs, **cparams):
         if _ENABLE_SQLALCHEMY_AS_APPLICATION_NAME:

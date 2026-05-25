@@ -232,25 +232,6 @@ def test_get_server_version_info_parsing(raw_value, expected):
 
 
 # ---------------------------------------------------------------------------
-# _is_single_table_reflection (SNOW-689531)
-# ---------------------------------------------------------------------------
-
-
-class TestIsSingleTableReflection:
-    """Unit tests for the _is_single_table_reflection heuristic."""
-
-    def test_returns_true(self):
-        """SA 2.x: singular calls are always single-table; no flag required."""
-        assert _make_dialect()._is_single_table_reflection("PUBLIC") is True
-
-    def test_returns_true_with_info_cache_present(self):
-        """SA 2.x: info_cache presence is irrelevant — get_multi_* handles bulk."""
-        assert (
-            _make_dialect()._is_single_table_reflection("PUBLIC", info_cache={}) is True
-        )
-
-
-# ---------------------------------------------------------------------------
 # Single-table dispatch on SA 2.x (SNOW-689531)
 # ---------------------------------------------------------------------------
 
