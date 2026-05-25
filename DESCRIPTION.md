@@ -14,6 +14,10 @@ Source code is also available at:
 
 # Release Notes
 
+- v2.0.0 (TBD)
+  - **Breaking change**: drop SQLAlchemy 1.4 support. The dialect now requires `SQLAlchemy>=2.0.0`. Users still on SQLAlchemy 1.4 should pin to `snowflake-sqlalchemy<2.0.0`.
+  - **Breaking change**: update supported Python versions to `>=3.9, <=3.14`.
+
 - v1.10.0 (May 20, 2026)
   - Fix `with_loader_criteria` silently dropping filters on non-Snowflake dialects ([#676](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/676)). Importing `snowflake-sqlalchemy` previously altered SQLAlchemy's ORM compilation for every dialect in the process, causing loader-criteria filters to be omitted inside sealed subqueries when using PostgreSQL, MySQL, SQLite, etc. Snowflake dialect behavior is unchanged; the BCR-1057 lateral-join workaround is now scoped to Snowflake connections only.
   - Map Snowflake `UUID` column type to `sqlalchemy.sql.sqltypes.UUID` for reflection on SQLAlchemy 2.x ([#681](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/681)). Previously reflected as `NullType`. Values are returned as plain strings (`as_uuid=False`) rather than `uuid.UUID` instances. No change on SQLAlchemy 1.4 where the generic `UUID` type does not exist.
