@@ -5,7 +5,6 @@
 import operator
 import random
 import string
-import sys
 import textwrap
 import uuid
 
@@ -245,11 +244,6 @@ def test_timezone(db_parameters, engine_testaccount, engine_testaccount_with_num
 
 
 def test_pandas_writeback(engine_testaccount):
-    if sys.version_info < (3, 8):
-        pytest.skip(
-            "In Python 3.7, this test depends on pandas features of which the implementation is incompatible with sqlachemy 2.0, and pandas does not support Python 3.7 anymore."
-        )
-
     with engine_testaccount.connect() as conn:
         sf_connector_version_data = [
             ("snowflake-connector-python", "1.2.23"),
@@ -357,11 +351,6 @@ def test_pandas_invalid_make_pd_writer(engine_testaccount):
 
 
 def test_percent_signs(engine_testaccount):
-    if sys.version_info < (3, 8):
-        pytest.skip(
-            "In Python 3.7, this test depends on pandas features of which the implementation is incompatible with sqlachemy 2.0, and pandas does not support Python 3.7 anymore."
-        )
-
     table_name = f"test_table_{uuid.uuid4().hex}".upper()
     with engine_testaccount.connect() as conn:
         with conn.begin():
