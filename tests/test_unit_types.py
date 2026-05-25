@@ -3,12 +3,11 @@
 #
 
 import snowflake.sqlalchemy
-from snowflake.sqlalchemy.compat import IS_VERSION_20
 from snowflake.sqlalchemy.snowdialect import SnowflakeDialect
 
 from .util import ischema_names_baseline
 
-_SA20_ONLY_TYPES = {"UUID"} if IS_VERSION_20 else set()
+_SA20_ONLY_TYPES = {"UUID"}
 
 
 def test_type_synonyms():

@@ -22,7 +22,6 @@ from sqlalchemy.sql.sqltypes import (
 )
 from sqlalchemy.sql.type_api import TypeEngine
 
-from snowflake.sqlalchemy.compat import IS_VERSION_20
 from snowflake.sqlalchemy.custom_types import (
     _CUSTOM_DECIMAL,
     ARRAY,
@@ -79,15 +78,14 @@ ischema_names = {
     "GEOMETRY": GEOMETRY,
 }
 
-if IS_VERSION_20:
-    from sqlalchemy.sql.sqltypes import UUID as _sa_uuid
+# Add UUID after the dict literal so the symbol can be del-ed afterwards.
+# Without del, inspect.getmembers would expose it as a class visible in this
+# module, breaking test_types_in_snowdialect which asserts every class here is
+# also present in snowdialect.
+from sqlalchemy.sql.sqltypes import UUID as _sa_uuid  # noqa: E402
 
-    ischema_names["UUID"] = _sa_uuid
-    # Remove _sa_uuid from the module namespace after use. Without this,
-    # inspect.getmembers would expose it as a class visible in this module,
-    # breaking test_types_in_snowdialect which asserts every class here is
-    # also present in snowdialect.
-    del _sa_uuid
+ischema_names["UUID"] = _sa_uuid
+del _sa_uuid
 
 NOT_NULL_STR = "NOT NULL"
 

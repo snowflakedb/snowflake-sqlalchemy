@@ -41,20 +41,17 @@ from __future__ import annotations
 import itertools
 
 from sqlalchemy import inspect as sa_inspect
-from sqlalchemy.orm import Session, attributes
-
-from .compat import IS_VERSION_20
+from sqlalchemy.orm import DeclarativeBase, Session, attributes
 
 
 def _snowflake_constructor(self, **kwargs):
     """Custom ORM instance constructor that pre-populates mapped columns.
 
     Mirrors SA's own ``mapper._insert_cols_as_none`` logic (SA 2.x
-    mapper.py L2764-2776; SA 1.4 mapper.py L2233-2249): primary keys,
-    server defaults, all client-side defaults (callable and
-    SQL-expression), and ``should_evaluate_none`` columns are intentionally
-    left absent from ``state_dict`` so that their normal SA handling is
-    preserved.
+    mapper.py L2764-2776): primary keys, server defaults, all
+    client-side defaults (callable and SQL-expression), and
+    ``should_evaluate_none`` columns are intentionally left absent from
+    ``state_dict`` so that their normal SA handling is preserved.
 
     For all remaining mapped columns:
     - columns with a scalar Python ``default`` are pre-populated with
@@ -119,10 +116,10 @@ def _snowflake_constructor(self, **kwargs):
 def snowflake_declarative_base(**kw):
     """Create a declarative base with the Snowflake bulk-insert constructor.
 
-    Works with both SQLAlchemy 1.4 and 2.x.  The returned base class
-    installs ``_snowflake_constructor`` as ``__init__`` on every mapped
-    model, so that every instance pre-populates all plain-nullable columns
-    with ``None`` (or their scalar default) at construction time.
+    The returned base class installs ``_snowflake_constructor`` as
+    ``__init__`` on every mapped model, so that every instance pre-populates
+    all plain-nullable columns with ``None`` (or their scalar default) at
+    construction time.
 
     Use this together with :class:`SnowflakeSession` to enable single-batch
     ``bulk_save_objects`` inserts for models with nullable optional columns.
@@ -137,36 +134,31 @@ def snowflake_declarative_base(**kw):
     return declarative_base(constructor=_snowflake_constructor, **kw)
 
 
-# SA 2.x only: class-based DeclarativeBase subclass.
-# SA 1.4 does not have DeclarativeBase so the class definition is guarded.
-if IS_VERSION_20:
-    from sqlalchemy.orm import DeclarativeBase
+class SnowflakeBase(DeclarativeBase):
+    """Declarative base for Snowflake ORM models with efficient bulk inserts.
 
-    class SnowflakeBase(DeclarativeBase):
-        """Declarative base for Snowflake ORM models with efficient bulk inserts.
+    Subclass your models from ``SnowflakeBase`` instead of the default
+    ``DeclarativeBase`` to enable single-batch ``bulk_save_objects``
+    behaviour.
 
-        Subclass your models from ``SnowflakeBase`` (SQLAlchemy 2.x) instead
-        of the default ``DeclarativeBase`` to enable single-batch
-        ``bulk_save_objects`` behaviour.
+    Use together with :class:`SnowflakeSession`.
 
-        Use together with :class:`SnowflakeSession`.
+    Example::
 
-        Example::
+        from snowflake.sqlalchemy import SnowflakeBase, SnowflakeSession
 
-            from snowflake.sqlalchemy import SnowflakeBase, SnowflakeSession
+        class MyModel(SnowflakeBase):
+            __tablename__ = "my_model"
+            id = Column(Integer, primary_key=True)
+            name = Column(String)   # nullable, no default
 
-            class MyModel(SnowflakeBase):
-                __tablename__ = "my_model"
-                id = Column(Integer, primary_key=True)
-                name = Column(String)   # nullable, no default
+        session = SnowflakeSession(bind=engine)
+        session.bulk_save_objects([MyModel(id=1), MyModel(id=2, name="foo")])
+        # Both objects go in a single INSERT (executemany).
+    """
 
-            session = SnowflakeSession(bind=engine)
-            session.bulk_save_objects([MyModel(id=1), MyModel(id=2, name="foo")])
-            # Both objects go in a single INSERT (executemany).
-        """
-
-        def __init__(self, **kwargs):
-            _snowflake_constructor(self, **kwargs)
+    def __init__(self, **kwargs):
+        _snowflake_constructor(self, **kwargs)
 
 
 class SnowflakeSession(Session):
@@ -179,19 +171,13 @@ class SnowflakeSession(Session):
     the same parameter-key set and are placed in a single ``executemany``
     INSERT batch.
 
-    Must be used together with :class:`SnowflakeBase` (SA 2.x) or
-    :func:`snowflake_declarative_base` (SA 1.4 / 2.x) for full effect.
-
-    SA version compatibility
-    ~~~~~~~~~~~~~~~~~~~~~~~~
-    ``Session._bulk_save_mappings`` is called with keyword arguments, which
-    is valid for both SA 1.4 (positional-or-keyword) and SA 2.x
-    (keyword-only after ``*``).  Verified against SA 1.4.54 and SA 2.0.48.
+    Must be used together with :class:`SnowflakeBase` or
+    :func:`snowflake_declarative_base` for full effect.
 
     Note: ``super().bulk_save_objects()`` hardcodes ``render_nulls=False``
-    with no override hook (SA 2.x session.py:4571; SA 1.4 equivalent).
-    This override replicates the ``itertools.groupby`` dispatch logic from
-    both SA versions to inject ``render_nulls=True``.
+    with no override hook (SA 2.x session.py:4571).  This override
+    replicates the ``itertools.groupby`` dispatch logic to inject
+    ``render_nulls=True``.
     """
 
     def bulk_save_objects(
