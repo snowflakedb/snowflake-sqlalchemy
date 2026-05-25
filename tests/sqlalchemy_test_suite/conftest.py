@@ -70,5 +70,5 @@ def pytest_sessionfinish(session):
     db_parameters = get_db_parameters()
     with snowflake.connector.connect(**db_parameters) as con:
         con.cursor().execute(f"DROP SCHEMA IF EXISTS {db_parameters['schema']}")
-        con.cursor().execute(f"DROP SCHEMA IF EXISTS f{TEST_SCHEMA}")
+        con.cursor().execute(f"DROP SCHEMA IF EXISTS {TEST_SCHEMA}")
     _pytest_sessionfinish(session)
