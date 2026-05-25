@@ -11,6 +11,10 @@ Source code is also available at:
 
 # Release Notes
 
+- v2.0.0 (TBD)
+  - **Breaking change**: drop SQLAlchemy 1.4 support. The dialect now requires `SQLAlchemy>=2.0.0`. Users still on SQLAlchemy 1.4 should pin to `snowflake-sqlalchemy<2.0.0`.
+  - **Breaking change**: update supported Python versions to `>=3.9, <=3.14`.
+
 - v1.11.0 (July 7, 2026)
 
 - **[Sensitive connection parameters](https://github.com/snowflakedb/snowflake-sqlalchemy#sensitive-connection-parameters):** We curated a set of connector kwargs (`host`, `protocol`, `token_file_path`, `private_key_file`, `ocsp_response_cache_filename`, `connection_diag_log_path`, `crl_cache_dir`, `unsafe_file_write`, `unsafe_skip_file_permissions_check`) that can no longer be supplied via the URL query string — pass them via `connect_args=` in `create_engine()` instead (applications already doing so are unaffected). If you encounter a possible behavioral change, set `SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS=1` and follow the instructions at [Sensitive connection parameters](https://github.com/snowflakedb/snowflake-sqlalchemy#sensitive-connection-parameters).
