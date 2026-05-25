@@ -8,7 +8,6 @@ import pytest
 from sqlalchemy.engine.url import URL
 
 from snowflake.sqlalchemy import base
-from snowflake.sqlalchemy.compat import IS_VERSION_20
 from snowflake.sqlalchemy.snowdialect import SnowflakeDialect
 
 
@@ -238,46 +237,15 @@ def test_get_server_version_info_parsing(raw_value, expected):
 class TestIsSingleTableReflection:
     """Unit tests for the _is_single_table_reflection heuristic."""
 
-    @pytest.mark.skipif(not IS_VERSION_20, reason="SA 2.x only")
-    def test_sa2_returns_true_without_opt_in(self):
+    def test_returns_true(self):
         """SA 2.x: singular calls are always single-table; no flag required."""
         assert _make_dialect()._is_single_table_reflection("PUBLIC") is True
 
-    @pytest.mark.skipif(not IS_VERSION_20, reason="SA 2.x only")
-    def test_sa2_returns_true_with_info_cache_present(self):
+    def test_returns_true_with_info_cache_present(self):
         """SA 2.x: info_cache presence is irrelevant — get_multi_* handles bulk."""
         assert (
             _make_dialect()._is_single_table_reflection("PUBLIC", info_cache={}) is True
         )
-
-    @mock.patch("snowflake.sqlalchemy.snowdialect.IS_VERSION_20", False)
-    def test_sa14_returns_false_without_opt_in(self):
-        """SA 1.4: defaults to schema-wide queries for backward compatibility."""
-        assert _make_dialect()._is_single_table_reflection("PUBLIC") is False
-
-    @mock.patch("snowflake.sqlalchemy.snowdialect.IS_VERSION_20", False)
-    def test_sa14_returns_true_with_opt_in_no_info_cache(self):
-        """SA 1.4 + cache_column_metadata=True + no info_cache → single-table path."""
-        dialect = _make_dialect(_cache_column_metadata=True)
-        assert dialect._is_single_table_reflection("PUBLIC", info_cache=None) is True
-
-    @mock.patch("snowflake.sqlalchemy.snowdialect.IS_VERSION_20", False)
-    def test_sa14_returns_false_when_metadata_reflect_in_progress(self):
-        """SA 1.4 + MetaData.reflect() in progress → fall back to schema-wide query."""
-        dialect = _make_dialect(_cache_column_metadata=True)
-        tables_info_key = (dialect._get_schema_tables_info.__name__, ("PUBLIC",), ())
-        assert (
-            dialect._is_single_table_reflection(
-                "PUBLIC", info_cache={tables_info_key: {}}
-            )
-            is False
-        )
-
-    @mock.patch("snowflake.sqlalchemy.snowdialect.IS_VERSION_20", False)
-    def test_sa14_returns_true_when_schema_tables_not_yet_cached(self):
-        """SA 1.4 + cache_column_metadata=True + empty cache → single-table path."""
-        dialect = _make_dialect(_cache_column_metadata=True)
-        assert dialect._is_single_table_reflection("PUBLIC", info_cache={}) is True
 
 
 # ---------------------------------------------------------------------------
@@ -286,10 +254,8 @@ class TestIsSingleTableReflection:
 
 
 class TestSingleTableDispatchSA2:
-    """SA 2.x: singular reflection methods must route to table-specific queries
-    without requiring cache_column_metadata=True."""
+    """SA 2.x: singular reflection methods must route to table-specific queries."""
 
-    @pytest.mark.skipif(not IS_VERSION_20, reason="SA 2.x only")
     @pytest.mark.parametrize(
         "public_method,table_method,schema_method,expected",
         [
@@ -337,7 +303,6 @@ class TestSingleTableDispatchSA2:
         tbl_mock.assert_called_once()
         assert result == expected
 
-    @pytest.mark.skipif(not IS_VERSION_20, reason="SA 2.x only")
     def test_get_indexes_passes_raw_tablename_not_normalized(self):
         """get_indexes must pass the raw tablename string to _get_table_indexes.
 

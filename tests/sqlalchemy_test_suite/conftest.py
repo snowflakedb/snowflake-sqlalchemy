@@ -15,7 +15,6 @@ from sqlalchemy.testing.plugin.pytestplugin import (
 
 import snowflake.connector
 from snowflake.sqlalchemy import URL
-from snowflake.sqlalchemy.compat import IS_VERSION_20
 
 from ..conftest import get_db_parameters
 from ..util import random_string
@@ -26,10 +25,7 @@ TEST_SCHEMA = f"test_schema_{random_string(5)}"
 TEST_SCHEMA_2 = f"{TEST_SCHEMA}_2"
 
 
-if IS_VERSION_20:
-    collect_ignore_glob = ["test_suite.py"]
-else:
-    collect_ignore_glob = ["test_suite_20.py"]
+collect_ignore_glob = ["test_suite.py"]
 
 
 # patch sqlalchemy.testing.config.Confi.__init__ for schema name randomization

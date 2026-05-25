@@ -13,8 +13,6 @@ import pytest
 from sqlalchemy import JSON, Column, Integer, String, func, text
 from sqlalchemy.orm import Session, declarative_base
 
-from snowflake.sqlalchemy.compat import IS_VERSION_20
-
 # ---------------------------------------------------------------------------
 # Helpers — model builders
 # ---------------------------------------------------------------------------
@@ -82,7 +80,6 @@ def snowflake_session_cls():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skipif(not IS_VERSION_20, reason="SnowflakeBase requires SQLAlchemy 2.x")
 class TestSnowflakeBaseConstructor:
     """Verify _snowflake_constructor behaviour via SnowflakeBase."""
 
@@ -304,7 +301,6 @@ class TestSnowflakeSession:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skipif(not IS_VERSION_20, reason="SnowflakeBase requires SQLAlchemy 2.x")
 class TestSnowflakeBaseWithSessionEndToEnd:
     """Verify that SnowflakeBase + SnowflakeSession together produce uniform
     parameter-key sets for bulk_save_objects, exercising the full pipeline."""
@@ -391,19 +387,13 @@ class TestPublicExports:
 
         assert callable(snowflake_declarative_base)
 
-    @pytest.mark.skipif(
-        not IS_VERSION_20, reason="SnowflakeBase requires SQLAlchemy 2.x"
-    )
     def test_snowflake_base_exported(self):
         from snowflake.sqlalchemy import SnowflakeBase  # noqa: F401
 
         assert SnowflakeBase is not None
 
-    @pytest.mark.skipif(
-        not IS_VERSION_20, reason="SnowflakeBase requires SQLAlchemy 2.x"
-    )
     def test_snowflake_base_in_all(self):
-        """SnowflakeBase must be listed in __all__ on SA 2.x."""
+        """SnowflakeBase must be listed in __all__."""
         import snowflake.sqlalchemy as sf
 
         assert "SnowflakeBase" in sf.__all__

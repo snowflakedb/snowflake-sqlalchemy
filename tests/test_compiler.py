@@ -4,7 +4,6 @@
 
 from datetime import datetime
 
-import pytest
 from sqlalchemy import DateTime, Integer, String, and_, func, insert, select
 from sqlalchemy.schema import DropColumnComment, DropTableComment
 from sqlalchemy.sql import column, quoted_name, table
@@ -207,7 +206,6 @@ def test_outer_lateral_join():
     )
 
 
-@pytest.mark.feature_v20
 def test_division_operator_with_force_div_is_floordiv_false():
     col1 = column("col1", Integer)
     col2 = column("col2", Integer)
@@ -218,7 +216,6 @@ def test_division_operator_with_force_div_is_floordiv_false():
     )
 
 
-@pytest.mark.feature_v20
 def test_division_operator_with_denominator_expr_force_div_is_floordiv_false():
     col1 = column("col1", Integer)
     col2 = column("col2", Integer)
@@ -229,7 +226,6 @@ def test_division_operator_with_denominator_expr_force_div_is_floordiv_false():
     )
 
 
-@pytest.mark.feature_v20
 def test_division_operator_with_force_div_is_floordiv_default_true():
     col1 = column("col1", Integer)
     col2 = column("col2", Integer)
@@ -239,7 +235,6 @@ def test_division_operator_with_force_div_is_floordiv_default_true():
     )
 
 
-@pytest.mark.feature_v20
 def test_division_operator_with_denominator_expr_force_div_is_floordiv_default_true():
     col1 = column("col1", Integer)
     col2 = column("col2", Integer)
@@ -250,7 +245,6 @@ def test_division_operator_with_denominator_expr_force_div_is_floordiv_default_t
     )
 
 
-@pytest.mark.feature_v20
 def test_floor_division_operator_force_div_is_floordiv_false():
     col1 = column("col1", Integer)
     col2 = column("col2", Integer)
@@ -261,7 +255,6 @@ def test_floor_division_operator_force_div_is_floordiv_false():
     )
 
 
-@pytest.mark.feature_v20
 def test_floor_division_operator_with_denominator_expr_force_div_is_floordiv_false():
     col1 = column("col1", Integer)
     col2 = column("col2", Integer)
@@ -272,7 +265,6 @@ def test_floor_division_operator_with_denominator_expr_force_div_is_floordiv_fal
     )
 
 
-@pytest.mark.feature_v20
 def test_floor_division_operator_force_div_is_floordiv_default_true():
     col1 = column("col1", Integer)
     col2 = column("col2", Integer)
@@ -280,7 +272,6 @@ def test_floor_division_operator_force_div_is_floordiv_default_true():
     assert str(stmt.compile(dialect=SnowflakeDialect())) == "col1 / col2"
 
 
-@pytest.mark.feature_v20
 def test_floor_division_operator_with_denominator_expr_force_div_is_floordiv_default_true():
     col1 = column("col1", Integer)
     col2 = column("col2", Integer)

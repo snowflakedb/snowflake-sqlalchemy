@@ -9,6 +9,7 @@ if sys.version_info < (3, 8):
 else:
     import importlib.metadata as importlib_metadata
 
+from sqlalchemy.sql.sqltypes import UUID  # noqa
 from sqlalchemy.types import (  # noqa
     BIGINT,
     BINARY,
@@ -28,7 +29,6 @@ from sqlalchemy.types import (  # noqa
 )
 
 from . import base, snowdialect  # noqa
-from .compat import IS_VERSION_20
 from .custom_commands import (  # noqa
     AWSBucket,
     AzureContainer,
@@ -67,7 +67,7 @@ from .custom_types import (  # noqa
     VARIANT,
     VECTOR,
 )
-from .orm import SnowflakeSession, snowflake_declarative_base  # noqa
+from .orm import SnowflakeBase, SnowflakeSession, snowflake_declarative_base  # noqa
 from .sql.custom_schema import (  # noqa
     DynamicTable,
     HybridTable,
@@ -85,11 +85,6 @@ from .sql.custom_schema.options import (  # noqa
     TargetLagOption,
     TimeUnit,
 )
-
-if IS_VERSION_20:
-    from .orm import SnowflakeBase  # noqa
-    from sqlalchemy.sql.sqltypes import UUID  # noqa
-
 from .util import _url as URL  # noqa
 from .util import create_snowflake_engine  # noqa
 
@@ -114,6 +109,7 @@ _custom_types = (
     "TIME",
     "TIMESTAMP",
     "URL",
+    "UUID",
     "VARCHAR",
     "ARRAY",
     "BYTEINT",
@@ -171,23 +167,19 @@ _enums = (
 )
 
 _orm = (
+    "SnowflakeBase",
     "SnowflakeSession",
     "snowflake_declarative_base",
 )
-
-_orm_v20 = ("SnowflakeBase",) if IS_VERSION_20 else ()
-_sa20_types = ("UUID",) if IS_VERSION_20 else ()
 
 _helpers = ("create_snowflake_engine",)
 
 __all__ = (
     *_custom_types,
-    *_sa20_types,
     *_custom_commands,
     *_custom_tables,
     *_custom_table_options,
     *_enums,
     *_orm,
-    *_orm_v20,
     *_helpers,
 )
