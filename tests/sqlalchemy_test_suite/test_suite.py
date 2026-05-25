@@ -77,7 +77,6 @@ class InsertBehaviorTest(_InsertBehaviorTest):
         pass
 
 
-# road to 2.0
 class TrueDivTest(_TrueDivTest):
     @pytest.mark.skip("`//` not supported")
     def test_floordiv_integer_bound(self, connection):

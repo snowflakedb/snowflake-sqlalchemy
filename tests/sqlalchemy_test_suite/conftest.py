@@ -25,9 +25,6 @@ TEST_SCHEMA = f"test_schema_{random_string(5)}"
 TEST_SCHEMA_2 = f"{TEST_SCHEMA}_2"
 
 
-collect_ignore_glob = ["test_suite.py"]
-
-
 # patch sqlalchemy.testing.config.Confi.__init__ for schema name randomization
 # same schema name would result in conflict as we're running tests in parallel in the CI
 def config_patched__init__(self, db, db_opts, options, file_config):
