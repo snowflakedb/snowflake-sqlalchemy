@@ -2,12 +2,7 @@
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
 
-import sys
-
-if sys.version_info < (3, 8):
-    import importlib_metadata
-else:
-    import importlib.metadata as importlib_metadata
+import importlib.metadata as importlib_metadata
 
 from sqlalchemy.sql.sqltypes import UUID  # noqa
 from sqlalchemy.types import (  # noqa

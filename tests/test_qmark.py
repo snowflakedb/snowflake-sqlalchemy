@@ -3,7 +3,6 @@
 #
 
 import os
-import sys
 
 import pytest
 
@@ -18,11 +17,6 @@ def test_qmark_bulk_insert(engine_testaccount_with_qmark):
     """
     Bulk insert using qmark paramstyle
     """
-    if sys.version_info < (3, 8):
-        pytest.skip(
-            "In Python 3.7, this test depends on pandas features of which the implementation is incompatible with sqlachemy 2.0, and pandas does not support Python 3.7 anymore."
-        )
-
     with engine_testaccount_with_qmark.connect() as con:
         with con.begin():
             con.exec_driver_sql(
