@@ -9,6 +9,8 @@ Source code is also available at:
 
 # Unreleased Notes
 
+- Fix `regexp_match` and `regexp_replace` flags rendered as bound parameters instead of literal strings ([#SNOW-3573046](https://github.com/snowflakedb/snowflake-sqlalchemy)). Flags passed to `ColumnElement.regexp_match(..., flags=...)` and `ColumnElement.regexp_replace(..., flags=...)` were processed through the standard parameter pipeline, producing incorrect SQL. Flags are now rendered as inline string literals, matching Snowflake's expected `REGEXP_LIKE(col, pattern, 'i')` / `REGEXP_REPLACE(col, pattern, replacement, 'i')` syntax.
+
 # Release Notes
 
 - v1.10.0 (May 20, 2026)
