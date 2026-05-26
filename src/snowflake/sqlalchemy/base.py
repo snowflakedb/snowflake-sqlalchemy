@@ -256,6 +256,15 @@ class SnowflakeORMSelectCompileState(context.ORMSelectCompileState):
     _is_snowflake = False
 
     def _init_global_attributes(self, statement, compiler, **kw):
+        """SA 2.x per-compilation setup hook for ORMSelectCompileState.
+
+        Sets ``_is_snowflake`` to True only when the active compiler is using
+        the Snowflake dialect.  This flag gates the BCR-1057 lateral-join
+        workarounds in ``_join_determine_implicit_left_side`` and
+        ``_join_left_to_right`` so they are applied exclusively to Snowflake
+        queries and leave other dialects (PostgreSQL, SQLite, etc.) completely
+        unaffected.
+        """
         self._is_snowflake = (
             compiler is not None and compiler.dialect.name == DIALECT_NAME
         )
