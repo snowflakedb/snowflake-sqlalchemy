@@ -7,8 +7,6 @@ from snowflake.sqlalchemy.snowdialect import SnowflakeDialect
 
 from .util import ischema_names_baseline
 
-_SA20_ONLY_TYPES = {"UUID"}
-
 
 def test_type_synonyms():
     from snowflake.sqlalchemy.snowdialect import ischema_names
@@ -18,11 +16,8 @@ def test_type_synonyms():
 
 
 def test_type_baseline():
-    assert (
-        set(SnowflakeDialect.ischema_names.keys())
-        == set(ischema_names_baseline.keys()) | _SA20_ONLY_TYPES
+    assert set(SnowflakeDialect.ischema_names.keys()) == set(
+        ischema_names_baseline.keys()
     )
     for k, v in SnowflakeDialect.ischema_names.items():
-        if k in _SA20_ONLY_TYPES:
-            continue
         assert issubclass(v, ischema_names_baseline[k])
