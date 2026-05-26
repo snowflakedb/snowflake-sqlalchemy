@@ -2,7 +2,7 @@
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
 
-import importlib.metadata as importlib_metadata
+from importlib.metadata import version as _get_version
 
 from sqlalchemy.sql.sqltypes import UUID  # noqa
 from sqlalchemy.types import (  # noqa
@@ -85,7 +85,7 @@ from .util import create_snowflake_engine  # noqa
 
 base.dialect = dialect = snowdialect.dialect
 
-__version__ = importlib_metadata.version("snowflake-sqlalchemy")
+__version__ = _get_version("snowflake-sqlalchemy")
 
 _custom_types = (
     "BIGINT",
