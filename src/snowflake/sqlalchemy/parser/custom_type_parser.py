@@ -17,6 +17,7 @@ from sqlalchemy.sql.sqltypes import (
     SMALLINT,
     TIME,
     TIMESTAMP,
+    UUID,
     VARCHAR,
     NullType,
 )
@@ -76,16 +77,8 @@ ischema_names = {
     "ARRAY": ARRAY,
     "GEOGRAPHY": GEOGRAPHY,
     "GEOMETRY": GEOMETRY,
+    "UUID": UUID,
 }
-
-# Add UUID after the dict literal so the symbol can be del-ed afterwards.
-# Without del, inspect.getmembers would expose it as a class visible in this
-# module, breaking test_types_in_snowdialect which asserts every class here is
-# also present in snowdialect.
-from sqlalchemy.sql.sqltypes import UUID as _sa_uuid  # noqa: E402
-
-ischema_names["UUID"] = _sa_uuid
-del _sa_uuid
 
 NOT_NULL_STR = "NOT NULL"
 
@@ -170,7 +163,9 @@ def parse_type(type_text: str) -> TypeEngine:
     if col_type_class is None:
         col_type_class = NullType
     else:
-        if issubclass(col_type_class, sqltypes.Numeric):
+        if issubclass(col_type_class, sqltypes.Uuid):
+            col_type_kw = {"as_uuid": False}
+        elif issubclass(col_type_class, sqltypes.Numeric):
             col_type_kw = __parse_numeric_type_parameters(parameters)
         elif issubclass(col_type_class, (sqltypes.String, sqltypes.BINARY)):
             col_type_kw = __parse_type_with_length_parameters(parameters)

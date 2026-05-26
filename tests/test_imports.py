@@ -44,6 +44,7 @@ def test_types_in_snowdialect():
         "SMALLINT",
         "TIME",
         "TIMESTAMP",
+        "UUID",
         "VARCHAR",
         "NullType",
         "_CUSTOM_DECIMAL",
