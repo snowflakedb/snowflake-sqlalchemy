@@ -221,12 +221,16 @@ def test_query_tag_appears_in_query_history():
                 conn.execute(text("SELECT 1; -- query tag test"))
 
             # Query the query history to verify the tag
-            result = conn.execute(text("""
+            result = conn.execute(
+                text(
+                    """
                     SELECT QUERY_TAG
                     FROM TABLE(INFORMATION_SCHEMA.QUERY_HISTORY_BY_SESSION())
                     WHERE QUERY_TEXT = 'SELECT 1; -- query tag test'
                     ORDER BY START_TIME DESC LIMIT 1
-                    """))
+                    """
+                )
+            )
             row = result.fetchone()
             assert row is not None, "Query should be found in history"
             assert row[0] == test_query_tag, f"Query tag should be '{test_query_tag}'"
@@ -258,13 +262,17 @@ def test_query_tag_per_query():
                 conn.execute(text("SELECT 3; -- no tag query"))
 
             # Verify the query tags in history
-            result = conn.execute(text("""
+            result = conn.execute(
+                text(
+                    """
                     SELECT QUERY_TEXT, QUERY_TAG
                     FROM TABLE(INFORMATION_SCHEMA.QUERY_HISTORY_BY_SESSION())
                     WHERE QUERY_TEXT LIKE 'SELECT %; -- batch%'
                        OR QUERY_TEXT LIKE 'SELECT %; -- no tag%'
                     ORDER BY START_TIME DESC
-                    """))
+                    """
+                )
+            )
             rows = result.fetchall()
             query_tags = {row[0]: row[1] for row in rows}
 
@@ -426,12 +434,14 @@ def test_insert_tables(engine_testaccount):
                     ),
                     not_(users.c.id > 5),
                 )
-                expected_sql = textwrap.dedent("""\
+                expected_sql = textwrap.dedent(
+                    """\
                     users.name LIKE :name_1
                      AND users.id = addresses.user_id
                      AND (addresses.email_address = :email_address_1
                      OR addresses.email_address = :email_address_2)
-                     AND users.id <= :id_1""")
+                     AND users.id <= :id_1"""
+                )
                 assert str(obj) == "".join(
                     expected_sql.split("\n")
                 ), "complex condition"
@@ -559,21 +569,27 @@ def test_table_does_not_exist(engine_testaccount):
         Table("does_not_exist", meta, autoload_with=engine_testaccount)
 
 
-@pytest.mark.skip("""
+@pytest.mark.skip(
+    """
 Reflection is not implemented yet.
-""")
+"""
+)
 def test_reflextion(engine_testaccount):
     """
     Tests Reflection
     """
     with engine_testaccount.connect() as conn:
-        engine_testaccount.execute(textwrap.dedent("""\
+        engine_testaccount.execute(
+            textwrap.dedent(
+                """\
             CREATE OR REPLACE TABLE user (
                 id       Integer primary key,
                 name     String,
                 fullname String
             )
-            """))
+            """
+            )
+        )
         try:
             meta = MetaData()
             user_reflected = Table("user", meta, autoload_with=engine_testaccount)
@@ -1085,12 +1101,18 @@ def test_view_definition(engine_testaccount, db_parameters):
     test_view_name = "testview_sqlalchemy"
     with engine_testaccount.connect() as conn:
         with conn.begin():
-            conn.execute(text(textwrap.dedent(f"""\
+            conn.execute(
+                text(
+                    textwrap.dedent(
+                        f"""\
                     CREATE OR REPLACE TABLE {test_table_name} (
                         id INTEGER,
                         name STRING
                     )
-                    """)))
+                    """
+                    )
+                )
+            )
             sql = f"CREATE OR REPLACE VIEW {test_view_name} AS SELECT * FROM {test_table_name} WHERE id > 10"
             conn.execute(text(sql).execution_options(autocommit=True))
         try:
@@ -1114,12 +1136,18 @@ def test_view_comment_reading(engine_testaccount, db_parameters):
     test_view_name = "testview_sqlalchemy"
     with engine_testaccount.connect() as conn:
         with conn.begin():
-            conn.execute(text(textwrap.dedent(f"""\
+            conn.execute(
+                text(
+                    textwrap.dedent(
+                        f"""\
                     CREATE OR REPLACE TABLE {test_table_name} (
                         id INTEGER,
                         name STRING
                     )
-                    """)))
+                    """
+                    )
+                )
+            )
             sql = f"CREATE OR REPLACE VIEW {test_view_name} AS SELECT * FROM {test_table_name} WHERE id > 10"
             conn.execute(text(sql).execution_options(autocommit=True))
             comment_text = "hello my viewing friends"
@@ -1209,12 +1237,14 @@ def test_copy(engine_testaccount):
             users.drop(engine_testaccount)
 
 
-@pytest.mark.skip("""
+@pytest.mark.skip(
+    """
 No transaction works yet in the core API. Use orm API or Python Connector
 directly if needed at the moment.
 Note Snowflake DB supports DML transaction natively, but we have not figured out
 how to integrate with SQLAlchemy core API yet.
-""")
+"""
+)
 def test_transaction(engine_testaccount, db_parameters):
     engine_testaccount.execute(
         text(f"CREATE TABLE {db_parameters['name']} (c1 number)")
@@ -2010,7 +2040,8 @@ def test_column_type_schema(engine_testaccount):
     with engine_testaccount.connect() as conn:
         table_name = random_string(5)
         # column type FIXED not supported, triggers SQL compilation error: Unsupported data type 'FIXED'.
-        conn.exec_driver_sql(f"""\
+        conn.exec_driver_sql(
+            f"""\
 CREATE TEMP TABLE {table_name} (
     C1 BIGINT, C2 BINARY, C3 BOOLEAN, C4 CHAR, C5 CHARACTER, C6 DATE, C7 DATETIME, C8 DEC,
     C9 DECIMAL, C10 DECFLOAT, C11 DOUBLE, C12 FLOAT, C13 INT, C14 INTEGER, C15 NUMBER, C16 REAL,
@@ -2018,7 +2049,8 @@ CREATE TEMP TABLE {table_name} (
     C24 TIMESTAMP_LTZ, C25 TIMESTAMP_NTZ, C26 TINYINT, C27 VARBINARY, C28 VARCHAR, C29 VARIANT,
     C30 OBJECT, C31 ARRAY, C32 GEOGRAPHY, C33 GEOMETRY, C34 VECTOR(INT, 2)
 )
-""")
+"""
+        )
 
         table_reflected = Table(table_name, MetaData(), autoload_with=conn)
         columns = table_reflected.columns
@@ -2030,7 +2062,8 @@ CREATE TEMP TABLE {table_name} (
 def test_result_type_and_value(engine_testaccount):
     with engine_testaccount.connect() as conn:
         table_name = random_string(5)
-        conn.exec_driver_sql(f"""\
+        conn.exec_driver_sql(
+            f"""\
 CREATE TEMP TABLE {table_name} (
     C1 BIGINT, C2 BINARY, C3 BOOLEAN, C4 CHAR, C5 CHARACTER, C6 DATE, C7 DATETIME, C8 DEC(12,3),
     C9 DECIMAL(12,3), C10 DOUBLE, C11 FLOAT, C12 INT, C13 INTEGER, C14 NUMBER, C15 REAL, C16 BYTEINT,
@@ -2038,7 +2071,8 @@ CREATE TEMP TABLE {table_name} (
     C24 TIMESTAMP_NTZ, C25 TINYINT, C26 VARBINARY, C27 VARCHAR, C28 VARIANT, C29 OBJECT, C30 ARRAY, C31 GEOGRAPHY,
     C32 GEOMETRY
 )
-""")
+"""
+        )
         table_reflected = Table(table_name, MetaData(), autoload_with=conn)
         current_date = date.today()
         current_utctime = datetime.utcnow()
@@ -2160,15 +2194,19 @@ SELECT PARSE_JSON('{{"vk1":100, "vk2":200, "vk3":300}}'),
 def test_normalize_and_denormalize_empty_string_column_name(engine_testaccount):
     with engine_testaccount.connect() as conn:
         table_name = random_string(5)
-        conn.exec_driver_sql(f"""
+        conn.exec_driver_sql(
+            f"""
 CREATE OR REPLACE TEMP TABLE {table_name}
 (EMPID INT, DEPT TEXT, JAN INT, FEB INT)
-""")
-        conn.exec_driver_sql(f"""
+"""
+        )
+        conn.exec_driver_sql(
+            f"""
 INSERT INTO {table_name} VALUES
     (1, 'ELECTRONICS', 100, 200),
     (2, 'CLOTHES', 100, 300)
-""")
+"""
+        )
         results = conn.exec_driver_sql(
             f'SELECT * FROM {table_name} UNPIVOT(SALES FOR "" IN (JAN, FEB)) ORDER BY EMPID;'
         ).fetchall()  # normalize_name will be called
@@ -2179,10 +2217,12 @@ INSERT INTO {table_name} VALUES
             (2, "CLOTHES", "FEB", 300),
         ]
 
-        conn.exec_driver_sql(f"""
+        conn.exec_driver_sql(
+            f"""
 CREATE OR REPLACE TEMP TABLE {table_name}
 (COL INT, "" INT)
-""")
+"""
+        )
         inspector = inspect(conn)
         columns = inspector.get_columns(table_name)  # denormalize_name will be called
         assert (

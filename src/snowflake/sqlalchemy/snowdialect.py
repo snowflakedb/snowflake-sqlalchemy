@@ -1407,7 +1407,8 @@ class SnowflakeDialect(default.DefaultDialect):
 
         try:
             return connection.execute(
-                text(f"""
+                text(
+                    f"""
             SELECT /* sqlalchemy:_get_schema_columns */
                    ic.table_name,
                    ic.column_name,
@@ -1427,7 +1428,8 @@ class SnowflakeDialect(default.DefaultDialect):
                    ic.data_type_alias
               FROM {info_schema_table} ic
              WHERE ic.table_schema=:table_schema
-             ORDER BY ic.ordinal_position"""),
+             ORDER BY ic.ordinal_position"""
+                ),
                 {"table_schema": schema_only},
             )
         except sa_exc.ProgrammingError as pe:
@@ -1494,8 +1496,10 @@ class SnowflakeDialect(default.DefaultDialect):
             )
         else:
             cursor = connection.execute(
-                text(f"SHOW /* sqlalchemy:get_view_definition */ VIEWS \
-                    LIKE '{self._denormalize_quote_join(view_name)}'")
+                text(
+                    f"SHOW /* sqlalchemy:get_view_definition */ VIEWS \
+                    LIKE '{self._denormalize_quote_join(view_name)}'"
+                )
             )
 
         name_to_index_map = self.__class__._map_name_to_idx(cursor)
