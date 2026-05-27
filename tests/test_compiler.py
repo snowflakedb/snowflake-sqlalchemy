@@ -125,6 +125,34 @@ class TestSnowflakeCompiler(AssertsCompiledSQL):
             "SELECT table1.name FROM table1 WHERE table1.name NOT ILIKE %(name_1)s ESCAPE '\\\\'",
         )
 
+    def test_regexp_match_with_flags_compilation(self):
+        statement = select(table1.c.name).where(
+            table1.c.name.regexp_match("ann", flags="i")
+        )
+        self.assert_compile(
+            statement,
+            "SELECT table1.name FROM table1 WHERE REGEXP_LIKE(table1.name, %(name_1)s, 'i')",
+            dialect="snowflake",
+        )
+
+    def test_not_regexp_match_with_flags_compilation(self):
+        statement = select(table1.c.name).where(
+            ~table1.c.name.regexp_match("ann", flags="i")
+        )
+        self.assert_compile(
+            statement,
+            "SELECT table1.name FROM table1 WHERE NOT REGEXP_LIKE(table1.name, %(name_1)s, 'i')",
+            dialect="snowflake",
+        )
+
+    def test_regexp_replace_with_flags_compilation(self):
+        statement = select(table1.c.name.regexp_replace("ann", "bob", flags="i"))
+        self.assert_compile(
+            statement,
+            "SELECT REGEXP_REPLACE(table1.name, %(name_1)s, %(name_2)s, 'i') AS anon_1 FROM table1",
+            dialect="snowflake",
+        )
+
     def test_drop_table_comment(self):
         self.assert_compile(DropTableComment(table1), "COMMENT ON TABLE table1 IS ''")
         self.assert_compile(
