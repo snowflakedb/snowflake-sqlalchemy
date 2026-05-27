@@ -14,9 +14,13 @@ Source code is also available at:
 
 # Release Notes
 
+
 - v2.0.0 (TBD)
   - **Breaking change**: drop SQLAlchemy 1.4 support. The dialect now requires `SQLAlchemy>=2.0.0`. Users still on SQLAlchemy 1.4 should pin to `snowflake-sqlalchemy<2.0.0`.
   - **Breaking change**: update supported Python versions to `>=3.9, <=3.14`.
+  - Fix `regexp_match` and `regexp_replace` flags rendered as bound parameters instead of literal strings ([#SNOW-3573046](https://github.com/snowflakedb/snowflake-sqlalchemy)). Flags passed to `ColumnElement.regexp_match(..., flags=...)` and `ColumnElement.regexp_replace(..., flags=...)` were processed through the standard parameter pipeline, producing incorrect SQL. Flags are now rendered as inline string literals, matching Snowflake's expected `REGEXP_LIKE(col, pattern, 'i')` / `REGEXP_REPLACE(col, pattern, replacement, 'i')` syntax.
+
+# Release Notes
 
 - v1.10.0 (May 20, 2026)
   - Fix `with_loader_criteria` silently dropping filters on non-Snowflake dialects ([#676](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/676)). Importing `snowflake-sqlalchemy` previously altered SQLAlchemy's ORM compilation for every dialect in the process, causing loader-criteria filters to be omitted inside sealed subqueries when using PostgreSQL, MySQL, SQLite, etc. Snowflake dialect behavior is unchanged; the BCR-1057 lateral-join workaround is now scoped to Snowflake connections only.
