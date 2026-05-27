@@ -2024,6 +2024,15 @@ def test_single_table_reflection_uses_optimized_path(engine_testaccount):
 
 
 def test_column_type_schema(engine_testaccount):
+    types_not_created = frozenset(
+        {
+            "FIXED",  # Snowflake rejects FIXED in DDL.
+            "MAP",  # Requires structured type syntax not covered here.
+            "UUID",  # Snowflake stores UUID as text; no native UUID column is created.
+        }
+    )
+    reflected_schema_type_names = frozenset(ischema_names_baseline) - types_not_created
+
     with engine_testaccount.connect() as conn:
         table_name = random_string(5)
         # column type FIXED not supported, triggers SQL compilation error: Unsupported data type 'FIXED'.
@@ -2041,9 +2050,7 @@ CREATE TEMP TABLE {table_name} (
 
         table_reflected = Table(table_name, MetaData(), autoload_with=conn)
         columns = table_reflected.columns
-        assert len(columns) == (
-            len(ischema_names_baseline) - 2
-        )  # -2 because FIXED and MAP is not supported
+        assert len(columns) == len(reflected_schema_type_names)
 
 
 def test_result_type_and_value(engine_testaccount):
