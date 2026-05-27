@@ -58,15 +58,25 @@ def test_alembic_autogenerate_multi_schema_fk(engine_testaccount):
     with engine.connect() as conn:
         conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema1}"))
         conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema2}"))
-        conn.execute(text(f"""
+        conn.execute(
+            text(
+                f"""
                 CREATE TABLE {schema1}.users (
                     id INTEGER PRIMARY KEY, name VARCHAR(100))
-            """))
-        conn.execute(text(f"""
+            """
+            )
+        )
+        conn.execute(
+            text(
+                f"""
                 CREATE TABLE {schema2}.products (
                     id INTEGER PRIMARY KEY, name VARCHAR(100))
-            """))
-        conn.execute(text(f"""
+            """
+            )
+        )
+        conn.execute(
+            text(
+                f"""
                 CREATE TABLE {schema2}.orders (
                     id INTEGER PRIMARY KEY,
                     product_id INTEGER, user_id INTEGER,
@@ -74,7 +84,9 @@ def test_alembic_autogenerate_multi_schema_fk(engine_testaccount):
                         FOREIGN KEY (product_id) REFERENCES {schema2}.products(id),
                     CONSTRAINT fk_cross_schema
                         FOREIGN KEY (user_id) REFERENCES {schema1}.users(id))
-            """))
+            """
+            )
+        )
         conn.commit()
 
     # Target metadata matches DB but adds one extra column.
@@ -167,17 +179,25 @@ def test_alembic_autogenerate_default_schema_fk(engine_testaccount):
     actions_name = f"test145_user_actions_{uuid.uuid4().hex[:8]}"
 
     with engine.connect() as conn:
-        conn.execute(text(f"""
+        conn.execute(
+            text(
+                f"""
                 CREATE TABLE {users_name} (
                     username VARCHAR(100) PRIMARY KEY)
-            """))
-        conn.execute(text(f"""
+            """
+            )
+        )
+        conn.execute(
+            text(
+                f"""
                 CREATE TABLE {actions_name} (
                     id INTEGER PRIMARY KEY,
                     "user" VARCHAR(100),
                     CONSTRAINT fk_user_actions_user_user
                         FOREIGN KEY ("user") REFERENCES {users_name}(username))
-            """))
+            """
+            )
+        )
         conn.commit()
 
     # Target metadata mirrors the DB — no schema= on Table or MetaData,

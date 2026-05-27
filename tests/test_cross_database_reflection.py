@@ -184,37 +184,53 @@ class TestCrossDatabaseReflection:
             # All DDL uses fully-qualified names — no USE DATABASE needed
             conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {current_db}.{schema_a}"))
             conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {current_db}.{schema_b}"))
-            conn.execute(text(f"""
+            conn.execute(
+                text(
+                    f"""
                     CREATE OR REPLACE TABLE {current_db}.{schema_a}.apples (
                         id INTEGER PRIMARY KEY,
                         name VARCHAR(100),
                         color VARCHAR(50)
                     )
-                    """))
-            conn.execute(text(f"""
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    f"""
                     CREATE OR REPLACE TABLE {current_db}.{schema_b}.bananas (
                         id INTEGER PRIMARY KEY,
                         variety VARCHAR(100) UNIQUE,
                         ripeness INTEGER
                     )
-                    """))
-            conn.execute(text(f"""
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    f"""
                     CREATE OR REPLACE TABLE {current_db}.{schema_b}.banana_ratings (
                         rating_id INTEGER PRIMARY KEY,
                         banana_id INTEGER,
                         score INTEGER,
                         FOREIGN KEY (banana_id) REFERENCES {current_db}.{schema_b}.bananas(id)
                     )
-                    """))
+                    """
+                )
+            )
             conn.execute(
                 text(f"CREATE SCHEMA IF NOT EXISTS {current_db}.{dotted_schema}")
             )
-            conn.execute(text(f"""
+            conn.execute(
+                text(
+                    f"""
                     CREATE OR REPLACE TABLE {current_db}.{dotted_schema}.oranges (
                         id INTEGER,
                         juice_content INTEGER
                     )
-                    """))
+                    """
+                )
+            )
             conn.commit()
 
         yield {
@@ -402,12 +418,16 @@ class TestCrossDatabaseReflection:
             current_db, current_schema = result.one()
 
             table_name = "test_single_schema_table"
-            conn.execute(text(f"""
+            conn.execute(
+                text(
+                    f"""
                     CREATE OR REPLACE TABLE {table_name} (
                         id INTEGER,
                         data VARCHAR(100)
                     )
-                    """))
+                    """
+                )
+            )
             conn.commit()
 
             try:
