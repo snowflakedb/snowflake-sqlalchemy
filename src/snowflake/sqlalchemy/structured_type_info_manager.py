@@ -89,10 +89,13 @@ class _StructuredTypeInfoManager:
             )
             table_name = str(parts[-1])
 
-        ip = self.name_utils.identifier_preparer
-        quoted_schema = ip.quote(self.name_utils.denormalize_name(schema))
-        quoted_table = ip.quote(self.name_utils.denormalize_name(table_name))
-        return self.get_table_columns_by_full_name(f"{quoted_schema}.{quoted_table}")
+        table_schema = self.name_utils.denormalize_name(schema)
+        table_name = self.name_utils.denormalize_name(table_name)
+        result = self._execute_desc(f"{table_schema}.{table_name}")
+        if not result:
+            return []
+
+        return self._parse_desc_result(result)
 
     def _parse_desc_result(self, result):
         """Parse DESC TABLE result into column information"""
