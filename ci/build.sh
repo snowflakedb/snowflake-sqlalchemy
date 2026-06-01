@@ -3,7 +3,7 @@
 # Build snowflake-sqlalchemy
 set -o pipefail
 
-PYTHON="python3.8"
+PYTHON="python3.9"
 THIS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SQLALCHEMY_DIR="$(dirname "${THIS_DIR}")"
 DIST_DIR="${SQLALCHEMY_DIR}/dist"
