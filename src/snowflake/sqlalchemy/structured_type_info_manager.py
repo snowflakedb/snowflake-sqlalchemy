@@ -1,11 +1,14 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
+from __future__ import annotations
 
 import re
+import warnings
+from typing import Any
 
-from sqlalchemy import exc as sa_exc
-from sqlalchemy import util as sa_util
-from sqlalchemy.sql import text
+from sqlalchemy import text
+from sqlalchemy.engine import Connection
+from sqlalchemy.exc import ProgrammingError, SAWarning
 
 from snowflake.sqlalchemy.name_utils import _NameUtils
 from snowflake.sqlalchemy.parser.custom_type_parser import NullType, parse_type
@@ -24,15 +27,22 @@ class _StructuredTypeInfoManager:
         default_schema (str): The default schema to use when none is specified
     """
 
-    def __init__(self, connection, name_utils: _NameUtils, default_schema: str):
+    def __init__(
+        self,
+        connection: Connection,
+        name_utils: _NameUtils,
+        default_schema: str,
+    ) -> None:
         self.connection = connection
-        self.full_columns_descriptions = {}
+        self.full_columns_descriptions: dict[
+            tuple[str, str], dict[str, dict[str, Any]]
+        ] = {}
         self.name_utils = name_utils
         self.default_schema = default_schema
 
     def get_column_info(
-        self, schema_name: str, table_name: str, column_name: str, **kwargs
-    ):
+        self, schema_name: str, table_name: str, column_name: str, **kwargs: Any
+    ) -> dict[str, Any] | None:
         self._load_structured_type_info(schema_name, table_name)
         if (
             (schema_name, table_name) in self.full_columns_descriptions
@@ -43,7 +53,7 @@ class _StructuredTypeInfoManager:
             ]
         return None
 
-    def _load_structured_type_info(self, schema_name: str, table_name: str):
+    def _load_structured_type_info(self, schema_name: str, table_name: str) -> bool:
         """Get column information for a structured type"""
         if (schema_name, table_name) not in self.full_columns_descriptions:
 
@@ -57,13 +67,17 @@ class _StructuredTypeInfoManager:
             )
         return True
 
-    def _table_columns_as_dict(self, columns: list):
-        result = {}
+    def _table_columns_as_dict(
+        self, columns: list[dict[str, Any]]
+    ) -> dict[str, dict[str, Any]]:
+        result: dict[str, dict[str, Any]] = {}
         for column in columns:
             result[column["name"]] = column
         return result
 
-    def get_table_columns_by_full_name(self, full_table_name: str):
+    def get_table_columns_by_full_name(
+        self, full_table_name: str
+    ) -> list[dict[str, Any]]:
         """
         Get all columns in a table using a fully-qualified table name.
 
@@ -79,24 +93,30 @@ class _StructuredTypeInfoManager:
 
         return self._parse_desc_result(result)
 
-    def get_table_columns(self, table_name: str, schema: str = None):
+    def get_table_columns(
+        self, table_name: str, schema: str | None = None
+    ) -> list[dict[str, Any]]:
         """Get all columns in a table in a schema"""
         schema = schema if schema else self.default_schema
 
         if "." in str(table_name):
-            parts = self.name_utils.identifier_preparer._split_schema_by_dot(
+            parts = self.name_utils.identifier_preparer._split_schema_by_dot(  # type: ignore[attr-defined]
                 str(table_name)
             )
             table_name = str(parts[-1])
 
         ip = self.name_utils.identifier_preparer
-        quoted_schema = ip.quote(self.name_utils.denormalize_name(schema))
-        quoted_table = ip.quote(self.name_utils.denormalize_name(table_name))
+        # denormalize_name returns str | None; both inputs are non-None here
+        dn_schema = self.name_utils.denormalize_name(schema)
+        dn_table = self.name_utils.denormalize_name(table_name)
+        assert dn_schema is not None and dn_table is not None
+        quoted_schema = ip.quote(dn_schema)
+        quoted_table = ip.quote(dn_table)
         return self.get_table_columns_by_full_name(f"{quoted_schema}.{quoted_table}")
 
-    def _parse_desc_result(self, result):
+    def _parse_desc_result(self, result: Any) -> list[dict[str, Any]]:
         """Parse DESC TABLE result into column information"""
-        ans = []
+        ans: list[dict[str, Any]] = []
 
         for desc_data in result:
             column_name = desc_data[0]
@@ -107,12 +127,15 @@ class _StructuredTypeInfoManager:
             comment = desc_data[9]
 
             column_name = self.name_utils.normalize_name(column_name)
+            assert column_name is not None  # DESC TABLE always returns a column name
             if column_name.startswith("sys_clustering_column"):
                 continue  # ignoring clustering column
             type_instance = parse_type(coltype)
             if isinstance(type_instance, NullType):
-                sa_util.warn(
-                    f"Did not recognize type '{coltype}' of column '{column_name}'"
+                warnings.warn(
+                    f"Did not recognize type '{coltype}' of column '{column_name}'",
+                    SAWarning,
+                    stacklevel=2,
                 )
 
             identity = None
@@ -159,7 +182,7 @@ class _StructuredTypeInfoManager:
             return []
         return ans
 
-    def _execute_desc(self, full_table_name: str):
+    def _execute_desc(self, full_table_name: str) -> Any | None:
         """
         Execute a DESC TABLE command handling possible exceptions.
 
@@ -181,8 +204,10 @@ class _StructuredTypeInfoManager:
                     f"DESC /* sqlalchemy:_get_schema_columns */ TABLE {full_table_name} TYPE = COLUMNS"
                 )
             )
-        except sa_exc.ProgrammingError:
-            sa_util.warn(
-                f"Failed to reflect table '{full_table_name}' using sqlalchemy:_get_schema_columns"
+        except ProgrammingError:
+            warnings.warn(
+                f"Failed to reflect table '{full_table_name}' using sqlalchemy:_get_schema_columns",
+                SAWarning,
+                stacklevel=2,
             )
         return None
