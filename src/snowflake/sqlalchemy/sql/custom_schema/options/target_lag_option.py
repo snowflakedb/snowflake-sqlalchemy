@@ -43,8 +43,8 @@ class TargetLagOption(TableOption):
 
     def __init__(
         self,
-        time: int | None = 0,
-        unit: TimeUnit | None = TimeUnit.MINUTES,
+        time: int = 0,
+        unit: TimeUnit = TimeUnit.MINUTES,
     ) -> None:
         super().__init__()
         self.time = time
@@ -52,7 +52,7 @@ class TargetLagOption(TableOption):
         self._name: TableOptionKey = TableOptionKey.TARGET_LAG
 
     @staticmethod
-    def create(
+    def create(  # type: ignore[override]
         value: TargetLagOption | tuple[int, TimeUnit] | KeywordOptionType,
     ) -> TableOption | None:
         if isinstance(value, NoneType):

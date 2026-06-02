@@ -47,6 +47,7 @@ path = "src/snowflake/sqlalchemy/version.py"
 [project.optional-dependencies]
 development = [
   "alembic",
+  "mypy",
   "pre-commit",
   "pytest",
   "setuptools",
@@ -93,6 +94,7 @@ test-dialect-compatibility = "pytest -ra -vvv --tb=short --cov snowflake.sqlalch
 test-dialect-aws = "pytest -m \"aws\" -ra -vvv --tb=short --cov snowflake.sqlalchemy --cov-append --junitxml ./junit.xml --ignore=tests/sqlalchemy_test_suite tests/"
 gh-cache-sum = "python -VV | sha256sum | cut -d' ' -f1"
 check-import = "python -c 'import snowflake.sqlalchemy; print(snowflake.sqlalchemy.__version__)'"
+type-check = "mypy src/snowflake/sqlalchemy/"
 
 [[tool.hatch.envs.release.matrix]]
 python = ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
@@ -131,3 +133,46 @@ markers = [
   "feature_max_lob_size: tests that could but should only run on our external CI",
   "mypy: typing tests",
 ]
+
+[tool.mypy]
+python_version = "3.12"
+mypy_path = "src"
+explicit_package_bases = true
+# Ignore stubs that are missing for snowflake-connector-python
+ignore_missing_imports = true
+# Check function bodies even when unannotated
+check_untyped_defs = true
+# Surface stale # type: ignore comments as annotations are added
+warn_unused_ignores = true
+
+# Files not yet annotated — errors suppressed until each phase lands.
+# Remove the override for a file once its phase is complete.
+[[tool.mypy.overrides]]
+module = [
+  "snowflake.sqlalchemy.alembic_util",
+  "snowflake.sqlalchemy.base",
+  "snowflake.sqlalchemy.custom_commands",
+  "snowflake.sqlalchemy.custom_types",
+  "snowflake.sqlalchemy.functions",
+  "snowflake.sqlalchemy.name_utils",
+  "snowflake.sqlalchemy.orm",
+  "snowflake.sqlalchemy.parser.custom_type_parser",
+  "snowflake.sqlalchemy.snowdialect",
+  "snowflake.sqlalchemy.structured_type_info_manager",
+  "snowflake.sqlalchemy.util",
+  "snowflake.sqlalchemy.sql.custom_schema.clustered_table",
+  "snowflake.sqlalchemy.sql.custom_schema.custom_table_base",
+  "snowflake.sqlalchemy.sql.custom_schema.custom_table_prefix",
+  "snowflake.sqlalchemy.sql.custom_schema.dynamic_table",
+  "snowflake.sqlalchemy.sql.custom_schema.hybrid_table",
+  "snowflake.sqlalchemy.sql.custom_schema.iceberg_table",
+  "snowflake.sqlalchemy.sql.custom_schema.snowflake_table",
+  "snowflake.sqlalchemy.sql.custom_schema.table_from_query",
+  "snowflake.sqlalchemy.sql.custom_schema.options.as_query_option",
+  "snowflake.sqlalchemy.sql.custom_schema.options.cluster_by_option",
+  "snowflake.sqlalchemy.sql.custom_schema.options.identifier_option",
+  "snowflake.sqlalchemy.sql.custom_schema.options.invalid_table_option",
+  "snowflake.sqlalchemy.sql.custom_schema.options.keyword_option",
+  "snowflake.sqlalchemy.sql.custom_schema.options.literal_option",
+]
+ignore_errors = true

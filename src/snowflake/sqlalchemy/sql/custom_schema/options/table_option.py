@@ -24,7 +24,7 @@ class TableOption:
         self._name: Optional[TableOptionKey] = None
 
     @property
-    def option_name(self) -> str:
+    def option_name(self) -> str | None:
         if isinstance(self._name, NoneType):
             return None
         return str(self._name.value)
@@ -58,7 +58,9 @@ class TableOption:
             raise exc.OptionKeyNotProvidedError(self.__class__.__name__)
 
     def template(self) -> str:
-        return f"{self.option_name.upper()} = %s"
+        name = self.option_name
+        assert name is not None, f"option_name not set on {self.__class__.__name__}"
+        return f"{name.upper()} = %s"
 
     def render_option(self, compiler) -> str:
         self._validate_option()
