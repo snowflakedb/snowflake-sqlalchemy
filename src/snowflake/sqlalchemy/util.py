@@ -6,6 +6,7 @@ from __future__ import annotations
 import os
 import re
 import warnings
+from collections.abc import Sequence
 from itertools import chain
 from typing import Any
 from urllib.parse import quote as _url_quote
@@ -21,7 +22,6 @@ from sqlalchemy.sql.elements import AsBoolean, ClauseElement, True_, _find_colum
 from sqlalchemy.sql.selectable import FromClause, Join, Lateral
 
 from snowflake.connector.compat import IS_STR
-from snowflake.connector.connection import SnowflakeConnection
 
 from ._constants import (
     APPLICATION_NAME,
@@ -161,7 +161,7 @@ def _url(**db_parameters: Any) -> str:
 
 
 def _set_connection_interpolate_empty_sequences(
-    dbapi_connection: SnowflakeConnection, flag: bool
+    dbapi_connection: Any, flag: bool
 ) -> None:
     """set the _interpolate_empty_sequences config of the underlying connection"""
     if hasattr(dbapi_connection, "driver_connection"):
@@ -169,7 +169,7 @@ def _set_connection_interpolate_empty_sequences(
         dbapi_connection.driver_connection._interpolate_empty_sequences = flag
     else:
         # _dbapi_connection is a raw SnowflakeConnection
-        dbapi_connection._interpolate_empty_sequences = flag  # type: ignore[attr-defined]
+        dbapi_connection._interpolate_empty_sequences = flag
 
 
 def _update_connection_application_name(**conn_kwargs: Any) -> dict[str, Any]:
@@ -217,7 +217,7 @@ def _legacy_url_params_enabled() -> bool:
 # which used the 'sqlalchemy.util.preloaded.sql_util.find_left_clause_to_join_from' method that
 # can not handle the BCR change, we implement it in a way that lateral join does not need onclause
 def _find_left_clause_to_join_from(
-    clauses: list[FromClause],
+    clauses: Sequence[FromClause],
     join_to: Any,
     onclause: ClauseElement | None,
 ) -> range | list[int]:
