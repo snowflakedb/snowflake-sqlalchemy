@@ -7,7 +7,7 @@
 set -o pipefail
 
 # In case this is ran from dev-vm
-PYTHON_ENV=${1:-3.8}
+PYTHON_ENV=${1:-3.9}
 
 # Set constants
 THIS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
