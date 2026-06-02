@@ -1,9 +1,12 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
-from typing import Optional, Union
+from __future__ import annotations
+
+from typing import Any
 
 from sqlalchemy.sql import Selectable
+from sqlalchemy.sql.compiler import Compiled
 
 from snowflake.sqlalchemy.custom_commands import NoneType
 
@@ -22,15 +25,15 @@ class AsQueryOption(TableOption):
         as select name, address from existing_table where name = "test"
     """
 
-    def __init__(self, query: Union[str, Selectable]) -> None:
+    def __init__(self, query: str | Selectable) -> None:
         super().__init__()
         self._name: TableOptionKey = TableOptionKey.AS_QUERY
         self.query = query
 
     @staticmethod
-    def create(
-        value: Optional[Union["AsQueryOption", str, Selectable]],
-    ) -> "TableOption":
+    def create(  # type: ignore[override]
+        value: AsQueryOption | str | Selectable | None,
+    ) -> TableOption | None:
         if isinstance(value, (NoneType, AsQueryOption)):
             return value
         if isinstance(value, (str, Selectable)):
@@ -57,11 +60,11 @@ class AsQueryOption(TableOption):
             )
         return self.query
 
-    def _render(self, compiler) -> str:
+    def _render(self, compiler: Any) -> str:
         return self.template() % (self.__get_expression(compiler))
 
     def __repr__(self) -> str:
         return "AsQueryOption(%s)" % self.__get_expression()
 
 
-AsQueryOptionType = Union[AsQueryOption, str, Selectable]
+AsQueryOptionType = AsQueryOption | str | Selectable

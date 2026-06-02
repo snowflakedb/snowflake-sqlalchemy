@@ -1,7 +1,12 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
+
 #
-from typing import Any, Optional, Union
+# Copyright (c) 2012-2023 Snowflake computing Inc. All rights reserved.
+#
+from __future__ import annotations
+
+from typing import Any
 
 from snowflake.sqlalchemy.custom_commands import NoneType
 
@@ -19,18 +24,19 @@ class LiteralOption(TableOption):
         WAREHOUSE = 'my_warehouse'
     """
 
-    def __init__(self, value: Union[int, str]) -> None:
+    def __init__(self, value: int | str) -> None:
         super().__init__()
         self.value: Any = value
 
     @property
-    def priority(self):
+    def priority(self) -> Priority:
         return Priority.HIGH
 
     @staticmethod
-    def create(
-        name: TableOptionKey, value: Optional[Union[str, int, "LiteralOption"]]
-    ) -> Optional[TableOption]:
+    def create(  # type: ignore[override]
+        name: TableOptionKey,
+        value: str | int | LiteralOption | None,
+    ) -> TableOption | None:
         if isinstance(value, NoneType):
             return None
         if isinstance(value, (str, int)):
@@ -47,12 +53,14 @@ class LiteralOption(TableOption):
         )
 
     def template(self) -> str:
+        name = self.option_name
+        assert name is not None, f"option_name not set on {self.__class__.__name__}"
         if isinstance(self.value, int):
-            return f"{self.option_name.upper()} = %d"
+            return f"{name.upper()} = %d"
         else:
-            return f"{self.option_name.upper()} = '%s'"
+            return f"{name.upper()} = '%s'"
 
-    def _render(self, compiler) -> str:
+    def _render(self, compiler: Any) -> str:
         if isinstance(self.value, int):
             return self.template() % self.value
         escaped = self._escape_string_literal_value(str(self.value))
@@ -67,4 +75,4 @@ class LiteralOption(TableOption):
         return f"LiteralOption(value='{self.value}'{option_name})"
 
 
-LiteralOptionType = Union[LiteralOption, str, int]
+LiteralOptionType = LiteralOption | str | int

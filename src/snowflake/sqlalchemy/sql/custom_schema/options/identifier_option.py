@@ -1,7 +1,9 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
-from typing import Optional, Union
+from __future__ import annotations
+
+from typing import Any
 
 from snowflake.sqlalchemy.custom_commands import NoneType
 
@@ -23,18 +25,19 @@ class IdentifierOption(TableOption):
         WAREHOUSE = my_warehouse
     """
 
-    def __init__(self, value: Union[str]) -> None:
+    def __init__(self, value: str) -> None:
         super().__init__()
         self.value: str = value
 
     @property
-    def priority(self):
+    def priority(self) -> Priority:
         return Priority.HIGH
 
     @staticmethod
-    def create(
-        name: TableOptionKey, value: Optional[Union[str, "IdentifierOption"]]
-    ) -> Optional[TableOption]:
+    def create(  # type: ignore[override]
+        name: TableOptionKey,
+        value: str | IdentifierOption | None,
+    ) -> TableOption | None:
         if isinstance(value, NoneType):
             return None
 
@@ -50,9 +53,11 @@ class IdentifierOption(TableOption):
         )
 
     def template(self) -> str:
-        return f"{self.option_name.upper()} = %s"
+        name = self.option_name
+        assert name is not None, f"option_name not set on {self.__class__.__name__}"
+        return f"{name.upper()} = %s"
 
-    def _render(self, compiler) -> str:
+    def _render(self, compiler: Any) -> str:
         return self.template() % self._quote_identifier_value(self.value, compiler)
 
     def __repr__(self) -> str:
@@ -64,4 +69,4 @@ class IdentifierOption(TableOption):
         return f"IdentifierOption(value='{self.value}'{option_name})"
 
 
-IdentifierOptionType = Union[IdentifierOption, str, int]
+IdentifierOptionType = IdentifierOption | str
