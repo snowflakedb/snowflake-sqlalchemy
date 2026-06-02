@@ -53,7 +53,7 @@ class TargetLagOption(TableOption):
 
     @staticmethod
     def create(  # type: ignore[override]
-        value: TargetLagOption | tuple[int, TimeUnit] | KeywordOptionType,
+        value: TargetLagOption | tuple[int, TimeUnit] | KeywordOptionType | None,
     ) -> TableOption | None:
         if isinstance(value, NoneType):
             return value

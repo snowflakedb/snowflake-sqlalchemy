@@ -1,7 +1,9 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
-from typing import Optional
+from __future__ import annotations
+
+from typing import Any
 
 from .table_option import TableOption, TableOptionKey
 
@@ -15,10 +17,12 @@ class InvalidTableOption(TableOption):
         self._name = name
 
     @staticmethod
-    def create(name: TableOptionKey, value: Exception) -> Optional[TableOption]:
+    def create(  # type: ignore[override]
+        name: TableOptionKey, value: Exception
+    ) -> TableOption:
         return InvalidTableOption(name, value)
 
-    def _render(self, compiler) -> str:
+    def _render(self, compiler: Any) -> str:
         raise self.exception
 
     def __repr__(self) -> str:

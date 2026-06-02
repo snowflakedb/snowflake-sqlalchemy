@@ -1,6 +1,7 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
+from __future__ import annotations
 
 from typing import Any
 
@@ -57,7 +58,7 @@ class SnowflakeTable(TableFromQueryBase):
         *args: SchemaItem,
         **kw: Any,
     ) -> None:
-        self.__init__(name, metadata, *args, _no_init=False, **kw)
+        self.__init__(name, metadata, *args, _no_init=False, **kw)  # type: ignore[misc]
 
     def __repr__(self) -> str:
         return "SnowflakeTable(%s)" % ", ".join(
