@@ -150,8 +150,5 @@ warn_unused_ignores = true
 [[tool.mypy.overrides]]
 module = [
   "snowflake.sqlalchemy.alembic_util",
-  "snowflake.sqlalchemy.base",
-  "snowflake.sqlalchemy.custom_commands",
-  "snowflake.sqlalchemy.snowdialect",
 ]
 ignore_errors = true
