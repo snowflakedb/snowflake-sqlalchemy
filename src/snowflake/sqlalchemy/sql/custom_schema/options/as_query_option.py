@@ -3,7 +3,7 @@
 #
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING
 
 from sqlalchemy.sql import Selectable
 from sqlalchemy.sql.compiler import Compiled
@@ -11,6 +11,9 @@ from sqlalchemy.sql.compiler import Compiled
 from snowflake.sqlalchemy.custom_commands import NoneType
 
 from .table_option import Priority, TableOption, TableOptionKey
+
+if TYPE_CHECKING:
+    from snowflake.sqlalchemy.base import SnowflakeDDLCompiler
 
 
 class AsQueryOption(TableOption):

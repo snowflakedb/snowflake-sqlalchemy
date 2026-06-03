@@ -11,6 +11,7 @@ from sqlalchemy.sql.ddl import DDLElement
 from sqlalchemy.sql.dml import UpdateBase
 from sqlalchemy.sql.elements import ClauseElement
 from sqlalchemy.sql.roles import FromClauseRole
+from sqlalchemy.sql.selectable import FromClause, Selectable
 
 from .util import escape_single_quotes, escape_string_literal_interior
 
@@ -58,7 +59,9 @@ class MergeInto(UpdateBase):
     __visit_name__ = "merge_into"
     _bind = None
 
-    def __init__(self, target: Any, source: Any, on: Any) -> None:
+    def __init__(
+        self, target: FromClause, source: FromClause | Selectable, on: ClauseElement
+    ) -> None:
         self.target = target
         self.source = source
         self.on = on
@@ -69,7 +72,7 @@ class MergeInto(UpdateBase):
 
         def __init__(self, command: str) -> None:
             self.set: dict[str, Any] = {}
-            self.predicate: Any = None
+            self.predicate: ClauseElement | None = None
             self.command = command
 
         def __repr__(self) -> str:
@@ -102,7 +105,7 @@ class MergeInto(UpdateBase):
             self.set = kwargs
             return self
 
-        def where(self, expr: Any) -> MergeInto.clause:
+        def where(self, expr: ClauseElement) -> MergeInto.clause:
             self.predicate = expr
             return self
 
@@ -573,7 +576,7 @@ class CreateStage(DDLElement):
 
     def __init__(
         self,
-        container: Any,
+        container: CloudStorageLocation | ExternalStage,
         stage: ExternalStage,
         replace_if_exists: bool = False,
         *,

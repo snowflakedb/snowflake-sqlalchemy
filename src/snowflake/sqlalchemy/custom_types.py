@@ -6,6 +6,7 @@ from __future__ import annotations
 import decimal
 import keyword
 import warnings
+from datetime import date, datetime, time
 from typing import TYPE_CHECKING, Any, Callable, ClassVar
 
 import sqlalchemy.types as sqltypes
@@ -13,6 +14,8 @@ import sqlalchemy.util as util
 from sqlalchemy.types import TypeEngine
 
 if TYPE_CHECKING:
+    from sqlalchemy.engine.interfaces import Dialect
+
     from .snowdialect import SnowflakeDialect
 
 DECFLOAT_PRECISION = 38
@@ -226,7 +229,9 @@ class DECFLOAT(SnowflakeType):
     __visit_name__ = "DECFLOAT"
     _warned_precision: ClassVar[bool] = False
 
-    def result_processor(self, dialect: Any, coltype: Any) -> Callable[[Any], Any]:
+    def result_processor(
+        self, dialect: Dialect, coltype: object
+    ) -> Callable[[Any], Any]:
         """Check decimal context precision and warn if it may truncate DECFLOAT values."""
         # Check if dialect has enable_decfloat configured
         decfloat_enabled = getattr(dialect, "_enable_decfloat", False)
@@ -254,8 +259,8 @@ class DECFLOAT(SnowflakeType):
 
 
 class _CUSTOM_Date(SnowflakeType, sqltypes.Date):
-    def literal_processor(self, dialect: Any) -> Callable[[Any], str | None]:  # type: ignore[override]
-        def process(value: Any) -> str | None:
+    def literal_processor(self, dialect: Dialect) -> Callable[[Any], str | None]:  # type: ignore[override]
+        def process(value: date | None) -> str | None:
             if value is not None:
                 return f"'{value.isoformat()}'"
             return None
@@ -267,8 +272,8 @@ class _CUSTOM_DateTime(SnowflakeType, sqltypes.DateTime):
     def __init__(self, timezone: bool = False) -> None:
         super().__init__(timezone=timezone)
 
-    def literal_processor(self, dialect: Any) -> Callable[[Any], str | None]:  # type: ignore[override]
-        def process(value: Any) -> str | None:
+    def literal_processor(self, dialect: Dialect) -> Callable[[Any], str | None]:  # type: ignore[override]
+        def process(value: datetime | None) -> str | None:
             if value is not None:
                 datetime_str = value.isoformat(" ", timespec="microseconds")
                 return f"'{datetime_str}'"
@@ -288,8 +293,8 @@ class _CUSTOM_Time(SnowflakeType, sqltypes.Time):
     :class:`TIMESTAMP_TZ` or ``DateTime(timezone=True)`` instead.
     """
 
-    def literal_processor(self, dialect: Any) -> Callable[[Any], str | None]:  # type: ignore[override]
-        def process(value: Any) -> str | None:
+    def literal_processor(self, dialect: Dialect) -> Callable[[Any], str | None]:  # type: ignore[override]
+        def process(value: time | None) -> str | None:
             if value is not None:
                 time_str = value.isoformat(timespec="microseconds")
                 return f"'{time_str}'"
@@ -299,7 +304,7 @@ class _CUSTOM_Time(SnowflakeType, sqltypes.Time):
 
 
 class _CUSTOM_Float(SnowflakeType, sqltypes.Float):
-    def bind_processor(self, dialect: Any) -> Callable[[Any], float | str | None]:
+    def bind_processor(self, dialect: Dialect) -> Callable[[Any], float | str | None]:
         return _process_float
 
 

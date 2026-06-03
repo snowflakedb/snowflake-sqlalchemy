@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any
+from typing import TYPE_CHECKING
 
 from snowflake.sqlalchemy.custom_commands import NoneType
 
 from .keyword_option import KeywordOption, KeywordOptionType
 from .keywords import SnowflakeKeyword
 from .table_option import Priority, TableOption, TableOptionKey
+
+if TYPE_CHECKING:
+    from snowflake.sqlalchemy.base import SnowflakeDDLCompiler
 
 
 class TimeUnit(Enum):
@@ -85,7 +88,7 @@ class TargetLagOption(TableOption):
     def priority(self) -> Priority:
         return Priority.HIGH
 
-    def _render(self, compiler: Any) -> str:
+    def _render(self, compiler: SnowflakeDDLCompiler) -> str:
         return self.template() % (self.__get_expression())
 
     def __repr__(self) -> str:
