@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any, Collection, NamedTuple, cast
 if TYPE_CHECKING:
     from sqlalchemy.engine import CursorResult, Row
     from sqlalchemy.engine.interfaces import (
+        DBAPIConnection,
         ReflectedCheckConstraint,
         ReflectedColumn,
         ReflectedForeignKeyConstraint,
@@ -366,23 +367,25 @@ class SnowflakeDialect(default.DefaultDialect):
         return self._has_object(connection, "TABLE", table_name, schema)
 
     def get_isolation_level_values(  # type: ignore[override]
-        self, dbapi_connection: Any
+        self, dbapi_connection: DBAPIConnection
     ) -> list[str]:
         return [
             SnowflakeIsolationLevel.READ_COMMITTED.value,
             SnowflakeIsolationLevel.AUTOCOMMIT.value,
         ]
 
-    def do_rollback(self, dbapi_connection: Any) -> None:
+    def do_rollback(self, dbapi_connection: DBAPIConnection) -> None:
         dbapi_connection.rollback()
 
-    def do_commit(self, dbapi_connection: Any) -> None:
+    def do_commit(self, dbapi_connection: DBAPIConnection) -> None:
         dbapi_connection.commit()
 
     def get_default_isolation_level(self, dbapi_conn: Any) -> str:  # type: ignore[override]
         return SnowflakeIsolationLevel.READ_COMMITTED.value
 
-    def set_isolation_level(self, dbapi_connection: Any, level: str) -> None:
+    def set_isolation_level(
+        self, dbapi_connection: DBAPIConnection, level: str
+    ) -> None:
         if level == SnowflakeIsolationLevel.AUTOCOMMIT.value:
             dbapi_connection.autocommit(True)
         else:
