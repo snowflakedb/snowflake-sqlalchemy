@@ -144,11 +144,3 @@ ignore_missing_imports = true
 check_untyped_defs = true
 # Surface stale # type: ignore comments as annotations are added
 warn_unused_ignores = true
-
-# Files not yet annotated — errors suppressed until each phase lands.
-# Remove the override for a file once its phase is complete.
-[[tool.mypy.overrides]]
-module = [
-  "snowflake.sqlalchemy.alembic_util",
-]
-ignore_errors = true
