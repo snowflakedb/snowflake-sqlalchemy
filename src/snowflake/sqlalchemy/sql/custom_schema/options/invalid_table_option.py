@@ -3,9 +3,12 @@
 #
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING
 
 from .table_option import TableOption, TableOptionKey
+
+if TYPE_CHECKING:
+    from snowflake.sqlalchemy.base import SnowflakeDDLCompiler
 
 
 class InvalidTableOption(TableOption):
@@ -22,7 +25,7 @@ class InvalidTableOption(TableOption):
     ) -> TableOption:
         return InvalidTableOption(name, value)
 
-    def _render(self, compiler: Any) -> str:
+    def _render(self, compiler: SnowflakeDDLCompiler) -> str:
         raise self.exception
 
     def __repr__(self) -> str:

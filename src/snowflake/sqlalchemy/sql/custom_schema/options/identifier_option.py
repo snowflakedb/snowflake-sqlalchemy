@@ -3,11 +3,14 @@
 #
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING
 
 from snowflake.sqlalchemy.custom_commands import NoneType
 
 from .table_option import Priority, TableOption, TableOptionKey
+
+if TYPE_CHECKING:
+    from snowflake.sqlalchemy.base import SnowflakeDDLCompiler
 
 
 class IdentifierOption(TableOption):
@@ -53,7 +56,7 @@ class IdentifierOption(TableOption):
         assert name is not None, f"option_name not set on {self.__class__.__name__}"
         return f"{name.upper()} = %s"
 
-    def _render(self, compiler: Any) -> str:
+    def _render(self, compiler: SnowflakeDDLCompiler) -> str:
         return self.template() % self.value
 
     def __repr__(self) -> str:

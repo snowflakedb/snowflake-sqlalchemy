@@ -7,7 +7,7 @@ import warnings
 from typing import Any
 
 from sqlalchemy import text
-from sqlalchemy.engine import Connection
+from sqlalchemy.engine import Connection, CursorResult
 from sqlalchemy.exc import ProgrammingError, SAWarning
 
 from snowflake.sqlalchemy.name_utils import _NameUtils
@@ -114,7 +114,7 @@ class _StructuredTypeInfoManager:
         quoted_table = ip.quote(dn_table)
         return self.get_table_columns_by_full_name(f"{quoted_schema}.{quoted_table}")
 
-    def _parse_desc_result(self, result: Any) -> list[dict[str, Any]]:
+    def _parse_desc_result(self, result: CursorResult) -> list[dict[str, Any]]:
         """Parse DESC TABLE result into column information"""
         ans: list[dict[str, Any]] = []
 
@@ -182,7 +182,7 @@ class _StructuredTypeInfoManager:
             return []
         return ans
 
-    def _execute_desc(self, full_table_name: str) -> Any | None:
+    def _execute_desc(self, full_table_name: str) -> CursorResult | None:
         """
         Execute a DESC TABLE command handling possible exceptions.
 

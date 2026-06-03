@@ -6,11 +6,14 @@
 #
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from snowflake.sqlalchemy.custom_commands import NoneType
 
 from .table_option import Priority, TableOption, TableOptionKey
+
+if TYPE_CHECKING:
+    from snowflake.sqlalchemy.base import SnowflakeDDLCompiler
 
 
 class LiteralOption(TableOption):
@@ -60,7 +63,7 @@ class LiteralOption(TableOption):
         else:
             return f"{name.upper()} = '%s'"
 
-    def _render(self, compiler: Any) -> str:
+    def _render(self, compiler: SnowflakeDDLCompiler) -> str:
         return self.template() % self.value
 
     def __repr__(self) -> str:

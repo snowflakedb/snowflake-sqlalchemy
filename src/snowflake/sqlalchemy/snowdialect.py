@@ -13,6 +13,7 @@ from time import time as time_in_seconds
 from typing import TYPE_CHECKING, Any, Collection, NamedTuple, cast
 
 if TYPE_CHECKING:
+    from sqlalchemy.engine import CursorResult, Row
     from sqlalchemy.engine.interfaces import (
         ReflectedCheckConstraint,
         ReflectedColumn,
@@ -210,7 +211,9 @@ class SnowflakeDialect(default.DefaultDialect):
         return connector
 
     @staticmethod
-    def parse_query_param_type(name: str, value: Any) -> Any:
+    def parse_query_param_type(
+        name: str, value: str | tuple[str, ...]
+    ) -> str | int | bool | tuple[str, ...]:
         """Cast param value if possible to type defined in connector-python."""
         if not (maybe_type_configuration := DEFAULT_CONFIGURATION.get(name)):
             return value
@@ -262,12 +265,12 @@ class SnowflakeDialect(default.DefaultDialect):
         # Handle enable_decfloat URL parameter
         enable_decfloat = query.pop("enable_decfloat", None)
         if enable_decfloat is not None:
-            self._enable_decfloat = parse_url_boolean(enable_decfloat)  # type: ignore[arg-type]
+            self._enable_decfloat = parse_url_boolean(enable_decfloat)
 
         # Handle case_sensitive_identifiers URL parameter
         case_sensitive_identifiers = query.pop("case_sensitive_identifiers", None)
         if case_sensitive_identifiers is not None:
-            flag = parse_url_boolean(case_sensitive_identifiers)  # type: ignore[arg-type]
+            flag = parse_url_boolean(case_sensitive_identifiers)
             if flag != self._case_sensitive_identifiers:
                 # Replace ``name_utils`` atomically rather than mutating the
                 # live instance's attribute.  Python attribute assignment is
@@ -450,7 +453,9 @@ class SnowflakeDialect(default.DefaultDialect):
         return ".".join(quoted_parts)
 
     @reflection.cache
-    def _current_database_schema(self, connection: Connection, **kw: Any) -> Any:
+    def _current_database_schema(
+        self, connection: Connection, **kw: Any
+    ) -> tuple[str | None, str | None]:
         res = connection.execute(
             text("select current_database(), current_schema();")
         ).fetchone()
@@ -475,7 +480,7 @@ class SnowflakeDialect(default.DefaultDialect):
         return current_schema
 
     @staticmethod
-    def _map_name_to_idx(result: Any) -> dict[str, int]:
+    def _map_name_to_idx(result: CursorResult) -> dict[str, int]:
         name_to_idx = {}
         for idx, col in enumerate(result.cursor.description):
             name_to_idx[col[0]] = idx
@@ -1270,7 +1275,7 @@ class SnowflakeDialect(default.DefaultDialect):
         )
 
         structured_type_info_manager = _StructuredTypeInfoManager(
-            connection, self.name_utils, default_schema
+            connection, self.name_utils, default_schema or ""
         )
 
         columns_by_table = {}  # type: ignore[var-annotated]
@@ -1350,7 +1355,7 @@ class SnowflakeDialect(default.DefaultDialect):
                 # does not double-qualify the identifier.
                 parts = self.identifier_preparer._split_schema_by_dot(str(table_name))  # type: ignore[attr-defined]
                 single_table_name = str(parts[-1])
-            full_table_name = self._always_quote_join(schema, single_table_name)
+            full_table_name = self._always_quote_join(schema or "", single_table_name)
             column_info_manager = _StructuredTypeInfoManager(
                 connection, self.name_utils, self.default_schema_name  # type: ignore[arg-type]
             )
@@ -1371,7 +1376,7 @@ class SnowflakeDialect(default.DefaultDialect):
         return schema_columns[normalized_table_name]  # type: ignore[index]
 
     def get_prefixes_from_data(
-        self, name_to_index_map: dict[str, int], row: Any, **kw: Any
+        self, name_to_index_map: dict[str, int], row: Row[Any], **kw: Any
     ) -> list[str]:
         prefixes_found = []
         for valid_prefix in CustomTablePrefix:
@@ -1383,7 +1388,7 @@ class SnowflakeDialect(default.DefaultDialect):
     @reflection.cache
     def _query_all_columns_info(
         self, connection: Connection, schema_name: str, **kw: Any
-    ) -> Any:
+    ) -> CursorResult | None:
         # schema_name is a full db.schema name from _get_full_schema_name.
         # Split to determine the database (for the FROM clause) and the schema
         # (for the WHERE clause).  The schema part must be denormalized because
@@ -1669,15 +1674,17 @@ class SnowflakeDialect(default.DefaultDialect):
             if table_name in filter_names and table_name in hybrid_table_names  # type: ignore[operator]
         ]
 
-    def _value_or_default(self, data: Any, table: Any, schema: Any) -> Any:
-        table = self.normalize_name(str(table))
+    def _value_or_default(self, data: Any, table: str, schema: str | None) -> list[Any]:
+        table = self.normalize_name(str(table)) or str(
+            table
+        )  # normalize_name -> str | None
         dic_data = dict(data)
         if (schema, table) in dic_data:
             return dic_data[(schema, table)]
         else:
             return []
 
-    def _parse_index_rows(self, result: Any) -> dict[str, Any]:
+    def _parse_index_rows(self, result: CursorResult) -> dict[str, Any]:
         """Parse SHOW INDEXES rows into {table_name: [index_dict, ...]}.
 
         Both SHOW INDEXES IN TABLE and SHOW INDEXES IN SCHEMA return the same
@@ -1751,7 +1758,7 @@ class SnowflakeDialect(default.DefaultDialect):
         # correct "TABLE_NAME" (case-insensitive uppercase).
         return self._get_table_indexes(connection, str(tablename), schema, **kw)  # type: ignore[return-value]
 
-    def connect(self, *cargs: Any, **cparams: Any) -> Any:
+    def connect(self, *cargs: Any, **cparams: Any) -> SnowflakeConnection:  # type: ignore[override]
         if _ENABLE_SQLALCHEMY_AS_APPLICATION_NAME:
             cparams = _update_connection_application_name(**cparams)
 
@@ -1760,11 +1767,11 @@ class SnowflakeDialect(default.DefaultDialect):
             decimal.getcontext().prec = DECFLOAT_PRECISION
 
         connection = super().connect(*cargs, **cparams)
-        self._log_new_connection_event(connection)
+        self._log_new_connection_event(connection)  # type: ignore[arg-type]
 
-        return connection
+        return connection  # type: ignore[return-value]
 
-    def _log_new_connection_event(self, connection: Any) -> Any:
+    def _log_new_connection_event(self, connection: SnowflakeConnection) -> None:
         try:
             snowflake_connection = cast(SnowflakeConnection, cast(object, connection))
             snowflake_telemetry_client = TelemetryClient(rest=snowflake_connection.rest)  # type: ignore[arg-type]

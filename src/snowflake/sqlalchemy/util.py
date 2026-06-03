@@ -116,20 +116,22 @@ def _update_connection_application_name(**conn_kwargs: Any) -> dict[str, Any]:
     return conn_kwargs
 
 
-def parse_url_boolean(value: str) -> bool:
-    if value.lower() in ("true", "1"):
+def parse_url_boolean(value: str | tuple[str, ...]) -> bool:
+    raw = value if isinstance(value, str) else value[0]
+    normalized = raw.lower()
+    if normalized in ("true", "1"):
         return True
-    elif value.lower() in ("false", "0"):
+    if normalized in ("false", "0"):
         return False
-    else:
-        raise ValueError(f"Invalid boolean value detected: '{value}'")
+    raise ValueError(f"Invalid boolean value detected: '{raw}'")
 
 
-def parse_url_integer(value: str) -> int:
+def parse_url_integer(value: str | tuple[str, ...]) -> int:
+    raw = value if isinstance(value, str) else value[0]
     try:
-        return int(value)
+        return int(raw)
     except ValueError as e:
-        raise ValueError(f"Invalid int value detected: '{value}") from e
+        raise ValueError(f"Invalid int value detected: '{raw}'") from e
 
 
 # handle Snowflake BCR bcr-1057
@@ -203,7 +205,9 @@ def _find_left_clause_to_join_from(
 class _Snowflake_Selectable_Join(Join):
     """Join subclass for Snowflake BCR-1057 (lateral joins without ON clause)."""
 
-    def _match_primaries(self, left: FromClause, right: FromClause) -> Any:
+    def _match_primaries(
+        self, left: FromClause, right: FromClause
+    ) -> Any:  # SA returns ColumnElement[bool]
         try:
             return super()._match_primaries(left, right)
         except NoForeignKeysError:
@@ -236,7 +240,7 @@ class _Snowflake_ORMJoin(_Snowflake_Selectable_Join, sa_orm_util_ORMJoin):
         full: bool = False,
         _left_memo: Any | None = None,
         _right_memo: Any | None = None,
-        _extra_criteria: Any = (),
+        _extra_criteria: Any = (),  # ORMJoin expects tuple[ColumnElement[bool], ...]
     ) -> None:
         is_lateral_without_onclause = onclause is None and isinstance(
             inspection.inspect(right).selectable, Lateral
@@ -256,7 +260,7 @@ class _Snowflake_ORMJoin(_Snowflake_Selectable_Join, sa_orm_util_ORMJoin):
             self.onclause = None
 
 
-def _is_true_placeholder(onclause: Any) -> bool:
+def _is_true_placeholder(onclause: ClauseElement | None) -> bool:
     """Return True if ``onclause`` is only the ``sql.true()`` placeholder that
     ``_Snowflake_ORMJoin`` passes through ``_ORMJoin.__init__`` to satisfy its
     ``onclause is not None`` assertion.

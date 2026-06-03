@@ -3,13 +3,16 @@
 #
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING
 
 from sqlalchemy.sql.expression import TextClause
 
 from snowflake.sqlalchemy.custom_commands import NoneType
 
 from .table_option import Priority, TableOption, TableOptionKey
+
+if TYPE_CHECKING:
+    from snowflake.sqlalchemy.base import SnowflakeDDLCompiler
 
 
 class ClusterByOption(TableOption):
@@ -54,7 +57,7 @@ class ClusterByOption(TableOption):
     def __get_expression(self) -> str:
         return ", ".join([str(expression) for expression in self.expressions])
 
-    def _render(self, compiler: Any) -> str:
+    def _render(self, compiler: SnowflakeDDLCompiler) -> str:
         return self.template() % (self.__get_expression())
 
     def __repr__(self) -> str:
