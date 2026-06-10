@@ -520,6 +520,7 @@ class SnowflakeDialect(default.DefaultDialect):
         result: dict[str, dict[str, Any]] = {}
         for row in rows:
             table_name = self.normalize_name(row._mapping["table_name"])
+            assert table_name is not None
             if table_name not in result:
                 result[table_name] = {
                     "constrained_columns": [],
@@ -548,6 +549,7 @@ class SnowflakeDialect(default.DefaultDialect):
         for row in rows:
             table_name = self.normalize_name(row._mapping["table_name"])
             constraint_name = self.normalize_name(row._mapping["constraint_name"])
+            assert table_name is not None and constraint_name is not None
             key = (table_name, constraint_name)
             if key not in constraints:
                 constraints[key] = {
@@ -561,7 +563,7 @@ class SnowflakeDialect(default.DefaultDialect):
                     "_table_name": table_name,
                 }
             else:
-                constraints[key]["column_names"].append(  # type: ignore[union-attr]
+                constraints[key]["column_names"].append(  # type: ignore[attr-defined]
                     _KeyedColumn(
                         int(row._mapping["key_sequence"]),
                         self.normalize_name(row._mapping["column_name"]),  # type: ignore[arg-type]
@@ -570,7 +572,7 @@ class SnowflakeDialect(default.DefaultDialect):
         result = defaultdict(list)
         for constraint in constraints.values():
             table_name = constraint.pop("_table_name")  # type: ignore[assignment]
-            constraint["column_names"] = self._sort_columns_by_key_sequence(  # type: ignore[assignment]
+            constraint["column_names"] = self._sort_columns_by_key_sequence(
                 constraint["column_names"]  # type: ignore[arg-type]
             )
             result[table_name].append(constraint)
@@ -743,7 +745,7 @@ class SnowflakeDialect(default.DefaultDialect):
 
     def _get_table_primary_keys(
         self, connection: Connection, table_name: str, schema: str | None, **kw: Any
-    ) -> list[dict[str, Any]]:
+    ) -> ReflectedPrimaryKeyConstraint:
         """SHOW PRIMARY KEYS IN TABLE — single-table path.
 
         Called by get_pk_constraint.
@@ -757,11 +759,11 @@ class SnowflakeDialect(default.DefaultDialect):
             )
             normalized_table_name = self.normalize_name(table_name)
             return self._parse_pk_rows(result).get(
-                normalized_table_name, {"constrained_columns": [], "name": None}
+                normalized_table_name or "", {"constrained_columns": [], "name": None}
             )
         except sa_exc.ProgrammingError:
             logger.debug("Failed to reflect primary keys for %s", full_name)
-            return {"constrained_columns": [], "name": None}  # type: ignore[return-value]
+            return {"constrained_columns": [], "name": None}
 
     @reflection.cache
     def _get_schema_primary_keys(
@@ -788,7 +790,7 @@ class SnowflakeDialect(default.DefaultDialect):
         **kw: Any,
     ) -> ReflectedPrimaryKeyConstraint:
         schema = schema or self.default_schema_name
-        return self._get_table_primary_keys(connection, table_name, schema, **kw)  # type: ignore[return-value]
+        return self._get_table_primary_keys(connection, table_name, schema, **kw)
 
     def get_multi_pk_constraint(
         self,
@@ -825,7 +827,7 @@ class SnowflakeDialect(default.DefaultDialect):
 
     def _get_table_unique_constraints(
         self, connection: Connection, table_name: str, schema: str | None, **kw: Any
-    ) -> list[dict[str, Any]]:
+    ) -> list[ReflectedUniqueConstraint]:
         """SHOW UNIQUE KEYS IN TABLE — single-table path.
 
         Called by get_unique_constraints.
@@ -838,7 +840,7 @@ class SnowflakeDialect(default.DefaultDialect):
                 )
             )
             normalized_table_name = self.normalize_name(table_name)
-            return self._parse_uk_rows(result).get(normalized_table_name, [])
+            return self._parse_uk_rows(result).get(normalized_table_name or "", [])
         except sa_exc.ProgrammingError:
             logger.debug("Failed to reflect unique constraints for %s", full_name)
             return []
@@ -862,7 +864,7 @@ class SnowflakeDialect(default.DefaultDialect):
 
     def get_unique_constraints(self, connection: Connection, table_name: str, schema: str | None, **kw: Any) -> list[ReflectedUniqueConstraint]:  # type: ignore[override]
         schema = schema or self.default_schema_name
-        return self._get_table_unique_constraints(connection, table_name, schema, **kw)  # type: ignore[return-value]
+        return self._get_table_unique_constraints(connection, table_name, schema, **kw)
 
     def get_multi_unique_constraints(
         self,
