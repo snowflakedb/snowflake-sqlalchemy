@@ -3,7 +3,7 @@
 #
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TypeVar, overload
 
 from sqlalchemy.sql.schema import MetaData, SchemaItem, Table
 
@@ -20,6 +20,8 @@ from ...exc import (
 from .custom_table_prefix import CustomTablePrefix
 from .options.invalid_table_option import InvalidTableOption
 from .options.table_option import TableOption, TableOptionKey
+
+_T = TypeVar("_T", bound=TableOption)
 
 
 class CustomTableBase(Table):
@@ -97,10 +99,24 @@ class CustomTableBase(Table):
                 )
         return None
 
-    def _get_dialect_option(self, option_name: TableOptionKey) -> TableOption | None:
-        if option_name.value in self.dialect_options[DIALECT_NAME]:
-            return self.dialect_options[DIALECT_NAME][option_name.value]
-        return None
+    @overload
+    def _get_dialect_option(
+        self, option_name: TableOptionKey
+    ) -> TableOption | None: ...
+
+    @overload
+    def _get_dialect_option(
+        self, option_name: TableOptionKey, type_: type[_T]
+    ) -> _T | None: ...
+    def _get_dialect_option(
+        self, option_name: TableOptionKey, type_: type[TableOption] | None = None
+    ) -> TableOption | None:
+        if option_name.value not in self.dialect_options[DIALECT_NAME]:
+            return None
+        val = self.dialect_options[DIALECT_NAME][option_name.value]
+        if type_ is not None:
+            return val if isinstance(val, type_) else None
+        return val
 
     def _as_dialect_options(
         self, table_options: list[TableOption | None]

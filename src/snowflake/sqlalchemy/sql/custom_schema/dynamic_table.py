@@ -67,11 +67,11 @@ class DynamicTable(TableFromQueryBase):
 
     @property
     def warehouse(self) -> IdentifierOption | None:
-        return self._get_dialect_option(TableOptionKey.WAREHOUSE)  # type: ignore[return-value]
+        return self._get_dialect_option(TableOptionKey.WAREHOUSE, IdentifierOption)
 
     @property
     def target_lag(self) -> TargetLagOption | None:
-        return self._get_dialect_option(TableOptionKey.TARGET_LAG)  # type: ignore[return-value]
+        return self._get_dialect_option(TableOptionKey.TARGET_LAG, TargetLagOption)
 
     def __init__(
         self,
@@ -102,7 +102,7 @@ class DynamicTable(TableFromQueryBase):
         *args: SchemaItem,
         **kw: Any,
     ) -> None:
-        self.__init__(name, metadata, *args, _no_init=False, **kw)  # type: ignore[misc]
+        self.__init__(name, metadata, *args, _no_init=False, **kw)  # type: ignore[misc]  # SA Table.__init__ pattern
 
     def __repr__(self) -> str:
         return "DynamicTable(%s)" % ", ".join(
