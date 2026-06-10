@@ -16,7 +16,7 @@ class ClusteredTableBase(CustomTableBase):
 
     @property
     def cluster_by(self) -> ClusterByOption | None:
-        return self._get_dialect_option(TableOptionKey.CLUSTER_BY)  # type: ignore[return-value]
+        return self._get_dialect_option(TableOptionKey.CLUSTER_BY, ClusterByOption)
 
     def __init__(
         self,

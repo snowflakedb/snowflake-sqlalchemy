@@ -17,7 +17,7 @@ class TableFromQueryBase(ClusteredTableBase):
 
     @property
     def as_query(self) -> AsQueryOption | None:
-        return self._get_dialect_option(TableOptionKey.AS_QUERY)  # type: ignore[return-value]
+        return self._get_dialect_option(TableOptionKey.AS_QUERY, AsQueryOption)
 
     def __init__(
         self,

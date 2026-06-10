@@ -58,7 +58,7 @@ class SnowflakeTable(TableFromQueryBase):
         *args: SchemaItem,
         **kw: Any,
     ) -> None:
-        self.__init__(name, metadata, *args, _no_init=False, **kw)  # type: ignore[misc]
+        self.__init__(name, metadata, *args, _no_init=False, **kw)  # type: ignore[misc]  # SA Table.__init__ pattern
 
     def __repr__(self) -> str:
         return "SnowflakeTable(%s)" % ", ".join(

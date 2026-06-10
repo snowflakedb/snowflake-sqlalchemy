@@ -48,15 +48,15 @@ class IcebergTable(TableFromQueryBase):
 
     @property
     def external_volume(self) -> LiteralOption | None:
-        return self._get_dialect_option(TableOptionKey.EXTERNAL_VOLUME)  # type: ignore[return-value]
+        return self._get_dialect_option(TableOptionKey.EXTERNAL_VOLUME, LiteralOption)
 
     @property
     def base_location(self) -> LiteralOption | None:
-        return self._get_dialect_option(TableOptionKey.BASE_LOCATION)  # type: ignore[return-value]
+        return self._get_dialect_option(TableOptionKey.BASE_LOCATION, LiteralOption)
 
     @property
     def catalog(self) -> LiteralOption | None:
-        return self._get_dialect_option(TableOptionKey.CATALOG)  # type: ignore[return-value]
+        return self._get_dialect_option(TableOptionKey.CATALOG, LiteralOption)
 
     def __init__(
         self,
@@ -86,7 +86,7 @@ class IcebergTable(TableFromQueryBase):
         *args: SchemaItem,
         **kw: Any,
     ) -> None:
-        self.__init__(name, metadata, *args, _no_init=False, **kw)  # type: ignore[misc]
+        self.__init__(name, metadata, *args, _no_init=False, **kw)  # type: ignore[misc]  # SA Table.__init__ pattern
 
     def __repr__(self) -> str:
         return "IcebergTable(%s)" % ", ".join(

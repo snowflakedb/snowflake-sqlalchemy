@@ -27,6 +27,8 @@ callback in ``env.py`` is the only injection point and requires a two-line
 opt-in per project.
 """
 
+from __future__ import annotations
+
 from sqlalchemy.sql.elements import quoted_name
 
 

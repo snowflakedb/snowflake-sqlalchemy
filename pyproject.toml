@@ -107,6 +107,13 @@ test-compatibility = "pytest -ra -vvv --tb=short tests/sqlalchemy_test_suite tes
 [tool.ruff]
 line-length = 88
 
+[tool.ruff.lint]
+extend-select = ["B"]   # flake8-bugbear rules
+
+[tool.ruff.lint.per-file-ignores]
+# F821: names come from `from sqlalchemy.testing.suite import *` which ruff cannot resolve
+"tests/sqlalchemy_test_suite/test_suite.py" = ["F821"]
+
 [tool.black]
 line-length = 88
 
