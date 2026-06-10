@@ -16,10 +16,14 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ProgrammingError as SAProgrammingError
 from sqlalchemy.pool import NullPool
 
+
 import snowflake.connector
 import snowflake.connector.connection
 import snowflake.connector.errors
 from snowflake.connector.compat import IS_WINDOWS
+from sqlalchemy import create_engine
+from sqlalchemy.pool import NullPool
+
 from snowflake.sqlalchemy import URL, dialect
 from snowflake.sqlalchemy._constants import (
     APPLICATION_NAME,

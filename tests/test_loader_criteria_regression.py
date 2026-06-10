@@ -60,9 +60,9 @@ def test_with_loader_criteria_in_subquery_non_snowflake_dialect():
             compile_kwargs={"literal_binds": True},
         )
     )
-    assert (
-        "is_active" in compiled
-    ), "with_loader_criteria did not inject filter into sealed subquery"
+    assert "is_active" in compiled, (
+        "with_loader_criteria did not inject filter into sealed subquery"
+    )
 
 
 def test_with_loader_criteria_in_subquery_snowflake_dialect():
@@ -89,6 +89,6 @@ def test_with_loader_criteria_in_subquery_snowflake_dialect():
             compile_kwargs={"literal_binds": True},
         )
     )
-    assert (
-        "is_active" in compiled
-    ), "with_loader_criteria did not inject filter into sealed subquery"
+    assert "is_active" in compiled, (
+        "with_loader_criteria did not inject filter into sealed subquery"
+    )

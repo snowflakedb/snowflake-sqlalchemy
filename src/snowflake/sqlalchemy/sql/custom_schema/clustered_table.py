@@ -13,7 +13,6 @@ from .options.table_option import TableOptionKey
 
 
 class ClusteredTableBase(CustomTableBase):
-
     @property
     def cluster_by(self) -> ClusterByOption | None:
         return self._get_dialect_option(TableOptionKey.CLUSTER_BY, ClusterByOption)

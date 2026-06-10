@@ -3,7 +3,7 @@
 #
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Union
 
 from snowflake.sqlalchemy.custom_commands import NoneType
 
@@ -75,4 +75,4 @@ class LiteralOption(TableOption):
         return f"LiteralOption(value='{self.value}'{option_name})"
 
 
-LiteralOptionType = LiteralOption | str | int
+LiteralOptionType = Union[LiteralOption, str, int]

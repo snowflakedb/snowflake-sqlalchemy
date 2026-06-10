@@ -11,6 +11,19 @@ import warnings
 from functools import reduce
 from typing import Any
 
+from snowflake.sqlalchemy._constants import DIALECT_NAME
+from snowflake.sqlalchemy.custom_commands import (
+    AWSBucket,
+    AzureContainer,
+    CloudStorageLocation,
+    CopyFormatter,
+    CopyInto,
+    CreateFileFormat,
+    CreateStage,
+    ExternalStage,
+    GCSBucket,
+    MergeInto,
+)
 from sqlalchemy import exc as sa_exc
 from sqlalchemy import inspect, sql
 from sqlalchemy import util as sa_util
@@ -28,20 +41,6 @@ from sqlalchemy.sql.operators import OperatorType
 from sqlalchemy.sql.schema import Column, Identity, IdentityOptions
 from sqlalchemy.sql.selectable import Join, Lateral, SelectState
 from sqlalchemy.sql.type_api import TypeEngine
-
-from snowflake.sqlalchemy._constants import DIALECT_NAME
-from snowflake.sqlalchemy.custom_commands import (
-    AWSBucket,
-    AzureContainer,
-    CloudStorageLocation,
-    CopyFormatter,
-    CopyInto,
-    CreateFileFormat,
-    CreateStage,
-    ExternalStage,
-    GCSBucket,
-    MergeInto,
-)
 
 from ._constants import NOT_NULL
 from .custom_types import (

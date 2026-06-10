@@ -106,6 +106,7 @@ def tokenize_parameters(text: str, character_for_strip: str = ",") -> list[str]:
         if c == '"':
             in_double_quote = not in_double_quote
 
+
         if c == "(":
             open_parenthesis += 1
         elif c == ")":

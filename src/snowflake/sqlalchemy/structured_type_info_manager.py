@@ -6,12 +6,11 @@ import re
 import warnings
 from typing import Any
 
+from snowflake.sqlalchemy.name_utils import _NameUtils
+from snowflake.sqlalchemy.parser.custom_type_parser import NullType, parse_type
 from sqlalchemy import text
 from sqlalchemy.engine import Connection, CursorResult
 from sqlalchemy.exc import ProgrammingError, SAWarning
-
-from snowflake.sqlalchemy.name_utils import _NameUtils
-from snowflake.sqlalchemy.parser.custom_type_parser import NullType, parse_type
 
 
 class _StructuredTypeInfoManager:
@@ -56,7 +55,6 @@ class _StructuredTypeInfoManager:
     def _load_structured_type_info(self, schema_name: str, table_name: str) -> bool:
         """Get column information for a structured type"""
         if (schema_name, table_name) not in self.full_columns_descriptions:
-
             column_definitions = self.get_table_columns(table_name, schema_name)
             if not column_definitions:
                 self.full_columns_descriptions[(schema_name, table_name)] = {}

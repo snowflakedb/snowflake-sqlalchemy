@@ -106,9 +106,9 @@ class TestSnowflakeBaseConstructor:
     def test_server_default_column_not_prepopulated(self, MyModel):
         """server_default column must NOT be pre-populated."""
         obj = MyModel(id=1)
-        assert (
-            "created_at" not in obj.__dict__
-        ), "server_default column must be absent from state_dict"
+        assert "created_at" not in obj.__dict__, (
+            "server_default column must be absent from state_dict"
+        )
 
     def test_scalar_default_column_prepopulated_with_value(self, MyModel):
         """Scalar Python default column must be pre-populated with the scalar value."""
@@ -119,23 +119,23 @@ class TestSnowflakeBaseConstructor:
     def test_callable_default_column_not_prepopulated(self, MyModel):
         """Callable Python default column must NOT be pre-populated."""
         obj = MyModel(id=1)
-        assert (
-            "token" not in obj.__dict__
-        ), "callable-default column must be absent from state_dict"
+        assert "token" not in obj.__dict__, (
+            "callable-default column must be absent from state_dict"
+        )
 
     def test_sql_expression_default_column_not_prepopulated(self, MyModel):
         """SQL-expression default column must NOT be pre-populated."""
         obj = MyModel(id=1)
-        assert (
-            "ts" not in obj.__dict__
-        ), "sql-expression-default column must be absent from state_dict"
+        assert "ts" not in obj.__dict__, (
+            "sql-expression-default column must be absent from state_dict"
+        )
 
     def test_should_evaluate_none_column_not_prepopulated(self, MyModel):
         """Column with should_evaluate_none=True (e.g. JSON) must NOT be pre-populated."""
         obj = MyModel(id=1)
-        assert (
-            "metadata_json" not in obj.__dict__
-        ), "should_evaluate_none column must be absent from state_dict"
+        assert "metadata_json" not in obj.__dict__, (
+            "should_evaluate_none column must be absent from state_dict"
+        )
 
     def test_user_supplied_server_default_column_preserved(self, MyModel):
         """User-supplied value for a server_default column must be preserved."""
@@ -271,9 +271,9 @@ class TestSnowflakeSession:
             session.bulk_save_objects([Item(id=1, name="a"), Item(id=2, name="b")])
 
         assert render_nulls_values, "Expected at least one call to _bulk_save_mappings"
-        assert all(
-            v is True for v in render_nulls_values
-        ), f"All calls must use render_nulls=True, got: {render_nulls_values}"
+        assert all(v is True for v in render_nulls_values), (
+            f"All calls must use render_nulls=True, got: {render_nulls_values}"
+        )
 
     def test_bulk_save_objects_signature_compatible(self, snowflake_session_cls):
         """SnowflakeSession.bulk_save_objects must accept the same kwargs as
@@ -336,9 +336,9 @@ class TestSnowflakeBaseWithSessionEndToEnd:
 
         # Verify uniform key sets
         key_sets = [_user_keys(o.__dict__) for o in objs]
-        assert all(
-            ks == key_sets[0] for ks in key_sets
-        ), f"Key sets differ across objects: {key_sets}"
+        assert all(ks == key_sets[0] for ks in key_sets), (
+            f"Key sets differ across objects: {key_sets}"
+        )
 
         # Capture render_nulls from _bulk_save_mappings calls
         render_nulls_values = []
@@ -354,9 +354,9 @@ class TestSnowflakeBaseWithSessionEndToEnd:
         assert render_nulls_values, "Expected _bulk_save_mappings to be called"
         assert all(v is True for v in render_nulls_values)
         # Only one call expected since all objects share the same mapper
-        assert (
-            len(render_nulls_values) == 1
-        ), f"Expected single _bulk_save_mappings call but got {len(render_nulls_values)}"
+        assert len(render_nulls_values) == 1, (
+            f"Expected single _bulk_save_mappings call but got {len(render_nulls_values)}"
+        )
 
     def test_bulk_save_objects_empty_list(self, snowflake_session_cls):
         """Passing an empty list to bulk_save_objects must not raise."""

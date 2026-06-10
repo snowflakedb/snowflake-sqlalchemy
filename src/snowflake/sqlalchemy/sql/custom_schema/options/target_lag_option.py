@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Union
 
 from snowflake.sqlalchemy.custom_commands import NoneType
 
@@ -95,4 +95,4 @@ class TargetLagOption(TableOption):
         return "TargetLagOption(%s)" % self.__get_expression()
 
 
-TargetLagOptionType = TargetLagOption | tuple[int, TimeUnit]
+TargetLagOptionType = Union[TargetLagOption, tuple[int, TimeUnit]]

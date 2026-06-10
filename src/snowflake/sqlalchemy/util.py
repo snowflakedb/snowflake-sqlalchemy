@@ -12,6 +12,8 @@ from typing import Any
 from urllib.parse import quote as _url_quote
 from urllib.parse import quote_plus, urlsplit, urlunsplit
 
+from snowflake.connector.compat import IS_STR
+
 from sqlalchemy import create_engine as _sa_create_engine
 from sqlalchemy import exc, inspection, sql
 from sqlalchemy.engine import Engine
@@ -20,8 +22,6 @@ from sqlalchemy.orm.util import _ORMJoin as sa_orm_util_ORMJoin
 from sqlalchemy.sql.base import _expand_cloned, _from_objects
 from sqlalchemy.sql.elements import AsBoolean, ClauseElement, True_, _find_columns
 from sqlalchemy.sql.selectable import FromClause, Join, Lateral
-
-from snowflake.connector.compat import IS_STR
 
 from ._constants import (
     APPLICATION_NAME,

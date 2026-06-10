@@ -7,6 +7,7 @@ from sqlalchemy import types as sql_types
 from sqlalchemy.schema import Column, Sequence, Table
 from sqlalchemy.testing import config
 from sqlalchemy.testing.assertions import eq_
+from sqlalchemy.testing.suite import *  # noqa
 from sqlalchemy.testing.suite import BizarroCharacterTest as _BizarroCharacterTest
 from sqlalchemy.testing.suite import (
     ComponentReflectionTestExtra as _ComponentReflectionTestExtra,
@@ -18,7 +19,6 @@ from sqlalchemy.testing.suite import LikeFunctionsTest as _LikeFunctionsTest
 from sqlalchemy.testing.suite import LongNameBlowoutTest as _LongNameBlowoutTest
 from sqlalchemy.testing.suite import SimpleUpdateDeleteTest as _SimpleUpdateDeleteTest
 from sqlalchemy.testing.suite import TrueDivTest as _TrueDivTest
-from sqlalchemy.testing.suite import *  # noqa
 
 # 1. Unsupported by snowflake db
 
@@ -165,7 +165,6 @@ class SimpleUpdateDeleteTest(_SimpleUpdateDeleteTest):
 
 
 class BizarroCharacterTest(_BizarroCharacterTest):
-
     def column_names_without_id():
         return testing.combinations(
             ("(3)",),
@@ -212,7 +211,6 @@ class BizarroCharacterTest(_BizarroCharacterTest):
 
 
 class ComponentReflectionTestExtra(_ComponentReflectionTestExtra):
-
     @testing.requires.table_reflection
     @testing.combinations(
         sql_types.String,
