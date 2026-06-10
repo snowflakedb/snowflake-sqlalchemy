@@ -118,14 +118,12 @@ def test_vector_rejects_invalid_element_type():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.feature_v20
 def test_uuid_parse_type_roundtrip():
     """parse_type('UUID') returns a UUID instance that compiles back to 'UUID'."""
     result = parse_type("UUID")
     assert result.compile() == "UUID"
 
 
-@pytest.mark.feature_v20
 def test_uuid_in_ischema_names():
     """ischema_names maps 'UUID' to sqlalchemy.sql.sqltypes.UUID on SA 2.x."""
     from sqlalchemy.sql.sqltypes import UUID
@@ -134,7 +132,6 @@ def test_uuid_in_ischema_names():
     assert issubclass(ischema_names["UUID"], UUID)
 
 
-@pytest.mark.feature_v20
 def test_get_type_kwargs_uuid_returns_as_uuid_false():
     """_get_type_kwargs returns {'as_uuid': False} for UUID so values are reflected as strings."""
     from sqlalchemy.sql.sqltypes import UUID
@@ -144,7 +141,6 @@ def test_get_type_kwargs_uuid_returns_as_uuid_false():
     assert result == {"as_uuid": False}
 
 
-@pytest.mark.feature_v20
 def test_resolve_column_type_uuid_produces_string_uuid():
     """_resolve_column_type for 'UUID' returns UUID(as_uuid=False), not NullType."""
     from sqlalchemy.sql.sqltypes import UUID

@@ -9,6 +9,7 @@ import string
 import warnings
 from typing import Any, List
 
+from sqlalchemy import __version__ as _SA_VERSION
 from sqlalchemy import exc as sa_exc
 from sqlalchemy import inspect, sql
 from sqlalchemy import util as sa_util
@@ -20,11 +21,21 @@ from sqlalchemy.sql import compiler, expression, functions, sqltypes
 from sqlalchemy.sql.base import CompileState
 from sqlalchemy.sql.elements import BindParameter, quoted_name
 from sqlalchemy.sql.expression import Executable
-from sqlalchemy.sql.selectable import Lateral, SelectState
+from sqlalchemy.sql.selectable import Join, Lateral, SelectState
 
 from snowflake.sqlalchemy._constants import DIALECT_NAME
-from snowflake.sqlalchemy.compat import IS_VERSION_20, args_reducer, string_types
 from snowflake.sqlalchemy.custom_commands import CloudStorageLocation, ExternalStage
+
+IS_VERSION_21 = tuple(int(v) for v in _SA_VERSION.split(".")[:2]) >= (2, 1)
+
+if IS_VERSION_21:
+    from sqlalchemy.orm.context import (
+        _ORMSelectCompileState as _SnowflakeORMSelectCompileStateBase,
+    )
+else:
+    from sqlalchemy.orm.context import (
+        ORMSelectCompileState as _SnowflakeORMSelectCompileStateBase,
+    )
 
 from ._constants import NOT_NULL
 from .exc import (
@@ -141,6 +152,7 @@ class SnowflakeSelectState(SelectState):
         if not self._is_snowflake:
             return super()._setup_joins(args, raw_columns)
         for right, onclause, left, flags in args:
+            explicit_left = left
             isouter = flags["isouter"]
             full = flags["full"]
 
@@ -158,6 +170,17 @@ class SnowflakeSelectState(SelectState):
                 # splice into an existing element in the
                 # self._from_obj list
                 left_clause = self.from_clauses[replace_from_obj_index]
+
+                # SQLA 2.1+: auto-derive ON clause from the original explicit
+                # left when one was given but no onclause was provided.
+                # For Snowflake BCR bcr-1057, lateral joins have no FK
+                # relationships so we allow onclause to remain None.
+                if IS_VERSION_21 and explicit_left is not None and onclause is None:
+                    try:
+                        onclause = Join._join_condition(explicit_left, right)
+                    except sa_exc.NoForeignKeysError:
+                        if not isinstance(right, Lateral):
+                            raise
 
                 self.from_clauses = (
                     self.from_clauses[:replace_from_obj_index]
@@ -241,17 +264,20 @@ class SnowflakeSelectState(SelectState):
 
 # handle Snowflake BCR bcr-1057
 @sql.base.CompileState.plugin_for("orm", "select")
-class SnowflakeORMSelectCompileState(context.ORMSelectCompileState):
-    # Default must be True on SA 1.4 (no _init_global_attributes hook there)
-    # so that the BCR-1057 code paths remain active as they were pre-PR.
-    # On SA 2.0 this default is overwritten by _init_global_attributes.
-    _is_snowflake = not IS_VERSION_20
+class SnowflakeORMSelectCompileState(_SnowflakeORMSelectCompileStateBase):
+    # Set by _init_global_attributes (always called on SA 2.x).
+    _is_snowflake = False
 
     def _init_global_attributes(self, statement, compiler, **kw):
-        # SA 2.0 entrypoint for setting _is_snowflake. SA 1.4 does not call
-        # this hook; on SA 1.4 _is_snowflake defaults to True below so the
-        # pre-PR BCR-1057 code paths remain active (the with_loader_criteria
-        # regression fixed by this PR is an SA 2.0-only scenario).
+        """SA 2.x per-compilation setup hook for ORMSelectCompileState.
+
+        Sets ``_is_snowflake`` to True only when the active compiler is using
+        the Snowflake dialect.  This flag gates the BCR-1057 lateral-join
+        workarounds in ``_join_determine_implicit_left_side`` and
+        ``_join_left_to_right`` so they are applied exclusively to Snowflake
+        queries and leave other dialects (PostgreSQL, SQLite, etc.) completely
+        unaffected.
+        """
         self._is_snowflake = (
             compiler is not None and compiler.dialect.name == DIALECT_NAME
         )
@@ -354,7 +380,6 @@ class SnowflakeORMSelectCompileState(context.ORMSelectCompileState):
 
         return left, replace_from_obj_index, use_entity_index
 
-    @args_reducer(positions_to_drop=(6, 7))
     def _join_left_to_right(
         self, entities_collection, left, right, onclause, prop, outerjoin, full
     ):
@@ -362,6 +387,8 @@ class SnowflakeORMSelectCompileState(context.ORMSelectCompileState):
             return super()._join_left_to_right(
                 entities_collection, left, right, onclause, prop, outerjoin, full
             )
+
+        explicit_left = left
 
         if left is None:
             # left not given (e.g. no relationship object/name specified)
@@ -395,14 +422,9 @@ class SnowflakeORMSelectCompileState(context.ORMSelectCompileState):
         # a lot of things can be wrong with it.  handle all that and
         # get back the new effective "right" side
 
-        if IS_VERSION_20:
-            r_info, right, onclause = self._join_check_and_adapt_right_side(
-                left, right, onclause, prop
-            )
-        else:
-            r_info, right, onclause = self._join_check_and_adapt_right_side(
-                left, right, onclause, prop, False, False
-            )
+        r_info, right, onclause = self._join_check_and_adapt_right_side(
+            left, right, onclause, prop
+        )
 
         if not r_info.is_selectable:
             extra_criteria = self._get_extra_criteria(r_info)
@@ -413,6 +435,17 @@ class SnowflakeORMSelectCompileState(context.ORMSelectCompileState):
             # splice into an existing element in the
             # self._from_obj list
             left_clause = self.from_clauses[replace_from_obj_index]
+
+            # SQLA 2.1+: auto-derive ON clause from the original explicit
+            # left when one was given but no onclause was provided.
+            # For Snowflake BCR bcr-1057, lateral joins have no FK
+            # relationships so we allow onclause to remain None.
+            if IS_VERSION_21 and explicit_left is not None and onclause is None:
+                try:
+                    onclause = _Snowflake_ORMJoin._join_condition(explicit_left, right)
+                except sa_exc.NoForeignKeysError:
+                    if not isinstance(right, Lateral):
+                        raise
 
             self.from_clauses = (
                 self.from_clauses[:replace_from_obj_index]
@@ -706,7 +739,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             encryption_list.sort(key=operator.itemgetter(0))
         encryption = "ENCRYPTION=({})".format(
             " ".join(
-                ("{}='{}'" if isinstance(v, string_types) else "{}={}").format(n, v)
+                ("{}='{}'" if isinstance(v, str) else "{}={}").format(n, v)
                 for n, v in encryption_list
             )
         )
@@ -731,7 +764,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             encryption_list.sort(key=operator.itemgetter(0))
         encryption = "ENCRYPTION=({})".format(
             " ".join(
-                f"{n}='{v}'" if isinstance(v, string_types) else f"{n}={v}"
+                f"{n}='{v}'" if isinstance(v, str) else f"{n}={v}"
                 for n, v in encryption_list
             )
         )
@@ -752,7 +785,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             encryption_list.sort(key=operator.itemgetter(0))
         encryption = "ENCRYPTION=({})".format(
             " ".join(
-                f"{n}='{v}'" if isinstance(v, string_types) else f"{n}={v}"
+                f"{n}='{v}'" if isinstance(v, str) else f"{n}={v}"
                 for n, v in encryption_list
             )
         )
@@ -879,7 +912,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         )
 
     def visit_truediv_binary(self, binary, operator, **kw):
-        if self.dialect.div_is_floordiv and IS_VERSION_20:
+        if self.dialect.div_is_floordiv:
             warnings.warn(
                 "div_is_floordiv value will be changed to False in a future release. This will generate a behavior change on true and floor division. Please review https://docs.sqlalchemy.org/en/20/changelog/whatsnew_20.html#python-division-operator-performs-true-division-for-all-backends-added-floor-division",
                 PendingDeprecationWarning,
@@ -891,7 +924,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         )
 
     def visit_floordiv_binary(self, binary, operator, **kw):
-        if self.dialect.div_is_floordiv and IS_VERSION_20:
+        if self.dialect.div_is_floordiv:
             warnings.warn(
                 "div_is_floordiv value will be changed to False in a future release. This will generate a behavior change on true and floor division. Please review https://docs.sqlalchemy.org/en/20/changelog/whatsnew_20.html#python-division-operator-performs-true-division-for-all-backends-added-floor-division",
                 PendingDeprecationWarning,

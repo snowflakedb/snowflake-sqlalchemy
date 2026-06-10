@@ -26,7 +26,6 @@ from snowflake.connector import errors as sf_errors
 from snowflake.connector.connection import DEFAULT_CONFIGURATION, SnowflakeConnection
 from snowflake.connector.constants import UTF8
 from snowflake.connector.telemetry import TelemetryClient, TelemetryData, TelemetryField
-from snowflake.sqlalchemy.compat import IS_VERSION_20, returns_unicode
 from snowflake.sqlalchemy.name_utils import _NameUtils
 from snowflake.sqlalchemy.structured_type_info_manager import _StructuredTypeInfoManager
 
@@ -107,7 +106,6 @@ class SnowflakeDialect(default.DefaultDialect):
     #  unicode strings
     supports_unicode_statements = True
     supports_unicode_binds = True
-    returns_unicode_strings = returns_unicode
     description_encoding = None
 
     # No lastrowid support. See SNOW-11155
@@ -172,7 +170,6 @@ class SnowflakeDialect(default.DefaultDialect):
         isolation_level: Optional[str] = SnowflakeIsolationLevel.READ_COMMITTED.value,
         enable_decfloat: bool = False,
         case_sensitive_identifiers: bool = False,
-        cache_column_metadata: bool = False,
         **kwargs: Any,
     ):
         super().__init__(isolation_level=isolation_level, **kwargs)
@@ -184,11 +181,6 @@ class SnowflakeDialect(default.DefaultDialect):
             case_sensitive_identifiers=case_sensitive_identifiers,
         )
         self._enable_decfloat = enable_decfloat
-        # Initialised here so ``_log_new_connection_event`` and any other
-        # pre-connect code path can read the attribute unconditionally.
-        # ``create_connect_args`` may later overwrite it when the URL query
-        # string carries ``cache_column_metadata=...``.
-        self._cache_column_metadata = cache_column_metadata
 
     def initialize(self, connection):
         super().initialize(connection)
@@ -253,10 +245,6 @@ class SnowflakeDialect(default.DefaultDialect):
         opts["autocommit"] = False  # autocommit is disabled by default
 
         query = dict(**url.query)  # make mutable
-        cache_column_metadata = query.pop("cache_column_metadata", None)
-        self._cache_column_metadata = (
-            parse_url_boolean(cache_column_metadata) if cache_column_metadata else False
-        )
 
         # Handle enable_decfloat URL parameter
         enable_decfloat = query.pop("enable_decfloat", None)
@@ -706,7 +694,7 @@ class SnowflakeDialect(default.DefaultDialect):
     def _get_table_primary_keys(self, connection, table_name, schema, **kw):
         """SHOW PRIMARY KEYS IN TABLE — single-table path.
 
-        Called by get_pk_constraint when _is_single_table_reflection returns True.
+        Called by get_pk_constraint.
         """
         full_name = self._always_quote_join(schema, table_name)
         try:
@@ -740,12 +728,7 @@ class SnowflakeDialect(default.DefaultDialect):
 
     def get_pk_constraint(self, connection, table_name, schema=None, **kw):
         schema = schema or self.default_schema_name
-        if self._is_single_table_reflection(schema, **kw):
-            return self._get_table_primary_keys(connection, table_name, schema, **kw)
-        full_schema_name = self._get_full_schema_name(connection, schema, **kw)
-        return self._get_schema_primary_keys(connection, full_schema_name, **kw).get(
-            table_name, {"constrained_columns": [], "name": None}
-        )
+        return self._get_table_primary_keys(connection, table_name, schema, **kw)
 
     def get_multi_pk_constraint(
         self,
@@ -783,7 +766,7 @@ class SnowflakeDialect(default.DefaultDialect):
     def _get_table_unique_constraints(self, connection, table_name, schema, **kw):
         """SHOW UNIQUE KEYS IN TABLE — single-table path.
 
-        Called by get_unique_constraints when _is_single_table_reflection returns True.
+        Called by get_unique_constraints.
         """
         full_name = self._always_quote_join(schema, table_name)
         try:
@@ -815,14 +798,7 @@ class SnowflakeDialect(default.DefaultDialect):
 
     def get_unique_constraints(self, connection, table_name, schema, **kw):
         schema = schema or self.default_schema_name
-        if self._is_single_table_reflection(schema, **kw):
-            return self._get_table_unique_constraints(
-                connection, table_name, schema, **kw
-            )
-        full_schema_name = self._get_full_schema_name(connection, schema, **kw)
-        return self._get_schema_unique_constraints(
-            connection, full_schema_name, **kw
-        ).get(table_name, [])
+        return self._get_table_unique_constraints(connection, table_name, schema, **kw)
 
     def get_multi_unique_constraints(
         self,
@@ -855,7 +831,7 @@ class SnowflakeDialect(default.DefaultDialect):
     def _get_table_foreign_keys(self, connection, table_name, schema, **kw):
         """SHOW IMPORTED KEYS IN TABLE — single-table path.
 
-        Called by get_foreign_keys when _is_single_table_reflection returns True.
+        Called by get_foreign_keys.
 
         When reflecting the default schema, same-schema FKs (default → default)
         are reported with ``referred_schema=None`` per SQLAlchemy's convention:
@@ -918,12 +894,7 @@ class SnowflakeDialect(default.DefaultDialect):
     def get_foreign_keys(self, connection, table_name, schema=None, **kw):
         """Gets all foreign keys for a table."""
         schema = schema or self.default_schema_name
-        if self._is_single_table_reflection(schema, **kw):
-            return self._get_table_foreign_keys(connection, table_name, schema, **kw)
-        full_schema_name = self._get_full_schema_name(connection, schema, **kw)
-        return self._get_schema_foreign_keys(connection, full_schema_name, **kw).get(
-            table_name, []
-        )
+        return self._get_table_foreign_keys(connection, table_name, schema, **kw)
 
     def get_multi_foreign_keys(
         self,
@@ -1012,7 +983,7 @@ class SnowflakeDialect(default.DefaultDialect):
             return {"precision": numeric_precision, "scale": numeric_scale}
         elif issubclass(col_type, (sqltypes.String, sqltypes.BINARY)):
             return {"length": character_maximum_length}
-        elif IS_VERSION_20 and issubclass(col_type, sqltypes.Uuid):
+        elif issubclass(col_type, sqltypes.Uuid):
             return {"as_uuid": False}
         return {}
 
@@ -1290,51 +1261,6 @@ class SnowflakeDialect(default.DefaultDialect):
 
         return columns_by_table
 
-    def _is_single_table_reflection(self, schema, **kw):
-        """Return True when a single-table SHOW command should be used for PK/UK/FK.
-
-        Opt-in via ``cache_column_metadata=true`` on the engine URL or
-        as a dialect keyword argument to ``create_engine``. When disabled (the
-        default) all reflection uses the existing
-        schema-wide queries unchanged, preserving backward compatibility.
-
-        SA 2.x path (IS_VERSION_20=True):
-          ``get_multi_pk_constraint`` / ``get_multi_unique_constraints`` /
-          ``get_multi_foreign_keys`` are used by MetaData.reflect(), so any call
-          to the singular get_pk_constraint / get_unique_constraints /
-          get_foreign_keys / get_indexes is inherently single-table (Inspector,
-          pandas.read_sql_table).  Always returns True; no opt-in required.
-
-        SA 1.4 path (IS_VERSION_20=False):
-          MetaData.reflect() calls the singular methods per-table and populates
-          ``_get_schema_tables_info`` early in the reflection pass.  Opt-in via
-          ``cache_column_metadata=true`` on the engine URL or connect_args.
-          When disabled (the default) all reflection uses the existing
-          schema-wide queries unchanged, preserving backward compatibility.
-          The presence of the tables-info key in info_cache signals that
-          multi-table reflection is in progress; fall back to schema-wide query.
-
-        Note: @reflection.cache caches results for the lifetime of a connection.
-        DDL executed mid-session will not be visible in reflection until a new
-        connection is obtained, regardless of which path is used.
-        """
-        if IS_VERSION_20:
-            # SA 2.x: get_multi_* handles MetaData.reflect(); singular calls
-            # are always single-table at this point.
-            return True
-
-        # SA 1.4: opt-in required for backward compatibility.
-        if not getattr(self, "_cache_column_metadata", False):
-            return False
-
-        # SA 1.4: detect whether MetaData.reflect() is in progress.
-        # @reflection.cache stores keys as (fn.__name__, args_tuple, kwargs_tuple).
-        info_cache = kw.get("info_cache")
-        if info_cache is None:
-            return True
-        tables_info_key = (self._get_schema_tables_info.__name__, (schema,), ())
-        return tables_info_key not in info_cache
-
     def get_columns(self, connection, table_name, schema=None, **kw):
         """
         Gets all column info given the table info
@@ -1346,12 +1272,7 @@ class SnowflakeDialect(default.DefaultDialect):
         # SA 2.x: get_multi_columns handles MetaData.reflect(); get_columns is
         # always a single-table call here.  Use DESC TABLE — it works for all
         # table types including temp tables not visible in information_schema.
-        # SA 1.4: opt-in via cache_column_metadata=True (_is_single_table_reflection
-        # returns True only when single-table); otherwise falls through to the
-        # schema-wide path used by MetaData.reflect() per-table loops.
-        if (
-            IS_VERSION_20 or self._is_single_table_reflection(schema, **kw)
-        ) and table_name:
+        if table_name:
             single_table_name = table_name
             if "." in str(table_name):
                 # table_name may arrive as "schema.table" or even
@@ -1691,7 +1612,7 @@ class SnowflakeDialect(default.DefaultDialect):
     def _get_table_indexes(self, connection, table_name, schema, **kw):
         """SHOW INDEXES IN TABLE — single-table path.
 
-        Called by get_indexes when _is_single_table_reflection returns True.
+        Called by get_indexes.
 
         For non-hybrid tables Snowflake returns an empty result set (not an
         error), so the list will simply be empty.  The SYS_INDEX primary-key
@@ -1714,20 +1635,14 @@ class SnowflakeDialect(default.DefaultDialect):
     def get_indexes(self, connection, tablename, schema, **kw):
         """Gets the indexes definition."""
         schema = schema or self.default_schema_name
-        if self._is_single_table_reflection(schema, **kw):
-            # Pass the raw string so _always_quote_join can correctly
-            # denormalize (uppercase) it.  normalize_name() wraps plain
-            # lowercase strings in quoted_name(quote=True), and
-            # quoted_name.upper() is intentionally a no-op for quote=True
-            # objects, which would cause _always_quote_join to emit
-            # "table_name" (case-sensitive lowercase) instead of the
-            # correct "TABLE_NAME" (case-insensitive uppercase).
-            return self._get_table_indexes(connection, str(tablename), schema, **kw)
-        table_name = self.normalize_name(str(tablename))
-        data = self.get_multi_indexes(
-            connection=connection, schema=schema, filter_names=[table_name], **kw
-        )
-        return self._value_or_default(data, table_name, schema)
+        # Pass the raw string so _always_quote_join can correctly
+        # denormalize (uppercase) it.  normalize_name() wraps plain
+        # lowercase strings in quoted_name(quote=True), and
+        # quoted_name.upper() is intentionally a no-op for quote=True
+        # objects, which would cause _always_quote_join to emit
+        # "table_name" (case-sensitive lowercase) instead of the
+        # correct "TABLE_NAME" (case-insensitive uppercase).
+        return self._get_table_indexes(connection, str(tablename), schema, **kw)
 
     def connect(self, *cargs, **cparams):
         if _ENABLE_SQLALCHEMY_AS_APPLICATION_NAME:
@@ -1771,7 +1686,6 @@ class SnowflakeDialect(default.DefaultDialect):
                 self._case_sensitive_identifiers
             )
             telemetry_value["enable_decfloat"] = self._enable_decfloat
-            telemetry_value["cache_column_metadata"] = self._cache_column_metadata
             telemetry_value["force_div_is_floordiv"] = self.force_div_is_floordiv
 
             snowflake_telemetry_client.add_log_to_batch(
