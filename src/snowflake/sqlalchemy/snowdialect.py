@@ -19,10 +19,9 @@ if TYPE_CHECKING:
         ReflectedColumn,
         ReflectedForeignKeyConstraint,
         ReflectedIndex,
-        ReflectedPrimaryKeyConstraint,
         ReflectedTableComment,
-        ReflectedUniqueConstraint,
     )
+
 from urllib.parse import unquote_plus
 
 import sqlalchemy.sql.sqltypes as sqltypes
@@ -31,6 +30,10 @@ from sqlalchemy import event as sa_vnt
 from sqlalchemy import exc as sa_exc
 from sqlalchemy import util as sa_util
 from sqlalchemy.engine import URL, Connection, default, reflection
+from sqlalchemy.engine.interfaces import (
+    ReflectedPrimaryKeyConstraint,
+    ReflectedUniqueConstraint,
+)
 from sqlalchemy.schema import Table
 from sqlalchemy.sql import text
 from sqlalchemy.sql.sqltypes import NullType
@@ -73,6 +76,10 @@ from .util import (
     parse_url_boolean,
     parse_url_integer,
 )
+
+# Type aliases for the schema-wide reflection caches: {table_name: constraint}
+_PKIndex = dict[str, ReflectedPrimaryKeyConstraint]
+_UKIndex = dict[str, list[ReflectedUniqueConstraint]]
 
 colspecs = {
     Date: _CUSTOM_Date,
@@ -539,14 +546,14 @@ class SnowflakeDialect(default.DefaultDialect):
         """Sort columns by key_sequence and return column names."""
         return [c.column_name for c in sorted(columns, key=lambda c: c.key_sequence)]
 
-    def _parse_pk_rows(self, rows: Any) -> list[dict[str, Any]]:
+    def _parse_pk_rows(self, rows: Any) -> _PKIndex:
         """Parse SHOW PRIMARY KEYS rows into {table_name: {constrained_columns, name}}.
 
         Both SHOW PRIMARY KEYS IN TABLE and SHOW PRIMARY KEYS IN SCHEMA return the
         same column set (including table_name), so this helper works for both paths.
         Columns are sorted by key_sequence to preserve the constraint's declared order.
         """
-        result = {}  # type: ignore[var-annotated]
+        result: dict[str, dict[str, Any]] = {}
         for row in rows:
             table_name = self.normalize_name(row._mapping["table_name"])
             if table_name not in result:
@@ -564,9 +571,9 @@ class SnowflakeDialect(default.DefaultDialect):
             entry["constrained_columns"] = self._sort_columns_by_key_sequence(
                 entry["constrained_columns"]
             )
-        return result  # type: ignore[return-value]
+        return cast(_PKIndex, result)
 
-    def _parse_uk_rows(self, rows: Any) -> list[dict[str, Any]]:
+    def _parse_uk_rows(self, rows: Any) -> _UKIndex:
         """Parse SHOW UNIQUE KEYS rows into {table_name: [{column_names, name}]}.
 
         Both SHOW UNIQUE KEYS IN TABLE and SHOW UNIQUE KEYS IN SCHEMA return the
@@ -603,7 +610,7 @@ class SnowflakeDialect(default.DefaultDialect):
                 constraint["column_names"]  # type: ignore[arg-type]
             )
             result[table_name].append(constraint)
-        return dict(result)  # type: ignore[return-value]
+        return cast(_UKIndex, dict(result))
 
     def _parse_fk_rows(
         self, rows: Any, same_schema_targets: dict[str, str]
@@ -785,7 +792,7 @@ class SnowflakeDialect(default.DefaultDialect):
                 )
             )
             normalized_table_name = self.normalize_name(table_name)
-            return self._parse_pk_rows(result).get(  # type: ignore[attr-defined]
+            return self._parse_pk_rows(result).get(
                 normalized_table_name, {"constrained_columns": [], "name": None}
             )
         except sa_exc.ProgrammingError:
@@ -795,7 +802,7 @@ class SnowflakeDialect(default.DefaultDialect):
     @reflection.cache
     def _get_schema_primary_keys(
         self, connection: Connection, schema: str | None, **kw: Any
-    ) -> list[dict[str, Any]]:
+    ) -> _PKIndex:
         """SHOW PRIMARY KEYS IN SCHEMA — schema-wide path for get_pk_constraint
         (SA 1.4) and get_multi_pk_constraint (SA 2.x).
 
@@ -839,11 +846,11 @@ class SnowflakeDialect(default.DefaultDialect):
             connection, effective_schema, **kw
         )
         all_pks = self._get_schema_primary_keys(connection, full_schema_name, **kw)
-        tables = filter_names if filter_names is not None else list(all_pks.keys())  # type: ignore[attr-defined]
+        tables = filter_names if filter_names is not None else list(all_pks.keys())
         return [
             (
                 (schema, table_name),
-                all_pks.get(table_name, {"constrained_columns": [], "name": None}),  # type: ignore[attr-defined]
+                all_pks.get(table_name, {"constrained_columns": [], "name": None}),
             )
             for table_name in tables
         ]
@@ -867,7 +874,7 @@ class SnowflakeDialect(default.DefaultDialect):
                 )
             )
             normalized_table_name = self.normalize_name(table_name)
-            return self._parse_uk_rows(result).get(normalized_table_name, [])  # type: ignore[attr-defined]
+            return self._parse_uk_rows(result).get(normalized_table_name, [])
         except sa_exc.ProgrammingError:
             logger.debug("Failed to reflect unique constraints for %s", full_name)
             return []
@@ -875,7 +882,7 @@ class SnowflakeDialect(default.DefaultDialect):
     @reflection.cache
     def _get_schema_unique_constraints(
         self, connection: Connection, schema: str | None, **kw: Any
-    ) -> list[dict[str, Any]]:
+    ) -> _UKIndex:
         """SHOW UNIQUE KEYS IN SCHEMA — schema-wide path for get_unique_constraints
         (SA 1.4) and get_multi_unique_constraints (SA 2.x).
 
@@ -912,9 +919,9 @@ class SnowflakeDialect(default.DefaultDialect):
             connection, effective_schema, **kw
         )
         all_uk = self._get_schema_unique_constraints(connection, full_schema_name, **kw)
-        tables = filter_names if filter_names is not None else list(all_uk.keys())  # type: ignore[attr-defined]
+        tables = filter_names if filter_names is not None else list(all_uk.keys())
         return [
-            ((schema, table_name), all_uk.get(table_name, [])) for table_name in tables  # type: ignore[attr-defined]
+            ((schema, table_name), all_uk.get(table_name, [])) for table_name in tables
         ]
 
     # ---------------------------------------------------------------------------
