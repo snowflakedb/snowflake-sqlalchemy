@@ -67,9 +67,9 @@ def test_plain_lowercase_identifiers_are_quoted():
     manager.get_table_columns("mytable", schema="myschema")
 
     sql = _first_sql(captured)
-    assert (
-        '"MYSCHEMA"."MYTABLE"' in sql
-    ), f"Expected double-quoted MYSCHEMA.MYTABLE in SQL, got: {sql!r}"
+    assert '"MYSCHEMA"."MYTABLE"' in sql, (
+        f"Expected double-quoted MYSCHEMA.MYTABLE in SQL, got: {sql!r}"
+    )
 
 
 def test_plain_uppercase_identifiers_are_quoted():
@@ -78,9 +78,9 @@ def test_plain_uppercase_identifiers_are_quoted():
     manager.get_table_columns("MYTABLE", schema="MYSCHEMA")
 
     sql = _first_sql(captured)
-    assert (
-        '"MYSCHEMA"."MYTABLE"' in sql
-    ), f"Expected double-quoted MYSCHEMA.MYTABLE in SQL, got: {sql!r}"
+    assert '"MYSCHEMA"."MYTABLE"' in sql, (
+        f"Expected double-quoted MYSCHEMA.MYTABLE in SQL, got: {sql!r}"
+    )
 
 
 def test_mixed_case_identifier_is_quoted():
@@ -101,9 +101,9 @@ def test_default_schema_used_when_schema_is_none():
     manager.get_table_columns("mytable", schema=None)
 
     sql = _first_sql(captured)
-    assert (
-        '"MYSCHEMA"' in sql
-    ), f"Expected default schema MYSCHEMA to appear quoted, got: {sql!r}"
+    assert '"MYSCHEMA"' in sql, (
+        f"Expected default schema MYSCHEMA to appear quoted, got: {sql!r}"
+    )
     assert '"MYTABLE"' in sql
 
 
@@ -114,9 +114,9 @@ def test_dotted_table_name_uses_only_last_component():
 
     sql = _first_sql(captured)
     # Exactly one schema qualifier — 'myschema' should not appear twice
-    assert (
-        sql.count('"MYSCHEMA"') == 1
-    ), f"Schema appeared more than once in SQL, got: {sql!r}"
+    assert sql.count('"MYSCHEMA"') == 1, (
+        f"Schema appeared more than once in SQL, got: {sql!r}"
+    )
     assert '"MYTABLE"' in sql
 
 
@@ -133,15 +133,15 @@ def test_semicolon_in_table_name_is_enclosed_in_double_quotes():
 
     sql = _first_sql(captured)
     # The payload must appear inside double-quotes in the SQL string
-    assert (
-        f'"{payload}"' in sql
-    ), f"Payload was not enclosed in double-quotes; got: {sql!r}"
+    assert f'"{payload}"' in sql, (
+        f"Payload was not enclosed in double-quotes; got: {sql!r}"
+    )
     # No bare semicolon must appear outside a quoted identifier
     # Strip everything inside double-quoted segments, then check for semicolons
     stripped = re.sub(r'"[^"]*"', "", sql)
-    assert (
-        ";" not in stripped
-    ), f"Semicolon escaped double-quote enclosure; got: {sql!r}"
+    assert ";" not in stripped, (
+        f"Semicolon escaped double-quote enclosure; got: {sql!r}"
+    )
 
 
 def test_drop_statement_injection_in_table_name_is_quoted():
@@ -153,9 +153,9 @@ def test_drop_statement_injection_in_table_name_is_quoted():
     sql = _first_sql(captured)
     assert f'"{payload}"' in sql, f"Payload not enclosed in double-quotes; got: {sql!r}"
     stripped = re.sub(r'"[^"]*"', "", sql)
-    assert (
-        "DROP" not in stripped
-    ), f"DROP keyword escaped double-quote enclosure; got: {sql!r}"
+    assert "DROP" not in stripped, (
+        f"DROP keyword escaped double-quote enclosure; got: {sql!r}"
+    )
 
 
 def test_newline_injection_in_table_name_is_quoted():
@@ -180,13 +180,13 @@ def test_semicolon_in_schema_is_enclosed_in_double_quotes():
     manager.get_table_columns("mytable", schema=payload)
 
     sql = _first_sql(captured)
-    assert (
-        f'"{payload}"' in sql
-    ), f"Schema payload not enclosed in double-quotes; got: {sql!r}"
+    assert f'"{payload}"' in sql, (
+        f"Schema payload not enclosed in double-quotes; got: {sql!r}"
+    )
     stripped = re.sub(r'"[^"]*"', "", sql)
-    assert (
-        ";" not in stripped
-    ), f"Semicolon escaped double-quote enclosure in schema; got: {sql!r}"
+    assert ";" not in stripped, (
+        f"Semicolon escaped double-quote enclosure in schema; got: {sql!r}"
+    )
 
 
 # ---------------------------------------------------------------------------

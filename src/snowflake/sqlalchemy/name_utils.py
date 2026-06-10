@@ -7,7 +7,6 @@ from sqlalchemy.sql.elements import quoted_name
 
 
 class _NameUtils:
-
     def __init__(
         self,
         identifier_preparer: IdentifierPreparer,

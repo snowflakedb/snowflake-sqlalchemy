@@ -14,7 +14,6 @@ from .options.table_option import TableOptionKey
 
 
 class TableFromQueryBase(ClusteredTableBase):
-
     @property
     def as_query(self) -> AsQueryOption | None:
         return self._get_dialect_option(TableOptionKey.AS_QUERY, AsQueryOption)

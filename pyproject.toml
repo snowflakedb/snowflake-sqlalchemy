@@ -47,7 +47,7 @@ path = "src/snowflake/sqlalchemy/version.py"
 [project.optional-dependencies]
 development = [
   "alembic",
-  "mypy",
+  "mypy>=1.0,<2.0",
   "pre-commit",
   "pytest",
   "setuptools",
@@ -108,14 +108,11 @@ test-compatibility = "pytest -ra -vvv --tb=short tests/sqlalchemy_test_suite tes
 line-length = 88
 
 [tool.ruff.lint]
-extend-select = ["B"]   # flake8-bugbear rules
+extend-select = ["B", "I"]   # flake8-bugbear + isort rules
 
 [tool.ruff.lint.per-file-ignores]
 # F821: names come from `from sqlalchemy.testing.suite import *` which ruff cannot resolve
 "tests/sqlalchemy_test_suite/test_suite.py" = ["F821"]
-
-[tool.black]
-line-length = 88
 
 [tool.pytest.ini_options]
 addopts = "-m 'not feature_max_lob_size and not aws and not requires_external_volume'"
@@ -142,7 +139,7 @@ markers = [
 ]
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.9"
 mypy_path = "src"
 explicit_package_bases = true
 # Ignore stubs that are missing for snowflake-connector-python

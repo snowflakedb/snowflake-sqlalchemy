@@ -14,6 +14,8 @@ from unittest.mock import patch
 
 import pytest
 import pytz
+import snowflake.connector.errors
+from snowflake.connector import Error, ProgrammingError, connect
 from sqlalchemy import (
     REAL,
     Boolean,
@@ -41,9 +43,7 @@ from sqlalchemy.sql import and_, literal, not_, or_, select
 from sqlalchemy.sql.ddl import CreateTable
 from sqlalchemy.testing.assertions import eq_
 
-import snowflake.connector.errors
 import snowflake.sqlalchemy.snowdialect
-from snowflake.connector import Error, ProgrammingError, connect
 from snowflake.sqlalchemy import URL, MergeInto, dialect
 from snowflake.sqlalchemy._constants import (
     APPLICATION_NAME,
@@ -356,9 +356,9 @@ def test_insert_tables(engine_testaccount):
 
                 # verify the results
                 results = conn.execute(select(users))
-                assert (
-                    len([row for row in results]) == 2
-                ), "number of rows from users table"
+                assert len([row for row in results]) == 2, (
+                    "number of rows from users table"
+                )
                 results.close()
 
                 # fetchone
@@ -367,9 +367,9 @@ def test_insert_tables(engine_testaccount):
                 results.close()
                 assert row._mapping._data[2] == "Jack Jones", "user name"
                 assert row._mapping["fullname"] == "Jack Jones", "user name by dict"
-                assert (
-                    row._mapping[users.c.fullname] == "Jack Jones"
-                ), "user name by Column object"
+                assert row._mapping[users.c.fullname] == "Jack Jones", (
+                    "user name by Column object"
+                )
 
                 conn.execute(
                     addresses.insert(),
@@ -383,9 +383,9 @@ def test_insert_tables(engine_testaccount):
 
                 # more records
                 results = conn.execute(select(addresses))
-                assert (
-                    len([row for row in results]) == 4
-                ), "number of rows from addresses table"
+                assert len([row for row in results]) == 4, (
+                    "number of rows from addresses table"
+                )
                 results.close()
 
                 # select specified column names
@@ -411,13 +411,13 @@ def test_insert_tables(engine_testaccount):
                     str(users.c.id == addresses.c.user_id)
                     == "users.id = addresses.user_id"
                 ), "equal operator"
-                assert (
-                    str(users.c.id == 7) == "users.id = :id_1"
-                ), "equal to a static number"
+                assert str(users.c.id == 7) == "users.id = :id_1", (
+                    "equal to a static number"
+                )
                 assert str(users.c.name == None)  # NOQA
-                assert (
-                    str(users.c.id + addresses.c.id) == "users.id + addresses.id"
-                ), "number + number"
+                assert str(users.c.id + addresses.c.id) == "users.id + addresses.id", (
+                    "number + number"
+                )
                 assert (
                     str(users.c.name + users.c.fullname)
                     == "users.name || users.fullname"
@@ -442,9 +442,9 @@ def test_insert_tables(engine_testaccount):
                      OR addresses.email_address = :email_address_2)
                      AND users.id <= :id_1"""
                 )
-                assert str(obj) == "".join(
-                    expected_sql.split("\n")
-                ), "complex condition"
+                assert str(obj) == "".join(expected_sql.split("\n")), (
+                    "complex condition"
+                )
 
                 # example 2
                 obj = (
@@ -456,9 +456,9 @@ def test_insert_tables(engine_testaccount):
                     )
                     & ~(users.c.id > 5)
                 )
-                assert str(obj) == "".join(
-                    expected_sql.split("\n")
-                ), "complex condition using python operators"
+                assert str(obj) == "".join(expected_sql.split("\n")), (
+                    "complex condition using python operators"
+                )
 
                 # example 3
                 s = select(
@@ -2271,14 +2271,14 @@ def test_normalize_name_empty_string_does_not_crash(engine_testaccount):
 
             table_keys = list(md.tables.keys())
 
-            assert any(
-                "normal_table" in key for key in table_keys
-            ), f"Expected normal_table in {table_keys}"
+            assert any("normal_table" in key for key in table_keys), (
+                f"Expected normal_table in {table_keys}"
+            )
 
             empty_string_as_table_identifier = f"{normalized_schema}."
-            assert (
-                empty_string_as_table_identifier in table_keys
-            ), f"Expected empty string table '{empty_string_as_table_identifier}' in {table_keys}"
+            assert empty_string_as_table_identifier in table_keys, (
+                f"Expected empty string table '{empty_string_as_table_identifier}' in {table_keys}"
+            )
 
             empty_table = md.tables[empty_string_as_table_identifier]
             assert empty_table.name == ""
@@ -2334,9 +2334,9 @@ def test_reflect_schema_none_does_not_crash(engine_testaccount):
 
         table_names = [k.lower() for k in md.tables.keys()]
 
-        assert any(
-            table_name in name for name in table_names
-        ), f"Expected {table_name} in reflected metadata, got {list(md.tables.keys())}"
+        assert any(table_name in name for name in table_names), (
+            f"Expected {table_name} in reflected metadata, got {list(md.tables.keys())}"
+        )
 
     finally:
         with engine_testaccount.connect() as conn:

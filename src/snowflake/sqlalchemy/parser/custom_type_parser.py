@@ -102,7 +102,6 @@ def tokenize_parameters(text: str, character_for_strip: str = ",") -> list[str]:
     parameter = ""
     open_parenthesis = 0
     for c in text:
-
         if c == "(":
             open_parenthesis += 1
         elif c == ")":

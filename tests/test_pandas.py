@@ -14,6 +14,8 @@ import pytest
 pytest.importorskip("pandas")
 import pandas as pd
 import sqlalchemy
+from snowflake.connector import ProgrammingError
+from snowflake.connector.pandas_tools import make_pd_writer, pd_writer
 from sqlalchemy import (
     Column,
     ForeignKey,
@@ -27,8 +29,6 @@ from sqlalchemy import (
     text,
 )
 
-from snowflake.connector import ProgrammingError
-from snowflake.connector.pandas_tools import make_pd_writer, pd_writer
 from tests.util import random_string
 
 
@@ -182,7 +182,6 @@ def test_timezone(db_parameters, engine_testaccount, engine_testaccount_with_num
     sa_engine2_raw_conn = engine_testaccount.raw_connection()
 
     with sa_engine.connect() as conn:
-
         with conn.begin():
             conn.exec_driver_sql(
                 textwrap.dedent(

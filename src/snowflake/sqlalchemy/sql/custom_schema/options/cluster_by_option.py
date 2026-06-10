@@ -3,11 +3,10 @@
 #
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-from sqlalchemy.sql.expression import TextClause
+from typing import TYPE_CHECKING, Union
 
 from snowflake.sqlalchemy.custom_commands import NoneType
+from sqlalchemy.sql.expression import TextClause
 
 from .table_option import Priority, TableOption, TableOptionKey
 
@@ -64,4 +63,4 @@ class ClusterByOption(TableOption):
         return "ClusterByOption(%s)" % self.__get_expression()
 
 
-ClusterByOptionType = ClusterByOption | list[str | TextClause]
+ClusterByOptionType = Union[ClusterByOption, list[Union[str, TextClause]]]
