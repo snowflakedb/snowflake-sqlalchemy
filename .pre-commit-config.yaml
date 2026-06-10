@@ -54,3 +54,9 @@ repos:
         language: system
         entry: python snyk/update_requirements.py
         files: ^pyproject.toml$
+      - id: mypy
+        name: mypy type check
+        language: system
+        entry: hatch run type-check
+        pass_filenames: false
+        types: [python]
