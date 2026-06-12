@@ -9,10 +9,11 @@ Source code is also available at:
 
 # Unreleased Notes
 
-- Fix `regexp_match` and `regexp_replace` flags rendered as bound parameters instead of literal strings ([#SNOW-3573046](https://github.com/snowflakedb/snowflake-sqlalchemy)). Flags passed to `ColumnElement.regexp_match(..., flags=...)` and `ColumnElement.regexp_replace(..., flags=...)` were processed through the standard parameter pipeline, producing incorrect SQL. Flags are now rendered as inline string literals, matching Snowflake's expected `REGEXP_LIKE(col, pattern, 'i')` / `REGEXP_REPLACE(col, pattern, replacement, 'i')` syntax.
-- Fix inconsistent identifier quoting in `_StructuredTypeInfoManager.get_table_columns`. The `DESC TABLE` fallback path used raw denormalised names in an f-string while all other reflection paths apply `ip.quote(denormalize_name(...))` via `_always_quote_join`. Schema and table components are now consistently double-quoted before the statement is constructed, and the method delegates to `get_table_columns_by_full_name` to collapse the two previously divergent code paths.
-
 # Release Notes
+
+- v1.10.1 (June 15, 2026)
+  - Fix `regexp_match` and `regexp_replace` flags rendered as bound parameters instead of literal strings ([#SNOW-3573046](https://github.com/snowflakedb/snowflake-sqlalchemy)). Flags passed to `ColumnElement.regexp_match(..., flags=...)` and `ColumnElement.regexp_replace(..., flags=...)` were processed through the standard parameter pipeline, producing incorrect SQL. Flags are now rendered as inline string literals, matching Snowflake's expected `REGEXP_LIKE(col, pattern, 'i')` / `REGEXP_REPLACE(col, pattern, replacement, 'i')` syntax.
+  - Fix inconsistent identifier quoting in `_StructuredTypeInfoManager.get_table_columns`. The `DESC TABLE` fallback path used raw denormalised names in an f-string while all other reflection paths apply `ip.quote(denormalize_name(...))` via `_always_quote_join`. Schema and table components are now consistently double-quoted before the statement is constructed, and the method delegates to `get_table_columns_by_full_name` to collapse the two previously divergent code paths.
 
 - v1.10.0 (May 20, 2026)
   - Fix `with_loader_criteria` silently dropping filters on non-Snowflake dialects ([#676](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/676)). Importing `snowflake-sqlalchemy` previously altered SQLAlchemy's ORM compilation for every dialect in the process, causing loader-criteria filters to be omitted inside sealed subqueries when using PostgreSQL, MySQL, SQLite, etc. Snowflake dialect behavior is unchanged; the BCR-1057 lateral-join workaround is now scoped to Snowflake connections only.
