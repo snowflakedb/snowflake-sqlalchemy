@@ -11,24 +11,11 @@ repos:
     -   id: check-yaml
         exclude: .github/repo_meta.yaml
     -   id: debug-statements
--   repo: https://github.com/PyCQA/isort
-    rev: 5.13.2
-    hooks:
-        - id: isort
 -   repo: https://github.com/asottile/pyupgrade
     rev: v3.18.0
     hooks:
     -   id: pyupgrade
         args: [--py37-plus]
--   repo: https://github.com/psf/black
-    rev: 24.10.0
-    hooks:
-        - id: black
-          args:
-              - --safe
-              - --target-version
-              - py38
-          language_version: python3
 -   repo: https://github.com/Lucas-C/pre-commit-hooks.git
     rev: v1.5.6
     hooks:
@@ -43,12 +30,12 @@ repos:
         args:
             - --license-filepath
             - license_header.txt
--   repo: https://github.com/pycqa/flake8
-    rev: 7.3.0
+-   repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.16
     hooks:
-      - id: flake8
-        additional_dependencies:
-          - flake8-bugbear
+    -   id: ruff-check
+        args: [--fix]
+    -   id: ruff-format
 -   repo: local
     hooks:
       - id: requirements-update
@@ -56,3 +43,9 @@ repos:
         language: system
         entry: python snyk/update_requirements.py
         files: ^pyproject.toml$
+      - id: mypy
+        name: mypy type check
+        language: system
+        entry: hatch run type-check
+        pass_filenames: false
+        types: [python]

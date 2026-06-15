@@ -1,6 +1,8 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
+from __future__ import annotations
+
 import decimal
 import operator
 from collections import defaultdict
@@ -8,26 +10,42 @@ from enum import Enum
 from functools import reduce
 from logging import getLogger
 from time import time as time_in_seconds
-from typing import Any, Collection, NamedTuple, Optional, cast
-from urllib.parse import unquote_plus
+from typing import TYPE_CHECKING, Any, Collection, Iterable, NamedTuple, cast
 
-import sqlalchemy.sql.sqltypes as sqltypes
-from sqlalchemy import __version__ as SQLALCHEMY_VERSION
-from sqlalchemy import event as sa_vnt
-from sqlalchemy import exc as sa_exc
-from sqlalchemy import util as sa_util
-from sqlalchemy.engine import URL, default, reflection
-from sqlalchemy.schema import Table
-from sqlalchemy.sql import text
-from sqlalchemy.sql.sqltypes import NullType
-from sqlalchemy.types import FLOAT, Date, DateTime, Float, Time
+if TYPE_CHECKING:
+    from sqlalchemy.engine import CursorResult, Row
+    from sqlalchemy.engine.interfaces import (
+        DBAPIConnection,
+        ReflectedCheckConstraint,
+        ReflectedColumn,
+        ReflectedForeignKeyConstraint,
+        ReflectedIndex,
+        ReflectedTableComment,
+    )
+
+from urllib.parse import unquote_plus
 
 from snowflake.connector import errors as sf_errors
 from snowflake.connector.connection import DEFAULT_CONFIGURATION, SnowflakeConnection
 from snowflake.connector.constants import UTF8
 from snowflake.connector.telemetry import TelemetryClient, TelemetryData, TelemetryField
+
+import sqlalchemy.sql.sqltypes as sqltypes
 from snowflake.sqlalchemy.name_utils import _NameUtils
 from snowflake.sqlalchemy.structured_type_info_manager import _StructuredTypeInfoManager
+from sqlalchemy import __version__ as SQLALCHEMY_VERSION
+from sqlalchemy import event as sa_vnt
+from sqlalchemy import exc as sa_exc
+from sqlalchemy import util as sa_util
+from sqlalchemy.engine import URL, Connection, default, reflection
+from sqlalchemy.engine.interfaces import (
+    ReflectedPrimaryKeyConstraint,
+    ReflectedUniqueConstraint,
+)
+from sqlalchemy.schema import Table
+from sqlalchemy.sql import text
+from sqlalchemy.sql.sqltypes import NullType
+from sqlalchemy.types import FLOAT, Date, DateTime, Float, Time
 
 from ._constants import DIALECT_NAME
 from .base import (
@@ -47,14 +65,22 @@ from .custom_types import (
     _CUSTOM_Time,
 )
 from .parser.custom_type_parser import *  # noqa
-from .parser.custom_type_parser import _CUSTOM_DECIMAL  # noqa
-from .parser.custom_type_parser import ischema_names, parse_index_columns, parse_type
+from .parser.custom_type_parser import (
+    _CUSTOM_DECIMAL,  # noqa
+    ischema_names,
+    parse_index_columns,
+    parse_type,
+)
 from .sql.custom_schema.custom_table_prefix import CustomTablePrefix
 from .util import (
     _update_connection_application_name,
     parse_url_boolean,
     parse_url_integer,
 )
+
+# Type aliases for the schema-wide reflection caches: {table_name: constraint}
+_PKIndex = dict[str, ReflectedPrimaryKeyConstraint]
+_UKIndex = dict[str, list[ReflectedUniqueConstraint]]
 
 colspecs = {
     Date: _CUSTOM_Date,
@@ -143,7 +169,7 @@ class SnowflakeDialect(default.DefaultDialect):
     # The dialect supports comments
     supports_comments = True
 
-    preparer = SnowflakeIdentifierPreparer
+    preparer = SnowflakeIdentifierPreparer  # type: ignore[assignment]
     ddl_compiler = SnowflakeDDLCompiler
     type_compiler = SnowflakeTypeCompiler
     statement_compiler = SnowflakeCompiler
@@ -167,12 +193,12 @@ class SnowflakeDialect(default.DefaultDialect):
     def __init__(
         self,
         force_div_is_floordiv: bool = True,
-        isolation_level: Optional[str] = SnowflakeIsolationLevel.READ_COMMITTED.value,
+        isolation_level: str | None = SnowflakeIsolationLevel.READ_COMMITTED.value,
         enable_decfloat: bool = False,
         case_sensitive_identifiers: bool = False,
         **kwargs: Any,
     ):
-        super().__init__(isolation_level=isolation_level, **kwargs)
+        super().__init__(isolation_level=isolation_level, **kwargs)  # type: ignore[arg-type]
         self.force_div_is_floordiv = force_div_is_floordiv
         self.div_is_floordiv = force_div_is_floordiv
         self._case_sensitive_identifiers = case_sensitive_identifiers
@@ -182,22 +208,24 @@ class SnowflakeDialect(default.DefaultDialect):
         )
         self._enable_decfloat = enable_decfloat
 
-    def initialize(self, connection):
+    def initialize(self, connection: Connection) -> None:
         super().initialize(connection)
         self.div_is_floordiv = self.force_div_is_floordiv
 
     @classmethod
-    def dbapi(cls):
+    def dbapi(cls) -> Any:  # type: ignore[override]
         return cls.import_dbapi()
 
     @classmethod
-    def import_dbapi(cls):
+    def import_dbapi(cls) -> Any:
         from snowflake import connector
 
         return connector
 
     @staticmethod
-    def parse_query_param_type(name: str, value: Any) -> Any:
+    def parse_query_param_type(
+        name: str, value: str | tuple[str, ...]
+    ) -> str | int | bool | tuple[str, ...]:
         """Cast param value if possible to type defined in connector-python."""
         if not (maybe_type_configuration := DEFAULT_CONFIGURATION.get(name)):
             return value
@@ -216,7 +244,7 @@ class SnowflakeDialect(default.DefaultDialect):
         else:
             return value
 
-    def create_connect_args(self, url: URL):
+    def create_connect_args(self, url: URL) -> tuple[list[Any], dict[str, Any]]:
         opts = url.translate_connect_args(username="user")
         if "database" in opts:
             name_spaces = [unquote_plus(e) for e in opts["database"].split("/")]
@@ -275,43 +303,66 @@ class SnowflakeDialect(default.DefaultDialect):
         return ([], opts)
 
     @reflection.cache
-    def has_table(self, connection, table_name, schema=None, **kw):
+    def has_table(
+        self,
+        connection: Connection,
+        table_name: str,
+        schema: str | None = None,
+        **kw: Any,
+    ) -> bool:
         """
         Checks if the table exists
         """
         return self._has_object(connection, "TABLE", table_name, schema)
 
-    def get_isolation_level_values(self, dbapi_connection):
+    def get_isolation_level_values(  # type: ignore[override]
+        self, dbapi_connection: DBAPIConnection
+    ) -> list[str]:
         return [
             SnowflakeIsolationLevel.READ_COMMITTED.value,
             SnowflakeIsolationLevel.AUTOCOMMIT.value,
         ]
 
-    def do_rollback(self, dbapi_connection):
+    def do_rollback(self, dbapi_connection: DBAPIConnection) -> None:
         dbapi_connection.rollback()
 
-    def do_commit(self, dbapi_connection):
+    def do_commit(self, dbapi_connection: DBAPIConnection) -> None:
         dbapi_connection.commit()
 
-    def get_default_isolation_level(self, dbapi_conn):
+    def get_default_isolation_level(self, dbapi_conn: Any) -> str:  # type: ignore[override]
         return SnowflakeIsolationLevel.READ_COMMITTED.value
 
-    def set_isolation_level(self, dbapi_connection, level):
+    def set_isolation_level(
+        self, dbapi_connection: DBAPIConnection, level: str
+    ) -> None:
         if level == SnowflakeIsolationLevel.AUTOCOMMIT.value:
             dbapi_connection.autocommit(True)
         else:
             dbapi_connection.autocommit(False)
 
     @reflection.cache
-    def has_sequence(self, connection, sequence_name, schema=None, **kw):
+    def has_sequence(
+        self,
+        connection: Connection,
+        sequence_name: str,
+        schema: str | None = None,
+        **kw: Any,
+    ) -> bool:
         """
         Checks if the sequence exists
         """
         return self._has_object(connection, "SEQUENCE", sequence_name, schema)
 
-    def _has_object(self, connection, object_type, object_name, schema=None):
+    def _has_object(
+        self,
+        connection: Connection,
+        object_type: str,
+        object_name: str,
+        schema: str | None = None,
+    ) -> bool:
         full_name = self._denormalize_quote_join(
-            self.denormalize_name(schema), self.denormalize_name(object_name)
+            self.denormalize_name(schema),  # type: ignore[arg-type]
+            self.denormalize_name(object_name),  # type: ignore[arg-type]
         )
         try:
             results = connection.execute(
@@ -325,21 +376,21 @@ class SnowflakeDialect(default.DefaultDialect):
                 return False
             raise
 
-    def normalize_name(self, name):
+    def normalize_name(self, name: str | None) -> str | None:  # type: ignore[override]
         return self.name_utils.normalize_name(name)
 
-    def denormalize_name(self, name):
+    def denormalize_name(self, name: str | None) -> str | None:  # type: ignore[override]
         return self.name_utils.denormalize_name(name)
 
-    def _denormalize_quote_join(self, *idents):
+    def _denormalize_quote_join(self, *idents: str) -> str:
         ip = self.identifier_preparer
         split_idents = reduce(
             operator.add,
-            [ip._split_schema_by_dot(ids) for ids in idents if ids is not None],
+            [ip._split_schema_by_dot(ids) for ids in idents if ids is not None],  # type: ignore[attr-defined]
         )
-        return ".".join(ip._quote_free_identifiers(*split_idents))
+        return ".".join(ip._quote_free_identifiers(*split_idents))  # type: ignore[attr-defined]
 
-    def _always_quote_join(self, *idents):
+    def _always_quote_join(self, *idents: str) -> str:
         """Build a dot-joined identifier string that always quotes every part.
 
         Unlike _denormalize_quote_join (which quotes only when _requires_quotes
@@ -361,11 +412,13 @@ class SnowflakeDialect(default.DefaultDialect):
         ip = self.identifier_preparer
         split_idents = reduce(
             operator.add,
-            [ip._split_schema_by_dot(ids) for ids in idents if ids is not None],
+            [ip._split_schema_by_dot(ids) for ids in idents if ids is not None],  # type: ignore[attr-defined]
         )
-        return ".".join(ip.quote(self.denormalize_name(i)) for i in split_idents)
+        return ".".join(ip.quote(self.denormalize_name(i)) for i in split_idents)  # type: ignore[arg-type]
 
-    def _get_full_schema_name(self, connection, schema=None, **kw):
+    def _get_full_schema_name(
+        self, connection: Connection, schema: str | None = None, **kw: Any
+    ) -> str:
         """
         Get fully-qualified schema name as database.schema.
 
@@ -386,7 +439,7 @@ class SnowflakeDialect(default.DefaultDialect):
         if not schema:
             parts = [current_database, current_schema]
         else:
-            parts = self.identifier_preparer._split_schema_by_dot(schema)
+            parts = self.identifier_preparer._split_schema_by_dot(schema)  # type: ignore[attr-defined]
             if len(parts) == 1:
                 parts = [current_database, parts[0]]
             elif len(parts) != 2:
@@ -409,45 +462,49 @@ class SnowflakeDialect(default.DefaultDialect):
             else:
                 quoted_parts.append(
                     self.identifier_preparer.quote_identifier(
-                        self.denormalize_name(part_name)
+                        self.denormalize_name(part_name)  # type: ignore[arg-type]
                     )
                 )
         return ".".join(quoted_parts)
 
     @reflection.cache
-    def _current_database_schema(self, connection, **kw):
+    def _current_database_schema(
+        self, connection: Connection, **kw: Any
+    ) -> tuple[str | None, str | None]:
         res = connection.execute(
             text("select current_database(), current_schema();")
         ).fetchone()
         return (
-            self.normalize_name(res[0]),
-            self.normalize_name(res[1]),
+            self.normalize_name(res[0]),  # type: ignore[index]
+            self.normalize_name(res[1]),  # type: ignore[index]
         )
 
-    def _get_server_version_info(self, connection):
+    def _get_server_version_info(self, connection: Connection) -> tuple[int, ...]:
         """Query and parse the Snowflake server version."""
         result = connection.execute(text("SELECT CURRENT_VERSION()"))
         version_row = result.fetchone()
         if version_row is None or len(version_row) == 0:
-            return None
+            return None  # type: ignore[return-value]
         # Split in case <internal identifier> documented in http://docs.snowflake.com/en/sql-reference/functions/current_version is added
         version = version_row[0].split()[0]
         return tuple(int(x) for x in version.split("."))
 
-    def _get_default_schema_name(self, connection):
+    def _get_default_schema_name(self, connection: Connection) -> str | None:  # type: ignore[override]
         # NOTE: no cache object is passed here
         _, current_schema = self._current_database_schema(connection)
         return current_schema
 
     @staticmethod
-    def _map_name_to_idx(result):
+    def _map_name_to_idx(result: CursorResult) -> dict[str, int]:
         name_to_idx = {}
         for idx, col in enumerate(result.cursor.description):
             name_to_idx[col[0]] = idx
         return name_to_idx
 
     @reflection.cache
-    def get_check_constraints(self, connection, table_name, schema, **kw):
+    def get_check_constraints(  # type: ignore[override]
+        self, connection: Connection, table_name: str, schema: str | None, **kw: Any
+    ) -> list[ReflectedCheckConstraint]:
         # check constraints are not supported by Snowflake
         return []
 
@@ -460,16 +517,17 @@ class SnowflakeDialect(default.DefaultDialect):
         """Sort columns by key_sequence and return column names."""
         return [c.column_name for c in sorted(columns, key=lambda c: c.key_sequence)]
 
-    def _parse_pk_rows(self, rows):
+    def _parse_pk_rows(self, rows: Any) -> _PKIndex:
         """Parse SHOW PRIMARY KEYS rows into {table_name: {constrained_columns, name}}.
 
         Both SHOW PRIMARY KEYS IN TABLE and SHOW PRIMARY KEYS IN SCHEMA return the
         same column set (including table_name), so this helper works for both paths.
         Columns are sorted by key_sequence to preserve the constraint's declared order.
         """
-        result = {}
+        result: dict[str, dict[str, Any]] = {}
         for row in rows:
             table_name = self.normalize_name(row._mapping["table_name"])
+            assert table_name is not None
             if table_name not in result:
                 result[table_name] = {
                     "constrained_columns": [],
@@ -478,16 +536,16 @@ class SnowflakeDialect(default.DefaultDialect):
             result[table_name]["constrained_columns"].append(
                 _KeyedColumn(
                     int(row._mapping["key_sequence"]),
-                    self.normalize_name(row._mapping["column_name"]),
+                    self.normalize_name(row._mapping["column_name"]),  # type: ignore[arg-type]
                 )
             )
         for entry in result.values():
             entry["constrained_columns"] = self._sort_columns_by_key_sequence(
                 entry["constrained_columns"]
             )
-        return result
+        return cast(_PKIndex, result)
 
-    def _parse_uk_rows(self, rows):
+    def _parse_uk_rows(self, rows: Any) -> _UKIndex:
         """Parse SHOW UNIQUE KEYS rows into {table_name: [{column_names, name}]}.
 
         Both SHOW UNIQUE KEYS IN TABLE and SHOW UNIQUE KEYS IN SCHEMA return the
@@ -498,35 +556,38 @@ class SnowflakeDialect(default.DefaultDialect):
         for row in rows:
             table_name = self.normalize_name(row._mapping["table_name"])
             constraint_name = self.normalize_name(row._mapping["constraint_name"])
+            assert table_name is not None and constraint_name is not None
             key = (table_name, constraint_name)
             if key not in constraints:
                 constraints[key] = {
                     "column_names": [
                         _KeyedColumn(
                             int(row._mapping["key_sequence"]),
-                            self.normalize_name(row._mapping["column_name"]),
+                            self.normalize_name(row._mapping["column_name"]),  # type: ignore[arg-type]
                         )
                     ],
                     "name": constraint_name,
                     "_table_name": table_name,
                 }
             else:
-                constraints[key]["column_names"].append(
+                constraints[key]["column_names"].append(  # type: ignore[attr-defined]
                     _KeyedColumn(
                         int(row._mapping["key_sequence"]),
-                        self.normalize_name(row._mapping["column_name"]),
+                        self.normalize_name(row._mapping["column_name"]),  # type: ignore[arg-type]
                     )
                 )
         result = defaultdict(list)
         for constraint in constraints.values():
-            table_name = constraint.pop("_table_name")
+            table_name = constraint.pop("_table_name")  # type: ignore[assignment]
             constraint["column_names"] = self._sort_columns_by_key_sequence(
-                constraint["column_names"]
+                constraint["column_names"]  # type: ignore[arg-type]
             )
             result[table_name].append(constraint)
-        return dict(result)
+        return cast(_UKIndex, dict(result))
 
-    def _parse_fk_rows(self, rows, same_schema_targets):
+    def _parse_fk_rows(
+        self, rows: Any, same_schema_targets: dict[str, str]
+    ) -> dict[str, Any]:
         """Parse SHOW IMPORTED KEYS rows into {fk_table_name: [{...}]}.
 
         Both SHOW IMPORTED KEYS IN TABLE and SHOW IMPORTED KEYS IN SCHEMA return
@@ -563,7 +624,7 @@ class SnowflakeDialect(default.DefaultDialect):
                     "constrained_columns": [
                         _KeyedColumn(
                             int(row._mapping["key_sequence"]),
-                            self.normalize_name(row._mapping["fk_column_name"]),
+                            self.normalize_name(row._mapping["fk_column_name"]),  # type: ignore[arg-type]
                         )
                     ],
                     "referred_schema": (
@@ -577,7 +638,7 @@ class SnowflakeDialect(default.DefaultDialect):
                     "referred_columns": [
                         _KeyedColumn(
                             int(row._mapping["key_sequence"]),
-                            self.normalize_name(row._mapping["pk_column_name"]),
+                            self.normalize_name(row._mapping["pk_column_name"]),  # type: ignore[arg-type]
                         )
                     ],
                     "name": fk_name,
@@ -592,35 +653,33 @@ class SnowflakeDialect(default.DefaultDialect):
                     options["onupdate"] = self.normalize_name(
                         row._mapping["update_rule"]
                     )
-                fk_map[fk_name]["options"] = options
+                fk_map[fk_name]["options"] = options  # type: ignore[assignment]
             else:
-                fk_map[fk_name]["constrained_columns"].append(
+                fk_map[fk_name]["constrained_columns"].append(  # type: ignore[union-attr]
                     _KeyedColumn(
                         int(row._mapping["key_sequence"]),
-                        self.normalize_name(row._mapping["fk_column_name"]),
+                        self.normalize_name(row._mapping["fk_column_name"]),  # type: ignore[arg-type]
                     )
                 )
-                fk_map[fk_name]["referred_columns"].append(
+                fk_map[fk_name]["referred_columns"].append(  # type: ignore[union-attr]
                     _KeyedColumn(
                         int(row._mapping["key_sequence"]),
-                        self.normalize_name(row._mapping["pk_column_name"]),
+                        self.normalize_name(row._mapping["pk_column_name"]),  # type: ignore[arg-type]
                     )
                 )
         result = defaultdict(list)
         for fk_info in fk_map.values():
-            fk_table_name = fk_info.pop("_fk_table_name")
-            fk_info["constrained_columns"] = self._sort_columns_by_key_sequence(
-                fk_info["constrained_columns"]
+            fk_table_name = fk_info.pop("_fk_table_name")  # type: ignore[assignment]
+            fk_info["constrained_columns"] = self._sort_columns_by_key_sequence(  # type: ignore[assignment]
+                fk_info["constrained_columns"]  # type: ignore[arg-type]
             )
-            fk_info["referred_columns"] = self._sort_columns_by_key_sequence(
-                fk_info["referred_columns"]
+            fk_info["referred_columns"] = self._sort_columns_by_key_sequence(  # type: ignore[assignment]
+                fk_info["referred_columns"]  # type: ignore[arg-type]
             )
             result[fk_table_name].append(fk_info)
-        return dict(result)
+        return dict(result)  # type: ignore[arg-type]
 
-    def _normalize_schema_target(
-        self, schema: Optional[str], database: Optional[str] = None
-    ):
+    def _normalize_schema_target(self, schema: str | None, database: str | None = None):
         normalized_schema = self.normalize_name(schema)
         normalized_database = self.normalize_name(database)
         if normalized_database is None:
@@ -633,7 +692,7 @@ class SnowflakeDialect(default.DefaultDialect):
         Returns (None, schema) for a single-part schema name, or
         (database, schema_name) for 'database.schema' notation.
         """
-        parts = self.identifier_preparer._split_schema_by_dot(schema)
+        parts = self.identifier_preparer._split_schema_by_dot(schema)  # type: ignore[attr-defined]
         if len(parts) == 1:
             return None, str(parts[0])
         elif len(parts) == 2:
@@ -646,7 +705,7 @@ class SnowflakeDialect(default.DefaultDialect):
     def _get_same_schemas_for_fk_reflection(
         self,
         schema: str,
-        current_database: Optional[str],
+        current_database: str | None,
     ):
         """Schema targets whose FKs should be reported with ``referred_schema=None``.
 
@@ -691,12 +750,14 @@ class SnowflakeDialect(default.DefaultDialect):
     # Primary key reflection
     # ---------------------------------------------------------------------------
 
-    def _get_table_primary_keys(self, connection, table_name, schema, **kw):
+    def _get_table_primary_keys(
+        self, connection: Connection, table_name: str, schema: str | None, **kw: Any
+    ) -> ReflectedPrimaryKeyConstraint:
         """SHOW PRIMARY KEYS IN TABLE — single-table path.
 
         Called by get_pk_constraint.
         """
-        full_name = self._always_quote_join(schema, table_name)
+        full_name = self._always_quote_join(schema, table_name)  # type: ignore[arg-type]
         try:
             result = connection.execute(
                 text(
@@ -705,14 +766,16 @@ class SnowflakeDialect(default.DefaultDialect):
             )
             normalized_table_name = self.normalize_name(table_name)
             return self._parse_pk_rows(result).get(
-                normalized_table_name, {"constrained_columns": [], "name": None}
+                normalized_table_name or "", {"constrained_columns": [], "name": None}
             )
         except sa_exc.ProgrammingError:
             logger.debug("Failed to reflect primary keys for %s", full_name)
             return {"constrained_columns": [], "name": None}
 
     @reflection.cache
-    def _get_schema_primary_keys(self, connection, schema, **kw):
+    def _get_schema_primary_keys(
+        self, connection: Connection, schema: str | None, **kw: Any
+    ) -> _PKIndex:
         """SHOW PRIMARY KEYS IN SCHEMA — schema-wide path for get_pk_constraint
         (SA 1.4) and get_multi_pk_constraint (SA 2.x).
 
@@ -726,7 +789,13 @@ class SnowflakeDialect(default.DefaultDialect):
         )
         return self._parse_pk_rows(result)
 
-    def get_pk_constraint(self, connection, table_name, schema=None, **kw):
+    def get_pk_constraint(
+        self,
+        connection: Connection,
+        table_name: str,
+        schema: str | None = None,
+        **kw: Any,
+    ) -> ReflectedPrimaryKeyConstraint:
         schema = schema or self.default_schema_name
         return self._get_table_primary_keys(connection, table_name, schema, **kw)
 
@@ -734,8 +803,8 @@ class SnowflakeDialect(default.DefaultDialect):
         self,
         connection,
         *,
-        schema: Optional[str] = None,
-        filter_names: Optional[Collection[str]] = None,
+        schema: str | None = None,
+        filter_names: Collection[str] | None = None,
         **kw,
     ):
         """SA 2.x bulk hook — called during MetaData.reflect() instead of
@@ -763,12 +832,14 @@ class SnowflakeDialect(default.DefaultDialect):
     # Unique constraint reflection
     # ---------------------------------------------------------------------------
 
-    def _get_table_unique_constraints(self, connection, table_name, schema, **kw):
+    def _get_table_unique_constraints(
+        self, connection: Connection, table_name: str, schema: str | None, **kw: Any
+    ) -> list[ReflectedUniqueConstraint]:
         """SHOW UNIQUE KEYS IN TABLE — single-table path.
 
         Called by get_unique_constraints.
         """
-        full_name = self._always_quote_join(schema, table_name)
+        full_name = self._always_quote_join(schema, table_name)  # type: ignore[arg-type]
         try:
             result = connection.execute(
                 text(
@@ -776,13 +847,15 @@ class SnowflakeDialect(default.DefaultDialect):
                 )
             )
             normalized_table_name = self.normalize_name(table_name)
-            return self._parse_uk_rows(result).get(normalized_table_name, [])
+            return self._parse_uk_rows(result).get(normalized_table_name or "", [])
         except sa_exc.ProgrammingError:
             logger.debug("Failed to reflect unique constraints for %s", full_name)
             return []
 
     @reflection.cache
-    def _get_schema_unique_constraints(self, connection, schema, **kw):
+    def _get_schema_unique_constraints(
+        self, connection: Connection, schema: str | None, **kw: Any
+    ) -> _UKIndex:
         """SHOW UNIQUE KEYS IN SCHEMA — schema-wide path for get_unique_constraints
         (SA 1.4) and get_multi_unique_constraints (SA 2.x).
 
@@ -796,7 +869,9 @@ class SnowflakeDialect(default.DefaultDialect):
         )
         return self._parse_uk_rows(result)
 
-    def get_unique_constraints(self, connection, table_name, schema, **kw):
+    def get_unique_constraints(  # type: ignore[override]
+        self, connection: Connection, table_name: str, schema: str | None, **kw: Any
+    ) -> list[ReflectedUniqueConstraint]:
         schema = schema or self.default_schema_name
         return self._get_table_unique_constraints(connection, table_name, schema, **kw)
 
@@ -804,8 +879,8 @@ class SnowflakeDialect(default.DefaultDialect):
         self,
         connection,
         *,
-        schema: Optional[str] = None,
-        filter_names: Optional[Collection[str]] = None,
+        schema: str | None = None,
+        filter_names: Collection[str] | None = None,
         **kw,
     ):
         """SA 2.x bulk hook — called during MetaData.reflect() instead of
@@ -828,7 +903,9 @@ class SnowflakeDialect(default.DefaultDialect):
     # Foreign key reflection
     # ---------------------------------------------------------------------------
 
-    def _get_table_foreign_keys(self, connection, table_name, schema, **kw):
+    def _get_table_foreign_keys(
+        self, connection: Connection, table_name: str, schema: str | None, **kw: Any
+    ) -> list[dict[str, Any]]:
         """SHOW IMPORTED KEYS IN TABLE — single-table path.
 
         Called by get_foreign_keys.
@@ -843,10 +920,11 @@ class SnowflakeDialect(default.DefaultDialect):
 
         Results are cached by the calling method's @reflection.cache decorator.
         """
-        full_name = self._always_quote_join(schema, table_name)
+        full_name = self._always_quote_join(schema, table_name)  # type: ignore[arg-type]
         current_database, _ = self._current_database_schema(connection, **kw)
         same_schemas = self._get_same_schemas_for_fk_reflection(
-            schema, current_database
+            schema,  # type: ignore[arg-type]
+            current_database,
         )
         try:
             result = connection.execute(
@@ -856,14 +934,17 @@ class SnowflakeDialect(default.DefaultDialect):
             )
             normalized_table_name = self.normalize_name(table_name)
             return self._parse_fk_rows(result, same_schemas).get(
-                normalized_table_name, []
+                normalized_table_name or "",
+                [],
             )
         except sa_exc.ProgrammingError:
             logger.debug("Failed to reflect foreign keys for %s", full_name)
             return []
 
     @reflection.cache
-    def _get_schema_foreign_keys(self, connection, schema, **kw):
+    def _get_schema_foreign_keys(
+        self, connection: Connection, schema: str | None, **kw: Any
+    ) -> dict[str, Any]:
         """SHOW IMPORTED KEYS IN SCHEMA — schema-wide path for get_foreign_keys
         (SA 1.4) and get_multi_foreign_keys (SA 2.x).
 
@@ -882,7 +963,8 @@ class SnowflakeDialect(default.DefaultDialect):
         """
         current_database, _ = self._current_database_schema(connection, **kw)
         same_schemas = self._get_same_schemas_for_fk_reflection(
-            schema, current_database
+            schema,  # type: ignore[arg-type]
+            current_database,
         )
         result = connection.execute(
             text(
@@ -891,17 +973,23 @@ class SnowflakeDialect(default.DefaultDialect):
         )
         return self._parse_fk_rows(result, same_schemas)
 
-    def get_foreign_keys(self, connection, table_name, schema=None, **kw):
+    def get_foreign_keys(
+        self,
+        connection: Connection,
+        table_name: str,
+        schema: str | None = None,
+        **kw: Any,
+    ) -> list[ReflectedForeignKeyConstraint]:
         """Gets all foreign keys for a table."""
         schema = schema or self.default_schema_name
-        return self._get_table_foreign_keys(connection, table_name, schema, **kw)
+        return self._get_table_foreign_keys(connection, table_name, schema, **kw)  # type: ignore[return-value]
 
     def get_multi_foreign_keys(
         self,
         connection,
         *,
-        schema: Optional[str] = None,
-        filter_names: Optional[Collection[str]] = None,
+        schema: str | None = None,
+        filter_names: Collection[str] | None = None,
         **kw,
     ):
         """SA 2.x bulk hook — called during MetaData.reflect() instead of
@@ -924,8 +1012,8 @@ class SnowflakeDialect(default.DefaultDialect):
         self,
         connection,
         *,
-        schema: Optional[str] = None,
-        filter_names: Optional[Collection[str]] = None,
+        schema: str | None = None,
+        filter_names: Collection[str] | None = None,
         **kw,
     ):
         """SA 2.x bulk hook — called by reflect_table/_get_reflection_info for
@@ -946,15 +1034,20 @@ class SnowflakeDialect(default.DefaultDialect):
         all_columns = self._get_schema_columns(connection, effective_schema, **kw)
         if all_columns is None:
             all_columns = {}
-        tables = filter_names if filter_names is not None else list(all_columns.keys())
+        if filter_names is not None:
+            tables: Iterable[str] = filter_names
+        else:
+            tables = [k for k in all_columns.keys() if k is not None]
         mgr = _StructuredTypeInfoManager(
-            connection, self.name_utils, self.default_schema_name
+            connection,
+            self.name_utils,
+            self.default_schema_name,  # type: ignore[arg-type]
         )
         result = []
         for table_name in tables:
             cols = all_columns.get(table_name)
             if cols is None:
-                full_name = self._always_quote_join(effective_schema, table_name)
+                full_name = self._always_quote_join(effective_schema or "", table_name)
                 cols = mgr.get_table_columns_by_full_name(full_name)
             result.append(((schema, table_name), cols))
         return result
@@ -1073,7 +1166,9 @@ class SnowflakeDialect(default.DefaultDialect):
             "cache": None,
         }
 
-    def _is_primary_key_column(self, table_name, column_name, schema_primary_keys):
+    def _is_primary_key_column(
+        self, table_name: str, column_name: str, schema_primary_keys: dict[str, Any]
+    ) -> bool:
         """
         Check if a column is part of the primary key.
 
@@ -1174,7 +1269,9 @@ class SnowflakeDialect(default.DefaultDialect):
         return table_name, column_info
 
     @reflection.cache
-    def _get_schema_columns(self, connection, schema, **kw):
+    def _get_schema_columns(
+        self, connection: Connection, schema: str | None, **kw: Any
+    ) -> dict[str | None, list[ReflectedColumn]]:
         """
         Get all columns in the schema with complete metadata.
 
@@ -1196,21 +1293,19 @@ class SnowflakeDialect(default.DefaultDialect):
 
         result = self._query_all_columns_info(connection, full_schema_name, **kw)
         if result is None:
-            return None
+            return None  # type: ignore[return-value]
 
-        current_database, default_schema = self._current_database_schema(
-            connection, **kw
-        )
+        _, default_schema = self._current_database_schema(connection, **kw)
 
         schema_primary_keys = self._get_schema_primary_keys(
             connection, full_schema_name, **kw
         )
 
         structured_type_info_manager = _StructuredTypeInfoManager(
-            connection, self.name_utils, default_schema
+            connection, self.name_utils, default_schema or ""
         )
 
-        columns_by_table = {}
+        columns_by_table: dict[str | None, list[ReflectedColumn]] = {}
 
         for (
             table_name,
@@ -1261,7 +1356,13 @@ class SnowflakeDialect(default.DefaultDialect):
 
         return columns_by_table
 
-    def get_columns(self, connection, table_name, schema=None, **kw):
+    def get_columns(
+        self,
+        connection: Connection,
+        table_name: str,
+        schema: str | None = None,
+        **kw: Any,
+    ) -> list[ReflectedColumn]:
         """
         Gets all column info given the table info
         """
@@ -1279,11 +1380,13 @@ class SnowflakeDialect(default.DefaultDialect):
                 # "database.schema.table" when callers pass a qualified
                 # name.  Take the last component so _always_quote_join
                 # does not double-qualify the identifier.
-                parts = self.identifier_preparer._split_schema_by_dot(str(table_name))
+                parts = self.identifier_preparer._split_schema_by_dot(str(table_name))  # type: ignore[attr-defined]
                 single_table_name = str(parts[-1])
-            full_table_name = self._always_quote_join(schema, single_table_name)
+            full_table_name = self._always_quote_join(schema or "", single_table_name)
             column_info_manager = _StructuredTypeInfoManager(
-                connection, self.name_utils, self.default_schema_name
+                connection,
+                self.name_utils,
+                self.default_schema_name,  # type: ignore[arg-type]
             )
             return column_info_manager.get_table_columns_by_full_name(full_table_name)
 
@@ -1301,7 +1404,9 @@ class SnowflakeDialect(default.DefaultDialect):
             raise sa_exc.NoSuchTableError()
         return schema_columns[normalized_table_name]
 
-    def get_prefixes_from_data(self, name_to_index_map, row, **kw):
+    def get_prefixes_from_data(
+        self, name_to_index_map: dict[str, int], row: Row[Any], **kw: Any
+    ) -> list[str]:
         prefixes_found = []
         for valid_prefix in CustomTablePrefix:
             key = f"is_{valid_prefix.name.lower()}"
@@ -1310,7 +1415,9 @@ class SnowflakeDialect(default.DefaultDialect):
         return prefixes_found
 
     @reflection.cache
-    def _query_all_columns_info(self, connection, schema_name, **kw):
+    def _query_all_columns_info(
+        self, connection: Connection, schema_name: str, **kw: Any
+    ) -> CursorResult | None:
         # schema_name is a full db.schema name from _get_full_schema_name.
         # Split to determine the database (for the FROM clause) and the schema
         # (for the WHERE clause).  The schema part must be denormalized because
@@ -1354,13 +1461,15 @@ class SnowflakeDialect(default.DefaultDialect):
                 {"table_schema": schema_only},
             )
         except sa_exc.ProgrammingError as pe:
-            if pe.orig.errno == 90030:
+            if pe.orig.errno == 90030:  # type: ignore[union-attr]
                 # This means that there are too many tables in the schema, we need to go more granular
                 return None  # None triggers get_table_columns while staying cacheable
             raise
 
     @reflection.cache
-    def _get_schema_tables_info(self, connection, schema=None, **kw):
+    def _get_schema_tables_info(
+        self, connection: Connection, schema: str | None = None, **kw: Any
+    ) -> Any:
         """
         Retrieves information about all tables in the specified schema.
         """
@@ -1381,7 +1490,9 @@ class SnowflakeDialect(default.DefaultDialect):
 
         return tables
 
-    def get_table_names(self, connection, schema=None, **kw):
+    def get_table_names(
+        self, connection: Connection, schema: str | None = None, **kw: Any
+    ) -> list[str]:
         """
         Gets all table names.
         """
@@ -1391,7 +1502,9 @@ class SnowflakeDialect(default.DefaultDialect):
         return list(ret)
 
     @reflection.cache
-    def get_view_names(self, connection, schema=None, **kw):
+    def get_view_names(
+        self, connection: Connection, schema: str | None = None, **kw: Any
+    ) -> list[str]:
         """
         Gets all view names
         """
@@ -1400,10 +1513,16 @@ class SnowflakeDialect(default.DefaultDialect):
             text(f"SHOW /* sqlalchemy:get_view_names */ VIEWS IN {full_schema_name}")
         )
 
-        return [self.normalize_name(row[1]) for row in cursor]
+        return [self.normalize_name(row[1]) for row in cursor]  # type: ignore[misc]
 
     @reflection.cache
-    def get_view_definition(self, connection, view_name, schema=None, **kw):
+    def get_view_definition(
+        self,
+        connection: Connection,
+        view_name: str,
+        schema: str | None = None,
+        **kw: Any,
+    ) -> str:
         """
         Gets the view definition
         """
@@ -1430,9 +1549,11 @@ class SnowflakeDialect(default.DefaultDialect):
                 return ret[name_to_index_map["text"]]
         except Exception:
             pass
-        return None
+        return None  # type: ignore[return-value]
 
-    def get_temp_table_names(self, connection, schema=None, **kw):
+    def get_temp_table_names(
+        self, connection: Connection, schema: str | None = None, **kw: Any
+    ) -> list[str]:
         full_schema_name = self._get_full_schema_name(connection, schema, **kw)
         cursor = connection.execute(
             text(
@@ -1446,9 +1567,9 @@ class SnowflakeDialect(default.DefaultDialect):
             if row[name_to_index_map["kind"]] == "TEMPORARY":
                 ret.append(self.normalize_name(row[name_to_index_map["name"]]))
 
-        return ret
+        return ret  # type: ignore[return-value]
 
-    def get_schema_names(self, connection, **kw):
+    def get_schema_names(self, connection: Connection, **kw: Any) -> list[str]:
         """
         Gets all schema names.
         """
@@ -1456,21 +1577,30 @@ class SnowflakeDialect(default.DefaultDialect):
             text("SHOW /* sqlalchemy:get_schema_names */ SCHEMAS")
         )
 
-        return [self.normalize_name(row[1]) for row in cursor]
+        return [self.normalize_name(row[1]) for row in cursor]  # type: ignore[misc]
 
     @reflection.cache
-    def get_sequence_names(self, connection, schema=None, **kw):
+    def get_sequence_names(
+        self, connection: Connection, schema: str | None = None, **kw: Any
+    ) -> list[str]:
         full_schema_name = self._get_full_schema_name(connection, schema, **kw)
         sql_command = f"SHOW SEQUENCES IN SCHEMA {full_schema_name}"
         try:
             cursor = connection.execute(text(sql_command))
-            return [self.normalize_name(row[0]) for row in cursor]
+            return [self.normalize_name(row[0]) for row in cursor]  # type: ignore[misc]
         except sa_exc.ProgrammingError as pe:
-            if pe.orig.errno == 2003:
+            if pe.orig.errno == 2003:  # type: ignore[union-attr]
                 # Schema does not exist
                 return []
+            raise
 
-    def _get_table_comment(self, connection, table_name, schema=None, **kw):
+    def _get_table_comment(
+        self,
+        connection: Connection,
+        table_name: str,
+        schema: str | None = None,
+        **kw: Any,
+    ) -> ReflectedTableComment:
         """
         Returns comment of table in a dictionary as described by SQLAlchemy spec.
         """
@@ -1480,9 +1610,15 @@ class SnowflakeDialect(default.DefaultDialect):
             f"TABLES LIKE '{table_name}' IN SCHEMA {full_schema_name}"
         )
         cursor = connection.execute(text(sql_command))
-        return cursor.fetchone()
+        return cursor.fetchone()  # type: ignore[return-value]
 
-    def _get_view_comment(self, connection, table_name, schema=None, **kw):
+    def _get_view_comment(
+        self,
+        connection: Connection,
+        table_name: str,
+        schema: str | None = None,
+        **kw: Any,
+    ) -> ReflectedTableComment:
         """
         Returns comment of view in a dictionary as described by SQLAlchemy spec.
         """
@@ -1492,9 +1628,15 @@ class SnowflakeDialect(default.DefaultDialect):
             f"VIEWS LIKE '{table_name}' IN SCHEMA {full_schema_name}"
         )
         cursor = connection.execute(text(sql_command))
-        return cursor.fetchone()
+        return cursor.fetchone()  # type: ignore[return-value]
 
-    def get_table_comment(self, connection, table_name, schema=None, **kw):
+    def get_table_comment(
+        self,
+        connection: Connection,
+        table_name: str,
+        schema: str | None = None,
+        **kw: Any,
+    ) -> ReflectedTableComment:
         """
         Returns comment associated with a table (or view) in a dictionary as
         SQLAlchemy expects. Note that since SQLAlchemy may not (in fact,
@@ -1508,8 +1650,8 @@ class SnowflakeDialect(default.DefaultDialect):
 
         return {
             "text": (
-                result._mapping["comment"]
-                if result and result._mapping["comment"]
+                result._mapping["comment"]  # type: ignore[attr-defined]
+                if result and result._mapping["comment"]  # type: ignore[attr-defined]
                 else None
             )
         }
@@ -1533,8 +1675,8 @@ class SnowflakeDialect(default.DefaultDialect):
         self,
         connection,
         *,
-        schema: Optional[str] = None,
-        filter_names: Optional[Collection[str]] = None,
+        schema: str | None = None,
+        filter_names: Collection[str] | None = None,
         **kw,
     ):
         """
@@ -1561,18 +1703,20 @@ class SnowflakeDialect(default.DefaultDialect):
         return [
             ((schema, table_name), table_indexes)
             for table_name, table_indexes in all_indexes.items()
-            if table_name in filter_names and table_name in hybrid_table_names
+            if table_name in filter_names and table_name in hybrid_table_names  # type: ignore[operator]
         ]
 
-    def _value_or_default(self, data, table, schema):
-        table = self.normalize_name(str(table))
+    def _value_or_default(self, data: Any, table: str, schema: str | None) -> list[Any]:
+        table = self.normalize_name(str(table)) or str(
+            table
+        )  # normalize_name -> str | None
         dic_data = dict(data)
         if (schema, table) in dic_data:
             return dic_data[(schema, table)]
         else:
             return []
 
-    def _parse_index_rows(self, result):
+    def _parse_index_rows(self, result: CursorResult) -> dict[str, Any]:
         """Parse SHOW INDEXES rows into {table_name: [index_dict, ...]}.
 
         Both SHOW INDEXES IN TABLE and SHOW INDEXES IN SCHEMA return the same
@@ -1584,7 +1728,7 @@ class SnowflakeDialect(default.DefaultDialect):
         for row in result.cursor.fetchall():
             if (
                 row[name_to_index_map["name"]]
-                == f'SYS_INDEX_{row[name_to_index_map["table"]]}_PRIMARY'
+                == f"SYS_INDEX_{row[name_to_index_map['table']]}_PRIMARY"
             ):
                 continue
             table_name = self.normalize_name(str(row[name_to_index_map["table"]]))
@@ -1607,9 +1751,11 @@ class SnowflakeDialect(default.DefaultDialect):
                     "dialect_options": {},
                 }
             )
-        return dict(indexes)
+        return dict(indexes)  # type: ignore[arg-type]
 
-    def _get_table_indexes(self, connection, table_name, schema, **kw):
+    def _get_table_indexes(
+        self, connection: Connection, table_name: str, schema: str | None, **kw: Any
+    ) -> dict[str, Any]:
         """SHOW INDEXES IN TABLE — single-table path.
 
         Called by get_indexes.
@@ -1618,7 +1764,7 @@ class SnowflakeDialect(default.DefaultDialect):
         error), so the list will simply be empty.  The SYS_INDEX primary-key
         sentinel is filtered out, consistent with the schema-wide path.
         """
-        full_name = self._always_quote_join(schema, table_name)
+        full_name = self._always_quote_join(schema, table_name)  # type: ignore[arg-type]
         try:
             result = connection.execute(
                 text(
@@ -1626,13 +1772,15 @@ class SnowflakeDialect(default.DefaultDialect):
                 )
             )
             normalized_table_name = self.normalize_name(table_name)
-            return self._parse_index_rows(result).get(normalized_table_name, [])
+            return self._parse_index_rows(result).get(normalized_table_name, [])  # type: ignore[arg-type]
         except sa_exc.ProgrammingError:
             logger.debug("Failed to reflect indexes for %s", full_name)
-            return []
+            return []  # type: ignore[return-value]
 
     @reflection.cache
-    def get_indexes(self, connection, tablename, schema, **kw):
+    def get_indexes(  # type: ignore[override]
+        self, connection: Connection, tablename: str, schema: str | None, **kw: Any
+    ) -> list[ReflectedIndex]:
         """Gets the indexes definition."""
         schema = schema or self.default_schema_name
         # Pass the raw string so _always_quote_join can correctly
@@ -1642,9 +1790,9 @@ class SnowflakeDialect(default.DefaultDialect):
         # objects, which would cause _always_quote_join to emit
         # "table_name" (case-sensitive lowercase) instead of the
         # correct "TABLE_NAME" (case-insensitive uppercase).
-        return self._get_table_indexes(connection, str(tablename), schema, **kw)
+        return self._get_table_indexes(connection, str(tablename), schema, **kw)  # type: ignore[return-value]
 
-    def connect(self, *cargs, **cparams):
+    def connect(self, *cargs: Any, **cparams: Any) -> SnowflakeConnection:  # type: ignore[override]
         if _ENABLE_SQLALCHEMY_AS_APPLICATION_NAME:
             cparams = _update_connection_application_name(**cparams)
 
@@ -1653,14 +1801,14 @@ class SnowflakeDialect(default.DefaultDialect):
             decimal.getcontext().prec = DECFLOAT_PRECISION
 
         connection = super().connect(*cargs, **cparams)
-        self._log_new_connection_event(connection)
+        self._log_new_connection_event(connection)  # type: ignore[arg-type]
 
-        return connection
+        return connection  # type: ignore[return-value]
 
-    def _log_new_connection_event(self, connection):
+    def _log_new_connection_event(self, connection: SnowflakeConnection) -> None:
         try:
             snowflake_connection = cast(SnowflakeConnection, cast(object, connection))
-            snowflake_telemetry_client = TelemetryClient(rest=snowflake_connection.rest)
+            snowflake_telemetry_client = TelemetryClient(rest=snowflake_connection.rest)  # type: ignore[arg-type]
 
             telemetry_value = {
                 "SQLAlchemy": SQLALCHEMY_VERSION,
@@ -1683,10 +1831,10 @@ class SnowflakeDialect(default.DefaultDialect):
             # are read from ``self`` so they reflect the final post-plugin
             # / post-URL state regardless of how they were configured.
             telemetry_value["case_sensitive_identifiers"] = (
-                self._case_sensitive_identifiers
+                self._case_sensitive_identifiers  # type: ignore[assignment]
             )
-            telemetry_value["enable_decfloat"] = self._enable_decfloat
-            telemetry_value["force_div_is_floordiv"] = self.force_div_is_floordiv
+            telemetry_value["enable_decfloat"] = self._enable_decfloat  # type: ignore[assignment]
+            telemetry_value["force_div_is_floordiv"] = self.force_div_is_floordiv  # type: ignore[assignment]
 
             snowflake_telemetry_client.add_log_to_batch(
                 TelemetryData.from_telemetry_data_dict(
@@ -1709,11 +1857,11 @@ class SnowflakeDialect(default.DefaultDialect):
 
 
 @sa_vnt.listens_for(Table, "before_create")
-def check_table(table, connection, _ddl_runner, **kw):
+def check_table(table: Any, connection: Any, _ddl_runner: Any, **kw: Any) -> None:
     from .sql.custom_schema.hybrid_table import HybridTable
 
     if HybridTable.is_equal_type(table):  # noqa
-        return True
+        return True  # type: ignore[return-value]
     if isinstance(_ddl_runner.dialect, SnowflakeDialect) and table.indexes:
         raise NotImplementedError("Only Snowflake Hybrid Tables supports indexes")
 

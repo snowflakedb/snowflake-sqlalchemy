@@ -173,9 +173,9 @@ class TestSplitSchemaByDot:
         """Flag on: '"my""schema"' parses to one part with unescaped value and quote=True."""
         parts = ip_cs._split_schema_by_dot('"my""schema"')
         assert len(parts) == 1, f"Expected 1 part, got {len(parts)}: {parts}"
-        assert (
-            str(parts[0]) == 'my"schema'
-        ), f"Expected 'my\"schema', got {str(parts[0])!r}"
+        assert str(parts[0]) == 'my"schema', (
+            f"Expected 'my\"schema', got {str(parts[0])!r}"
+        )
         assert getattr(parts[0], "quote", None) is True
 
 
@@ -291,9 +291,9 @@ class TestNormalizeName:
         if expected_value is None:
             assert result is None
             return
-        assert (
-            str(result) == expected_value
-        ), f"value mismatch for {input_name!r} flag={flag}"
+        assert str(result) == expected_value, (
+            f"value mismatch for {input_name!r} flag={flag}"
+        )
         actual_quote = getattr(result, "quote", None)
         assert actual_quote == expected_quote, (
             f"quote attr mismatch for {input_name!r} flag={flag}: "
@@ -333,9 +333,9 @@ class TestNormalizeName:
         d = self._dialect(case_sensitive=flag)
         normalized = d.normalize_name(snowflake_name)
         result = d.denormalize_name(normalized)
-        assert (
-            result == expected_raw
-        ), f"denormalize_name({normalized!r}) = {result!r}, expected {expected_raw!r}"
+        assert result == expected_raw, (
+            f"denormalize_name({normalized!r}) = {result!r}, expected {expected_raw!r}"
+        )
 
     def test_all_reserved_words_flag_off_unchanged(self):
         """All-uppercase reserved words return unchanged when flag=False (spot-check)."""
@@ -346,9 +346,9 @@ class TestNormalizeName:
             upper = word.upper()
             if upper == word:
                 result = d.normalize_name(upper)
-                assert (
-                    result == upper
-                ), f"flag=False: normalize_name({upper!r}) should be {upper!r}, got {result!r}"
+                assert result == upper, (
+                    f"flag=False: normalize_name({upper!r}) should be {upper!r}, got {result!r}"
+                )
 
     def test_all_reserved_words_flag_on_returns_quoted(self):
         """All-uppercase reserved words return quoted_name(lc, True) when flag=True."""
@@ -359,9 +359,9 @@ class TestNormalizeName:
             upper = word.upper()
             if upper == word:
                 result = d.normalize_name(upper)
-                assert isinstance(
-                    result, quoted_name
-                ), f"flag=True: normalize_name({upper!r}) should be quoted_name, got {result!r}"
+                assert isinstance(result, quoted_name), (
+                    f"flag=True: normalize_name({upper!r}) should be quoted_name, got {result!r}"
+                )
                 assert result.quote is True
                 assert str(result) == upper.lower()
 
@@ -391,9 +391,9 @@ class TestHasObjectNormalization:
         sql_text = str(call_args[0][0])
         # denormalize_name('mytable') -> 'MYTABLE'
         # _denormalize_quote_join('MYTABLE') -> '"MYTABLE"'
-        assert (
-            '"MYTABLE"' in sql_text
-        ), f"Expected '\"MYTABLE\"' in DESC SQL, got: {sql_text!r}"
+        assert '"MYTABLE"' in sql_text, (
+            f"Expected '\"MYTABLE\"' in DESC SQL, got: {sql_text!r}"
+        )
 
     def test_quoted_name_generates_quoted_lowercase(self):
         """_has_object(quoted_name('mytable', True)) should generate DESC TABLE \"mytable\"."""
@@ -401,9 +401,9 @@ class TestHasObjectNormalization:
         d._has_object(conn, "TABLE", quoted_name("mytable", True))
         call_args = conn.execute.call_args
         sql_text = str(call_args[0][0])
-        assert (
-            '"mytable"' in sql_text
-        ), f"Expected '\"mytable\"' in DESC SQL, got: {sql_text!r}"
+        assert '"mytable"' in sql_text, (
+            f"Expected '\"mytable\"' in DESC SQL, got: {sql_text!r}"
+        )
 
     def test_mixed_case_generates_quoted_mixed(self):
         """_has_object('MyTable') should generate DESC TABLE \"MyTable\" (case-sensitive)."""
@@ -413,9 +413,9 @@ class TestHasObjectNormalization:
         sql_text = str(call_args[0][0])
         # denormalize_name('MyTable') -> 'MyTable' (mixed case passes through)
         # _denormalize_quote_join('MyTable') -> '"MyTable"' (quoted because mixed case)
-        assert (
-            '"MyTable"' in sql_text
-        ), f"Expected '\"MyTable\"' in DESC SQL, got: {sql_text!r}"
+        assert '"MyTable"' in sql_text, (
+            f"Expected '\"MyTable\"' in DESC SQL, got: {sql_text!r}"
+        )
 
     def test_with_schema_plain_lowercase(self):
         """_has_object with schema denormalizes both schema and object_name."""
@@ -424,17 +424,16 @@ class TestHasObjectNormalization:
         call_args = conn.execute.call_args
         sql_text = str(call_args[0][0])
         # Both schema and object_name are denormalized: lowercase → UPPERCASE then quoted.
-        assert (
-            '"MYTABLE"' in sql_text
-        ), f"Expected '\"MYTABLE\"' in DESC SQL, got: {sql_text!r}"
-        assert (
-            '"MYSCHEMA"' in sql_text
-        ), f"Expected '\"MYSCHEMA\"' in DESC SQL, got: {sql_text!r}"
+        assert '"MYTABLE"' in sql_text, (
+            f"Expected '\"MYTABLE\"' in DESC SQL, got: {sql_text!r}"
+        )
+        assert '"MYSCHEMA"' in sql_text, (
+            f"Expected '\"MYSCHEMA\"' in DESC SQL, got: {sql_text!r}"
+        )
 
     def test_programming_error_returns_false(self):
         """_has_object returns False when DESC raises ProgrammingError."""
         import sqlalchemy.exc as sa_exc
-
         from snowflake.connector import errors as sf_errors
 
         d = SnowflakeDialect()
@@ -509,9 +508,9 @@ class TestCaseSensitiveIdentifiersFlag:
             query={"case_sensitive_identifiers": "True"},
         )
         _, opts = d.create_connect_args(url)
-        assert (
-            "case_sensitive_identifiers" not in opts
-        ), "case_sensitive_identifiers must not be forwarded to connector opts"
+        assert "case_sensitive_identifiers" not in opts, (
+            "case_sensitive_identifiers must not be forwarded to connector opts"
+        )
 
     def test_url_param_replaces_name_utils_atomically(self):
         """URL-driven flip must swap ``name_utils`` rather than mutate it.
@@ -576,9 +575,9 @@ class TestCreateSnowflakeEngineHelper:
                 case_sensitive_schema=True,
             )
             call_url = mock_ce.call_args[0][0]
-            assert (
-                "%22myschema%22" in call_url
-            ), f"Expected %22myschema%22 in URL, got: {call_url!r}"
+            assert "%22myschema%22" in call_url, (
+                f"Expected %22myschema%22 in URL, got: {call_url!r}"
+            )
 
     def test_case_insensitive_schema_no_encoding(self):
         """case_sensitive_schema=False (default) should not encode schema."""
@@ -592,9 +591,9 @@ class TestCreateSnowflakeEngineHelper:
                 case_sensitive_schema=False,
             )
             call_url = mock_ce.call_args[0][0]
-            assert (
-                "%22" not in call_url
-            ), f"Should not have percent-encoded quotes in URL, got: {call_url!r}"
+            assert "%22" not in call_url, (
+                f"Should not have percent-encoded quotes in URL, got: {call_url!r}"
+            )
             assert "myschema" in call_url
 
     def test_no_schema(self):
@@ -620,9 +619,9 @@ class TestCreateSnowflakeEngineHelper:
                 case_sensitive_schema=True,
             )
             call_url = mock_ce.call_args[0][0]
-            assert (
-                "//" not in call_url.split("://", 1)[1]
-            ), f"Double slash in path portion of URL: {call_url!r}"
+            assert "//" not in call_url.split("://", 1)[1], (
+                f"Double slash in path portion of URL: {call_url!r}"
+            )
             assert "%22myschema%22" in call_url
 
     def test_kwargs_forwarded_to_create_engine(self):
@@ -653,12 +652,12 @@ class TestCreateSnowflakeEngineHelper:
                 case_sensitive_schema=False,
             )
             call_url = mock_ce.call_args[0][0]
-            assert (
-                " " not in call_url
-            ), f"Raw space must not appear in URL, got: {call_url!r}"
-            assert (
-                "my%20schema" in call_url or "my+schema" in call_url
-            ), f"Expected URL-encoded space in URL, got: {call_url!r}"
+            assert " " not in call_url, (
+                f"Raw space must not appear in URL, got: {call_url!r}"
+            )
+            assert "my%20schema" in call_url or "my+schema" in call_url, (
+                f"Expected URL-encoded space in URL, got: {call_url!r}"
+            )
 
     def test_case_insensitive_schema_with_question_mark_is_url_encoded(self):
         """Security fix: '?' in schema must be percent-encoded to prevent query-string injection."""
@@ -681,12 +680,12 @@ class TestCreateSnowflakeEngineHelper:
             )
             # More direct check: the raw '?' from the schema must be encoded
             schema_segment = call_url.split("/mydb/", 1)[1]
-            assert (
-                "?" not in schema_segment
-            ), f"Raw '?' must not appear in URL schema segment, got: {call_url!r}"
-            assert (
-                "%3F" in schema_segment
-            ), f"Expected '%3F' (encoded '?') in schema segment, got: {call_url!r}"
+            assert "?" not in schema_segment, (
+                f"Raw '?' must not appear in URL schema segment, got: {call_url!r}"
+            )
+            assert "%3F" in schema_segment, (
+                f"Expected '%3F' (encoded '?') in schema segment, got: {call_url!r}"
+            )
 
     def test_case_insensitive_schema_with_hash_is_url_encoded(self):
         """Security fix: '#' in schema must be percent-encoded to prevent fragment injection."""
@@ -701,12 +700,12 @@ class TestCreateSnowflakeEngineHelper:
             )
             call_url = mock_ce.call_args[0][0]
             schema_segment = call_url.split("/mydb/", 1)[1]
-            assert (
-                "#" not in schema_segment
-            ), f"Raw '#' must not appear in URL schema segment, got: {call_url!r}"
-            assert (
-                "%23" in schema_segment
-            ), f"Expected '%23' (encoded '#') in schema segment, got: {call_url!r}"
+            assert "#" not in schema_segment, (
+                f"Raw '#' must not appear in URL schema segment, got: {call_url!r}"
+            )
+            assert "%23" in schema_segment, (
+                f"Expected '%23' (encoded '#') in schema segment, got: {call_url!r}"
+            )
 
     def test_case_sensitive_schema_special_chars_encoded(self):
         """case_sensitive_schema=True with special chars in schema must also encode them."""
@@ -720,16 +719,16 @@ class TestCreateSnowflakeEngineHelper:
                 case_sensitive_schema=True,
             )
             call_url = mock_ce.call_args[0][0]
-            assert (
-                " " not in call_url
-            ), f"Raw space must not appear in URL, got: {call_url!r}"
-            assert (
-                "%22" in call_url
-            ), f"Expected %22 (double-quote encoding) in URL, got: {call_url!r}"
+            assert " " not in call_url, (
+                f"Raw space must not appear in URL, got: {call_url!r}"
+            )
+            assert "%22" in call_url, (
+                f"Expected %22 (double-quote encoding) in URL, got: {call_url!r}"
+            )
             # The space in 'my schema' must be encoded
-            assert (
-                "my%20schema" in call_url
-            ), f"Expected URL-encoded schema name, got: {call_url!r}"
+            assert "my%20schema" in call_url, (
+                f"Expected URL-encoded schema name, got: {call_url!r}"
+            )
 
     def test_base_url_with_query_params_inserts_schema_correctly(self):
         """Base URL with query params must have schema inserted into path before '?'."""
@@ -743,17 +742,17 @@ class TestCreateSnowflakeEngineHelper:
             )
             call_url = mock_ce.call_args[0][0]
             # Schema must be in path before the query string
-            assert (
-                "/myschema?" in call_url
-            ), f"Expected '/myschema?' in URL, got: {call_url!r}"
-            assert (
-                "warehouse=COMPUTE_WH" in call_url
-            ), f"Expected query param preserved in URL, got: {call_url!r}"
+            assert "/myschema?" in call_url, (
+                f"Expected '/myschema?' in URL, got: {call_url!r}"
+            )
+            assert "warehouse=COMPUTE_WH" in call_url, (
+                f"Expected query param preserved in URL, got: {call_url!r}"
+            )
             # The schema should NOT appear after the '?'
             query_part = call_url.split("?", 1)[1]
-            assert (
-                "myschema" not in query_part
-            ), f"Schema should not be in query string: {call_url!r}"
+            assert "myschema" not in query_part, (
+                f"Schema should not be in query string: {call_url!r}"
+            )
 
     def test_base_url_with_query_params_case_sensitive_schema(self):
         """Base URL with query params and case_sensitive_schema=True."""
@@ -768,15 +767,15 @@ class TestCreateSnowflakeEngineHelper:
             )
             call_url = mock_ce.call_args[0][0]
             # Schema must be in path before the query string, with %22 encoding
-            assert (
-                "%22myschema%22?" in call_url
-            ), f"Expected '/%22myschema%22?' in URL, got: {call_url!r}"
-            assert (
-                "warehouse=COMPUTE_WH" in call_url
-            ), f"Expected first query param preserved in URL, got: {call_url!r}"
-            assert (
-                "role=MYROLE" in call_url
-            ), f"Expected second query param preserved in URL, got: {call_url!r}"
+            assert "%22myschema%22?" in call_url, (
+                f"Expected '/%22myschema%22?' in URL, got: {call_url!r}"
+            )
+            assert "warehouse=COMPUTE_WH" in call_url, (
+                f"Expected first query param preserved in URL, got: {call_url!r}"
+            )
+            assert "role=MYROLE" in call_url, (
+                f"Expected second query param preserved in URL, got: {call_url!r}"
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -848,17 +847,17 @@ class TestAlembicRenderItemHelper:
         }
 
         result = render_item("column", col, autogen_ctx)
-        assert (
-            result is not False
-        ), "render_item should return a string for quoted_name columns"
+        assert result is not False, (
+            "render_item should return a string for quoted_name columns"
+        )
         assert isinstance(result, str), f"Expected str, got {type(result)}"
         assert "mycol" in result, f"Expected 'mycol' in result, got {result!r}"
-        assert (
-            "quoted_name" in result
-        ), f"Rendered output must contain 'quoted_name': {result!r}"
-        assert (
-            "True" in result
-        ), f"Rendered output must contain 'True' for quote flag: {result!r}"
+        assert "quoted_name" in result, (
+            f"Rendered output must contain 'quoted_name': {result!r}"
+        )
+        assert "True" in result, (
+            f"Rendered output must contain 'True' for quote flag: {result!r}"
+        )
 
     def test_plain_column_returns_false(self):
         """render_item for a plain (non-quoted) column returns False (delegate to default)."""
@@ -1055,9 +1054,9 @@ class TestStructuredTypeCacheKeyNormalization:
         )
         inner = manager.full_columns_descriptions[("PUBLIC", "MYTABLE")]
         # The column name is normalized
-        assert (
-            "mycol" in inner
-        ), f"Expected 'mycol' in inner dict, got keys: {list(inner.keys())}"
+        assert "mycol" in inner, (
+            f"Expected 'mycol' in inner dict, got keys: {list(inner.keys())}"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -1090,9 +1089,9 @@ class TestClusterByWithQuotedName:
             snowflake_clusterby=[quoted_name("mycol", True)],
         )
         sql = self._compile_create(t)
-        assert (
-            'CLUSTER BY ("mycol")' in sql
-        ), f"Expected 'CLUSTER BY (\"mycol\")' in CREATE TABLE, got: {sql!r}"
+        assert 'CLUSTER BY ("mycol")' in sql, (
+            f"Expected 'CLUSTER BY (\"mycol\")' in CREATE TABLE, got: {sql!r}"
+        )
 
     def test_cluster_by_plain_column_unquoted(self):
         """CLUSTER BY with plain 'mycol' remains unquoted (regression guard)."""
@@ -1107,6 +1106,6 @@ class TestClusterByWithQuotedName:
             snowflake_clusterby=["mycol"],
         )
         sql = self._compile_create(t)
-        assert (
-            "CLUSTER BY (mycol)" in sql
-        ), f"Expected 'CLUSTER BY (mycol)' in CREATE TABLE, got: {sql!r}"
+        assert "CLUSTER BY (mycol)" in sql, (
+            f"Expected 'CLUSTER BY (mycol)' in CREATE TABLE, got: {sql!r}"
+        )

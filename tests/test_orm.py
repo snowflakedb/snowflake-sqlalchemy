@@ -120,7 +120,7 @@ def test_orm_one_to_many_relationship(engine_testaccount, db_parameters):
         session.delete(jack)
         got_addresses = session.query(Address).all()
         assert len(got_addresses) == 3, (
-            "address records still remain in no " "cascade mode"
+            "address records still remain in no cascade mode"
         )
 
     finally:
@@ -576,9 +576,9 @@ def test_basic_table_with_large_lob_size_in_memory(engine_testaccount, sql_compi
                 query = text(f"SELECT GET_DDL('TABLE', '{User.__tablename__}')")
                 result = conn.execute(query)
                 row = str(result.mappings().fetchone())
-                assert (
-                    "VARCHAR(134217728)" in row
-                ), f"Expected VARCHAR(134217728) in {row}"
+                assert "VARCHAR(134217728)" in row, (
+                    f"Expected VARCHAR(134217728) in {row}"
+                )
 
     finally:
         Base.metadata.drop_all(engine_testaccount)

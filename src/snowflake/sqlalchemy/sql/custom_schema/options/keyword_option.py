@@ -1,12 +1,17 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
-from typing import Optional, Union
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Union
 
 from snowflake.sqlalchemy.custom_commands import NoneType
 
 from .keywords import SnowflakeKeyword
 from .table_option import Priority, TableOption, TableOptionKey
+
+if TYPE_CHECKING:
+    from snowflake.sqlalchemy.base import SnowflakeDDLCompiler
 
 
 class KeywordOption(TableOption):
@@ -20,24 +25,27 @@ class KeywordOption(TableOption):
         TARGET_LAG = DOWNSTREAM
     """
 
-    def __init__(self, value: Union[SnowflakeKeyword]) -> None:
+    def __init__(self, value: SnowflakeKeyword) -> None:
         super().__init__()
         self.value: str = value.value
 
     @property
-    def priority(self):
+    def priority(self) -> Priority:
         return Priority.HIGH
 
     def template(self) -> str:
-        return f"{self.option_name.upper()} = %s"
+        name = self.option_name
+        assert name is not None, f"option_name not set on {self.__class__.__name__}"
+        return f"{name.upper()} = %s"
 
-    def _render(self, compiler) -> str:
+    def _render(self, compiler: SnowflakeDDLCompiler) -> str:
         return self.template() % self.value.upper()
 
     @staticmethod
-    def create(
-        name: TableOptionKey, value: Optional[Union[SnowflakeKeyword, "KeywordOption"]]
-    ) -> Optional[TableOption]:
+    def create(  # type: ignore[override]
+        name: TableOptionKey,
+        value: SnowflakeKeyword | KeywordOption | None,
+    ) -> TableOption | None:
         if isinstance(value, NoneType):
             return value
         if isinstance(value, SnowflakeKeyword):

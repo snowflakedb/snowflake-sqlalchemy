@@ -2,6 +2,7 @@
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
 
+import snowflake.connector
 import sqlalchemy.testing.config
 from sqlalchemy import util
 from sqlalchemy.dialects import registry
@@ -13,7 +14,6 @@ from sqlalchemy.testing.plugin.pytestplugin import (
     pytest_sessionstart as _pytest_sessionstart,
 )
 
-import snowflake.connector
 from snowflake.sqlalchemy import URL
 
 from ..conftest import get_db_parameters

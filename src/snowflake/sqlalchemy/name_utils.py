@@ -1,12 +1,12 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
+from __future__ import annotations
 
 from sqlalchemy.sql.compiler import IdentifierPreparer
 from sqlalchemy.sql.elements import quoted_name
 
 
 class _NameUtils:
-
     def __init__(
         self,
         identifier_preparer: IdentifierPreparer,
@@ -15,7 +15,7 @@ class _NameUtils:
         self.identifier_preparer = identifier_preparer
         self.case_sensitive_identifiers = case_sensitive_identifiers
 
-    def normalize_name(self, name):
+    def normalize_name(self, name: str | None) -> str | quoted_name | None:
         if name is None:
             return None
         if name == "":
@@ -51,7 +51,7 @@ class _NameUtils:
             # observable difference is the Python type and .quote attribute.
             return name
 
-    def denormalize_name(self, name):
+    def denormalize_name(self, name: str | None) -> str | None:
         if name is None:
             return None
         if name == "":

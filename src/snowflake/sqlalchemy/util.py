@@ -1,23 +1,25 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
+from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from itertools import chain
 from typing import Any
 from urllib.parse import quote as _url_quote
 from urllib.parse import quote_plus, urlsplit, urlunsplit
 
+from snowflake.connector.compat import IS_STR
+
 from sqlalchemy import create_engine as _sa_create_engine
 from sqlalchemy import exc, inspection, sql
+from sqlalchemy.engine import Engine
 from sqlalchemy.exc import NoForeignKeysError
 from sqlalchemy.orm.util import _ORMJoin as sa_orm_util_ORMJoin
 from sqlalchemy.sql.base import _expand_cloned, _from_objects
-from sqlalchemy.sql.elements import AsBoolean, True_, _find_columns
-from sqlalchemy.sql.selectable import Join, Lateral
-
-from snowflake.connector.compat import IS_STR
-from snowflake.connector.connection import SnowflakeConnection
+from sqlalchemy.sql.elements import AsBoolean, ClauseElement, True_, _find_columns
+from sqlalchemy.sql.selectable import FromClause, Join, Lateral
 
 from ._constants import (
     APPLICATION_NAME,
@@ -28,11 +30,11 @@ from ._constants import (
 )
 
 
-def _rfc_1738_quote(text):
+def _rfc_1738_quote(text: str) -> str:
     return re.sub(r"[:@/]", lambda m: "%%%X" % ord(m.group(0)), text)
 
 
-def _url(**db_parameters):
+def _url(**db_parameters: Any) -> str:
     """
     Composes a SQLAlchemy connect string from the given database connection
     parameters.
@@ -42,7 +44,7 @@ def _url(**db_parameters):
     Please follow the instructions to encode the password:
     https://github.com/snowflakedb/snowflake-sqlalchemy#escaping-special-characters-such-as---signs-in-passwords
     """
-    specified_parameters = []
+    specified_parameters: list[str] = []
     if "account" not in db_parameters:
         raise exc.ArgumentError("account parameter must be specified.")
 
@@ -79,7 +81,7 @@ def _url(**db_parameters):
     elif "schema" in db_parameters:
         raise exc.ArgumentError("schema cannot be specified without database")
 
-    def sep(is_first_parameter):
+    def sep(is_first_parameter: bool) -> str:
         return "?" if is_first_parameter else "&"
 
     is_first_parameter = True
@@ -93,7 +95,7 @@ def _url(**db_parameters):
 
 
 def _set_connection_interpolate_empty_sequences(
-    dbapi_connection: SnowflakeConnection, flag: bool
+    dbapi_connection: Any, flag: bool
 ) -> None:
     """set the _interpolate_empty_sequences config of the underlying connection"""
     if hasattr(dbapi_connection, "driver_connection"):
@@ -104,7 +106,7 @@ def _set_connection_interpolate_empty_sequences(
         dbapi_connection._interpolate_empty_sequences = flag
 
 
-def _update_connection_application_name(**conn_kwargs: Any) -> Any:
+def _update_connection_application_name(**conn_kwargs: Any) -> dict[str, Any]:
     if PARAM_APPLICATION not in conn_kwargs:
         conn_kwargs[PARAM_APPLICATION] = APPLICATION_NAME
     if PARAM_INTERNAL_APPLICATION_NAME not in conn_kwargs:
@@ -114,27 +116,33 @@ def _update_connection_application_name(**conn_kwargs: Any) -> Any:
     return conn_kwargs
 
 
-def parse_url_boolean(value: str) -> bool:
-    if value.lower() in ("true", "1"):
+def parse_url_boolean(value: str | tuple[str, ...]) -> bool:
+    raw = value if isinstance(value, str) else value[0]
+    normalized = raw.lower()
+    if normalized in ("true", "1"):
         return True
-    elif value.lower() in ("false", "0"):
+    if normalized in ("false", "0"):
         return False
-    else:
-        raise ValueError(f"Invalid boolean value detected: '{value}'")
+    raise ValueError(f"Invalid boolean value detected: '{raw}'")
 
 
-def parse_url_integer(value: str) -> int:
+def parse_url_integer(value: str | tuple[str, ...]) -> int:
+    raw = value if isinstance(value, str) else value[0]
     try:
-        return int(value)
+        return int(raw)
     except ValueError as e:
-        raise ValueError(f"Invalid int value detected: '{value}") from e
+        raise ValueError(f"Invalid int value detected: '{raw}'") from e
 
 
 # handle Snowflake BCR bcr-1057
 # the BCR impacts sqlalchemy.orm.context.ORMSelectCompileState and sqlalchemy.sql.selectable.SelectState
 # which used the 'sqlalchemy.util.preloaded.sql_util.find_left_clause_to_join_from' method that
 # can not handle the BCR change, we implement it in a way that lateral join does not need onclause
-def _find_left_clause_to_join_from(clauses, join_to, onclause):
+def _find_left_clause_to_join_from(
+    clauses: Sequence[FromClause],
+    join_to: Any,
+    onclause: ClauseElement | None,
+) -> range | list[int]:
     """Given a list of FROM clauses, a selectable,
     and optional ON clause, return a list of integer indexes from the
     clauses list indicating the clauses that can be joined from.
@@ -146,7 +154,7 @@ def _find_left_clause_to_join_from(clauses, join_to, onclause):
     which clauses contain the same columns.
 
     """
-    idx = []
+    idx: list[int] = []
     selectables = set(_from_objects(join_to))
 
     # if we are given more than one target clause to join
@@ -163,6 +171,7 @@ def _find_left_clause_to_join_from(clauses, join_to, onclause):
     for i, f in enumerate(clauses):
         for s in selectables.difference([f]):
             if resolve_ambiguity:
+                assert cols_in_onclause is not None  # set when resolve_ambiguity=True
                 if set(f.c).union(s.c).issuperset(cols_in_onclause):
                     idx.append(i)
                     break
@@ -196,7 +205,9 @@ def _find_left_clause_to_join_from(clauses, join_to, onclause):
 class _Snowflake_Selectable_Join(Join):
     """Join subclass for Snowflake BCR-1057 (lateral joins without ON clause)."""
 
-    def _match_primaries(self, left, right):
+    def _match_primaries(
+        self, left: FromClause, right: FromClause
+    ) -> Any:  # SA returns ColumnElement[bool]
         try:
             return super()._match_primaries(left, right)
         except NoForeignKeysError:
@@ -222,15 +233,15 @@ class _Snowflake_ORMJoin(_Snowflake_Selectable_Join, sa_orm_util_ORMJoin):
 
     def __init__(
         self,
-        left,
-        right,
-        onclause=None,
-        isouter=False,
-        full=False,
-        _left_memo=None,
-        _right_memo=None,
-        _extra_criteria=(),
-    ):
+        left: Any,
+        right: Any,
+        onclause: Any | None = None,
+        isouter: bool = False,
+        full: bool = False,
+        _left_memo: Any | None = None,
+        _right_memo: Any | None = None,
+        _extra_criteria: Any = (),  # ORMJoin expects tuple[ColumnElement[bool], ...]
+    ) -> None:
         is_lateral_without_onclause = onclause is None and isinstance(
             inspection.inspect(right).selectable, Lateral
         )
@@ -249,7 +260,7 @@ class _Snowflake_ORMJoin(_Snowflake_Selectable_Join, sa_orm_util_ORMJoin):
             self.onclause = None
 
 
-def _is_true_placeholder(onclause):
+def _is_true_placeholder(onclause: ClauseElement | None) -> bool:
     """Return True if ``onclause`` is only the ``sql.true()`` placeholder that
     ``_Snowflake_ORMJoin`` passes through ``_ORMJoin.__init__`` to satisfy its
     ``onclause is not None`` assertion.
@@ -265,8 +276,11 @@ def _is_true_placeholder(onclause):
 
 
 def create_snowflake_engine(
-    base_url, schema=None, case_sensitive_schema=False, **kwargs
-):
+    base_url: str,
+    schema: str | None = None,
+    case_sensitive_schema: bool = False,
+    **kwargs: Any,
+) -> Engine:
     """
     Create a Snowflake SQLAlchemy engine with optional case-sensitive schema support.
 

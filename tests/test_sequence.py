@@ -191,6 +191,6 @@ def test_identity_pk_warns_about_orm_limitation(sql_compiler):
     assert any(
         "Identity" in m and "primary key" in m and "FlushError" in m for m in messages
     ), f"Expected warning about Identity/primary key/FlushError, got: {messages}"
-    assert any(
-        "Sequence" in m for m in messages
-    ), f"Expected warning to mention Sequence() workaround, got: {messages}"
+    assert any("Sequence" in m for m in messages), (
+        f"Expected warning to mention Sequence() workaround, got: {messages}"
+    )

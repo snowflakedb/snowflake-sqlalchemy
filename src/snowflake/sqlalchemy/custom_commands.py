@@ -1,20 +1,22 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
+from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import List
+from typing import Any
 
 from sqlalchemy import false, true
 from sqlalchemy.sql.ddl import DDLElement
 from sqlalchemy.sql.dml import UpdateBase
 from sqlalchemy.sql.elements import ClauseElement
 from sqlalchemy.sql.roles import FromClauseRole
+from sqlalchemy.sql.selectable import FromClause, Selectable
 
 NoneType = type(None)
 
 
-def translate_bool(bln):
+def translate_bool(bln: bool) -> ClauseElement:
     if bln:
         return true()
     return false()
@@ -24,25 +26,28 @@ class MergeInto(UpdateBase):
     __visit_name__ = "merge_into"
     _bind = None
 
-    def __init__(self, target, source, on):
+    def __init__(
+        self, target: FromClause, source: FromClause | Selectable, on: ClauseElement
+    ) -> None:
         self.target = target
         self.source = source
         self.on = on
-        self.clauses = []
+        self.clauses: list[MergeInto.clause] = []
 
     class clause(ClauseElement):
         __visit_name__ = "merge_into_clause"
 
-        def __init__(self, command):
-            self.set = {}
-            self.predicate = None
+        def __init__(self, command: str) -> None:
+            self.set: dict[str, Any] = {}
+            self.predicate: ClauseElement | None = None
             self.command = command
 
-        def __repr__(self):
+        def __repr__(self) -> str:
             case_predicate = (
                 f" AND {str(self.predicate)}" if self.predicate is not None else ""
             )
             if self.command == "INSERT":
+                sets: Any
                 sets, sets_tos = zip(*self.set.items())
                 return "WHEN NOT MATCHED{} THEN {} ({}) VALUES ({})".format(
                     case_predicate,
@@ -63,31 +68,31 @@ class MergeInto(UpdateBase):
                     f" SET {str(sets)}" if self.set else "",
                 )
 
-        def values(self, **kwargs):
+        def values(self, **kwargs: Any) -> MergeInto.clause:
             self.set = kwargs
             return self
 
-        def where(self, expr):
+        def where(self, expr: ClauseElement) -> MergeInto.clause:
             self.predicate = expr
             return self
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         clauses = " ".join([repr(clause) for clause in self.clauses])
         return f"MERGE INTO {self.target} USING {self.source} ON {self.on}" + (
             f" {clauses}" if clauses else ""
         )
 
-    def when_matched_then_update(self):
+    def when_matched_then_update(self) -> MergeInto.clause:
         clause = self.clause("UPDATE")
         self.clauses.append(clause)
         return clause
 
-    def when_matched_then_delete(self):
+    def when_matched_then_delete(self) -> MergeInto.clause:
         clause = self.clause("DELETE")
         self.clauses.append(clause)
         return clause
 
-    def when_not_matched_then_insert(self):
+    def when_not_matched_then_insert(self) -> MergeInto.clause:
         clause = self.clause("INSERT")
         self.clauses.append(clause)
         return clause
@@ -98,10 +103,10 @@ class FilesOption:
     Class to represent FILES option for the snowflake COPY INTO statement
     """
 
-    def __init__(self, file_names: List[str]):
+    def __init__(self, file_names: list[str]) -> None:
         self.file_names = file_names
 
-    def __str__(self):
+    def __str__(self) -> str:
         the_files = ["'" + f.replace("'", "\\'") + "'" for f in self.file_names]
         return f"({','.join(the_files)})"
 
@@ -113,14 +118,20 @@ class CopyInto(UpdateBase):
     __visit_name__ = "copy_into"
     _bind = None
 
-    def __init__(self, from_, into, partition_by=None, formatter=None):
+    def __init__(
+        self,
+        from_: Any,
+        into: Any,
+        partition_by: Any | None = None,
+        formatter: CopyFormatter | None = None,
+    ) -> None:
         self.from_ = from_
         self.into = into
         self.formatter = formatter
-        self.copy_options = {}
+        self.copy_options: dict[str, Any] = {}
         self.partition_by = partition_by
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         """
         repr for debugging / logging purposes only. For compilation logic, see
         the corresponding visitor in base.py
@@ -131,36 +142,36 @@ class CopyInto(UpdateBase):
 
         return val + f" {repr(self.formatter)} ({self.copy_options})"
 
-    def bind(self):
+    def bind(self) -> None:
         return None
 
-    def force(self, force):
+    def force(self, force: bool) -> CopyInto:
         if not isinstance(force, bool):
             raise TypeError("Parameter force should be a boolean value")
         self.copy_options.update({"FORCE": translate_bool(force)})
         return self
 
-    def single(self, single_file):
+    def single(self, single_file: bool) -> CopyInto:
         if not isinstance(single_file, bool):
             raise TypeError("Parameter single_file should  be a boolean value")
         self.copy_options.update({"SINGLE": translate_bool(single_file)})
         return self
 
-    def maxfilesize(self, max_size):
+    def maxfilesize(self, max_size: int) -> CopyInto:
         if not isinstance(max_size, int):
             raise TypeError("Parameter max_size should be an integer value")
         self.copy_options.update({"MAX_FILE_SIZE": max_size})
         return self
 
-    def files(self, file_names):
+    def files(self, file_names: list[str]) -> CopyInto:
         self.copy_options.update({"FILES": FilesOption(file_names)})
         return self
 
-    def pattern(self, pattern):
+    def pattern(self, pattern: str) -> CopyInto:
         self.copy_options.update({"PATTERN": pattern})
         return self
 
-    def storage_integration(self, integration_name):
+    def storage_integration(self, integration_name: str) -> CopyInto:
         self.copy_options.update({"STORAGE_INTEGRATION": integration_name})
         return self
 
@@ -173,12 +184,12 @@ class CopyFormatter(ClauseElement):
 
     __visit_name__ = "copy_formatter"
 
-    def __init__(self, format_name=None):
-        self.options = dict()
+    def __init__(self, format_name: str | None = None) -> None:
+        self.options: dict[str, Any] = dict()
         if format_name:
             self.options["format_name"] = format_name
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         """
         repr for debugging / logging purposes only. For compilation logic, see
         the corresponding visitor in base.py
@@ -186,7 +197,7 @@ class CopyFormatter(ClauseElement):
         return f"FILE_FORMAT=({self.options})"
 
     @staticmethod
-    def value_repr(name, value):
+    def value_repr(name: str, value: Any) -> str:
         """
         Make a SQL-suitable representation of "value". This is called from
         the corresponding visitor function (base.py/visit_copy_formatter())
@@ -210,7 +221,7 @@ class CopyFormatter(ClauseElement):
 class CSVFormatter(CopyFormatter):
     file_format = "csv"
 
-    def compression(self, comp_type):
+    def compression(self, comp_type: str | None) -> CSVFormatter:
         """String (constant) that specifies to compresses the unloaded data files using the specified compression algorithm."""
         if isinstance(comp_type, str):
             comp_type = comp_type.lower()
@@ -229,7 +240,7 @@ class CSVFormatter(CopyFormatter):
         self.options["COMPRESSION"] = comp_type
         return self
 
-    def _check_delimiter(self, delimiter, delimiter_txt):
+    def _check_delimiter(self, delimiter: str | int | None, delimiter_txt: str) -> None:
         """
         Check if a delimiter is either a string of length 1 or an integer. In case of
         a string delimiter, take into account that the actual string may be longer,
@@ -247,7 +258,7 @@ class CSVFormatter(CopyFormatter):
             f"{delimiter_txt} should be a single character, that is either a string, or a number"
         )
 
-    def record_delimiter(self, deli_type):
+    def record_delimiter(self, deli_type: str | int | None) -> CSVFormatter:
         """Character that separates records in an unloaded file."""
         self._check_delimiter(deli_type, "Record delimiter")
         if isinstance(deli_type, int):
@@ -256,7 +267,7 @@ class CSVFormatter(CopyFormatter):
             self.options["RECORD_DELIMITER"] = deli_type
         return self
 
-    def field_delimiter(self, deli_type):
+    def field_delimiter(self, deli_type: str | int | None) -> CSVFormatter:
         """Character that separates fields in an unloaded file."""
         self._check_delimiter(deli_type, "Field delimiter")
         if isinstance(deli_type, int):
@@ -265,7 +276,7 @@ class CSVFormatter(CopyFormatter):
             self.options["FIELD_DELIMITER"] = deli_type
         return self
 
-    def file_extension(self, ext):
+    def file_extension(self, ext: str | None) -> CSVFormatter:
         """String that specifies the extension for files unloaded to a stage. Accepts any extension. The user is
         responsible for specifying a valid file extension that can be read by the desired software or service.
         """
@@ -274,28 +285,28 @@ class CSVFormatter(CopyFormatter):
         self.options["FILE_EXTENSION"] = ext
         return self
 
-    def date_format(self, dt_frmt):
+    def date_format(self, dt_frmt: str) -> CSVFormatter:
         """String that defines the format of date values in the unloaded data files."""
         if not isinstance(dt_frmt, str):
             raise TypeError("Date format should be a string")
         self.options["DATE_FORMAT"] = dt_frmt
         return self
 
-    def time_format(self, tm_frmt):
+    def time_format(self, tm_frmt: str) -> CSVFormatter:
         """String that defines the format of time values in the unloaded data files."""
         if not isinstance(tm_frmt, str):
             raise TypeError("Time format should be a string")
         self.options["TIME_FORMAT"] = tm_frmt
         return self
 
-    def timestamp_format(self, tmstmp_frmt):
+    def timestamp_format(self, tmstmp_frmt: str) -> CSVFormatter:
         """String that defines the format of timestamp values in the unloaded data files."""
         if not isinstance(tmstmp_frmt, str):
             raise TypeError("Timestamp format should be a string")
         self.options["TIMESTAMP_FORMAT"] = tmstmp_frmt
         return self
 
-    def binary_format(self, bin_fmt):
+    def binary_format(self, bin_fmt: str) -> CSVFormatter:
         """Character used as the escape character for any field values. The option can be used when unloading data
         from binary columns in a table."""
         if isinstance(bin_fmt, str):
@@ -306,7 +317,7 @@ class CSVFormatter(CopyFormatter):
         self.options["BINARY_FORMAT"] = bin_fmt
         return self
 
-    def escape(self, esc):
+    def escape(self, esc: str | int | None) -> CSVFormatter:
         """Character used as the escape character for any field values."""
         self._check_delimiter(esc, "Escape")
         if isinstance(esc, int):
@@ -315,7 +326,7 @@ class CSVFormatter(CopyFormatter):
             self.options["ESCAPE"] = esc
         return self
 
-    def escape_unenclosed_field(self, esc):
+    def escape_unenclosed_field(self, esc: str | int | None) -> CSVFormatter:
         """Single character string used as the escape character for unenclosed field values only."""
         self._check_delimiter(esc, "Escape unenclosed field")
         if isinstance(esc, int):
@@ -324,7 +335,7 @@ class CSVFormatter(CopyFormatter):
             self.options["ESCAPE_UNENCLOSED_FIELD"] = esc
         return self
 
-    def field_optionally_enclosed_by(self, enc):
+    def field_optionally_enclosed_by(self, enc: str | None) -> CSVFormatter:
         """Character used to enclose strings. Either None, ', or \"."""
         _available_options = [None, "'", '"']
         if enc not in _available_options:
@@ -332,7 +343,7 @@ class CSVFormatter(CopyFormatter):
         self.options["FIELD_OPTIONALLY_ENCLOSED_BY"] = enc
         return self
 
-    def null_if(self, null_value):
+    def null_if(self, null_value: Sequence) -> CSVFormatter:
         """Copying into a table these strings will be replaced by a NULL, while copying out of Snowflake will replace
         NULL values with the first string"""
         if not isinstance(null_value, Sequence):
@@ -340,7 +351,7 @@ class CSVFormatter(CopyFormatter):
         self.options["NULL_IF"] = tuple(null_value)
         return self
 
-    def skip_header(self, skip_header):
+    def skip_header(self, skip_header: int) -> CSVFormatter:
         """
         Number of header rows to be skipped at the beginning of the file
         """
@@ -349,7 +360,7 @@ class CSVFormatter(CopyFormatter):
         self.options["SKIP_HEADER"] = skip_header
         return self
 
-    def trim_space(self, trim_space):
+    def trim_space(self, trim_space: bool) -> CSVFormatter:
         """
         Remove leading or trailing white spaces
         """
@@ -358,7 +369,9 @@ class CSVFormatter(CopyFormatter):
         self.options["TRIM_SPACE"] = trim_space
         return self
 
-    def error_on_column_count_mismatch(self, error_on_col_count_mismatch):
+    def error_on_column_count_mismatch(
+        self, error_on_col_count_mismatch: bool
+    ) -> CSVFormatter:
         """
         Generate a parsing error if the number of delimited columns (i.e. fields) in
         an input data file does not match the number of columns in the corresponding table.
@@ -374,7 +387,7 @@ class JSONFormatter(CopyFormatter):
 
     file_format = "json"
 
-    def compression(self, comp_type):
+    def compression(self, comp_type: str | None) -> JSONFormatter:
         """String (constant) that specifies to compresses the unloaded data files using the specified compression algorithm."""
         if isinstance(comp_type, str):
             comp_type = comp_type.lower()
@@ -393,7 +406,7 @@ class JSONFormatter(CopyFormatter):
         self.options["COMPRESSION"] = comp_type
         return self
 
-    def file_extension(self, ext):
+    def file_extension(self, ext: str | None) -> JSONFormatter:
         """String that specifies the extension for files unloaded to a stage. Accepts any extension. The user is
         responsible for specifying a valid file extension that can be read by the desired software or service.
         """
@@ -408,14 +421,14 @@ class PARQUETFormatter(CopyFormatter):
 
     file_format = "parquet"
 
-    def snappy_compression(self, comp):
+    def snappy_compression(self, comp: bool) -> PARQUETFormatter:
         """Enable, or disable snappy compression"""
         if not isinstance(comp, bool):
             raise TypeError("Comp should be a Boolean value")
         self.options["SNAPPY_COMPRESSION"] = translate_bool(comp)
         return self
 
-    def compression(self, comp):
+    def compression(self, comp: str) -> PARQUETFormatter:
         """
         Set compression type
         """
@@ -424,7 +437,7 @@ class PARQUETFormatter(CopyFormatter):
         self.options["COMPRESSION"] = comp
         return self
 
-    def binary_as_text(self, value):
+    def binary_as_text(self, value: bool) -> PARQUETFormatter:
         """Enable, or disable binary as text"""
         if not isinstance(value, bool):
             raise TypeError("binary_as_text should be a Boolean value")
@@ -439,24 +452,35 @@ class ExternalStage(ClauseElement, FromClauseRole):
     _hide_froms = ()
 
     @staticmethod
-    def prepare_namespace(namespace):
+    def prepare_namespace(namespace: str) -> str:
         return f"{namespace}." if not namespace.endswith(".") else namespace
 
     @staticmethod
-    def prepare_path(path):
+    def prepare_path(path: str) -> str:
         return f"/{path}" if not path.startswith("/") else path
 
-    def __init__(self, name, path=None, namespace=None, file_format=None):
+    def __init__(
+        self,
+        name: str,
+        path: str | None = None,
+        namespace: str | None = None,
+        file_format: str | None = None,
+    ) -> None:
         self.name = name
         self.path = self.prepare_path(path) if path else ""
         self.namespace = self.prepare_namespace(namespace) if namespace else ""
         self.file_format = file_format
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"@{self.namespace}{self.name}{self.path} ({self.file_format})"
 
     @classmethod
-    def from_parent_stage(cls, parent_stage, path, file_format=None):
+    def from_parent_stage(
+        cls,
+        parent_stage: ExternalStage,
+        path: str,
+        file_format: str | None = None,
+    ) -> ExternalStage:
         """
         Extend an existing parent stage (with or without path) with an
         additional sub-path
@@ -477,7 +501,12 @@ class CreateFileFormat(DDLElement):
 
     __visit_name__ = "create_file_format"
 
-    def __init__(self, format_name, formatter, replace_if_exists=False):
+    def __init__(
+        self,
+        format_name: str,
+        formatter: CopyFormatter,
+        replace_if_exists: bool = False,
+    ) -> None:
         super().__init__()
         self.format_name = format_name
         self.formatter = formatter
@@ -492,7 +521,14 @@ class CreateStage(DDLElement):
 
     __visit_name__ = "create_stage"
 
-    def __init__(self, container, stage, replace_if_exists=False, *, temporary=False):
+    def __init__(
+        self,
+        container: CloudStorageLocation | ExternalStage,
+        stage: ExternalStage,
+        replace_if_exists: bool = False,
+        *,
+        temporary: bool = False,
+    ) -> None:
         super().__init__()
         self.container = container
         self.temporary = temporary
@@ -504,7 +540,7 @@ class CloudStorageLocation(ClauseElement):
     """Base class for cloud storage URI locations used in COPY INTO statements."""
 
     @classmethod
-    def from_uri(cls, uri):
+    def from_uri(cls, uri: str) -> CloudStorageLocation:
         raise NotImplementedError
 
 
@@ -513,14 +549,14 @@ class AWSBucket(CloudStorageLocation):
 
     __visit_name__ = "aws_bucket"
 
-    def __init__(self, bucket, path=None):
+    def __init__(self, bucket: str, path: str | None = None) -> None:
         self.bucket = bucket
         self.path = path
-        self.encryption_used = {}
-        self.credentials_used = {}
+        self.encryption_used: dict[str, Any] = {}
+        self.credentials_used: dict[str, Any] = {}
 
     @classmethod
-    def from_uri(cls, uri):
+    def from_uri(cls, uri: str) -> AWSBucket:
         if uri[0:5] != "s3://":
             raise ValueError(f"Invalid AWS bucket URI: {uri}")
         b = uri[5:].split("/", 1)
@@ -530,7 +566,7 @@ class AWSBucket(CloudStorageLocation):
             bucket, path = b
         return cls(bucket, path)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         credentials = "CREDENTIALS=({})".format(
             " ".join(f"{n}='{v}'" for n, v in self.credentials_used.items())
         )
@@ -548,8 +584,12 @@ class AWSBucket(CloudStorageLocation):
         )
 
     def credentials(
-        self, aws_role=None, aws_key_id=None, aws_secret_key=None, aws_token=None
-    ):
+        self,
+        aws_role: str | None = None,
+        aws_key_id: str | None = None,
+        aws_secret_key: str | None = None,
+        aws_token: str | None = None,
+    ) -> AWSBucket:
         if aws_role is None and (aws_key_id is None and aws_secret_key is None):
             raise ValueError(
                 "Either 'aws_role', or aws_key_id and aws_secret_key has to be supplied"
@@ -565,15 +605,15 @@ class AWSBucket(CloudStorageLocation):
                 self.credentials_used["AWS_TOKEN"] = aws_token
         return self
 
-    def encryption_aws_cse(self, master_key):
+    def encryption_aws_cse(self, master_key: str) -> AWSBucket:
         self.encryption_used = {"TYPE": "AWS_CSE", "MASTER_KEY": master_key}
         return self
 
-    def encryption_aws_sse_s3(self):
+    def encryption_aws_sse_s3(self) -> AWSBucket:
         self.encryption_used = {"TYPE": "AWS_SSE_S3"}
         return self
 
-    def encryption_aws_sse_kms(self, kms_key_id=None):
+    def encryption_aws_sse_kms(self, kms_key_id: str | None = None) -> AWSBucket:
         self.encryption_used = {"TYPE": "AWS_SSE_KMS"}
         if kms_key_id:
             self.encryption_used["KMS_KEY_ID"] = kms_key_id
@@ -585,15 +625,15 @@ class AzureContainer(CloudStorageLocation):
 
     __visit_name__ = "azure_container"
 
-    def __init__(self, account, container, path=None):
+    def __init__(self, account: str, container: str, path: str | None = None) -> None:
         self.account = account
         self.container = container
         self.path = path
-        self.encryption_used = {}
-        self.credentials_used = {}
+        self.encryption_used: dict[str, Any] = {}
+        self.credentials_used: dict[str, Any] = {}
 
     @classmethod
-    def from_uri(cls, uri):
+    def from_uri(cls, uri: str) -> AzureContainer:
         if uri[0:8] != "azure://":
             raise ValueError(f"Invalid Azure Container URI: {uri}")
         account, uri = uri[8:].split(".", 1)
@@ -606,7 +646,7 @@ class AzureContainer(CloudStorageLocation):
             container, path = b
         return cls(account, container, path)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         credentials = "CREDENTIALS=({})".format(
             " ".join(f"{n}='{v}'" for n, v in self.credentials_used.items())
         )
@@ -625,11 +665,11 @@ class AzureContainer(CloudStorageLocation):
             f" {encryption}" if self.encryption_used else "",
         )
 
-    def credentials(self, azure_sas_token):
+    def credentials(self, azure_sas_token: str) -> AzureContainer:
         self.credentials_used = {"AZURE_SAS_TOKEN": azure_sas_token}
         return self
 
-    def encryption_azure_cse(self, master_key):
+    def encryption_azure_cse(self, master_key: str) -> AzureContainer:
         self.encryption_used = {"TYPE": "AZURE_CSE", "MASTER_KEY": master_key}
         return self
 
@@ -639,13 +679,13 @@ class GCSBucket(CloudStorageLocation):
 
     __visit_name__ = "gcs_bucket"
 
-    def __init__(self, bucket, path=None):
+    def __init__(self, bucket: str, path: str | None = None) -> None:
         self.bucket = bucket
         self.path = path
-        self.encryption_used = {}
+        self.encryption_used: dict[str, Any] = {}
 
     @classmethod
-    def from_uri(cls, uri):
+    def from_uri(cls, uri: str) -> GCSBucket:
         if uri[0:6] != "gcs://":
             raise ValueError(f"Invalid GCS bucket URI: {uri}")
         b = uri[6:].split("/", 1)
@@ -655,7 +695,7 @@ class GCSBucket(CloudStorageLocation):
             bucket, path = b
         return cls(bucket, path)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         encryption = "ENCRYPTION=({})".format(
             " ".join(
                 f"{n}='{v}'" if isinstance(v, str) else f"{n}={v}"
@@ -665,13 +705,13 @@ class GCSBucket(CloudStorageLocation):
         uri = "'gcs://{}{}'".format(self.bucket, f"/{self.path}" if self.path else "")
         return "{}{}".format(uri, f" {encryption}" if self.encryption_used else "")
 
-    def encryption_gcs_sse_kms(self, kms_key_id=None):
+    def encryption_gcs_sse_kms(self, kms_key_id: str | None = None) -> GCSBucket:
         self.encryption_used = {"TYPE": "GCS_SSE_KMS"}
         if kms_key_id:
             self.encryption_used["KMS_KEY_ID"] = kms_key_id
         return self
 
-    def encryption_none(self):
+    def encryption_none(self) -> GCSBucket:
         self.encryption_used = {"TYPE": "NONE"}
         return self
 

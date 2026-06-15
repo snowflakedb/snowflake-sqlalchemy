@@ -1,8 +1,9 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
+from __future__ import annotations
+
 from enum import Enum
-from typing import List, Optional
 
 from snowflake.sqlalchemy import exc
 from snowflake.sqlalchemy.custom_commands import NoneType
@@ -19,17 +20,16 @@ class Priority(Enum):
 
 
 class TableOption:
-
     def __init__(self) -> None:
-        self._name: Optional[TableOptionKey] = None
+        self._name: TableOptionKey | None = None
 
     @property
-    def option_name(self) -> str:
+    def option_name(self) -> str | None:
         if isinstance(self._name, NoneType):
             return None
         return str(self._name.value)
 
-    def _set_option_name(self, name: Optional["TableOptionKey"]):
+    def _set_option_name(self, name: TableOptionKey | None):
         self._name = name
 
     @property
@@ -37,13 +37,13 @@ class TableOption:
         return Priority.MEDIUM
 
     @staticmethod
-    def create(**kwargs) -> "TableOption":
+    def create(**kwargs) -> TableOption:
         raise NotImplementedError
 
     @staticmethod
     def _get_invalid_table_option(
-        parameter_name: "TableOptionKey", input_type: str, expected_types: List[str]
-    ) -> "TableOption":
+        parameter_name: TableOptionKey, input_type: str, expected_types: list[str]
+    ) -> TableOption:
         from .invalid_table_option import InvalidTableOption
 
         return InvalidTableOption(
@@ -58,7 +58,9 @@ class TableOption:
             raise exc.OptionKeyNotProvidedError(self.__class__.__name__)
 
     def template(self) -> str:
-        return f"{self.option_name.upper()} = %s"
+        name = self.option_name
+        assert name is not None, f"option_name not set on {self.__class__.__name__}"
+        return f"{name.upper()} = %s"
 
     def render_option(self, compiler) -> str:
         self._validate_option()

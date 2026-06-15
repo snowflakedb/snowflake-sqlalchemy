@@ -272,12 +272,13 @@ class TestSingleTableDispatchSA2:
         dialect = _make_dialect()
         connection = mock.Mock()
 
-        with mock.patch.object(
-            dialect, table_method, return_value=expected
-        ) as tbl_mock, mock.patch.object(
-            dialect,
-            schema_method,
-            side_effect=AssertionError(f"{schema_method} must not be called"),
+        with (
+            mock.patch.object(dialect, table_method, return_value=expected) as tbl_mock,
+            mock.patch.object(
+                dialect,
+                schema_method,
+                side_effect=AssertionError(f"{schema_method} must not be called"),
+            ),
         ):
             result = getattr(dialect, public_method)(connection, "foo", schema="PUBLIC")
 

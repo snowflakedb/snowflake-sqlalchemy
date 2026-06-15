@@ -12,12 +12,12 @@ from logging import getLogger
 from typing import Literal
 
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.pool import NullPool
-
 import snowflake.connector
 import snowflake.connector.connection
 from snowflake.connector.compat import IS_WINDOWS
+from sqlalchemy import create_engine
+from sqlalchemy.pool import NullPool
+
 from snowflake.sqlalchemy import URL, dialect
 from snowflake.sqlalchemy._constants import (
     APPLICATION_NAME,

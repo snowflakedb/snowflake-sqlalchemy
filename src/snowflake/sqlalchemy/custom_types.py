@@ -1,13 +1,21 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
+from __future__ import annotations
+
 import decimal
 import warnings
-from typing import Optional, Tuple, Union
+from datetime import date, datetime, time
+from typing import TYPE_CHECKING, Any, Callable, ClassVar
 
 import sqlalchemy.types as sqltypes
 import sqlalchemy.util as util
 from sqlalchemy.types import TypeEngine
+
+if TYPE_CHECKING:
+    from sqlalchemy.engine.interfaces import Dialect
+
+    from .snowdialect import SnowflakeDialect
 
 DECFLOAT_PRECISION = 38
 
@@ -23,7 +31,7 @@ TINYINT = sqltypes.SMALLINT
 VARBINARY = sqltypes.BINARY
 
 
-def _process_float(value):
+def _process_float(value: float | None) -> float | str | None:
     if value == float("inf"):
         return "inf"
     elif value == float("-inf"):
@@ -34,8 +42,8 @@ def _process_float(value):
 
 
 class SnowflakeType(sqltypes.TypeEngine):
-    def _default_dialect(self):
-        # Get around circular import
+    def _default_dialect(self) -> SnowflakeDialect:
+        # Get around circular import — SnowflakeDialect is only imported under TYPE_CHECKING
         return __import__("snowflake.sqlalchemy").sqlalchemy.dialect()
 
 
@@ -53,19 +61,18 @@ class VECTOR(SnowflakeType):
     """
 
     __visit_name__ = "VECTOR"
-
-    _VALID_ELEMENT_TYPES = {"INT", "FLOAT"}
+    _VALID_ELEMENT_TYPES: ClassVar[set[str]] = {"INT", "FLOAT"}
 
     def __init__(
-        self, element_type: Union[str, sqltypes.Integer, sqltypes.Float], dimension: int
-    ):
+        self, element_type: str | sqltypes.Integer | sqltypes.Float, dimension: int
+    ) -> None:
         self.element_type = self._normalize_element_type(element_type)
         self.dimension = self._normalize_dimension(dimension)
         super().__init__()
 
     def _normalize_element_type(
-        self, element_type: Union[str, sqltypes.Integer, sqltypes.Float]
-    ):
+        self, element_type: str | sqltypes.Integer | sqltypes.Float
+    ) -> str:
         if not isinstance(element_type, (str, sqltypes.Integer, sqltypes.Float)):
             raise TypeError(
                 f"VECTOR element type must be a string, SQLAlchemy INT or FLOAT type, got {type(element_type).__name__}."
@@ -86,7 +93,7 @@ class VECTOR(SnowflakeType):
 
     @staticmethod
     def _map_sqlalchemy_type(
-        element_type: Union[sqltypes.Integer, sqltypes.Float],
+        element_type: sqltypes.Integer | sqltypes.Float,
     ) -> str:
         if isinstance(element_type, sqltypes.Integer):
             return "INT"
@@ -108,12 +115,12 @@ class VECTOR(SnowflakeType):
             )
         return dimension
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"VECTOR({self.element_type}, {self.dimension})"
 
 
 class StructuredType(SnowflakeType):
-    def __init__(self, is_semi_structured: bool = False):
+    def __init__(self, is_semi_structured: bool = False) -> None:
         self.is_semi_structured = is_semi_structured
         super().__init__()
 
@@ -126,7 +133,7 @@ class MAP(StructuredType):
         key_type: sqltypes.TypeEngine,
         value_type: sqltypes.TypeEngine,
         not_null: bool = False,
-    ):
+    ) -> None:
         self.key_type = key_type
         self.value_type = value_type
         self.not_null = not_null
@@ -136,7 +143,7 @@ class MAP(StructuredType):
 class OBJECT(StructuredType):
     __visit_name__ = "OBJECT"
 
-    def __init__(self, **items_types: Union[TypeEngine, Tuple[TypeEngine, bool]]):
+    def __init__(self, **items_types: TypeEngine | tuple[TypeEngine, bool]) -> None:
         for key, value in items_types.items():
             if not isinstance(value, tuple):
                 items_types[key] = (value, False)
@@ -145,7 +152,7 @@ class OBJECT(StructuredType):
         self.is_semi_structured = len(items_types) == 0
         super().__init__()
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         quote_char = "'"
         return "OBJECT(%s)" % ", ".join(
             [
@@ -160,9 +167,9 @@ class ARRAY(StructuredType):
 
     def __init__(
         self,
-        value_type: Optional[sqltypes.TypeEngine] = None,
+        value_type: sqltypes.TypeEngine | None = None,
         not_null: bool = False,
-    ):
+    ) -> None:
         self.value_type = value_type
         self.not_null = not_null
         super().__init__(is_semi_structured=value_type is None)
@@ -213,14 +220,16 @@ class DECFLOAT(SnowflakeType):
     """
 
     __visit_name__ = "DECFLOAT"
-    _warned_precision = False
+    _warned_precision: ClassVar[bool] = False
 
-    def result_processor(self, dialect, coltype):
+    def result_processor(
+        self, dialect: Dialect, coltype: object
+    ) -> Callable[[Any], Any]:
         """Check decimal context precision and warn if it may truncate DECFLOAT values."""
         # Check if dialect has enable_decfloat configured
         decfloat_enabled = getattr(dialect, "_enable_decfloat", False)
 
-        def process(value):
+        def process(value: Any) -> Any:
             if value is not None and not DECFLOAT._warned_precision:
                 # Skip warning if dialect has DECFLOAT support enabled
                 if decfloat_enabled:
@@ -243,23 +252,25 @@ class DECFLOAT(SnowflakeType):
 
 
 class _CUSTOM_Date(SnowflakeType, sqltypes.Date):
-    def literal_processor(self, dialect):
-        def process(value):
+    def literal_processor(self, dialect: Dialect) -> Callable[[Any], str | None]:  # type: ignore[override]
+        def process(value: date | None) -> str | None:
             if value is not None:
                 return f"'{value.isoformat()}'"
+            return None
 
         return process
 
 
 class _CUSTOM_DateTime(SnowflakeType, sqltypes.DateTime):
-    def __init__(self, timezone=False):
+    def __init__(self, timezone: bool = False) -> None:
         super().__init__(timezone=timezone)
 
-    def literal_processor(self, dialect):
-        def process(value):
+    def literal_processor(self, dialect: Dialect) -> Callable[[Any], str | None]:  # type: ignore[override]
+        def process(value: datetime | None) -> str | None:
             if value is not None:
                 datetime_str = value.isoformat(" ", timespec="microseconds")
                 return f"'{datetime_str}'"
+            return None
 
         return process
 
@@ -275,21 +286,22 @@ class _CUSTOM_Time(SnowflakeType, sqltypes.Time):
     :class:`TIMESTAMP_TZ` or ``DateTime(timezone=True)`` instead.
     """
 
-    def literal_processor(self, dialect):
-        def process(value):
+    def literal_processor(self, dialect: Dialect) -> Callable[[Any], str | None]:  # type: ignore[override]
+        def process(value: time | None) -> str | None:
             if value is not None:
                 time_str = value.isoformat(timespec="microseconds")
                 return f"'{time_str}'"
+            return None
 
         return process
 
 
 class _CUSTOM_Float(SnowflakeType, sqltypes.Float):
-    def bind_processor(self, dialect):
+    def bind_processor(self, dialect: Dialect) -> Callable[[Any], float | str | None]:
         return _process_float
 
 
 class _CUSTOM_DECIMAL(SnowflakeType, sqltypes.DECIMAL):
     @util.memoized_property
-    def _type_affinity(self):
+    def _type_affinity(self) -> type:
         return sqltypes.INTEGER if self.scale == 0 else sqltypes.DECIMAL
