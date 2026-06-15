@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import re
 import warnings
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
+
+if TYPE_CHECKING:
+    from sqlalchemy.engine.interfaces import ReflectedColumn, ReflectedIdentity
 
 from snowflake.sqlalchemy.name_utils import _NameUtils
 from snowflake.sqlalchemy.parser.custom_type_parser import NullType, parse_type
@@ -34,14 +37,14 @@ class _StructuredTypeInfoManager:
     ) -> None:
         self.connection = connection
         self.full_columns_descriptions: dict[
-            tuple[str, str], dict[str, dict[str, Any]]
+            tuple[str, str], dict[str, ReflectedColumn]
         ] = {}
         self.name_utils = name_utils
         self.default_schema = default_schema
 
     def get_column_info(
         self, schema_name: str, table_name: str, column_name: str, **kwargs: Any
-    ) -> dict[str, Any] | None:
+    ) -> ReflectedColumn | None:
         self._load_structured_type_info(schema_name, table_name)
         if (
             (schema_name, table_name) in self.full_columns_descriptions
@@ -66,16 +69,16 @@ class _StructuredTypeInfoManager:
         return True
 
     def _table_columns_as_dict(
-        self, columns: list[dict[str, Any]]
-    ) -> dict[str, dict[str, Any]]:
-        result: dict[str, dict[str, Any]] = {}
+        self, columns: list[ReflectedColumn]
+    ) -> dict[str, ReflectedColumn]:
+        result: dict[str, ReflectedColumn] = {}
         for column in columns:
             result[column["name"]] = column
         return result
 
     def get_table_columns_by_full_name(
         self, full_table_name: str
-    ) -> list[dict[str, Any]]:
+    ) -> list[ReflectedColumn]:
         """
         Get all columns in a table using a fully-qualified table name.
 
@@ -93,7 +96,7 @@ class _StructuredTypeInfoManager:
 
     def get_table_columns(
         self, table_name: str, schema: str | None = None
-    ) -> list[dict[str, Any]]:
+    ) -> list[ReflectedColumn]:
         """Get all columns in a table in a schema"""
         schema = schema if schema else self.default_schema
 
@@ -112,9 +115,9 @@ class _StructuredTypeInfoManager:
         quoted_table = ip.quote(dn_table)
         return self.get_table_columns_by_full_name(f"{quoted_schema}.{quoted_table}")
 
-    def _parse_desc_result(self, result: CursorResult) -> list[dict[str, Any]]:
+    def _parse_desc_result(self, result: CursorResult) -> list[ReflectedColumn]:
         """Parse DESC TABLE result into column information"""
-        ans: list[dict[str, Any]] = []
+        ans: list[ReflectedColumn] = []
 
         for desc_data in result:
             column_name = desc_data[0]
@@ -143,36 +146,43 @@ class _StructuredTypeInfoManager:
             )
             if match:
                 # Build complete identity metadata for SQLAlchemy 2.0+ ReflectedIdentity convention
-                identity = {
-                    "start": int(match.group("start")),
-                    "increment": int(match.group("increment")),
-                    # Snowflake-specific defaults (same as main reflection path)
-                    "always": False,  # Snowflake only supports BY DEFAULT
-                    "on_null": None,  # Not separately tracked
-                    "cycle": False,  # Snowflake only supports NO CYCLE
-                    "order": match.group("order_type") == "ORDER",
-                    # Not available via DESC TABLE
-                    "minvalue": None,
-                    "maxvalue": None,
-                    "nominvalue": None,
-                    "nomaxvalue": None,
-                    "cache": None,
-                }
+                identity = cast(
+                    "ReflectedIdentity",
+                    {
+                        "start": int(match.group("start")),
+                        "increment": int(match.group("increment")),
+                        # Snowflake-specific defaults (same as main reflection path)
+                        "always": False,  # Snowflake only supports BY DEFAULT
+                        "on_null": None,  # Not separately tracked
+                        "cycle": False,  # Snowflake only supports NO CYCLE
+                        "order": match.group("order_type") == "ORDER",
+                        # Not available via DESC TABLE
+                        "minvalue": None,
+                        "maxvalue": None,
+                        "nominvalue": None,
+                        "nomaxvalue": None,
+                        "cache": None,
+                    },
+                )
             is_identity = identity is not None
 
             ans.append(
-                {
-                    "name": column_name,
-                    "type": type_instance,
-                    "nullable": is_nullable == "Y",
-                    "default": None if is_identity else column_default,
-                    "autoincrement": is_identity,
-                    "comment": comment if comment != "" else None,
-                    "primary_key": primary_key == "Y",
-                }
+                cast(
+                    "ReflectedColumn",
+                    {
+                        "name": column_name,
+                        "type": type_instance,
+                        "nullable": is_nullable == "Y",
+                        "default": None if is_identity else column_default,
+                        "autoincrement": is_identity,
+                        "comment": comment if comment != "" else None,
+                        "primary_key": primary_key == "Y",
+                    },
+                )
             )
 
             if is_identity:
+                assert identity is not None
                 ans[-1]["identity"] = identity
 
         # If we didn't find any columns for the table, the table doesn't exist.
