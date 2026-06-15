@@ -25,7 +25,6 @@ classifiers = [
   "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3 :: Only",
-  "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
@@ -81,7 +80,7 @@ packages = ["src/snowflake"]
 [tool.hatch.envs.default]
 extra-dependencies = ["SQLAlchemy>=2.0.0"]
 features = ["development", "pandas"]
-python = "3.12"
+python = "3.10"
 installer = "uv"
 
 [tool.hatch.envs.default.env-vars]
@@ -97,7 +96,7 @@ check-import = "python -c 'import snowflake.sqlalchemy; print(snowflake.sqlalche
 type-check = "mypy src/snowflake/sqlalchemy/"
 
 [[tool.hatch.envs.release.matrix]]
-python = ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
+python = ["3.10", "3.11", "3.12", "3.13", "3.14"]
 features = ["development", "pandas"]
 
 [tool.hatch.envs.release.scripts]
