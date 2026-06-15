@@ -134,7 +134,7 @@ jobs:
       matrix:
         include:
           - hatch-env: default
-            python-version: "3.13"
+            python-version: "3.10"
     steps:
       - name: Checkout Code
         id: checkout_code
@@ -174,7 +174,7 @@ jobs:
           needs.verify-test-run.outputs.got-testable-changes == 'true'
         )
       )
-    name: Test dialect ${{ matrix.os }}-3.13-${{ matrix.cloud-provider }}
+    name: Test dialect ${{ matrix.os }}-3.10-${{ matrix.cloud-provider }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -192,7 +192,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: "3.10"
 
       - name: Upgrade pip and prepare environment
         run: |
@@ -221,7 +221,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: coverage.xml_dialect-${{ matrix.os }}-3.13-${{ matrix.cloud-provider }}
+          name: coverage.xml_dialect-${{ matrix.os }}-3.10-${{ matrix.cloud-provider }}
           path: |
             ./coverage.xml
 
@@ -237,7 +237,7 @@ jobs:
           needs.verify-test-run.outputs.got-testable-changes == 'true'
         )
       )
-    name: Test dialect compatibility ${{ matrix.os }}-3.13-${{ matrix.cloud-provider }}
+    name: Test dialect compatibility ${{ matrix.os }}-3.10-${{ matrix.cloud-provider }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -255,7 +255,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: "3.10"
 
       - name: Upgrade pip and install hatch
         run: |
@@ -280,7 +280,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: coverage.xml_dialect-compatibility-${{ matrix.os }}-3.13-${{ matrix.cloud-provider }}
+          name: coverage.xml_dialect-compatibility-${{ matrix.os }}-3.10-${{ matrix.cloud-provider }}
           path: |
             ./coverage.xml
 
