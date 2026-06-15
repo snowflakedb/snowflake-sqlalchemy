@@ -9,7 +9,7 @@ from collections import defaultdict
 from enum import Enum
 from logging import getLogger
 from time import time as time_in_seconds
-from typing import TYPE_CHECKING, Any, Collection, NamedTuple, cast
+from typing import TYPE_CHECKING, Any, Collection, Iterable, NamedTuple, cast
 
 if TYPE_CHECKING:
     from sqlalchemy.engine import CursorResult, Row
@@ -1107,10 +1107,10 @@ class SnowflakeDialect(default.DefaultDialect):
         )
         result = []
         for table_name in tables:
-            cols = all_columns.get(table_name)  # type: ignore[arg-type]
+            cols = all_columns.get(table_name)
             if cols is None:
-                full_name = self._always_quote_join(effective_schema, table_name)  # type: ignore[arg-type]
-                cols = mgr.get_table_columns_by_full_name(full_name)  # type: ignore[assignment]
+                full_name = self._always_quote_join(effective_schema or "", table_name)
+                cols = mgr.get_table_columns_by_full_name(full_name)
             result.append(((schema, table_name), cols))
         return result
 
@@ -1333,7 +1333,7 @@ class SnowflakeDialect(default.DefaultDialect):
     @reflection.cache
     def _get_schema_columns(
         self, connection: Connection, schema: str | None, **kw: Any
-    ) -> dict[tuple[str | None, str], list[ReflectedColumn]]:
+    ) -> dict[str | None, list[ReflectedColumn]]:
         """
         Get columns for a schema (or a filtered subset) with complete metadata.
 
@@ -1372,9 +1372,7 @@ class SnowflakeDialect(default.DefaultDialect):
         if result is None:
             return None  # type: ignore[return-value]
 
-        current_database, default_schema = self._current_database_schema(
-            connection, **kw
-        )
+        _, default_schema = self._current_database_schema(connection, **kw)
 
         schema_primary_keys = self._get_schema_primary_keys(
             connection, full_schema_name, **kw
@@ -1384,7 +1382,7 @@ class SnowflakeDialect(default.DefaultDialect):
             connection, self.name_utils, default_schema or ""
         )
 
-        columns_by_table = {}  # type: ignore[var-annotated]
+        columns_by_table: dict[str | None, list[ReflectedColumn]] = {}
 
         for (
             table_name,
@@ -1464,7 +1462,7 @@ class SnowflakeDialect(default.DefaultDialect):
                 self.name_utils,
                 self.default_schema_name,  # type: ignore[arg-type]
             )
-            return column_info_manager.get_table_columns_by_full_name(full_table_name)  # type: ignore[return-value]
+            return column_info_manager.get_table_columns_by_full_name(full_table_name)
 
         # Use schema-wide cached query (optimal for multi-table reflection)
         schema_columns = self._get_schema_columns(connection, schema, **kw)
@@ -1478,7 +1476,7 @@ class SnowflakeDialect(default.DefaultDialect):
         normalized_table_name = self.normalize_name(table_name)
         if normalized_table_name not in schema_columns:
             raise sa_exc.NoSuchTableError()
-        return schema_columns[normalized_table_name]  # type: ignore[index]
+        return schema_columns[normalized_table_name]
 
     def get_prefixes_from_data(
         self, name_to_index_map: dict[str, int], row: Row[Any], **kw: Any
