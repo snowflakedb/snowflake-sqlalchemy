@@ -29,130 +29,116 @@ def nu():
 # ---------------------------------------------------------------------------
 
 
-class TestQuoteComponent:
-    def test_plain_lowercase_is_uppercased_and_quoted(self, nu):
-        assert nu._quote_component(quoted_name("myschema", None)) == '"MYSCHEMA"'
-
-    def test_plain_uppercase_is_quoted(self, nu):
-        assert nu._quote_component(quoted_name("MYSCHEMA", None)) == '"MYSCHEMA"'
-
-    def test_mixed_case_without_explicit_quote_is_quoted(self, nu):
-        assert nu._quote_component(quoted_name("MySchema", None)) == '"MySchema"'
-
-    def test_quote_true_preserves_lowercase_no_denormalization(self, nu):
-        # quote=True signals the identifier was double-quoted at the source and
-        # is case-sensitive.  denormalize_name must NOT uppercase it.
-        assert nu._quote_component(quoted_name("myschema", True)) == '"myschema"'
-
-    def test_quote_true_mixed_case_preserved(self, nu):
-        assert nu._quote_component(quoted_name("MySchema", True)) == '"MySchema"'
-
-    def test_internal_double_quote_is_escaped(self, nu):
-        result = nu._quote_component(quoted_name('my"schema', None))
-        assert result.startswith('"') and result.endswith('"')
-        assert '""' in result  # SQL double-quote escaping
-
-
-# ---------------------------------------------------------------------------
-# always_quote_join — normal identifiers
-# ---------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    "component, expected",
+    [
+        pytest.param(
+            quoted_name("myschema", None), '"MYSCHEMA"', id="lowercase→uppercase"
+        ),
+        pytest.param(quoted_name("MYSCHEMA", None), '"MYSCHEMA"', id="uppercase"),
+        pytest.param(quoted_name("MySchema", None), '"MySchema"', id="mixed-case"),
+        pytest.param(
+            quoted_name("myschema", True),
+            '"myschema"',
+            id="quote=True preserves lowercase",
+        ),
+        pytest.param(
+            quoted_name("MySchema", True),
+            '"MySchema"',
+            id="quote=True preserves mixed-case",
+        ),
+    ],
+)
+def test_quote_component(nu, component, expected):
+    assert nu._quote_component(component) == expected
 
 
-class TestAlwaysQuoteJoinNormal:
-    def test_plain_lowercase_schema_and_table(self, nu):
-        assert nu.always_quote_join("myschema", "mytable") == '"MYSCHEMA"."MYTABLE"'
-
-    def test_plain_uppercase_schema_and_table(self, nu):
-        assert nu.always_quote_join("MYSCHEMA", "MYTABLE") == '"MYSCHEMA"."MYTABLE"'
-
-    def test_mixed_case_schema_and_table(self, nu):
-        result = nu.always_quote_join("MySchema", "MyTable")
-        assert result == '"MySchema"."MyTable"'
-
-    def test_none_ident_is_skipped(self, nu):
-        assert (
-            nu.always_quote_join(None, "myschema", "mytable") == '"MYSCHEMA"."MYTABLE"'
-        )
-
-    def test_single_ident(self, nu):
-        assert nu.always_quote_join("myschema") == '"MYSCHEMA"'
+def test_quote_component_escapes_internal_double_quote(nu):
+    result = nu._quote_component(quoted_name('my"schema', None))
+    assert result.startswith('"') and result.endswith('"')
+    assert '""' in result  # SQL double-quote escaping
 
 
 # ---------------------------------------------------------------------------
-# always_quote_join — database-qualified schemas (1.10.1 regression guard)
+# always_quote_join
 # ---------------------------------------------------------------------------
 
 
-class TestAlwaysQuoteJoinDatabaseQualified:
-    def test_unquoted_db_qualified_schema_is_split(self, nu):
-        # Primary regression: MYDB.MYSCHEMA must become "MYDB"."MYSCHEMA",
-        # not "MYDB.MYSCHEMA" (a single identifier containing a literal dot).
-        result = nu.always_quote_join("MYDB.MYSCHEMA", "mytable")
-        assert result == '"MYDB"."MYSCHEMA"."MYTABLE"'
-
-    def test_lowercase_db_qualified_schema_is_split_and_uppercased(self, nu):
-        result = nu.always_quote_join("mydb.myschema", "mytable")
-        assert result == '"MYDB"."MYSCHEMA"."MYTABLE"'
-
-    def test_pre_quoted_db_qualified_schema_not_double_escaped(self, nu):
-        # If the schema string already contains SQL double-quotes around each
-        # component, the parser must strip and re-quote correctly.
-        result = nu.always_quote_join('"MYDB"."MYSCHEMA"', "mytable")
-        assert result == '"MYDB"."MYSCHEMA"."MYTABLE"'
-        assert '"""' not in result
-
-    def test_literal_dot_inside_quoted_component_not_split(self, nu):
-        # A quoted component containing a literal dot must not be re-split.
-        result = nu.always_quote_join('"my.schema"', "mytable")
-        assert result == '"my.schema"."MYTABLE"'
+@pytest.mark.parametrize(
+    "idents, expected",
+    [
+        # plain identifiers
+        pytest.param(
+            ("myschema", "mytable"), '"MYSCHEMA"."MYTABLE"', id="plain lowercase"
+        ),
+        pytest.param(
+            ("MYSCHEMA", "MYTABLE"), '"MYSCHEMA"."MYTABLE"', id="plain uppercase"
+        ),
+        pytest.param(("MySchema", "MyTable"), '"MySchema"."MyTable"', id="mixed case"),
+        pytest.param(
+            (None, "myschema", "mytable"), '"MYSCHEMA"."MYTABLE"', id="None skipped"
+        ),
+        pytest.param(("myschema",), '"MYSCHEMA"', id="single ident"),
+        # database-qualified schemas — 1.10.1 regression guard
+        pytest.param(
+            ("MYDB.MYSCHEMA", "mytable"),
+            '"MYDB"."MYSCHEMA"."MYTABLE"',
+            id="unquoted db-qualified schema",
+        ),
+        pytest.param(
+            ("mydb.myschema", "mytable"),
+            '"MYDB"."MYSCHEMA"."MYTABLE"',
+            id="lowercase db-qualified schema",
+        ),
+        pytest.param(
+            ('"MYDB"."MYSCHEMA"', "mytable"),
+            '"MYDB"."MYSCHEMA"."MYTABLE"',
+            id="pre-quoted db-qualified schema",
+        ),
+        pytest.param(
+            ('"my.schema"', "mytable"),
+            '"my.schema"."MYTABLE"',
+            id="literal dot in quoted component not split",
+        ),
+        pytest.param(
+            ("myschema", "foo.bar"),
+            '"MYSCHEMA"."FOO"."BAR"',
+            id="dot in table splits into components",
+        ),
+        # case-sensitivity signal (quote=True) preserved
+        pytest.param(
+            (quoted_name("myschema", True), "mytable"),
+            '"myschema"."MYTABLE"',
+            id="quote=True lowercase case preserved",
+        ),
+        pytest.param(
+            (quoted_name("MySchema", True), "mytable"),
+            '"MySchema"."MYTABLE"',
+            id="quote=True mixed-case preserved",
+        ),
+    ],
+)
+def test_always_quote_join(nu, idents, expected):
+    assert nu.always_quote_join(*idents) == expected
+    assert '"""' not in nu.always_quote_join(*idents)
 
 
 # ---------------------------------------------------------------------------
-# always_quote_join — case-sensitivity signal (quote=True) preserved
+# always_quote_join — identifier quoting correctness
 # ---------------------------------------------------------------------------
 
 
-class TestAlwaysQuoteJoinCaseSensitivity:
-    def test_quote_true_lowercase_schema_case_preserved(self, nu):
-        # Old _always_quote_join called str() before checking quote, so
-        # quoted_name("myschema", True) was uppercased to "MYSCHEMA".
-        # always_quote_join must preserve the case-sensitive lowercase form.
-        schema = quoted_name("myschema", True)
-        result = nu.always_quote_join(schema, "mytable")
-        assert '"myschema"' in result
-        assert '"MYSCHEMA"' not in result
-
-    def test_quote_true_mixed_case_schema_case_preserved(self, nu):
-        schema = quoted_name("MySchema", True)
-        result = nu.always_quote_join(schema, "mytable")
-        assert '"MySchema"' in result
-
-
-# ---------------------------------------------------------------------------
-# always_quote_join — SQL injection guard
-# ---------------------------------------------------------------------------
-
-
-class TestAlwaysQuoteJoinInjection:
-    def test_semicolon_in_schema_is_quoted(self, nu):
-        payload = "myschema; DROP TABLE users--"
-        result = nu.always_quote_join(payload, "mytable")
-        stripped = re.sub(r'"[^"]*"', "", result)
-        assert ";" not in stripped, f"Semicolon escaped quoting: {result!r}"
-
-    def test_semicolon_in_table_is_quoted(self, nu):
-        payload = "mytable; SELECT 1--"
-        result = nu.always_quote_join("myschema", payload)
-        stripped = re.sub(r'"[^"]*"', "", result)
-        assert ";" not in stripped, f"Semicolon escaped quoting: {result!r}"
-
-    def test_dot_in_table_splits_into_components(self, nu):
-        # A dot in table_name produces extra components, but all are quoted.
-        result = nu.always_quote_join("myschema", "foo.bar")
-        assert result == '"MYSCHEMA"."FOO"."BAR"'
-
-    def test_drop_injection_in_schema_is_neutralised(self, nu):
-        payload = "x'; DROP TABLE t--"
-        result = nu.always_quote_join(payload, "t")
-        stripped = re.sub(r'"[^"]*"', "", result)
-        assert "DROP" not in stripped, f"DROP keyword escaped quoting: {result!r}"
+@pytest.mark.parametrize(
+    "idents, blocked",
+    [
+        pytest.param(
+            ("myschema; DROP TABLE users--", "mytable"), ";", id="semicolon in schema"
+        ),
+        pytest.param(("myschema", "mytable; SELECT 1--"), ";", id="semicolon in table"),
+        pytest.param(("x'; DROP TABLE t--", "t"), "DROP", id="DROP in schema"),
+    ],
+)
+def test_always_quote_join_identifier_quoting(nu, idents, blocked):
+    result = nu.always_quote_join(*idents)
+    stripped = re.sub(r'"[^"]*"', "", result)
+    assert blocked not in stripped, f"Pattern {blocked!r} escaped quoting: {result!r}"
