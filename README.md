@@ -583,22 +583,7 @@ columns = inspector.get_columns('my_table', schema='public')
 
 **Per-table optimisation**
 
-On **SQLAlchemy 2.x**, `get_pk_constraint`, `get_unique_constraints`, `get_foreign_keys`, `get_indexes`, and `get_columns` automatically use per-table queries (`SHOW … IN TABLE`, `DESC TABLE`) for single-table Inspector calls (e.g. `Inspector.get_pk_constraint()`, `pandas.read_sql_table()`). `MetaData.reflect()` continues to use the schema-wide `get_multi_*` hooks, which issue one query per reflection pass.
-
-On **SQLAlchemy 1.4**, `MetaData.reflect()` calls the singular methods per-table. Add `cache_column_metadata=True` to the connection URL to opt in to per-table queries for `get_pk_constraint`, `get_unique_constraints`, `get_foreign_keys`, `get_indexes`, and `get_columns`. Without this flag, the existing schema-wide queries are used unchanged.
-
-```python
-engine = create_engine(URL(
-    account = 'abc123',
-    user = 'testuser1',
-    password = 'pass',
-    database = 'db',
-    schema = 'public',
-    warehouse = 'testwh',
-    role='myrole',
-    cache_column_metadata=True,  # SA 1.4 only: enables per-table reflection
-))
-```
+`get_pk_constraint`, `get_unique_constraints`, `get_foreign_keys`, `get_indexes`, and `get_columns` automatically use per-table queries (`SHOW … IN TABLE`, `DESC TABLE`) for single-table Inspector calls (e.g. `Inspector.get_pk_constraint()`, `pandas.read_sql_table()`). `MetaData.reflect()` continues to use the schema-wide `get_multi_*` hooks, which issue one query per reflection pass.
 
 **Performance Implications**
 
@@ -612,7 +597,7 @@ For single-table inspection via `Inspector`, per-table queries (`DESC TABLE`, `S
 **Best Practices**
 
 1. **For bulk reflection**: use `metadata.reflect()` — schema-wide queries are issued once and cached.
-2. **For single-table inspection**: use `inspector.get_columns()` / `inspector.get_pk_constraint()` etc. — per-table queries are used automatically (SA 2.x) or with `cache_column_metadata=True` (SA 1.4).
+2. **For single-table inspection**: use `inspector.get_columns()` / `inspector.get_pk_constraint()` etc. — per-table queries are used automatically.
 3. **For very large schemas**: reflect only the tables you need:
 
 ```python

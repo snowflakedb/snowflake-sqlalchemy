@@ -1,8 +1,8 @@
 #!/bin/bash -e
 # Test Snowflake SQLAlchemy in Docker
 # NOTES:
-#   - By default this script runs Python 3.7 tests, as these are installed in dev vms
-#   - To compile only a specific version(s) pass in versions like: `./test_docker.sh "3.7 3.8"`
+#   - By default this script runs Python 3.9 tests, as these are installed in dev vms
+#   - To compile only a specific version(s) pass in versions like: `./test_docker.sh "3.9 3.10"`
 
 set -o pipefail
 

@@ -854,7 +854,6 @@ def test_get_foreign_keys_multi_schema(engine_testaccount, db_parameters):
             conn.commit()
 
 
-@pytest.mark.feature_v20
 def test_get_multi_foreign_keys_multi_schema(engine_testaccount, db_parameters):
     """Verify get_multi_foreign_keys (SA 2.x bulk path) returns correct referred_schema."""
     engine = engine_testaccount
@@ -1313,14 +1312,11 @@ def test_many_table_column_metadta(db_parameters):
     """
     Get dozens of table metadata with column metadata cache.
 
-    cache_column_metadata=True will cache all column metadata for all tables
-    in the schema.
-
     Optimized: Uses TRANSIENT tables with autoincrement (no explicit sequences)
     and fewer tables to significantly reduce test duration while maintaining
     coverage of multi-table metadata caching.
     """
-    url = url_factory(cache_column_metadata=True)
+    url = url_factory()
     engine = get_engine(url)
 
     RE_SUFFIX_NUM = re.compile(r".*(\d+)$")
@@ -1995,8 +1991,7 @@ def test_single_table_reflection_uses_optimized_path(engine_testaccount):
     Verify that single-table reflection uses table-specific queries (DESC TABLE)
     instead of querying the entire schema via information_schema.
 
-    SA 2.x: get_columns is always a single-table call (IS_VERSION_20 guard).
-    SA 1.4: opt-in via cache_column_metadata=True.
+    SA 2.x: get_columns is always a single-table call.
     """
     table_name = random_string(5, choices=string.ascii_uppercase)
     with engine_testaccount.connect() as conn:
@@ -2006,10 +2001,8 @@ def test_single_table_reflection_uses_optimized_path(engine_testaccount):
                 text(f'create table public.{table_name} ("col1" text, "col2" integer);')
             )
 
-            # SA 2.x: DESC TABLE is used unconditionally (IS_VERSION_20 guard).
-            # SA 1.4: opt-in via cache_column_metadata=True.
+            # SA 2.x: DESC TABLE is used unconditionally.
             inspector = inspect(engine_testaccount)
-            inspector.dialect._cache_column_metadata = True
 
             # Mock _query_all_columns_info to detect if it's called
             # If optimization works, this should NOT be called
@@ -2037,6 +2030,15 @@ def test_single_table_reflection_uses_optimized_path(engine_testaccount):
 
 
 def test_column_type_schema(engine_testaccount):
+    types_not_created = frozenset(
+        {
+            "FIXED",  # Snowflake rejects FIXED in DDL.
+            "MAP",  # Requires structured type syntax not covered here.
+            "UUID",  # Snowflake stores UUID as text; no native UUID column is created.
+        }
+    )
+    reflected_schema_type_names = frozenset(ischema_names_baseline) - types_not_created
+
     with engine_testaccount.connect() as conn:
         table_name = random_string(5)
         # column type FIXED not supported, triggers SQL compilation error: Unsupported data type 'FIXED'.
@@ -2054,9 +2056,7 @@ CREATE TEMP TABLE {table_name} (
 
         table_reflected = Table(table_name, MetaData(), autoload_with=conn)
         columns = table_reflected.columns
-        assert len(columns) == (
-            len(ischema_names_baseline) - 2
-        )  # -2 because FIXED and MAP is not supported
+        assert len(columns) == len(reflected_schema_type_names)
 
 
 def test_result_type_and_value(engine_testaccount):
@@ -2424,7 +2424,6 @@ def test_snowflake_sqlalchemy_as_valid_client_type():
         [literal(5.5), literal(8), 0.6875],
     ],
 )
-@pytest.mark.feature_v20
 def test_true_division_operation(engine_testaccount, operation):
     # expected_warning = "div_is_floordiv value will be changed to False in a future release. This will generate a behavior change on true and floor division. Please review https://docs.sqlalchemy.org/en/20/changelog/whatsnew_20.html#python-division-operator-performs-true-division-for-all-backends-added-floor-division"
     # with pytest.warns(PendingDeprecationWarning, match=expected_warning):
@@ -2450,10 +2449,9 @@ def test_true_division_operation(engine_testaccount, operation):
         [literal(3), literal(2), 1.5, 1.5],
         [literal(4), literal(1.5), 2.6666666666666665, 2.0],
         [literal(5.5), literal(10.7), 0.5140186915887851, 0],
-        [literal(5.5), literal(8), 0.6875, 0.0],
+        [literal(5.5), literal(8), 0.6875, 0],
     ],
 )
-@pytest.mark.feature_v20
 def test_division_force_div_is_floordiv_default(engine_testaccount, operation):
     expected_warning = "div_is_floordiv value will be changed to False in a future release. This will generate a behavior change on true and floor division. Please review https://docs.sqlalchemy.org/en/20/changelog/whatsnew_20.html#python-division-operator-performs-true-division-for-all-backends-added-floor-division"
     with pytest.warns(PendingDeprecationWarning, match=expected_warning):
@@ -2479,7 +2477,6 @@ def test_division_force_div_is_floordiv_default(engine_testaccount, operation):
         [literal(5.5), literal(8), 0.6875, 0],
     ],
 )
-@pytest.mark.feature_v20
 def test_division_force_div_is_floordiv_false(db_parameters, operation):
     engine = create_engine(URL(**db_parameters), **{"force_div_is_floordiv": False})
     with engine.connect() as conn:

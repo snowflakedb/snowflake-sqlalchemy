@@ -23,7 +23,6 @@ from sqlalchemy.sql.expression import Executable
 from sqlalchemy.sql.selectable import Lateral, SelectState
 
 from snowflake.sqlalchemy._constants import DIALECT_NAME
-from snowflake.sqlalchemy.compat import IS_VERSION_20, args_reducer, string_types
 from snowflake.sqlalchemy.custom_commands import CloudStorageLocation, ExternalStage
 
 from ._constants import NOT_NULL
@@ -242,16 +241,19 @@ class SnowflakeSelectState(SelectState):
 # handle Snowflake BCR bcr-1057
 @sql.base.CompileState.plugin_for("orm", "select")
 class SnowflakeORMSelectCompileState(context.ORMSelectCompileState):
-    # Default must be True on SA 1.4 (no _init_global_attributes hook there)
-    # so that the BCR-1057 code paths remain active as they were pre-PR.
-    # On SA 2.0 this default is overwritten by _init_global_attributes.
-    _is_snowflake = not IS_VERSION_20
+    # Set by _init_global_attributes (always called on SA 2.x).
+    _is_snowflake = False
 
     def _init_global_attributes(self, statement, compiler, **kw):
-        # SA 2.0 entrypoint for setting _is_snowflake. SA 1.4 does not call
-        # this hook; on SA 1.4 _is_snowflake defaults to True below so the
-        # pre-PR BCR-1057 code paths remain active (the with_loader_criteria
-        # regression fixed by this PR is an SA 2.0-only scenario).
+        """SA 2.x per-compilation setup hook for ORMSelectCompileState.
+
+        Sets ``_is_snowflake`` to True only when the active compiler is using
+        the Snowflake dialect.  This flag gates the BCR-1057 lateral-join
+        workarounds in ``_join_determine_implicit_left_side`` and
+        ``_join_left_to_right`` so they are applied exclusively to Snowflake
+        queries and leave other dialects (PostgreSQL, SQLite, etc.) completely
+        unaffected.
+        """
         self._is_snowflake = (
             compiler is not None and compiler.dialect.name == DIALECT_NAME
         )
@@ -354,7 +356,6 @@ class SnowflakeORMSelectCompileState(context.ORMSelectCompileState):
 
         return left, replace_from_obj_index, use_entity_index
 
-    @args_reducer(positions_to_drop=(6, 7))
     def _join_left_to_right(
         self, entities_collection, left, right, onclause, prop, outerjoin, full
     ):
@@ -395,14 +396,9 @@ class SnowflakeORMSelectCompileState(context.ORMSelectCompileState):
         # a lot of things can be wrong with it.  handle all that and
         # get back the new effective "right" side
 
-        if IS_VERSION_20:
-            r_info, right, onclause = self._join_check_and_adapt_right_side(
-                left, right, onclause, prop
-            )
-        else:
-            r_info, right, onclause = self._join_check_and_adapt_right_side(
-                left, right, onclause, prop, False, False
-            )
+        r_info, right, onclause = self._join_check_and_adapt_right_side(
+            left, right, onclause, prop
+        )
 
         if not r_info.is_selectable:
             extra_criteria = self._get_extra_criteria(r_info)
@@ -706,7 +702,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             encryption_list.sort(key=operator.itemgetter(0))
         encryption = "ENCRYPTION=({})".format(
             " ".join(
-                ("{}='{}'" if isinstance(v, string_types) else "{}={}").format(n, v)
+                ("{}='{}'" if isinstance(v, str) else "{}={}").format(n, v)
                 for n, v in encryption_list
             )
         )
@@ -731,7 +727,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             encryption_list.sort(key=operator.itemgetter(0))
         encryption = "ENCRYPTION=({})".format(
             " ".join(
-                f"{n}='{v}'" if isinstance(v, string_types) else f"{n}={v}"
+                f"{n}='{v}'" if isinstance(v, str) else f"{n}={v}"
                 for n, v in encryption_list
             )
         )
@@ -752,7 +748,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             encryption_list.sort(key=operator.itemgetter(0))
         encryption = "ENCRYPTION=({})".format(
             " ".join(
-                f"{n}='{v}'" if isinstance(v, string_types) else f"{n}={v}"
+                f"{n}='{v}'" if isinstance(v, str) else f"{n}={v}"
                 for n, v in encryption_list
             )
         )
@@ -879,7 +875,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         )
 
     def visit_truediv_binary(self, binary, operator, **kw):
-        if self.dialect.div_is_floordiv and IS_VERSION_20:
+        if self.dialect.div_is_floordiv:
             warnings.warn(
                 "div_is_floordiv value will be changed to False in a future release. This will generate a behavior change on true and floor division. Please review https://docs.sqlalchemy.org/en/20/changelog/whatsnew_20.html#python-division-operator-performs-true-division-for-all-backends-added-floor-division",
                 PendingDeprecationWarning,
@@ -891,7 +887,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         )
 
     def visit_floordiv_binary(self, binary, operator, **kw):
-        if self.dialect.div_is_floordiv and IS_VERSION_20:
+        if self.dialect.div_is_floordiv:
             warnings.warn(
                 "div_is_floordiv value will be changed to False in a future release. This will generate a behavior change on true and floor division. Please review https://docs.sqlalchemy.org/en/20/changelog/whatsnew_20.html#python-division-operator-performs-true-division-for-all-backends-added-floor-division",
                 PendingDeprecationWarning,
