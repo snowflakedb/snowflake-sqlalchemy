@@ -354,28 +354,11 @@ class SnowflakeDialect(default.DefaultDialect):
     def _always_quote_join(self, *idents):
         """Build a dot-joined identifier string that always quotes every part.
 
-        Unlike _denormalize_quote_join (which quotes only when _requires_quotes
-        demands it), this helper denormalizes each segment first and then
-        unconditionally wraps it in double-quotes.  This is safe because quoting
-        a denormalized Snowflake identifier is semantically equivalent to the
-        unquoted form for case-insensitive names, while also being correct for
-        case-sensitive ones.
-
-        IMPORTANT: denormalization must happen before quoting.  Quoting the
-        SA-normalized (lowercase) form would produce "my_table" which Snowflake
-        resolves as a case-sensitive reference to a table literally stored as
-        my_table — different from the stored MY_TABLE.
-
-        Only use this for new, single-table SQL helpers.  Existing callers of
-        _denormalize_quote_join must not be changed to avoid altering SQL output
-        for existing users (backward-compatibility constraint).
+        Delegates to ``_NameUtils.always_quote_join`` — see that method for
+        the full contract.  The dialect accessor exists for backward
+        compatibility with callers inside this class.
         """
-        ip = self.identifier_preparer
-        split_idents = reduce(
-            operator.add,
-            [ip._split_schema_by_dot(ids) for ids in idents if ids is not None],
-        )
-        return ".".join(ip.quote(self.denormalize_name(i)) for i in split_idents)
+        return self.name_utils.always_quote_join(*idents)
 
     def _get_full_schema_name(self, connection, schema=None, **kw):
         """
@@ -407,24 +390,10 @@ class SnowflakeDialect(default.DefaultDialect):
                     f"'database.schema', got {len(parts)} parts"
                 )
 
-        # Quote each part unconditionally and preserve explicit quoted-name
-        # boundaries from _split_schema_by_dot. Do NOT pass through
-        # _denormalize_quote_join, which would re-split parts containing
-        # literal dots (e.g. "schema.with.dots").
-        quoted_parts = []
-        for part in parts:
-            part_name = str(part)
-            if getattr(part, "quote", None):
-                quoted_parts.append(
-                    self.identifier_preparer.quote_identifier(part_name)
-                )
-            else:
-                quoted_parts.append(
-                    self.identifier_preparer.quote_identifier(
-                        self.denormalize_name(part_name)
-                    )
-                )
-        return ".".join(quoted_parts)
+        # Quote each pre-split part unconditionally, preserving explicit
+        # quoted-name boundaries.  Do NOT re-split via always_quote_join
+        # because parts may contain literal dots (e.g. "schema.with.dots").
+        return ".".join(self.name_utils._quote_component(p) for p in parts)
 
     @reflection.cache
     def _current_database_schema(self, connection, **kw):

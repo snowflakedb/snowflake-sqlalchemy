@@ -83,39 +83,13 @@ class _StructuredTypeInfoManager:
         """Get all columns in a table in a schema"""
         schema = schema if schema else self.default_schema
 
-        ip = self.name_utils.identifier_preparer
-
         if "." in str(table_name):
-            parts = ip._split_schema_by_dot(str(table_name))
-            table_name = str(parts[-1])
+            ip = self.name_utils.identifier_preparer
+            table_name = ip._split_schema_by_dot(str(table_name))[-1]
 
-        # Quote each component of a (possibly database-qualified) schema
-        # separately instead of quoting the whole dotted string as a single
-        # identifier. Quoting ``"MYDB"."MYSCHEMA"`` as one identifier double-
-        # escapes the existing quotes (``"""MYDB"".""MYSCHEMA"""``) and breaks
-        # the DESC TABLE fallback. Splitting on the dot — while preserving
-        # explicit quotes around a component (e.g. ``"my.schema"``) — keeps the
-        # injection guard (every component is still double-quoted) and mirrors
-        # the schema-wide reflection path's ``_always_quote_join`` behaviour.
-        components = [
-            self._quote_component(component)
-            for component in ip._split_schema_by_dot(schema)
-        ]
-        components.append(self._quote_component(table_name))
-        return self.get_table_columns_by_full_name(".".join(components))
-
-    def _quote_component(self, component) -> str:
-        """Unconditionally double-quote a single identifier component.
-
-        A component flagged as explicitly quoted (``quote=True``) is taken
-        verbatim; otherwise it is denormalized first so a plain lowercase name
-        matches how Snowflake stores it.
-        """
-        ip = self.name_utils.identifier_preparer
-        name = str(component)
-        if getattr(component, "quote", None):
-            return ip.quote_identifier(name)
-        return ip.quote_identifier(self.name_utils.denormalize_name(name))
+        return self.get_table_columns_by_full_name(
+            self.name_utils.always_quote_join(schema, table_name)
+        )
 
     def _parse_desc_result(self, result):
         """Parse DESC TABLE result into column information"""
