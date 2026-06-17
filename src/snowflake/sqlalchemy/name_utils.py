@@ -1,6 +1,9 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 
+import operator
+from functools import reduce
+
 from sqlalchemy.sql.compiler import IdentifierPreparer
 from sqlalchemy.sql.elements import quoted_name
 
@@ -61,3 +64,42 @@ class _NameUtils:
         ):
             name = name.upper()
         return name
+
+    def _quote_component(self, component) -> str:
+        """Unconditionally double-quote a single pre-split identifier component.
+
+        Components marked ``quote=True`` are taken verbatim (case preserved);
+        others are denormalized first so a plain lowercase name maps to the
+        Snowflake-stored uppercase form.
+
+        Use this only for parts that were already extracted by
+        ``_split_schema_by_dot`` — do NOT call it on dotted strings because
+        it will not split them first.
+        """
+        ip = self.identifier_preparer
+        name = str(component)
+        if getattr(component, "quote", None):
+            return ip.quote_identifier(name)
+        return ip.quote_identifier(self.denormalize_name(name))
+
+    def always_quote_join(self, *idents) -> str:
+        """Build a dot-joined SQL identifier string that always quotes every part.
+
+        Each identifier in *idents is split on unquoted dots via
+        ``_split_schema_by_dot`` (so ``"db.schema"`` becomes two components),
+        then every component is unconditionally double-quoted via
+        ``_quote_component``.
+
+        Do NOT pass pre-split parts that may contain literal dots (e.g. a
+        component extracted from ``'"my.schema"'``).  Use ``_quote_component``
+        directly on each pre-split part instead.
+        """
+        split_idents = reduce(
+            operator.add,
+            [
+                self.identifier_preparer._split_schema_by_dot(ids)
+                for ids in idents
+                if ids is not None
+            ],
+        )
+        return ".".join(self._quote_component(i) for i in split_idents)

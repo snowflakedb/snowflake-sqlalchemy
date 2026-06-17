@@ -10,6 +10,15 @@ Source code is also available at:
 # Unreleased Notes
 
 - Fix double-escaped identifier quoting for database-qualified schemas in `_StructuredTypeInfoManager.get_table_columns`. Since v1.10.1 the schema was quoted as a single identifier, so a qualified schema such as `"MYDB"."MYSCHEMA"` became `"""MYDB"".""MYSCHEMA"""` and the `DESC TABLE` fallback failed (emitting a `Failed to reflect table ... sqlalchemy:_get_schema_columns` warning) for every structured-typed table when reflecting a non-default `database.schema`. The schema is now split on the dot and each component is double-quoted individually, preserving the SNOW-3480955 injection guard while correctly handling qualified schemas.
+- Unify always-quote identifier logic into `_NameUtils`. Move the canonical
+  `_quote_component` / `always_quote_join` helpers onto `_NameUtils` so
+  `SnowflakeDialect._always_quote_join`, `_get_full_schema_name`, and
+  `_StructuredTypeInfoManager.get_table_columns` all share one implementation,
+  eliminating the divergence that caused the v1.10.1 regression. As a
+  side-effect, corrects the quoting of `quoted_name("myschema", True)` (an
+  explicitly case-sensitive lowercase identifier): the old `_always_quote_join`
+  called `str()` before inspecting the `quote` attribute, silently uppercasing
+  the name to `"MYSCHEMA"` and discarding the case-sensitivity signal.
 
 # Release Notes
 
