@@ -231,7 +231,9 @@ def test_quoted_database_qualified_schema_is_not_double_escaped():
     assert (
         '"MYDB"."MYSCHEMA"."MYTABLE"' in sql
     ), f"Already-quoted qualified schema was double-escaped; got: {sql!r}"
-    assert '"""' not in sql, f"Found triple double-quote (double escaping); got: {sql!r}"
+    assert (
+        '"""' not in sql
+    ), f"Found triple double-quote (double escaping); got: {sql!r}"
 
 
 def test_quoted_component_with_literal_dot_is_preserved():
