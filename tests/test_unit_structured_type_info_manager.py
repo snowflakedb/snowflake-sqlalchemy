@@ -202,3 +202,44 @@ def test_desc_table_statement_structure():
     sql = _first_sql(captured)
     assert sql.startswith("DESC"), f"Expected DESC statement, got: {sql!r}"
     assert "TYPE = COLUMNS" in sql, f"Missing TYPE = COLUMNS clause, got: {sql!r}"
+
+
+# ---------------------------------------------------------------------------
+# Database-qualified schema quoting (regression: see issue)
+# ---------------------------------------------------------------------------
+
+
+def test_unquoted_database_qualified_schema_is_split_and_quoted():
+    """``MYDB.MYSCHEMA`` must become ``"MYDB"."MYSCHEMA"``, not a single quoted
+    identifier ``"MYDB.MYSCHEMA"``."""
+    manager, captured = _make_manager()
+    manager.get_table_columns("mytable", schema="mydb.myschema")
+
+    sql = _first_sql(captured)
+    assert (
+        '"MYDB"."MYSCHEMA"."MYTABLE"' in sql
+    ), f"Qualified schema not split into quoted components; got: {sql!r}"
+
+
+def test_quoted_database_qualified_schema_is_not_double_escaped():
+    """An already-quoted qualified schema must be preserved, not re-quoted as a
+    single identifier with the inner quotes doubled (the regression)."""
+    manager, captured = _make_manager()
+    manager.get_table_columns("mytable", schema='"MYDB"."MYSCHEMA"')
+
+    sql = _first_sql(captured)
+    assert (
+        '"MYDB"."MYSCHEMA"."MYTABLE"' in sql
+    ), f"Already-quoted qualified schema was double-escaped; got: {sql!r}"
+    assert '"""' not in sql, f"Found triple double-quote (double escaping); got: {sql!r}"
+
+
+def test_quoted_component_with_literal_dot_is_preserved():
+    """A quoted component containing a literal dot is treated as one identifier."""
+    manager, captured = _make_manager()
+    manager.get_table_columns("mytable", schema='"my.schema"')
+
+    sql = _first_sql(captured)
+    assert (
+        '"my.schema"."MYTABLE"' in sql
+    ), f"Quoted component with a literal dot was mis-split; got: {sql!r}"
