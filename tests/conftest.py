@@ -27,7 +27,10 @@ from snowflake.sqlalchemy._constants import (
     SNOWFLAKE_SQLALCHEMY_VERSION,
 )
 
-from .parameters import CONNECTION_PARAMETERS
+try:
+    from .parameters import CONNECTION_PARAMETERS
+except ImportError:
+    CONNECTION_PARAMETERS = None
 
 CLOUD_PROVIDERS = {"aws", "azure", "gcp"}
 EXTERNAL_SKIP_TAGS = {"internal"}
@@ -88,6 +91,24 @@ DEFAULT_PARAMETERS = {
     "host": "<host>",
     "port": "443",
 }
+
+
+def _connection_parameters_from_env() -> dict:
+    _env_map = {
+        "SNOWFLAKE_ACCOUNT": "account",
+        "SNOWFLAKE_USER": "user",
+        "SNOWFLAKE_PASSWORD": "password",
+        "SNOWFLAKE_DATABASE": "database",
+        "SNOWFLAKE_SCHEMA": "schema",
+        "SNOWFLAKE_HOST": "host",
+        "SNOWFLAKE_PORT": "port",
+        "SNOWFLAKE_PROTOCOL": "protocol",
+        "SNOWFLAKE_WAREHOUSE": "warehouse",
+        "SNOWFLAKE_ROLE": "role",
+    }
+    return {
+        param: os.environ[env] for env, param in _env_map.items() if env in os.environ
+    }
 
 
 @pytest.fixture(scope="session")
@@ -154,7 +175,10 @@ def get_db_parameters() -> dict:
         logger.warning("time.tzset is unavailable on this platform")
 
     ret.update(DEFAULT_PARAMETERS)
-    ret.update(CONNECTION_PARAMETERS)
+    if CONNECTION_PARAMETERS is not None:
+        ret.update(CONNECTION_PARAMETERS)
+    else:
+        ret.update(_connection_parameters_from_env())
 
     if "account" in ret and ret["account"] == DEFAULT_PARAMETERS["account"]:
         help()
