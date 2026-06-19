@@ -16,9 +16,15 @@ on:
         required: true
         description: "Last commit SHA in the pull request"
 
+permissions:
+  contents: read
+
 jobs:
   verify-test-run:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       got-testable-changes: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.changes.outputs.run_tests }}
     steps:
@@ -76,7 +82,7 @@ jobs:
     if: |
       !cancelled() &&
       (
-        (github.event_name == 'workflow_dispatch') ||
+        (github.event_name == 'workflow_dispatch' && needs.verify-test-run.result == 'success') ||
         (
           github.event_name == 'pull_request' &&
           github.event.pull_request.head.repo.full_name == github.repository &&
@@ -120,7 +126,7 @@ jobs:
     if: |
       !cancelled() &&
       (
-        (github.event_name == 'workflow_dispatch') ||
+        (github.event_name == 'workflow_dispatch' && needs.verify-test-run.result == 'success') ||
         (
           github.event_name == 'pull_request' &&
           github.event.pull_request.head.repo.full_name == github.repository &&
@@ -169,7 +175,7 @@ jobs:
     if: |
       !cancelled() &&
       (
-        (github.event_name == 'workflow_dispatch') ||
+        (github.event_name == 'workflow_dispatch' && needs.verify-test-run.result == 'success') ||
         (
           github.event_name == 'pull_request' &&
           github.event.pull_request.head.repo.full_name == github.repository &&
@@ -178,6 +184,17 @@ jobs:
       )
     name: Test dialect ${{ matrix.os }}-${{ fromJson('{"default":"3.13","sa14":"3.12"}')[matrix.hatch-env] }}-${{ matrix.cloud-provider }}-${{ matrix.hatch-env }}
     runs-on: ${{ matrix.os }}
+    env:
+      SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+      SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+      SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+      SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+      SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
+      SNOWFLAKE_HOST: ${{ secrets.SNOWFLAKE_HOST }}
+      SNOWFLAKE_PORT: ${{ secrets.SNOWFLAKE_PORT }}
+      SNOWFLAKE_PROTOCOL: ${{ secrets.SNOWFLAKE_PROTOCOL }}
+      SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+      SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
     strategy:
       fail-fast: false
       matrix:
@@ -246,7 +263,7 @@ jobs:
     if: |
       !cancelled() &&
       (
-        (github.event_name == 'workflow_dispatch') ||
+        (github.event_name == 'workflow_dispatch' && needs.verify-test-run.result == 'success') ||
         (
           github.event_name == 'pull_request' &&
           github.event.pull_request.head.repo.full_name == github.repository &&
@@ -255,6 +272,17 @@ jobs:
       )
     name: Test dialect compatibility ${{ matrix.os }}-${{ fromJson('{"default":"3.13","sa14":"3.12"}')[matrix.hatch-env] }}-${{ matrix.cloud-provider }}-${{ matrix.hatch-env }}
     runs-on: ${{ matrix.os }}
+    env:
+      SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+      SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+      SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+      SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+      SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
+      SNOWFLAKE_HOST: ${{ secrets.SNOWFLAKE_HOST }}
+      SNOWFLAKE_PORT: ${{ secrets.SNOWFLAKE_PORT }}
+      SNOWFLAKE_PROTOCOL: ${{ secrets.SNOWFLAKE_PROTOCOL }}
+      SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+      SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
     strategy:
       fail-fast: false
       matrix:
@@ -315,7 +343,7 @@ jobs:
     if: |
       !cancelled() &&
       (
-        (github.event_name == 'workflow_dispatch') ||
+        (github.event_name == 'workflow_dispatch' && needs.verify-test-run.result == 'success') ||
         (
           github.event_name == 'pull_request' &&
           github.event.pull_request.head.repo.full_name == github.repository &&
@@ -324,6 +352,17 @@ jobs:
       )
     name: Test dialect v14 ${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
     runs-on: ${{ matrix.os }}
+    env:
+      SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+      SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+      SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+      SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+      SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
+      SNOWFLAKE_HOST: ${{ secrets.SNOWFLAKE_HOST }}
+      SNOWFLAKE_PORT: ${{ secrets.SNOWFLAKE_PORT }}
+      SNOWFLAKE_PROTOCOL: ${{ secrets.SNOWFLAKE_PROTOCOL }}
+      SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+      SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
     strategy:
       fail-fast: false
       matrix:
@@ -383,7 +422,7 @@ jobs:
     if: |
       !cancelled() &&
       (
-        (github.event_name == 'workflow_dispatch') ||
+        (github.event_name == 'workflow_dispatch' && needs.verify-test-run.result == 'success') ||
         (
           github.event_name == 'pull_request' &&
           github.event.pull_request.head.repo.full_name == github.repository &&
@@ -392,6 +431,17 @@ jobs:
       )
     name: Test dialect v14 compatibility ${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
     runs-on: ${{ matrix.os }}
+    env:
+      SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+      SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+      SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+      SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+      SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
+      SNOWFLAKE_HOST: ${{ secrets.SNOWFLAKE_HOST }}
+      SNOWFLAKE_PORT: ${{ secrets.SNOWFLAKE_PORT }}
+      SNOWFLAKE_PROTOCOL: ${{ secrets.SNOWFLAKE_PROTOCOL }}
+      SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+      SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
     strategy:
       fail-fast: false
       matrix:
@@ -448,7 +498,7 @@ jobs:
     if: |
       !cancelled() && (success() || failure()) &&
       (
-        (github.event_name == 'workflow_dispatch') ||
+        (github.event_name == 'workflow_dispatch' && needs.verify-test-run.result == 'success') ||
         (
           github.event_name == 'pull_request' &&
           github.event.pull_request.head.repo.full_name == github.repository &&

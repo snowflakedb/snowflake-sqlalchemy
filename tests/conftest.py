@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import logging.handlers
 import os
-import sys
 import time
 import uuid
 from logging import getLogger
@@ -13,10 +12,12 @@ from typing import Literal
 
 import pytest
 from sqlalchemy import create_engine
+from sqlalchemy.exc import ProgrammingError as SAProgrammingError
 from sqlalchemy.pool import NullPool
 
 import snowflake.connector
 import snowflake.connector.connection
+import snowflake.connector.errors
 from snowflake.connector.compat import IS_WINDOWS
 from snowflake.sqlalchemy import URL, dialect
 from snowflake.sqlalchemy._constants import (
@@ -107,7 +108,7 @@ def _connection_parameters_from_env() -> dict:
         "SNOWFLAKE_ROLE": "role",
     }
     return {
-        param: os.environ[env] for env, param in _env_map.items() if env in os.environ
+        param: os.environ[env] for env, param in _env_map.items() if os.environ.get(env)
     }
 
 
@@ -162,6 +163,35 @@ def base_location(external_stage, engine_testaccount):
         connection.exec_driver_sql(remove_base_location)
 
 
+# Snowflake error numbers for features not available on all account tiers.
+_FEATURE_UNAVAILABLE_ERRNOS = {
+    391404,  # Hybrid tables not available to trial accounts
+}
+
+
+def _feature_unavailable_reason(exc: BaseException) -> str | None:
+    """Return a skip reason if exc signals a Snowflake feature not available, else None."""
+    if isinstance(exc, SAProgrammingError) and exc.orig is not None:
+        exc = exc.orig
+    if (
+        isinstance(exc, snowflake.connector.errors.ProgrammingError)
+        and exc.errno in _FEATURE_UNAVAILABLE_ERRNOS
+    ):
+        return f"feature not available on this account: {exc}"
+    return None
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    outcome = yield
+    report = outcome.get_result()
+    if report.failed and call.excinfo is not None:
+        reason = _feature_unavailable_reason(call.excinfo.value)
+        if reason:
+            report.outcome = "skipped"
+            report.longrepr = (item.location[0], item.location[1], f"Skipped: {reason}")
+
+
 def get_db_parameters() -> dict:
     """
     Sets the db connection parameters
@@ -180,9 +210,7 @@ def get_db_parameters() -> dict:
     else:
         ret.update(_connection_parameters_from_env())
 
-    if "account" in ret and ret["account"] == DEFAULT_PARAMETERS["account"]:
-        help()
-        sys.exit(2)
+    assert ret["account"] != DEFAULT_PARAMETERS["account"], "account not configured"
 
     if "host" in ret and ret["host"] == DEFAULT_PARAMETERS["host"]:
         ret["host"] = ret["account"] + ".snowflakecomputing.com"
