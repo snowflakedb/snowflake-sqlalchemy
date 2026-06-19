@@ -51,8 +51,7 @@ from snowflake.sqlalchemy._constants import (
 )
 from snowflake.sqlalchemy.snowdialect import SnowflakeDialect
 
-from .conftest import get_engine, url_factory
-from .parameters import CONNECTION_PARAMETERS
+from .conftest import get_db_parameters, get_engine, url_factory
 from .util import ischema_names_baseline, random_string
 
 THIS_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -127,29 +126,28 @@ def test_connect_args():
     Snowflake connect string supports account name as a replacement of
     host:port
     """
+    params = get_db_parameters()
     server = ""
-    if "host" in CONNECTION_PARAMETERS and "port" in CONNECTION_PARAMETERS:
-        server = "{host}:{port}".format(
-            host=CONNECTION_PARAMETERS["host"], port=CONNECTION_PARAMETERS["port"]
-        )
-    elif "account" in CONNECTION_PARAMETERS and "region" in CONNECTION_PARAMETERS:
+    if "host" in params and "port" in params:
+        server = "{host}:{port}".format(host=params["host"], port=params["port"])
+    elif "account" in params and "region" in params:
         server = "{account}.{region}".format(
-            account=CONNECTION_PARAMETERS["account"],
-            region=CONNECTION_PARAMETERS["region"],
+            account=params["account"],
+            region=params["region"],
         )
-    elif "account" in CONNECTION_PARAMETERS:
-        server = CONNECTION_PARAMETERS["account"]
+    elif "account" in params:
+        server = params["account"]
 
     engine = create_engine(
         "snowflake://{user}:{password}@{server}/{database}/{schema}"
         "?account={account}&protocol={protocol}".format(
-            user=CONNECTION_PARAMETERS["user"],
-            account=CONNECTION_PARAMETERS["account"],
-            password=CONNECTION_PARAMETERS["password"],
+            user=params["user"],
+            account=params["account"],
+            password=params["password"],
             server=server,
-            database=CONNECTION_PARAMETERS["database"],
-            schema=CONNECTION_PARAMETERS["schema"],
-            protocol=CONNECTION_PARAMETERS["protocol"],
+            database=params["database"],
+            schema=params["schema"],
+            protocol=params["protocol"],
         )
     )
     try:
@@ -157,14 +155,13 @@ def test_connect_args():
     finally:
         engine.dispose()
 
-    engine = create_engine(URL(**CONNECTION_PARAMETERS))
+    engine = get_engine(url_factory())
     try:
         verify_engine_connection(engine)
     finally:
         engine.dispose()
-    parameters = {**CONNECTION_PARAMETERS}
-    parameters["warehouse"] = "testwh"
-    engine = create_engine(URL(**parameters))
+
+    engine = get_engine(url_factory(warehouse="testwh"))
     try:
         verify_engine_connection(engine)
     finally:
@@ -183,12 +180,7 @@ def test_get_server_version_info(engine_testaccount):
 
 
 def test_boolean_query_argument_parsing():
-    engine = create_engine(
-        URL(
-            **CONNECTION_PARAMETERS,
-            validate_default_parameters=True,
-        )
-    )
+    engine = get_engine(url_factory(validate_default_parameters=True))
     try:
         verify_engine_connection(engine)
         connection = engine.raw_connection()
@@ -203,10 +195,8 @@ def test_query_tag_appears_in_query_history():
     Tests that query_tag actually appears in Snowflake's query history.
     """
     test_query_tag = "sqlalchemy_history_test_tag"
-    engine = create_engine(
-        URL(
-            **CONNECTION_PARAMETERS,
-        ),
+    engine = get_engine(
+        url_factory(),
         connect_args={
             "session_parameters": {
                 "QUERY_TAG": test_query_tag,
@@ -243,7 +233,7 @@ def test_query_tag_per_query():
     Tests setting query_tag dynamically per query or per set of SQL actions
     using ALTER SESSION SET QUERY_TAG.
     """
-    engine = create_engine(URL(**CONNECTION_PARAMETERS))
+    engine = get_engine(url_factory())
     try:
         with engine.connect() as conn:
             # Set query_tag for first set of operations
@@ -2346,15 +2336,15 @@ def test_reflect_schema_none_does_not_crash(engine_testaccount):
 
 @pytest.mark.pandas
 def test_snowflake_sqlalchemy_as_valid_client_type():
-    engine = create_engine(
-        URL(**CONNECTION_PARAMETERS),
+    engine = get_engine(
+        url_factory(),
         connect_args={"internal_application_name": "UnknownClient"},
     )
     with engine.connect() as conn:
         with pytest.raises(snowflake.connector.errors.NotSupportedError):
             conn.exec_driver_sql("select 1").cursor.fetch_pandas_all()
 
-    engine = create_engine(URL(**CONNECTION_PARAMETERS))
+    engine = get_engine(url_factory())
     with engine.connect() as conn:
         conn.exec_driver_sql("select 1").cursor.fetch_pandas_all()
 
@@ -2385,7 +2375,7 @@ def test_snowflake_sqlalchemy_as_valid_client_type():
             "3.0.0",
             (type(None), str),
         )
-        engine = create_engine(URL(**CONNECTION_PARAMETERS))
+        engine = get_engine(url_factory())
         with engine.connect() as conn:
             conn.exec_driver_sql("select 1").cursor.fetch_pandas_all()
             assert (
