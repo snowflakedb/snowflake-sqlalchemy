@@ -1,0 +1,41 @@
+name: Jira issues
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  jira-action:
+    environment: jira
+    runs-on: ubuntu-latest
+    name: Create an issue
+    steps:
+      - name: Curl to webhook
+        env:
+          WEBHOOK_URL: ${{ secrets.JIRA_WEBHOOK_URL }}
+          WEBHOOK_TOKEN: ${{ secrets.JIRA_WEBHOOK_TOKEN }}
+          GITHUB_ISSUE_NUMBER: ${{ github.event.issue.number }}
+          GITHUB_ISSUE_URL: ${{ github.event.issue.html_url }}
+          GITHUB_ISSUE_TITLE: ${{ github.event.issue.title }}
+          GITHUB_ISSUE_BODY: ${{ github.event.issue.body }}
+          JIRA_EPIC: ${{ secrets.JIRA_ISSUES_EPIC }}
+        run: |
+          PAYLOAD=$(jq -n \
+            --arg github_issue_number "$GITHUB_ISSUE_NUMBER" \
+            --arg github_issue_url "$GITHUB_ISSUE_URL" \
+            --arg github_issue_title "$GITHUB_ISSUE_TITLE" \
+            --arg github_issue_body "$GITHUB_ISSUE_BODY" \
+            --arg jira_epic "$JIRA_EPIC" \
+            '{
+              issues: [$jira_epic],
+              data: {
+                summary: ("snowflake-sqlalchemy issue " + $github_issue_number),
+                description: ("*URL*\n" + $github_issue_url + "\n\n*Title*\n" + $github_issue_title + "\n\n*Description*\n" + $github_issue_body),
+                parent: $jira_epic
+              }
+            }')
+
+          curl --fail --max-redirs 0 --location --request POST "$WEBHOOK_URL" \
+          --header "X-Automation-Webhook-Token: $WEBHOOK_TOKEN" \
+          --header 'Content-Type: application/json' \
+          --data "$PAYLOAD"
