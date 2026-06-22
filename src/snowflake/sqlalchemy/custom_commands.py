@@ -12,6 +12,7 @@ from sqlalchemy.sql.elements import ClauseElement
 from sqlalchemy.sql.roles import FromClauseRole
 
 from .compat import string_types
+from .util import escape_string_literal_interior
 
 NoneType = type(None)
 
@@ -104,7 +105,14 @@ class FilesOption:
         self.file_names = file_names
 
     def __str__(self):
-        the_files = ["'" + f.replace("'", "\\'") + "'" for f in self.file_names]
+        # File names are frequently externally-influenced (uploads, object-store
+        # listings, webhook bodies).  Use the shared Snowflake literal escaping
+        # (doubles ' and \) instead of the old \' convention, which left a
+        # backslash-before-quote escaping under ESCAPE_STRING_LITERALS
+        # (SNOW-3649871).
+        the_files = [
+            "'" + escape_string_literal_interior(f) + "'" for f in self.file_names
+        ]
         return f"({','.join(the_files)})"
 
 
