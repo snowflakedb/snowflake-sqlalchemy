@@ -16,6 +16,37 @@ from .util import escape_string_literal_interior
 
 NoneType = type(None)
 
+# Cloud-storage option keys whose values are bearer secrets (cloud access keys,
+# SAS tokens, client-side-encryption master keys).  These must never appear in
+# any debug/log representation (SNOW-3649782 / SNOW-3649850).  Structural option
+# keys (TYPE, AWS_ROLE, KMS_KEY_ID, ...) are not secrets and stay visible.
+SECRET_OPTION_KEYS = frozenset(
+    {"AWS_SECRET_KEY", "AWS_KEY_ID", "AWS_TOKEN", "AZURE_SAS_TOKEN", "MASTER_KEY"}
+)
+REDACTED_SECRET = "***"
+
+
+def _redact_option(name, value):
+    """Return ``value`` for non-secret option keys, ``***`` for secret ones."""
+    return REDACTED_SECRET if name in SECRET_OPTION_KEYS else value
+
+
+# FILE_FORMAT option keys whose values are free-form text with no Snowflake
+# backslash-escape semantics.  These receive full escaping (doubles both ' and
+# \).  All other string options use quote-only escaping (' → ''), preserving
+# legitimate backslash sequences: delimiter/escape options validated to a single
+# character by _check_delimiter (e.g. RECORD_DELIMITER='\n'), and NULL_IF
+# elements which may carry the Snowflake null token \N (SNOW-3649888).
+_FULL_ESCAPE_OPTION_KEYS = frozenset(
+    {
+        "COMPRESSION",
+        "DATE_FORMAT",
+        "FILE_EXTENSION",
+        "TIME_FORMAT",
+        "TIMESTAMP_FORMAT",
+    }
+)
+
 
 def translate_bool(bln):
     if bln:
@@ -196,12 +227,25 @@ class CopyFormatter(ClauseElement):
         return f"FILE_FORMAT=({self.options})"
 
     @staticmethod
+    def _escape_option_str(name, value):
+        """Escape the interior of a FILE_FORMAT string option value.
+
+        Free-form text options (dates, times, extensions, compression type)
+        receive full escaping (doubles both ' and \\).  Delimiter/escape options
+        and NULL_IF receive quote-only escaping (' → '') so that legitimate
+        Snowflake backslash sequences (\\n, \\134, \\N) are preserved.
+        """
+        if name in _FULL_ESCAPE_OPTION_KEYS:
+            return escape_string_literal_interior(value)
+        return value.replace("'", "''")
+
+    @staticmethod
     def value_repr(name, value):
         """
         Make a SQL-suitable representation of "value". This is called from
         the corresponding visitor function (base.py/visit_copy_formatter())
         - in case of a format name: return it without quotes
-        - in case of a string: enclose in quotes: "value"
+        - in case of a string: enclose in quotes with interior escaping
         - in case of a tuple of length 1: enclose the only element in brackets: (value)
             Standard stringification of Python would append a trailing comma: (value,)
             which is not correct in SQL
@@ -210,9 +254,9 @@ class CopyFormatter(ClauseElement):
         if name == "format_name":
             return value
         elif isinstance(value, str):
-            return f"'{value}'"
+            return f"'{CopyFormatter._escape_option_str(name, value)}'"
         elif isinstance(value, tuple) and len(value) == 1:
-            return f"('{value[0]}')"
+            return f"('{CopyFormatter._escape_option_str(name, str(value[0]))}')"
         else:
             return str(value)
 
@@ -542,11 +586,18 @@ class AWSBucket(CloudStorageLocation):
 
     def __repr__(self):
         credentials = "CREDENTIALS=({})".format(
-            " ".join(f"{n}='{v}'" for n, v in self.credentials_used.items())
+            " ".join(
+                f"{n}='{_redact_option(n, v)}'"
+                for n, v in self.credentials_used.items()
+            )
         )
         encryption = "ENCRYPTION=({})".format(
             " ".join(
-                f"{n}='{v}'" if isinstance(v, string_types) else f"{n}={v}"
+                (
+                    f"{n}='{_redact_option(n, v)}'"
+                    if isinstance(v, string_types)
+                    else f"{n}={v}"
+                )
                 for n, v in self.encryption_used.items()
             )
         )
@@ -618,11 +669,18 @@ class AzureContainer(CloudStorageLocation):
 
     def __repr__(self):
         credentials = "CREDENTIALS=({})".format(
-            " ".join(f"{n}='{v}'" for n, v in self.credentials_used.items())
+            " ".join(
+                f"{n}='{_redact_option(n, v)}'"
+                for n, v in self.credentials_used.items()
+            )
         )
         encryption = "ENCRYPTION=({})".format(
             " ".join(
-                f"{n}='{v}'" if isinstance(v, string_types) else f"{n}={v}"
+                (
+                    f"{n}='{_redact_option(n, v)}'"
+                    if isinstance(v, string_types)
+                    else f"{n}={v}"
+                )
                 for n, v in self.encryption_used.items()
             )
         )
@@ -668,7 +726,11 @@ class GCSBucket(CloudStorageLocation):
     def __repr__(self):
         encryption = "ENCRYPTION=({})".format(
             " ".join(
-                f"{n}='{v}'" if isinstance(v, string_types) else f"{n}={v}"
+                (
+                    f"{n}='{_redact_option(n, v)}'"
+                    if isinstance(v, string_types)
+                    else f"{n}={v}"
+                )
                 for n, v in self.encryption_used.items()
             )
         )

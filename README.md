@@ -987,6 +987,42 @@ copy_into = CopyIntoStorage(from_=users,
 connection.execute(copy_into)
 ```
 
+#### Securing cloud credentials in logs
+
+When a `CopyIntoStorage` / `CreateStage` uses **inline** credentials
+(`AWSBucket.credentials(...)`, `AzureContainer.credentials(...)`, or any
+`encryption_*_cse(master_key)`), those secrets are emitted as literal values in
+the compiled SQL — that is how Snowflake receives them. If the SQLAlchemy engine
+log is enabled (`create_engine(..., echo=True)` or the `sqlalchemy.engine` logger
+at `INFO`/`DEBUG`), the full statement, secrets included, is written to your log
+sink. That logger is independent of the Snowflake connector's secret masking.
+
+- **Preferred:** use a named `STORAGE_INTEGRATION` instead of inline credentials,
+  so no secret ever appears in the SQL:
+
+  ```python
+  copy_into = CopyIntoStorage(from_=users, into=AWSBucket.from_uri('s3://my_private_backup'))
+  copy_into.storage_integration('my_s3_integration')
+  ```
+
+- **When inline credentials are unavoidable**, attach the redaction filter so the
+  secret values are masked (`***`) in log output. Attach it to the handler that
+  actually emits the records (handler filters run on propagated records; logger
+  filters do not):
+
+  ```python
+  import logging
+  from snowflake.sqlalchemy import add_secret_redaction_filter
+
+  handler = logging.StreamHandler()
+  add_secret_redaction_filter(handler)
+  logging.getLogger("sqlalchemy.engine").addHandler(handler)
+  ```
+
+  `redact_secrets(text)` is also exported for redacting a statement string
+  directly. Note that object `repr()` (`AWSBucket`, `AzureContainer`,
+  `CopyIntoStorage`, ...) already masks these secrets.
+
 ### Iceberg Table with Snowflake Catalog support
 
 Snowflake SQLAlchemy supports Iceberg Tables with the Snowflake Catalog, along with various related parameters. For detailed information about Iceberg Tables, refer to the Snowflake [CREATE ICEBERG](https://docs.snowflake.com/en/sql-reference/sql/create-iceberg-table-snowflake) documentation.

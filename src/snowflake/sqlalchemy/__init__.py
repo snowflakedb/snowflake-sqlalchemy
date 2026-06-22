@@ -68,6 +68,11 @@ from .custom_types import (  # noqa
     VECTOR,
 )
 from .orm import SnowflakeSession, snowflake_declarative_base  # noqa
+from .secret_logging import (  # noqa
+    SnowflakeSecretRedactionFilter,
+    add_secret_redaction_filter,
+    redact_secrets,
+)
 from .sql.custom_schema import (  # noqa
     DynamicTable,
     HybridTable,
@@ -180,6 +185,12 @@ _sa20_types = ("UUID",) if IS_VERSION_20 else ()
 
 _helpers = ("create_snowflake_engine",)
 
+_secret_logging = (
+    "SnowflakeSecretRedactionFilter",
+    "add_secret_redaction_filter",
+    "redact_secrets",
+)
+
 __all__ = (
     *_custom_types,
     *_sa20_types,
@@ -190,4 +201,5 @@ __all__ = (
     *_orm,
     *_orm_v20,
     *_helpers,
+    *_secret_logging,
 )

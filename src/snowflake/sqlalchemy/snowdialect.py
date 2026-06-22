@@ -2,6 +2,7 @@
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
 import decimal
+import logging
 import operator
 from collections import defaultdict
 from enum import Enum
@@ -81,6 +82,44 @@ class SnowflakeIsolationLevel(Enum):
 class _KeyedColumn(NamedTuple):
     key_sequence: int
     column_name: str
+
+
+class _RedactionHandler(logging.Handler):
+    """Handler whose sole purpose is to run attached filters in-place.
+
+    logging.NullHandler cannot be used for this role because its handle()
+    is a stub that skips filter evaluation entirely.  This handler inherits
+    the standard Handler.handle() which calls filters then emit(); emit()
+    here is a no-op so nothing is actually written anywhere.
+    """
+
+    def emit(self, record) -> None:
+        pass
+
+
+def _ensure_engine_log_redaction() -> None:
+    """Attach a SnowflakeSecretRedactionFilter to the SQLAlchemy engine logger.
+
+    Inserts a _RedactionHandler at position 0 on the shared
+    ``sqlalchemy.engine.Engine`` parent logger.  Records from engine-specific
+    child loggers propagate through this parent; Handler.handle() calls the
+    handler's filters which rewrite ``record.msg`` in-place before any real
+    handler (StreamHandler, FileHandler, …) emits the record.  Idempotent:
+    calling multiple times (e.g. from several engines) adds the handler only
+    once.
+    """
+    from .secret_logging import SnowflakeSecretRedactionFilter
+
+    parent = getLogger("sqlalchemy.engine.Engine")
+    if any(
+        isinstance(h, _RedactionHandler)
+        and any(isinstance(f, SnowflakeSecretRedactionFilter) for f in h.filters)
+        for h in parent.handlers
+    ):
+        return
+    h = _RedactionHandler()
+    h.addFilter(SnowflakeSecretRedactionFilter())
+    parent.handlers.insert(0, h)
 
 
 class SnowflakeDialect(default.DefaultDialect):
@@ -173,6 +212,7 @@ class SnowflakeDialect(default.DefaultDialect):
         enable_decfloat: bool = False,
         case_sensitive_identifiers: bool = False,
         cache_column_metadata: bool = False,
+        redact_log_secrets: bool = True,
         **kwargs: Any,
     ):
         super().__init__(isolation_level=isolation_level, **kwargs)
@@ -189,10 +229,13 @@ class SnowflakeDialect(default.DefaultDialect):
         # ``create_connect_args`` may later overwrite it when the URL query
         # string carries ``cache_column_metadata=...``.
         self._cache_column_metadata = cache_column_metadata
+        self._redact_log_secrets = redact_log_secrets
 
     def initialize(self, connection):
         super().initialize(connection)
         self.div_is_floordiv = self.force_div_is_floordiv
+        if self._redact_log_secrets:
+            _ensure_engine_log_redaction()
 
     @classmethod
     def dbapi(cls):
