@@ -24,7 +24,13 @@ from sqlalchemy.sql.selectable import Lateral, SelectState
 
 from snowflake.sqlalchemy._constants import DIALECT_NAME
 from snowflake.sqlalchemy.compat import IS_VERSION_20, args_reducer, string_types
-from snowflake.sqlalchemy.custom_commands import CloudStorageLocation, ExternalStage
+from snowflake.sqlalchemy.custom_commands import (
+    AWSBucket,
+    AzureContainer,
+    CloudStorageLocation,
+    ExternalStage,
+    GCSBucket,
+)
 
 from ._constants import NOT_NULL
 from .exc import (
@@ -463,16 +469,78 @@ class SnowflakeIdentifierPreparer(compiler.IdentifierPreparer):
 
         super().__init__(dialect, initial_quote=quote, escape_quote=quote)
 
+    def _safe_quote(self, ident):
+        """Quote ``ident`` per dialect rules, but never emit an unsafe value raw.
+
+        ``IdentifierPreparer.quote`` honours ``quoted_name(..., quote=False)``
+        by returning the value verbatim.  In an identifier/schema position that
+        is a quoting concern (SNOW-3649808): an application that wraps a
+        user-derived identifier in ``quote=False`` would splat it unquoted into
+        the compiled statement.  We override only that case — when quote=False
+        but the value is *structurally* unsafe — while leaving legal bare
+        identifiers (the documented quote=False idiom, including upper-case
+        ones Snowflake folds) untouched.
+        """
+        if getattr(ident, "quote", None) is False and self._is_unsafe_unquoted(ident):
+            return self.quote_identifier(ident)
+        return self.quote(ident)
+
+    def _is_unsafe_unquoted(self, value: str) -> bool:
+        """Return True if emitting ``value`` unquoted could alter SQL structure.
+
+        Mirrors :meth:`_requires_quotes` but omits the case-only clause: an
+        upper/mixed-case identifier is harmless emitted bare (Snowflake folds
+        it), whereas whitespace, quotes, dots, parentheses, semicolons, etc. are
+        what require quoting.  Used to neutralise risky values while still
+        preserving the historical bare rendering of legal identifiers.
+        """
+        if not value:
+            return False
+        lc_value = value.lower()
+        return (
+            lc_value in self.reserved_words
+            or lc_value in self.illegal_identifiers
+            or value[0] in self.illegal_initial_characters
+            or not self.legal_characters.match(str(value))
+        )
+
+    def quote_identifier_if_unsafe(self, value: str) -> str:
+        """Quote each dot-separated part of ``value`` only when it is unsafe.
+
+        Used for custom-command identifiers (stage name/namespace, format_name,
+        file_format) that historically render bare and must keep doing so for
+        legal identifiers — including upper-case ones — while neutralising any
+        part that contains SQL metacharacters (SNOW-3649881 / SNOW-3649858).
+        """
+        return ".".join(
+            self.quote_identifier(p) if self._is_unsafe_unquoted(p) else str(p)
+            for p in self._split_schema_by_dot(value)
+            if p is not None
+        )
+
     def _quote_free_identifiers(self, *ids):
         """
-        Unilaterally identifier-quote any number of strings.
+        Identifier-quote any number of strings, quoting whenever the value
+        requires it.  Unlike a bare ``quote()`` this refuses to emit an unsafe
+        ``quote=False`` identifier verbatim (see :meth:`_safe_quote`).
         """
-        return tuple(self.quote(i) for i in ids if i is not None)
+        return tuple(self._safe_quote(i) for i in ids if i is not None)
 
     def quote_schema(self, schema, force=None):
         """
         Split schema by a dot and merge with required quotes
         """
+        # SA 2.0 schema-translate tokens arrive as
+        # ``quoted_name("__[SCHEMA_<key>]", quote=False)``.  _safe_quote
+        # (used inside _quote_free_identifiers) overrides quote=False when
+        # the value contains unsafe characters — but the bracket characters
+        # in SA's internal token are safe as-is; quoting them
+        # destroys the token and breaks SA's post-compile substitution.
+        # Return the token string as-is so SA can resolve it normally.
+        if getattr(schema, "quote", None) is False and str(schema).startswith(
+            "__[SCHEMA_"
+        ):
+            return str(schema)
         idents = self._split_schema_by_dot(schema)
         return ".".join(self._quote_free_identifiers(*idents))
 
@@ -482,8 +550,14 @@ class SnowflakeIdentifierPreparer(compiler.IdentifierPreparer):
 
         if not isinstance(n, quoted_name) or n.quote is None:
             return self.quote(s)
-
-        return self.quote_identifier(s) if n.quote else s
+        if n.quote:
+            return self.quote_identifier(s)
+        # n.quote is False: previously returned ``s`` verbatim, which let an
+        # application that wrapped a user-supplied alias in
+        # ``quoted_name(alias, quote=False)`` could emit arbitrary SQL into the
+        # projection list (SNOW-3649824).  _safe_quote encodes the rule:
+        # honour quote=False for legal bare identifiers, force-quote if unsafe.
+        return self._safe_quote(s)
 
     def _requires_quotes(self, value: str) -> bool:
         """Return True if the given identifier requires quoting."""
@@ -546,6 +620,68 @@ class SnowflakeIdentifierPreparer(compiler.IdentifierPreparer):
         ]
 
 
+def _render_storage_credentials(credentials_used, deterministic: bool = False) -> str:
+    """Render a ``CREDENTIALS=(...)`` clause with escaped literal values.
+
+    Credential values (SAS tokens, secret keys, KMS ids, ...) are
+    caller-supplied and embedded in single-quoted literals, so each is escaped
+    to neutralise single-quote / backslash sequences (SNOW-3649816).  Keys come
+    from the closed set defined by the bucket helpers and are emitted as-is.
+    """
+    items = list(credentials_used.items())
+    if deterministic:
+        items.sort(key=operator.itemgetter(0))
+    return "CREDENTIALS=({})".format(
+        " ".join(f"{n}='{escape_string_literal_interior(str(v))}'" for n, v in items)
+    )
+
+
+def _render_storage_encryption(encryption_used, deterministic: bool = False) -> str:
+    """Render an ``ENCRYPTION=(...)`` clause with escaped literal values."""
+    items = list(encryption_used.items())
+    if deterministic:
+        items.sort(key=operator.itemgetter(0))
+    return "ENCRYPTION=({})".format(
+        " ".join(
+            (
+                f"{n}='{escape_string_literal_interior(str(v))}'"
+                if isinstance(v, string_types)
+                else f"{n}={v}"
+            )
+            for n, v in items
+        )
+    )
+
+
+def _render_storage_uri(container) -> str:
+    """Return the escaped, single-quoted storage location literal for a container.
+
+    The bucket/path/account components originate from caller-supplied URIs
+    (``*.from_uri``), so the assembled body is escaped before being wrapped in
+    quotes — a single-quote in any component would otherwise escape the
+    location literal (SNOW-3649816 / SNOW-3649858).
+    """
+    if isinstance(container, AWSBucket):
+        body = "s3://{}{}".format(
+            container.bucket, f"/{container.path}" if container.path else ""
+        )
+    elif isinstance(container, AzureContainer):
+        body = "azure://{}.blob.core.windows.net/{}{}".format(
+            container.account,
+            container.container,
+            f"/{container.path}" if container.path else "",
+        )
+    elif isinstance(container, GCSBucket):
+        body = "gcs://{}{}".format(
+            container.bucket, f"/{container.path}" if container.path else ""
+        )
+    else:
+        raise TypeError(
+            f"Unsupported cloud storage location: {type(container).__name__}"
+        )
+    return f"'{escape_string_literal_interior(body)}'"
+
+
 class SnowflakeCompiler(compiler.SQLCompiler):
     def visit_sequence(self, sequence, **kw):
         return self.dialect.identifier_preparer.format_sequence(sequence) + ".nextval"
@@ -583,7 +719,11 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             return "WHEN NOT MATCHED{} THEN {} ({}) VALUES ({})".format(
                 case_predicate,
                 merge_into_clause.command,
-                ", ".join(sets),
+                # Column keys come straight from clause.values(**kwargs) with no
+                # resolution against the target table, so an application driving
+                # the column set from external input could emit unintended SQL here
+                # (SNOW-3649763).  Identifier-quote each key.
+                ", ".join(self.preparer.quote(s) for s in sets),
                 ", ".join(map(lambda e: e._compiler_dispatch(self, **kw), sets_tos)),
             )
         else:
@@ -593,7 +733,10 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             sets = (
                 ", ".join(
                     [
-                        f"{set[0]} = {set[1]._compiler_dispatch(self, **kw)}"
+                        # Same untrusted-key source as the INSERT branch above
+                        # (SNOW-3649763); quote the assignment target.
+                        f"{self.preparer.quote(set[0])} = "
+                        f"{set[1]._compiler_dispatch(self, **kw)}"
                         for set in set_list
                     ]
                 )
@@ -673,7 +816,13 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         if kw.get("deterministic", False):
             options_list.sort(key=operator.itemgetter(0))
         if "format_name" in formatter.options:
-            return f"FILE_FORMAT=(format_name = {formatter.options['format_name']})"
+            # format_name is a (possibly schema-qualified) identifier supplied
+            # by the caller; quote any unsafe part so it cannot alter the COPY
+            # options / SQL while keeping normal names bare (SNOW-3649881).
+            format_name = self.preparer.quote_identifier_if_unsafe(
+                formatter.options["format_name"]
+            )
+            return f"FILE_FORMAT=(format_name = {format_name})"
         return "FILE_FORMAT=(TYPE={}{})".format(
             formatter.file_format,
             (
@@ -697,74 +846,51 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         )
 
     def visit_aws_bucket(self, aws_bucket, **kw):
-        credentials_list = list(aws_bucket.credentials_used.items())
-        if kw.get("deterministic", False):
-            credentials_list.sort(key=operator.itemgetter(0))
-        credentials = "CREDENTIALS=({})".format(
-            " ".join(f"{n}='{v}'" for n, v in credentials_list)
-        )
-        encryption_list = list(aws_bucket.encryption_used.items())
-        if kw.get("deterministic", False):
-            encryption_list.sort(key=operator.itemgetter(0))
-        encryption = "ENCRYPTION=({})".format(
-            " ".join(
-                ("{}='{}'" if isinstance(v, string_types) else "{}={}").format(n, v)
-                for n, v in encryption_list
-            )
-        )
-        uri = "'s3://{}{}'".format(
-            aws_bucket.bucket, f"/{aws_bucket.path}" if aws_bucket.path else ""
-        )
+        deterministic = kw.get("deterministic", False)
         return (
-            uri,
-            credentials if aws_bucket.credentials_used else "",
-            encryption if aws_bucket.encryption_used else "",
+            _render_storage_uri(aws_bucket),
+            (
+                _render_storage_credentials(aws_bucket.credentials_used, deterministic)
+                if aws_bucket.credentials_used
+                else ""
+            ),
+            (
+                _render_storage_encryption(aws_bucket.encryption_used, deterministic)
+                if aws_bucket.encryption_used
+                else ""
+            ),
         )
 
     def visit_azure_container(self, azure_container, **kw):
-        credentials_list = list(azure_container.credentials_used.items())
-        if kw.get("deterministic", False):
-            credentials_list.sort(key=operator.itemgetter(0))
-        credentials = "CREDENTIALS=({})".format(
-            " ".join(f"{n}='{v}'" for n, v in credentials_list)
-        )
-        encryption_list = list(azure_container.encryption_used.items())
-        if kw.get("deterministic", False):
-            encryption_list.sort(key=operator.itemgetter(0))
-        encryption = "ENCRYPTION=({})".format(
-            " ".join(
-                f"{n}='{v}'" if isinstance(v, string_types) else f"{n}={v}"
-                for n, v in encryption_list
-            )
-        )
-        uri = "'azure://{}.blob.core.windows.net/{}{}'".format(
-            azure_container.account,
-            azure_container.container,
-            f"/{azure_container.path}" if azure_container.path else "",
-        )
+        deterministic = kw.get("deterministic", False)
         return (
-            uri,
-            credentials if azure_container.credentials_used else "",
-            encryption if azure_container.encryption_used else "",
+            _render_storage_uri(azure_container),
+            (
+                _render_storage_credentials(
+                    azure_container.credentials_used, deterministic
+                )
+                if azure_container.credentials_used
+                else ""
+            ),
+            (
+                _render_storage_encryption(
+                    azure_container.encryption_used, deterministic
+                )
+                if azure_container.encryption_used
+                else ""
+            ),
         )
 
     def visit_gcs_bucket(self, gcs_bucket, **kw):
-        encryption_list = list(gcs_bucket.encryption_used.items())
-        if kw.get("deterministic", False):
-            encryption_list.sort(key=operator.itemgetter(0))
-        encryption = "ENCRYPTION=({})".format(
-            " ".join(
-                f"{n}='{v}'" if isinstance(v, string_types) else f"{n}={v}"
-                for n, v in encryption_list
-            )
-        )
-        uri = "'gcs://{}{}'".format(
-            gcs_bucket.bucket, f"/{gcs_bucket.path}" if gcs_bucket.path else ""
-        )
+        deterministic = kw.get("deterministic", False)
         return (
-            uri,
+            _render_storage_uri(gcs_bucket),
             "",
-            encryption if gcs_bucket.encryption_used else "",
+            (
+                _render_storage_encryption(gcs_bucket.encryption_used, deterministic)
+                if gcs_bucket.encryption_used
+                else ""
+            ),
         )
 
     def visit_external_stage(self, external_stage, **kw):
@@ -772,7 +898,16 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             return (
                 f"@{external_stage.namespace}{external_stage.name}{external_stage.path}"
             )
-        return f"@{external_stage.namespace}{external_stage.name}{external_stage.path} (file_format => {external_stage.file_format})"
+        # file_format names a (possibly schema-qualified) file format object;
+        # quote any unsafe part so it cannot alter SQL in the stage
+        # reference (SNOW-3649881).
+        file_format = self.preparer.quote_identifier_if_unsafe(
+            external_stage.file_format
+        )
+        return (
+            f"@{external_stage.namespace}{external_stage.name}{external_stage.path}"
+            f" (file_format => {file_format})"
+        )
 
     def delete_extra_from_clause(
         self, delete_stmt, from_table, extra_froms, from_hints, **kw
@@ -1117,16 +1252,52 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
 
         return text
 
+    def _format_stage_prefix(self, stage) -> str:
+        """Identifier-quote a stage's ``<namespace>.<name>`` prefix.
+
+        ``ExternalStage.prepare_namespace`` stores the namespace with a trailing
+        dot (or ``""``), so ``f"{stage.namespace}{stage.name}"`` always yields a
+        clean dotted identifier (``"DB.SCH.S"`` or ``"S"``).
+        ``quote_identifier_if_unsafe`` splits on dots internally, so the combined
+        string can be passed directly — no manual strip/rejoin needed.
+        Legal identifiers stay bare (no BCR).  (SNOW-3649858)
+        """
+        return self.preparer.quote_identifier_if_unsafe(
+            f"{stage.namespace}{stage.name}"
+        )
+
     def visit_create_stage(self, create_stage, **kw):
         """
         This visitor will create the SQL representation for a CREATE STAGE command.
         """
-        return "CREATE {or_replace}{temporary}STAGE {}{} URL={}".format(
-            create_stage.stage.namespace,
-            create_stage.stage.name,
-            repr(create_stage.container),
+        # Render the storage URL/credentials/encryption through the shared,
+        # escaped helpers rather than repr(container): repr() is a debug
+        # representation (and is redacted separately to hide secrets),
+        # and using it as a SQL serialiser left single-quote escaping incomplete
+        # (SNOW-3649858).
+        container = create_stage.container
+        deterministic = kw.get("deterministic", False)
+        uri = _render_storage_uri(container)
+        credentials = (
+            _render_storage_credentials(container.credentials_used, deterministic)
+            if getattr(container, "credentials_used", None)
+            else ""
+        )
+        encryption = (
+            _render_storage_encryption(container.encryption_used, deterministic)
+            if getattr(container, "encryption_used", None)
+            else ""
+        )
+        storage = "URL={}{}{}".format(
+            uri,
+            f" {credentials}" if credentials else "",
+            f" {encryption}" if encryption else "",
+        )
+        return "CREATE {or_replace}{temporary}STAGE {prefix} {storage}".format(
             or_replace="OR REPLACE " if create_stage.replace_if_exists else "",
             temporary="TEMPORARY " if create_stage.temporary else "",
+            prefix=self._format_stage_prefix(create_stage.stage),
+            storage=storage,
         )
 
     def visit_create_file_format(self, file_format, **kw):
@@ -1136,7 +1307,9 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
         """
         return "CREATE {}FILE FORMAT {} TYPE='{}' {}".format(
             "OR REPLACE " if file_format.replace_if_exists else "",
-            file_format.format_name,
+            # format_name is a (possibly schema-qualified) identifier; quote any
+            # unsafe part to prevent unintended DDL (SNOW-3649881).
+            self.preparer.quote_identifier_if_unsafe(file_format.format_name),
             file_format.formatter.file_format,
             " ".join(
                 [
