@@ -53,7 +53,10 @@ class LiteralOption(TableOption):
             return f"{self.option_name.upper()} = '%s'"
 
     def _render(self, compiler) -> str:
-        return self.template() % self.value
+        if isinstance(self.value, int):
+            return self.template() % self.value
+        escaped = self._escape_string_literal_value(str(self.value))
+        return self.template() % escaped
 
     def __repr__(self) -> str:
         option_name = (

@@ -9,6 +9,8 @@ Source code is also available at:
 
 # Unreleased Notes
 
+- `ClusterByOption` now raises `TypeError` at DDL compile time when an expression element is neither a `str` nor a `sqlalchemy.sql.expression.TextClause`. Previously, such values were silently coerced via `str()`, which produced malformed DDL (e.g. bind-parameter placeholders like `:id_1`) for any expression beyond a bare column name. The accepted types match the documented constructor signature; code using only `str` or `text(...)` is unaffected.
+
 # Release Notes
 
 - v1.10.2 (June 18, 2026)
