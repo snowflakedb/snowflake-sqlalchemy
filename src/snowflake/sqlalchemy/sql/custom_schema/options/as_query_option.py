@@ -48,13 +48,17 @@ class AsQueryOption(TableOption):
     def priority(self) -> Priority:
         return Priority.LOWEST
 
-    def __get_expression(self):
+    def __get_expression(self, compiler=None):
         if isinstance(self.query, Selectable):
-            return self.query.compile(compile_kwargs={"literal_binds": True})
+            dialect = compiler.dialect if compiler is not None else None
+            return self.query.compile(
+                dialect=dialect,
+                compile_kwargs={"literal_binds": True},
+            )
         return self.query
 
     def _render(self, compiler) -> str:
-        return self.template() % (self.__get_expression())
+        return self.template() % (self.__get_expression(compiler))
 
     def __repr__(self) -> str:
         return "AsQueryOption(%s)" % self.__get_expression()

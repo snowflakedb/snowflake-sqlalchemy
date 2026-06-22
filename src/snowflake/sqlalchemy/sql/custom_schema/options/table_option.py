@@ -6,6 +6,7 @@ from typing import List, Optional
 
 from snowflake.sqlalchemy import exc
 from snowflake.sqlalchemy.custom_commands import NoneType
+from snowflake.sqlalchemy.util import escape_string_literal_interior
 
 
 class Priority(Enum):
@@ -59,6 +60,29 @@ class TableOption:
 
     def template(self) -> str:
         return f"{self.option_name.upper()} = %s"
+
+    @staticmethod
+    def _quote_identifier_value(value: str, compiler=None) -> str:
+        """Return the identifier quoted per the dialect's rules.
+
+        Uses ``compiler.preparer.quote()`` when a compiler is available so
+        that special characters are wrapped in double-quotes and any embedded
+        double-quotes are doubled.  Falls back to the bare value when no
+        compiler is present (e.g. in ``__repr__`` / test-only paths).
+        """
+        if compiler is not None:
+            return compiler.preparer.quote(value)
+        return value
+
+    @staticmethod
+    def _escape_string_literal_value(value: str) -> str:
+        """Return the escaped interior of a DDL string literal (no surrounding quotes).
+
+        Applies single-quote doubling and backslash doubling for Snowflake's
+        ESCAPE_STRING_LITERALS semantics.  Returns only the interior — no
+        surrounding quotes — ready to interpolate into a ``'%s'`` template.
+        """
+        return escape_string_literal_interior(value)
 
     def render_option(self, compiler) -> str:
         self._validate_option()

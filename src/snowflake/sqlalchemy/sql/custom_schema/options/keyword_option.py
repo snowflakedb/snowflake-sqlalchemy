@@ -32,6 +32,7 @@ class KeywordOption(TableOption):
         return f"{self.option_name.upper()} = %s"
 
     def _render(self, compiler) -> str:
+        # This function renders only keywords, so no additional processing is needed.
         return self.template() % self.value.upper()
 
     @staticmethod

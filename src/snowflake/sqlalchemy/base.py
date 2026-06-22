@@ -40,6 +40,8 @@ from .util import (
     _set_connection_interpolate_empty_sequences,
     _Snowflake_ORMJoin,
     _Snowflake_Selectable_Join,
+    escape_backslashes,
+    escape_string_literal_interior,
 )
 
 RESERVED_WORDS = frozenset(
@@ -901,7 +903,17 @@ class SnowflakeCompiler(compiler.SQLCompiler):
 
     def render_literal_value(self, value, type_):
         # escape backslash
-        return super().render_literal_value(value, type_).replace("\\", "\\\\")
+        return escape_backslashes(super().render_literal_value(value, type_))
+
+    def _escape_string_interior(self, value: str) -> str:
+        """Return ``value`` escaped for embedding inside a single-quoted literal.
+
+        Returns only the escaped interior (no surrounding quotes), so callers
+        that already supply the enclosing quotes can interpolate the result
+        directly.  Shares its escaping rules with the DDL compiler via
+        ``escape_string_literal_interior``.
+        """
+        return escape_string_literal_interior(value)
 
 
 class SnowflakeExecutionContext(default.DefaultExecutionContext):
@@ -964,6 +976,14 @@ _identity_pk_warned: set = set()
 
 
 class SnowflakeDDLCompiler(compiler.DDLCompiler):
+    def _escape_string_interior(self, value: str) -> str:
+        """Return ``value`` escaped for embedding inside a single-quoted literal.
+
+        DDL counterpart of ``SnowflakeCompiler._escape_string_interior``; both
+        share their escaping rules via ``escape_string_literal_interior``.
+        """
+        return escape_string_literal_interior(value)
+
     def denormalize_column_name(self, name):
         if name is None:
             return None

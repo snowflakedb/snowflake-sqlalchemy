@@ -11,6 +11,10 @@ from .table_option import Priority, TableOption, TableOptionKey
 class IdentifierOption(TableOption):
     """Class to represent an identifier option in Snowflake Tables.
 
+    Pass the bare identifier name — without surrounding double-quotes.
+    The dialect's identifier preparer applies quoting automatically when
+    the name contains characters that require it (spaces, mixed case, etc.).
+
     Example:
         warehouse = IdentifierOption('my_warehouse')
 
@@ -49,7 +53,7 @@ class IdentifierOption(TableOption):
         return f"{self.option_name.upper()} = %s"
 
     def _render(self, compiler) -> str:
-        return self.template() % self.value
+        return self.template() % self._quote_identifier_value(self.value, compiler)
 
     def __repr__(self) -> str:
         option_name = (

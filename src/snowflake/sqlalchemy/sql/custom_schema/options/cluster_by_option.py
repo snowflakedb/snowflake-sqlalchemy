@@ -45,11 +45,22 @@ class ClusterByOption(TableOption):
     def priority(self) -> Priority:
         return Priority.HIGH
 
-    def __get_expression(self):
-        return ", ".join([str(expression) for expression in self.expressions])
+    def __get_expression(self, compiler=None):
+        parts = []
+        for expr in self.expressions:
+            if isinstance(expr, TextClause):
+                parts.append(str(expr))  # TextClause is trusted literal SQL
+            elif isinstance(expr, str):
+                parts.append(self._quote_identifier_value(expr, compiler))
+            else:
+                raise TypeError(
+                    "ClusterByOption expressions must be str or TextClause, "
+                    f"got {type(expr).__name__}"
+                )
+        return ", ".join(parts)
 
     def _render(self, compiler) -> str:
-        return self.template() % (self.__get_expression())
+        return self.template() % (self.__get_expression(compiler))
 
     def __repr__(self) -> str:
         return "ClusterByOption(%s)" % self.__get_expression()

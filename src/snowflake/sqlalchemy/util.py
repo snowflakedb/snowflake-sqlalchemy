@@ -316,3 +316,25 @@ def create_snowflake_engine(
     else:
         url = base_url
     return _sa_create_engine(url, **kwargs)
+
+
+def escape_backslashes(value: str) -> str:
+    """Double backslashes so they survive Snowflake's ESCAPE_STRING_LITERALS.
+
+    Snowflake interprets backslash escape sequences inside string literals by
+    default, so any literal backslash in user data must be doubled.
+    """
+    return value.replace("\\", "\\\\")
+
+
+def escape_string_literal_interior(value: str) -> str:
+    """Escape the *interior* of a single-quoted Snowflake string literal.
+
+    Doubles single quotes (standard SQL ``''`` escaping) and backslashes
+    (Snowflake ``ESCAPE_STRING_LITERALS`` semantics).  The two replacements are
+    order-independent.  Returns only the interior — **no surrounding quotes** —
+    and deliberately does **not** double percent signs, so the result is safe to
+    interpolate into a Python ``%``-formatted DDL template (unlike SQLAlchemy's
+    ``String`` literal processor, which both wraps in quotes and doubles ``%``).
+    """
+    return value.replace("'", "''").replace("\\", "\\\\")
