@@ -73,8 +73,7 @@ class SnowflakeSecretRedactionFilter(logging.Filter):
                 }
             else:
                 record.args = tuple(
-                    redact_secrets(a) if isinstance(a, str) else a
-                    for a in record.args
+                    redact_secrets(a) if isinstance(a, str) else a for a in record.args
                 )
         return True
 

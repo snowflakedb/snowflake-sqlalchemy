@@ -17,7 +17,7 @@ import snowflake.connector
 from snowflake.sqlalchemy import URL
 from snowflake.sqlalchemy.compat import IS_VERSION_20
 
-from ..conftest import get_db_parameters
+from ..conftest import _without_blocked_query_params, get_db_parameters
 from ..util import random_string
 
 registry.register("snowflake", "snowflake.sqlalchemy", "dialect")
@@ -53,7 +53,16 @@ sqlalchemy.testing.config.Config.__init__ = config_patched__init__
 
 def pytest_sessionstart(session):
     db_parameters = get_db_parameters()
-    session.config.option.dburi = [URL(**db_parameters)]
+    # Build the compliance-suite dburi on the default, strict code path:
+    # connector-only parameters (e.g. protocol) are not carried in the URL query
+    # string.  ``snowflake.connector.connect`` below still receives the full set.
+    # ``render_as_string(hide_password=False)`` is required because ``str(URL)``
+    # masks the password as '***'.
+    session.config.option.dburi = [
+        _without_blocked_query_params(URL(**db_parameters)).render_as_string(
+            hide_password=False
+        )
+    ]
     # schema name with 'TEST_SCHEMA' is required by some tests of the sqlalchemy test suite
     with snowflake.connector.connect(**db_parameters) as con:
         con.cursor().execute(f"CREATE SCHEMA IF NOT EXISTS {db_parameters['schema']}")

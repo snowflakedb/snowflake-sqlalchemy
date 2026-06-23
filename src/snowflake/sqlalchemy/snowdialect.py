@@ -4,6 +4,7 @@
 import decimal
 import logging
 import operator
+import warnings
 from collections import defaultdict
 from enum import Enum
 from functools import reduce
@@ -31,7 +32,7 @@ from snowflake.sqlalchemy.compat import IS_VERSION_20, returns_unicode
 from snowflake.sqlalchemy.name_utils import _NameUtils
 from snowflake.sqlalchemy.structured_type_info_manager import _StructuredTypeInfoManager
 
-from ._constants import DIALECT_NAME
+from ._constants import DIALECT_NAME, SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS
 from .base import (
     SnowflakeCompiler,
     SnowflakeDDLCompiler,
@@ -53,6 +54,7 @@ from .parser.custom_type_parser import _CUSTOM_DECIMAL  # noqa
 from .parser.custom_type_parser import ischema_names, parse_index_columns, parse_type
 from .sql.custom_schema.custom_table_prefix import CustomTablePrefix
 from .util import (
+    _legacy_url_params_enabled,
     _update_connection_application_name,
     parse_url_boolean,
     parse_url_integer,
@@ -68,6 +70,38 @@ colspecs = {
 _ENABLE_SQLALCHEMY_AS_APPLICATION_NAME = True
 
 logger = getLogger(__name__)
+
+# Query parameters that are not forwarded to snowflake.connector.connect()
+# when they arrive via the URL query string.  Each entry is a connector kwarg
+# that changes the connection target, reads a local file, writes to a local
+# path, or relaxes a connector-internal safety check.
+#
+# Callers who legitimately need one of these parameters should pass it via
+# connect_args= in create_engine() — that path skips URL parsing entirely
+# and is under the application's explicit control.
+_URL_QUERY_BLOCKED_KWARGS: frozenset = frozenset(
+    {
+        # Overrides the host derived from the URL authority; redirects the
+        # login request to a different server.
+        "host",
+        # Selects the transport; plain HTTP would expose credentials in transit.
+        "protocol",
+        # Connector reads the named file and sends its contents as an OAuth
+        # token — local file read.
+        "token_file_path",
+        # Connector opens the named file to load a private key — local file read.
+        "private_key_file",
+        # Connector writes OCSP / CRL / diagnostic artefacts to the given
+        # path — local file write.
+        "ocsp_response_cache_filename",
+        "connection_diag_log_path",
+        "crl_cache_dir",
+        # Connector-internal safety flags; relaxing them changes the safety
+        # posture of every subsequent file operation.
+        "unsafe_file_write",
+        "unsafe_skip_file_permissions_check",
+    }
+)
 
 
 class TelemetryEvents(Enum):
@@ -212,6 +246,7 @@ class SnowflakeDialect(default.DefaultDialect):
         enable_decfloat: bool = False,
         case_sensitive_identifiers: bool = False,
         cache_column_metadata: bool = False,
+        legacy_url_params: Optional[bool] = None,
         redact_log_secrets: bool = True,
         **kwargs: Any,
     ):
@@ -229,6 +264,15 @@ class SnowflakeDialect(default.DefaultDialect):
         # ``create_connect_args`` may later overwrite it when the URL query
         # string carries ``cache_column_metadata=...``.
         self._cache_column_metadata = cache_column_metadata
+        # Opt-in compatibility shim for the legacy URL/query behaviour.
+        # An explicit ``legacy_url_params`` kwarg wins; when it is left unset
+        # (None) the env variable acts as a global fallback.  It is deliberately
+        # NOT readable from the URL query string — see create_connect_args.
+        self._legacy_url_params = (
+            legacy_url_params
+            if legacy_url_params is not None
+            else _legacy_url_params_enabled()
+        )
         self._redact_log_secrets = redact_log_secrets
 
     def initialize(self, connection):
@@ -324,7 +368,32 @@ class SnowflakeDialect(default.DefaultDialect):
                 )
 
         # URL sets the query parameter values as strings, we need to cast to expected types when necessary
+        #
+        # ``legacy_url_params`` is intentionally read only from the engine kwarg
+        # / env variable (resolved into ``self._legacy_url_params`` in __init__),
+        # never from the URL query string: honouring it as a URL param would let
+        # a caller who controls only the URL re-enable the restricted behaviour
+        # with ``?legacy_url_params=true``, skipping this handling entirely.
+        legacy = self._legacy_url_params
         for name, value in query.items():
+            if name in _URL_QUERY_BLOCKED_KWARGS:
+                if legacy:
+                    warnings.warn(
+                        f"Connection parameter {name!r} is set via the URL query string. "
+                        "This is a deprecated practice that will stop working in a future release. "
+                        "Pass the parameter via connect_args= in create_engine() instead.",
+                        DeprecationWarning,
+                        stacklevel=2,
+                    )
+                else:
+                    raise sa_exc.ArgumentError(
+                        f"Connection parameter {name!r} cannot be set via the URL "
+                        "query string for safety reasons. "
+                        "Pass it via connect_args= in create_engine() instead. "
+                        "To restore the previous behaviour temporarily, pass "
+                        "legacy_url_params=True to create_engine() or set the "
+                        f"{SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS} environment variable."
+                    )
             opts[name] = self.parse_query_param_type(name, value)
 
         return ([], opts)
@@ -1785,6 +1854,7 @@ class SnowflakeDialect(default.DefaultDialect):
             telemetry_value["enable_decfloat"] = self._enable_decfloat
             telemetry_value["cache_column_metadata"] = self._cache_column_metadata
             telemetry_value["force_div_is_floordiv"] = self.force_div_is_floordiv
+            telemetry_value["legacy_url_params"] = self._legacy_url_params
 
             snowflake_telemetry_client.add_log_to_batch(
                 TelemetryData.from_telemetry_data_dict(

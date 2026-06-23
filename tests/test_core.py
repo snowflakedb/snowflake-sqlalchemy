@@ -138,17 +138,21 @@ def test_connect_args():
     elif "account" in params:
         server = params["account"]
 
-    engine = create_engine(
+    engine = get_engine(
         "snowflake://{user}:{password}@{server}/{database}/{schema}"
-        "?account={account}&protocol={protocol}".format(
+        "?account={account}".format(
             user=params["user"],
             account=params["account"],
             password=params["password"],
             server=server,
             database=params["database"],
             schema=params["schema"],
-            protocol=params["protocol"],
-        )
+        ),
+        # protocol is a blocked URL query param under the strict default, so
+        # it must be supplied via connect_args= rather than the query string;
+        # this keeps the test exercising a real (non-default) protocol instead
+        # of having it silently stripped by _without_blocked_query_params.
+        connect_args={"protocol": params["protocol"]},
     )
     try:
         verify_engine_connection(engine)
@@ -1741,7 +1745,7 @@ def test_special_schema_character(db_parameters, on_public_ci):
             .execute("select current_database(), current_schema();")
             .fetchall()
         )
-    with create_engine(URL(**options)).connect() as sa_conn:
+    with get_engine(URL(**options)).connect() as sa_conn:
         sa_connection = sa_conn.execute(
             text("select current_database(), current_schema();")
         ).fetchall()
@@ -2471,7 +2475,7 @@ def test_division_force_div_is_floordiv_default(engine_testaccount, operation):
 )
 @pytest.mark.feature_v20
 def test_division_force_div_is_floordiv_false(db_parameters, operation):
-    engine = create_engine(URL(**db_parameters), **{"force_div_is_floordiv": False})
+    engine = get_engine(URL(**db_parameters), **{"force_div_is_floordiv": False})
     with engine.connect() as conn:
         eq_(
             conn.execute(

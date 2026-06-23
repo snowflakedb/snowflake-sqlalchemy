@@ -274,6 +274,71 @@ with engine.connect() as conn:
     conn.execute(text("..."))  # No tag
 ```
 
+#### Sensitive connection parameters
+
+For more robust connection-string handling, a small set of sensitive connector
+parameters cannot be supplied through the **URL query string**. These are parameters that
+change the connection target or transport, read or write
+local files, or relax a connector safety check:
+
+`host`, `protocol`, `token_file_path`, `private_key_file`, `ocsp_response_cache_filename`,
+`connection_diag_log_path`, `crl_cache_dir`, `unsafe_file_write`,
+`unsafe_skip_file_permissions_check`.
+
+Passing any of these in the URL query string raises `sqlalchemy.exc.ArgumentError`. Supply
+them through the `connect_args` parameter of `create_engine` instead, which is fully under
+your application's control:
+
+```python
+from sqlalchemy import create_engine
+from snowflake.sqlalchemy import URL
+
+# Instead of '...?protocol=https&host=...', pass them via connect_args:
+engine = create_engine(
+    URL(
+        account="abc123",
+        user="testuser1",
+        password="0123456",
+        database="testdb",
+        schema="public",
+    ),
+    connect_args={
+        "protocol": "https",
+    },
+)
+```
+
+Similarly, the `URL` helper validates the `account` and `region` values (which become part
+of the connection URL authority) and percent-encodes `user`, so URL metacharacters such as
+`?`, `&`, `@`, and `#` cannot introduce additional parameters.
+
+##### Temporary compatibility: `legacy_url_params`
+
+If an existing application still relies on the previous behavior, you can re-enable it during
+migration. When enabled, the parameters above are forwarded from the URL query string as
+before and a `DeprecationWarning` is emitted for each one. This shim is temporary and will be
+removed in a future release.
+
+Enable it in either of two ways (an explicit kwarg always wins; the environment variable is a
+global fallback):
+
+```python
+# Per-engine, under application control (recommended over the env variable):
+engine = create_engine(url, legacy_url_params=True)
+```
+
+```bash
+# Global fallback for the whole process; interpreted like other boolean flags
+# ("1" / "true", case-insensitive):
+export SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS=1
+```
+
+`legacy_url_params` is accepted only as an engine kwarg or the environment
+variable — it is intentionally **not** read from the URL query string, so a caller who controls
+only the URL cannot use it to relax this handling. Note that the `URL()` helper's `account` /
+`region` validation runs before any engine exists, so only the environment variable relaxes it
+at URL-construction time.
+
 ### Opening and Closing Connection
 
 Open a connection by executing `engine.connect()`; avoid using `engine.execute()`. Make certain to close the connection by executing `connection.close()` before

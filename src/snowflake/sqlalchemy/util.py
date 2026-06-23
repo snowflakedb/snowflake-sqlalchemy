@@ -2,7 +2,9 @@
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
 
+import os
 import re
+import warnings
 from itertools import chain
 from typing import Any
 from urllib.parse import quote as _url_quote
@@ -24,12 +26,36 @@ from ._constants import (
     PARAM_APPLICATION,
     PARAM_INTERNAL_APPLICATION_NAME,
     PARAM_INTERNAL_APPLICATION_VERSION,
+    SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS,
     SNOWFLAKE_SQLALCHEMY_VERSION,
 )
 
 
 def _rfc_1738_quote(text):
     return re.sub(r"[:@/]", lambda m: "%%%X" % ord(m.group(0)), text)
+
+
+# Characters valid in the URL authority fields we interpolate (account, region —
+# both DNS labels).  Rejects URL metacharacters (?  & @ : / # …) that would otherwise
+# be misinterpreted as URL delimiters when the value is placed in the URL authority
+# component, introducing unintended query parameters.
+_SAFE_URL_FIELD_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+
+
+def _validate_url_field(field: str, value: str) -> None:
+    if not _SAFE_URL_FIELD_RE.fullmatch(value):
+        msg = (
+            f"'{field}' contains characters that cannot be safely placed in the "
+            f"connection URL: {value!r}. "
+            "Only alphanumeric characters, hyphens, dots, and underscores are allowed."
+        )
+        if _legacy_url_params_enabled():
+            # stacklevel=3 points the warning at the caller's ``URL(...)`` site:
+            # URL is an alias of _url (frame 2), which calls this function
+            # (frame 1); frame 3 is the user's call.
+            warnings.warn(msg, DeprecationWarning, stacklevel=3)
+        else:
+            raise exc.ArgumentError(msg)
 
 
 def _url(**db_parameters):
@@ -46,27 +72,38 @@ def _url(**db_parameters):
     if "account" not in db_parameters:
         raise exc.ArgumentError("account parameter must be specified.")
 
+    # Percent-encode user so that metacharacters (@, ?, #, …) cannot corrupt the
+    # URL authority component.  SQLAlchemy decodes the userinfo field when it
+    # parses the URL, so the connector always receives the original plain value.
+    user = _url_quote(db_parameters.get("user", ""), safe="")
+
     if "host" in db_parameters:
         ret = "snowflake://{user}:{password}@{host}:{port}/".format(
-            user=db_parameters.get("user", ""),
+            user=user,
             password=_rfc_1738_quote(db_parameters.get("password", "")),
             host=db_parameters["host"],
             port=db_parameters["port"] if "port" in db_parameters else 443,
         )
         specified_parameters += ["user", "password", "host", "port"]
     elif "region" not in db_parameters:
+        account = db_parameters["account"]
+        _validate_url_field("account", account)
         ret = "snowflake://{user}:{password}@{account}/".format(
-            account=db_parameters["account"],
-            user=db_parameters.get("user", ""),
+            account=account,
+            user=user,
             password=_rfc_1738_quote(db_parameters.get("password", "")),
         )
         specified_parameters += ["user", "password", "account"]
     else:
+        account = db_parameters["account"]
+        region = db_parameters["region"]
+        _validate_url_field("account", account)
+        _validate_url_field("region", region)
         ret = "snowflake://{user}:{password}@{account}.{region}/".format(
-            account=db_parameters["account"],
-            user=db_parameters.get("user", ""),
+            account=account,
+            user=user,
             password=_rfc_1738_quote(db_parameters.get("password", "")),
-            region=db_parameters["region"],
+            region=region,
         )
         specified_parameters += ["user", "password", "account", "region"]
 
@@ -128,6 +165,20 @@ def parse_url_integer(value: str) -> int:
         return int(value)
     except ValueError as e:
         raise ValueError(f"Invalid int value detected: '{value}") from e
+
+
+def _legacy_url_params_enabled() -> bool:
+    """Whether the legacy URL-params compatibility shim is enabled.
+
+    Reuses :func:`parse_url_boolean` so the env variable is interpreted exactly
+    like every other boolean flag in the dialect (``true``/``1``, case-insensitive).
+    An unset, empty, or unrecognised value disables the shim rather than raising.
+    """
+    value = os.environ.get(SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS, "")
+    try:
+        return parse_url_boolean(value)
+    except ValueError:
+        return False
 
 
 # handle Snowflake BCR bcr-1057
