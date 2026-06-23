@@ -6,8 +6,10 @@ from unittest import mock
 
 import pytest
 from sqlalchemy.engine.url import URL
+from sqlalchemy.sql.elements import quoted_name
 
 from snowflake.sqlalchemy import base
+from snowflake.sqlalchemy import snowdialect as sd_module
 from snowflake.sqlalchemy.compat import IS_VERSION_20
 from snowflake.sqlalchemy.snowdialect import SnowflakeDialect
 
@@ -362,3 +364,61 @@ class TestSingleTableDispatchSA2:
         # uppercase it correctly inside _always_quote_join.
         assert received["table_name"] == "my_table"
         assert type(received["table_name"]) is str
+
+    @pytest.mark.skipif(not IS_VERSION_20, reason="SA 2.x only")
+    def test_get_columns_quoted_name_with_embedded_dot_is_atomic(self):
+        """quoted_name with embedded dot must not be re-split into extra schema parts."""
+        dialect = _make_dialect()
+        connection = mock.Mock()
+        received = {}
+
+        with mock.patch.object(sd_module, "_StructuredTypeInfoManager") as MockMgr:
+            mock_instance = mock.Mock()
+            mock_instance.get_table_columns_by_full_name.return_value = {}
+            MockMgr.return_value = mock_instance
+
+            dialect.get_columns(
+                connection,
+                quoted_name("weird.name", True),
+                schema="PUBLIC",
+            )
+
+            call_args = mock_instance.get_table_columns_by_full_name.call_args
+            received["full"] = call_args[0][0]
+
+        full = received["full"]
+        in_quote, parts = False, 0
+        for ch in full:
+            if ch == '"':
+                in_quote = not in_quote
+            elif ch == "." and not in_quote:
+                parts += 1
+        assert (
+            parts == 1
+        ), f"Expected 2-part reference (schema.table), got {parts + 1} parts: {full!r}"
+        assert (
+            '"weird.name"' in full
+        ), f"Expected quoted atomic identifier '\"weird.name\"' in {full!r}"
+
+    @pytest.mark.skipif(not IS_VERSION_20, reason="SA 2.x only")
+    def test_get_columns_dotted_plain_string_uses_last_component(self):
+        """A plain 'schema.table' string takes the last component as the table name."""
+        dialect = _make_dialect()
+        connection = mock.Mock()
+        received = {}
+
+        with mock.patch.object(sd_module, "_StructuredTypeInfoManager") as MockMgr:
+            mock_instance = mock.Mock()
+            mock_instance.get_table_columns_by_full_name.return_value = {}
+            MockMgr.return_value = mock_instance
+
+            dialect.get_columns(connection, "myschema.mytable", schema="PUBLIC")
+
+            call_args = mock_instance.get_table_columns_by_full_name.call_args
+            received["full"] = call_args[0][0]
+
+        full = received["full"]
+        assert '"MYTABLE"' in full, f"Expected last component 'MYTABLE' in {full!r}"
+        assert (
+            '"MYSCHEMA"' not in full
+        ), f"Schema component from table_name must be dropped; got {full!r}"
