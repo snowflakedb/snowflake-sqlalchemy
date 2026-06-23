@@ -366,6 +366,65 @@ class TestNormalizeName:
                 assert str(result) == upper.lower()
 
 
+class TestSplitSchemaByDotPrefixDrop:
+    """Regression tests for the prefix-drop bug: unquoted prefix before a quoted segment."""
+
+    @pytest.fixture
+    def ip(self):
+        return SnowflakeDialect().identifier_preparer
+
+    @pytest.mark.parametrize(
+        "schema_str, expected_parts",
+        [
+            ('prefix"QUOTED"', ["prefix", "QUOTED"]),
+            ('tenantA_"TENANT_B"', ["tenantA_", "TENANT_B"]),
+            ('"myschema"', ["myschema"]),
+            ("mydb.myschema", ["mydb", "myschema"]),
+            ('a"B"', ["a", "B"]),
+        ],
+    )
+    def test_split_parts(self, ip, schema_str, expected_parts):
+        parts = ip._split_schema_by_dot(schema_str)
+        assert [str(p) for p in parts] == expected_parts
+
+
+class TestQualifyObjectName:
+    """_qualify_object_name must treat object_name atomically, never re-splitting on dots."""
+
+    @pytest.fixture
+    def dialect(self):
+        d = SnowflakeDialect()
+        d.default_schema_name = "PUBLIC"
+        return d
+
+    def _count_parts(self, qualified: str) -> int:
+        parts = 0
+        in_quote = False
+        for ch in qualified:
+            if ch == '"':
+                in_quote = not in_quote
+            elif ch == "." and not in_quote:
+                parts += 1
+        return parts + 1 if qualified else 0
+
+    @pytest.mark.parametrize(
+        "object_name, schema, expected_parts",
+        [
+            ("my_table", None, 1),
+            ("my_table", "PUBLIC", 2),
+            ("other.table", "PUBLIC", 2),
+            ("my_table", "OTHER_DB.OTHER_SCHEMA", 3),
+            ("OTHER_DB.OTHER_SCHEMA.SECRETS", None, 1),
+        ],
+    )
+    def test_part_count(self, dialect, object_name, schema, expected_parts):
+        result = dialect._qualify_object_name(object_name, schema=schema)
+        assert self._count_parts(result) == expected_parts, f"got {result!r}"
+
+    def test_no_schema_exact_output(self, dialect):
+        assert dialect._qualify_object_name("my_table") == '"MY_TABLE"'
+
+
 # ---------------------------------------------------------------------------
 # _has_object denormalizes object_name before building SQL
 # ---------------------------------------------------------------------------
@@ -383,53 +442,24 @@ class TestHasObjectNormalization:
         conn.execute.return_value = result_mock
         return d, conn
 
-    def test_plain_lowercase_generates_quoted_uppercase(self):
-        """_has_object('mytable') should generate DESC TABLE \"MYTABLE\" (quoted uppercase)."""
+    @pytest.mark.parametrize(
+        "object_name, schema, expected_fragments",
+        [
+            ("mytable", None, ['"MYTABLE"']),
+            (quoted_name("mytable", True), None, ['"mytable"']),
+            ("MyTable", None, ['"MyTable"']),
+            ("mytable", "myschema", ['"MYTABLE"', '"MYSCHEMA"']),
+        ],
+        ids=["lowercase", "quoted_name", "mixed_case", "with_schema"],
+    )
+    def test_desc_sql_fragments(self, object_name, schema, expected_fragments):
         d, conn = self._dialect_with_mock_connection()
-        d._has_object(conn, "TABLE", "mytable")
-        call_args = conn.execute.call_args
-        sql_text = str(call_args[0][0])
-        # denormalize_name('mytable') -> 'MYTABLE'
-        # _denormalize_quote_join('MYTABLE') -> '"MYTABLE"'
-        assert (
-            '"MYTABLE"' in sql_text
-        ), f"Expected '\"MYTABLE\"' in DESC SQL, got: {sql_text!r}"
-
-    def test_quoted_name_generates_quoted_lowercase(self):
-        """_has_object(quoted_name('mytable', True)) should generate DESC TABLE \"mytable\"."""
-        d, conn = self._dialect_with_mock_connection()
-        d._has_object(conn, "TABLE", quoted_name("mytable", True))
-        call_args = conn.execute.call_args
-        sql_text = str(call_args[0][0])
-        assert (
-            '"mytable"' in sql_text
-        ), f"Expected '\"mytable\"' in DESC SQL, got: {sql_text!r}"
-
-    def test_mixed_case_generates_quoted_mixed(self):
-        """_has_object('MyTable') should generate DESC TABLE \"MyTable\" (case-sensitive)."""
-        d, conn = self._dialect_with_mock_connection()
-        d._has_object(conn, "TABLE", "MyTable")
-        call_args = conn.execute.call_args
-        sql_text = str(call_args[0][0])
-        # denormalize_name('MyTable') -> 'MyTable' (mixed case passes through)
-        # _denormalize_quote_join('MyTable') -> '"MyTable"' (quoted because mixed case)
-        assert (
-            '"MyTable"' in sql_text
-        ), f"Expected '\"MyTable\"' in DESC SQL, got: {sql_text!r}"
-
-    def test_with_schema_plain_lowercase(self):
-        """_has_object with schema denormalizes both schema and object_name."""
-        d, conn = self._dialect_with_mock_connection()
-        d._has_object(conn, "TABLE", "mytable", schema="myschema")
-        call_args = conn.execute.call_args
-        sql_text = str(call_args[0][0])
-        # Both schema and object_name are denormalized: lowercase → UPPERCASE then quoted.
-        assert (
-            '"MYTABLE"' in sql_text
-        ), f"Expected '\"MYTABLE\"' in DESC SQL, got: {sql_text!r}"
-        assert (
-            '"MYSCHEMA"' in sql_text
-        ), f"Expected '\"MYSCHEMA\"' in DESC SQL, got: {sql_text!r}"
+        d._has_object(conn, "TABLE", object_name, schema=schema)
+        sql_text = str(conn.execute.call_args[0][0])
+        for fragment in expected_fragments:
+            assert (
+                fragment in sql_text
+            ), f"Expected {fragment!r} in DESC SQL, got: {sql_text!r}"
 
     def test_programming_error_returns_false(self):
         """_has_object returns False when DESC raises ProgrammingError."""

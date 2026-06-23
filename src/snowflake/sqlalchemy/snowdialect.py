@@ -434,9 +434,7 @@ class SnowflakeDialect(default.DefaultDialect):
         return self._has_object(connection, "SEQUENCE", sequence_name, schema)
 
     def _has_object(self, connection, object_type, object_name, schema=None):
-        full_name = self._denormalize_quote_join(
-            self.denormalize_name(schema), self.denormalize_name(object_name)
-        )
+        full_name = self._qualify_object_name(object_name, schema)
         try:
             results = connection.execute(
                 text(f"DESC {object_type} /* sqlalchemy:_has_object */ {full_name}")
@@ -471,6 +469,16 @@ class SnowflakeDialect(default.DefaultDialect):
         compatibility with callers inside this class.
         """
         return self.name_utils.always_quote_join(*idents)
+
+    def _qualify_object_name(self, object_name, schema=None):
+        """Return schema.object fully quoted, treating object_name as a single atomic identifier."""
+        ip = self.identifier_preparer
+        parts = []
+        if schema is not None:
+            schema_parts = ip._split_schema_by_dot(self.denormalize_name(schema))
+            parts.extend(ip._quote_free_identifiers(*schema_parts))
+        parts.append(ip._safe_quote(self.denormalize_name(object_name)))
+        return ".".join(parts)
 
     def _get_full_schema_name(self, connection, schema=None, **kw):
         """
@@ -1434,14 +1442,11 @@ class SnowflakeDialect(default.DefaultDialect):
             IS_VERSION_20 or self._is_single_table_reflection(schema, **kw)
         ) and table_name:
             single_table_name = table_name
-            if "." in str(table_name):
-                # table_name may arrive as "schema.table" or even
-                # "database.schema.table" when callers pass a qualified
-                # name.  Take the last component so _always_quote_join
-                # does not double-qualify the identifier.
+            if "." in str(table_name) and not getattr(table_name, "quote", False):
+                # Strip any schema prefix — _qualify_object_name adds it from `schema`.
                 parts = self.identifier_preparer._split_schema_by_dot(str(table_name))
                 single_table_name = str(parts[-1])
-            full_table_name = self._always_quote_join(schema, single_table_name)
+            full_table_name = self._qualify_object_name(single_table_name, schema)
             column_info_manager = _StructuredTypeInfoManager(
                 connection, self.name_utils, self.default_schema_name
             )

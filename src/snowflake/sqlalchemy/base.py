@@ -583,6 +583,8 @@ class SnowflakeIdentifierPreparer(compiler.IdentifierPreparer):
                     ret.append((schema[pre_idx:idx], False))
                     pre_idx = idx + 1
                 elif schema[idx] == '"':
+                    if pre_idx < idx:
+                        ret.append((schema[pre_idx:idx], False))
                     in_quote = True
                     pre_idx = idx + 1
             else:
