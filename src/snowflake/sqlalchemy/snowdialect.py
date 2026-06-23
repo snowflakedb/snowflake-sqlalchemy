@@ -56,6 +56,7 @@ from .sql.custom_schema.custom_table_prefix import CustomTablePrefix
 from .util import (
     _legacy_url_params_enabled,
     _update_connection_application_name,
+    escape_string_literal_interior,
     parse_url_boolean,
     parse_url_integer,
 )
@@ -1573,18 +1574,21 @@ class SnowflakeDialect(default.DefaultDialect):
         Gets the view definition
         """
         schema = schema or self.default_schema_name
+        # denormalize_name gives the stored form without identifier quoting;
+        # escape_string_literal_interior then doubles ' and \ for the LIKE string literal.
+        like_value = escape_string_literal_interior(self.denormalize_name(view_name))
         if schema:
             cursor = connection.execute(
                 text(
-                    f"SHOW /* sqlalchemy:get_view_definition */ VIEWS \
-                    LIKE '{self._denormalize_quote_join(view_name)}' IN {self._denormalize_quote_join(schema)}"
+                    f"SHOW /* sqlalchemy:get_view_definition */ VIEWS "
+                    f"LIKE '{like_value}' IN {self._denormalize_quote_join(schema)}"
                 )
             )
         else:
             cursor = connection.execute(
                 text(
-                    f"SHOW /* sqlalchemy:get_view_definition */ VIEWS \
-                    LIKE '{self._denormalize_quote_join(view_name)}'"
+                    f"SHOW /* sqlalchemy:get_view_definition */ VIEWS "
+                    f"LIKE '{like_value}'"
                 )
             )
 
@@ -1593,7 +1597,7 @@ class SnowflakeDialect(default.DefaultDialect):
             ret = cursor.fetchone()
             if ret:
                 return ret[name_to_index_map["text"]]
-        except Exception:
+        except (sa_exc.DBAPIError, sf_errors.ProgrammingError):
             pass
         return None
 
