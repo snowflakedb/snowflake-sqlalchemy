@@ -422,3 +422,49 @@ class TestSingleTableDispatchSA2:
         assert (
             '"MYSCHEMA"' not in full
         ), f"Schema component from table_name must be dropped; got {full!r}"
+
+
+def _capture_view_sql(dialect, view_name, schema="PUBLIC"):
+    """Call get_view_definition and return the SQL string passed to execute()."""
+    conn = mock.MagicMock()
+    cursor = mock.MagicMock()
+    cursor.keys.return_value = []
+    cursor.fetchone.return_value = None
+    conn.execute.return_value = cursor
+    try:
+        dialect.get_view_definition(conn, view_name, schema=schema)
+    except Exception:
+        pass
+    assert conn.execute.called
+    sql_arg = conn.execute.call_args[0][0]
+    return sql_arg.text if hasattr(sql_arg, "text") else str(sql_arg)
+
+
+class TestGetViewDefinitionLikeEscaping:
+    """get_view_definition must escape single quotes in the LIKE value."""
+
+    def test_plain_view_name_produces_valid_sql(self):
+        """A normal view name must appear correctly in the LIKE clause."""
+        d = _make_dialect()
+        sql = _capture_view_sql(d, "my_view")
+        assert "LIKE" in sql
+        assert "MY_VIEW" in sql or "my_view" in sql
+
+    @pytest.mark.parametrize(
+        "view_name, expected, not_expected",
+        [
+            pytest.param("o'brien", ["''"], ['"o'], id="simple_quote"),
+            pytest.param("a' b --", ["''"], [], id="quote_and_comment"),
+            pytest.param("back\\slash", ["\\\\"], [], id="backslash_doubled"),
+        ],
+    )
+    def test_special_chars_are_escaped(self, view_name, expected, not_expected):
+        sql = _capture_view_sql(_make_dialect(), view_name)
+        for fragment in expected:
+            assert (
+                fragment in sql
+            ), f"Expected {fragment!r} in SQL for {view_name!r}, got: {sql!r}"
+        for fragment in not_expected:
+            assert (
+                fragment not in sql
+            ), f"Unexpected {fragment!r} in SQL for {view_name!r}, got: {sql!r}"
