@@ -12,6 +12,7 @@ from typing import Literal
 
 import pytest
 from sqlalchemy import create_engine
+from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ProgrammingError as SAProgrammingError
 from sqlalchemy.pool import NullPool
 
@@ -27,6 +28,7 @@ from snowflake.sqlalchemy._constants import (
     PARAM_INTERNAL_APPLICATION_VERSION,
     SNOWFLAKE_SQLALCHEMY_VERSION,
 )
+from snowflake.sqlalchemy.snowdialect import _URL_QUERY_BLOCKED_KWARGS
 
 try:
     from .parameters import CONNECTION_PARAMETERS
@@ -241,13 +243,33 @@ def get_db_parameters() -> dict:
     return ret
 
 
-def url_factory(**kwargs) -> URL:
+def _without_blocked_query_params(url):
+    """Return *url* with connector-only parameters removed from the query string.
+
+    The dialect accepts these parameters (e.g. ``protocol``) only via
+    ``connect_args=`` in ``create_engine``, not via the URL query string.  The
+    test connection parameters historically carry them in the URL; this helper
+    keeps the integration tests on the default, strict code path by dropping
+    them from the query.  Values such as ``protocol=https`` simply fall back to
+    the connector defaults, and ``host``/``port`` are unaffected because they
+    live in the URL authority rather than the query.
+
+    Tests that specifically exercise the legacy URL behaviour enable
+    ``SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS`` themselves and do not use this
+    helper.
+    """
+    url = make_url(url)
+    query = {k: v for k, v in url.query.items() if k not in _URL_QUERY_BLOCKED_KWARGS}
+    return url.set(query=query)
+
+
+def url_factory(**kwargs):
     url_params = get_db_parameters()
     url_params.update(kwargs)
-    return URL(**url_params)
+    return _without_blocked_query_params(URL(**url_params))
 
 
-def get_engine(url: URL, **engine_kwargs):
+def get_engine(url, **engine_kwargs):
     engine_params = {
         "poolclass": NullPool,
         "future": True,
@@ -260,7 +282,7 @@ def get_engine(url: URL, **engine_kwargs):
     connect_args["insecure_mode"] = True
     engine_params["connect_args"] = connect_args
 
-    engine = create_engine(url, **engine_params)
+    engine = create_engine(_without_blocked_query_params(url), **engine_params)
     return engine
 
 

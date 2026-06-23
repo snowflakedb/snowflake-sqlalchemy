@@ -25,6 +25,7 @@ _DEFAULT_FLAG_PAYLOAD = {
     "enable_decfloat": False,
     "cache_column_metadata": False,
     "force_div_is_floordiv": True,
+    "legacy_url_params": False,
 }
 
 
