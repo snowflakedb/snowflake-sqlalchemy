@@ -1424,8 +1424,14 @@ class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
             return "OBJECT"
         else:
             contents = []
+            ip = self.dialect.identifier_preparer
             for key in type_.items_types:
-                row_text = f"{key} {type_.items_types[key][0].compile()}"
+                if len(key) >= 2 and key[0] == '"' and key[-1] == '"':
+                    inner = key[1:-1].replace('""', '"')
+                else:
+                    inner = key
+                quoted_key = ip.quote(inner)
+                row_text = f"{quoted_key} {type_.items_types[key][0].compile()}"
                 # Type and not null is specified
                 if len(type_.items_types[key]) > 1:
                     row_text += f"{' NOT NULL' if type_.items_types[key][1] else ''}"

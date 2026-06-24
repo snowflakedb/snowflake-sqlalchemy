@@ -146,10 +146,10 @@ class OBJECT(StructuredType):
         super().__init__()
 
     def __repr__(self):
-        quote_char = "'"
+        dq = '"'
         return "OBJECT(%s)" % ", ".join(
             [
-                f"{repr(key).strip(quote_char)}={repr(value)}"
+                f"{key.strip(dq)}={repr(value)}"
                 for key, value in self.items_types.items()
             ]
         )
