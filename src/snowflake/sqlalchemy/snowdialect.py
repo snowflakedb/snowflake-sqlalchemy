@@ -1532,12 +1532,17 @@ class SnowflakeDialect(default.DefaultDialect):
             connection: Database connection.
             schema_name: Fully-qualified ``"database"."schema"`` name produced
                 by _get_full_schema_name.
-            filter_names: Non-empty iterable of table names to query.
+            filter_names: Iterable of table names to query.  An empty iterable
+                returns ``[]`` immediately without issuing SQL (``IN ()`` is
+                invalid in Snowflake).
 
         Returns:
             Result set from information_schema.columns for the given tables,
             or None on Snowflake result-size error 90030.
         """
+        if not filter_names:
+            return []
+
         database_raw, schema_raw = self._db_plus_schema(schema_name)
         if database_raw is None:
             raise ValueError(

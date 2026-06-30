@@ -454,7 +454,6 @@ class TestGetViewDefinitionLikeEscaping:
         "view_name, expected, not_expected",
         [
             pytest.param("o'brien", ["''"], ['"o'], id="simple_quote"),
-
             pytest.param("back\\slash", ["\\\\"], [], id="backslash_doubled"),
         ],
     )
@@ -506,7 +505,6 @@ class TestReflectionCommentLikeEscaping:
         "table_name, expected, not_expected",
         [
             pytest.param("o'brien", ["''"], ['"o'], id="simple_quote"),
-
             pytest.param("back\\slash", ["\\\\"], [], id="backslash_doubled"),
         ],
     )

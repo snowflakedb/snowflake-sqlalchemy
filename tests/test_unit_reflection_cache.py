@@ -99,6 +99,16 @@ def patch_column_query_methods(dialect, filtered_rows=(), all_rows=()):
         yield mock_all_columns_query, mock_targeted_query, mock_primary_keys
 
 
+def test_targeted_query_empty_filter_names_returns_empty_without_sql(dialect_no_db):
+    """Empty filter_names must short-circuit before SQL — AND ic.table_name IN () is invalid."""
+    conn, sql_log = _make_mock_conn()
+
+    result = dialect_no_db._query_filtered_columns_info(conn, _FULL_SCHEMA, ())
+
+    assert list(result) == []
+    assert sql_log == [], "no SQL should be issued for empty filter_names"
+
+
 def test_targeted_query_contains_table_name_in_clause(dialect_no_db):
     """Targeted query must have AND ic.table_name IN (...) in its WHERE clause."""
     conn, sql_log = _make_mock_conn()
@@ -292,29 +302,24 @@ def test_multi_columns_warm_cache_skips_sql(dialect_no_db):
     conn.execute.assert_not_called()
 
 
-def test_multi_columns_warm_cache_returns_requested_columns(dialect_no_db):
-    """Warm cache: result contains exactly the columns for the requested table."""
-    conn = MagicMock()
-    cols_a = [{"name": "id"}]
-    cols_b = [{"name": "name"}]
-    info_cache = {_FULL_SCHEMA_CACHE_KEY: {"table_a": cols_a, "table_b": cols_b}}
-
-    result = dialect_no_db.get_multi_columns(
-        conn,
-        schema=_SCHEMA,
-        filter_names=["table_a"],
-        info_cache=info_cache,
-    )
-
-    assert len(result) == 1
-    assert result[0] == ((_SCHEMA, "table_a"), cols_a)
-
-
-def test_multi_columns_warm_cache_serves_multiple_filter_names(dialect_no_db):
-    """Warm cache: all requested tables are served from cache without SQL."""
+@pytest.mark.parametrize(
+    "filter_names, expected_keys",
+    [
+        pytest.param(["table_a"], {(_SCHEMA, "table_a")}, id="single_table"),
+        pytest.param(
+            ["t1", "t3"], {(_SCHEMA, "t1"), (_SCHEMA, "t3")}, id="multi_table"
+        ),
+    ],
+)
+def test_multi_columns_warm_cache_serves_correct_subset(
+    dialect_no_db, filter_names, expected_keys
+):
+    """Warm cache: only the requested tables are returned, no SQL issued."""
     conn = MagicMock()
     info_cache = {
         _FULL_SCHEMA_CACHE_KEY: {
+            "table_a": [{"name": "id"}],
+            "table_b": [{"name": "name"}],
             "t1": [{"name": "a"}],
             "t2": [{"name": "b"}],
             "t3": [{"name": "c"}],
@@ -322,14 +327,10 @@ def test_multi_columns_warm_cache_serves_multiple_filter_names(dialect_no_db):
     }
 
     result = dialect_no_db.get_multi_columns(
-        conn,
-        schema=_SCHEMA,
-        filter_names=["t1", "t3"],
-        info_cache=info_cache,
+        conn, schema=_SCHEMA, filter_names=filter_names, info_cache=info_cache
     )
 
-    assert len(result) == 2
-    assert {r[0] for r in result} == {(_SCHEMA, "t1"), (_SCHEMA, "t3")}
+    assert {r[0] for r in result} == expected_keys
     conn.execute.assert_not_called()
 
 

@@ -242,9 +242,7 @@ class TestVisitObjectKeyQuoting:
         obj.items_types = {'"a"."b"': (VARCHAR(10), False)}
         result = self._type_compiler().process(obj)
         # The dot and the inner quotes must not appear unescaped in the output
-        assert (
-            '"a"."b"' not in result
-        ), f"Value was emitted verbatim in DDL: {result!r}"
+        assert '"a"."b"' not in result, f"Value was emitted verbatim in DDL: {result!r}"
 
 
 class TestObjectRepr:

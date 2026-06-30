@@ -9,6 +9,7 @@ Source code is also available at:
 
 # Unreleased Notes
 
+- Optimise single-table reflection (SNOW-3720548): reflecting one table no longer scans the entire schema, reducing latency and Snowflake credit usage for targeted `Inspector` calls.
 - Improve `_url()` helper and `create_connect_args` connection-parameter handling:
   - `account` and `region` values are now validated against an allowlist of DNS-safe characters (alphanumeric, `-`, `.`, `_`) before being interpolated into the connection URL, preventing URL-authority corruption from unexpected characters.
   - `user` values are percent-encoded before being placed in the URL userinfo component, preserving the original value delivered to the connector while preventing `@`, `?`, and `#` from being misinterpreted as URL delimiters.
@@ -21,7 +22,6 @@ Source code is also available at:
   - `repr()` of `AWSBucket`, `AzureContainer`, `GCSBucket` (and, transitively, `CopyIntoStorage`) now masks cloud secrets — `AWS_SECRET_KEY`, `AWS_KEY_ID`, `AWS_TOKEN`, `AZURE_SAS_TOKEN`, `MASTER_KEY` are rendered as `'***'` (SNOW-3649782). Compiled SQL is unchanged.
   - Added an opt-in logging redactor for engine logs that contain inline credentials: `SnowflakeSecretRedactionFilter`, `add_secret_redaction_filter()`, and `redact_secrets()`. Prefer `STORAGE_INTEGRATION` to avoid putting secrets in SQL at all (SNOW-3649850).
 - Fix `get_view_definition` silently truncating or failing for view names that contain a single quote or backslash (e.g. `o'brien`). The name is now SQL-escaped (`'` → `''`, `\` → `\\`) before being embedded in the `SHOW VIEWS LIKE '...'` literal, so such views are found correctly and no query manipulation is possible via a crafted view name.
-- Optimise single-table reflection (SNOW-3720548): reflecting one table no longer scans the entire schema, reducing latency and Snowflake credit usage for targeted `Inspector` calls.
 
 # Release Notes
 
