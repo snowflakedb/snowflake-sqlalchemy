@@ -127,7 +127,7 @@ def test_dotted_table_name_uses_only_last_component():
 
 def test_semicolon_in_table_name_is_enclosed_in_double_quotes():
     """Semicolons in table_name must not escape double-quote enclosure (SNOW-3480955)."""
-    payload = "foo; SELECT 1--"
+    payload = "foo; -- aaa"
     manager, captured = _make_manager()
     manager.get_table_columns(payload, schema="myschema")
 
@@ -144,9 +144,9 @@ def test_semicolon_in_table_name_is_enclosed_in_double_quotes():
     ), f"Semicolon escaped double-quote enclosure; got: {sql!r}"
 
 
-def test_drop_statement_injection_in_table_name_is_quoted():
-    """Classic DROP TABLE injection payload in table_name is neutralised by quoting."""
-    payload = "x'; DROP TABLE users--"
+def test_quote_semicolon_in_table_name_is_quoted():
+    """A quote + semicolon + comment in table_name is neutralised by quoting."""
+    payload = "x'; -- aaa"
     manager, captured = _make_manager()
     manager.get_table_columns(payload, schema="myschema")
 
@@ -154,8 +154,8 @@ def test_drop_statement_injection_in_table_name_is_quoted():
     assert f'"{payload}"' in sql, f"Payload not enclosed in double-quotes; got: {sql!r}"
     stripped = re.sub(r'"[^"]*"', "", sql)
     assert (
-        "DROP" not in stripped
-    ), f"DROP keyword escaped double-quote enclosure; got: {sql!r}"
+        ";" not in stripped
+    ), f"Semicolon escaped double-quote enclosure; got: {sql!r}"
 
 
 def test_newline_injection_in_table_name_is_quoted():
@@ -175,7 +175,7 @@ def test_newline_injection_in_table_name_is_quoted():
 
 def test_semicolon_in_schema_is_enclosed_in_double_quotes():
     """Injection payload in schema is also double-quoted (SNOW-3480955)."""
-    payload = "myschema; SELECT 1--"
+    payload = "myschema; -- aaa"
     manager, captured = _make_manager()
     manager.get_table_columns("mytable", schema=payload)
 

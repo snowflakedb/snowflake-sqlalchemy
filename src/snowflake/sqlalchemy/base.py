@@ -7,6 +7,7 @@ import operator
 import re
 import string
 import warnings
+from functools import reduce
 from typing import Any, List
 
 from sqlalchemy import exc as sa_exc
@@ -48,6 +49,8 @@ from .util import (
     _Snowflake_Selectable_Join,
     escape_backslashes,
     escape_string_literal_interior,
+    requires_quotes,
+    split_identifier_parts,
 )
 
 RESERVED_WORDS = frozenset(
@@ -485,6 +488,20 @@ class SnowflakeIdentifierPreparer(compiler.IdentifierPreparer):
             return self.quote_identifier(ident)
         return self.quote(ident)
 
+    @property
+    def _identifier_cfg(self) -> dict:
+        """Config bundle passed to the pure identifier predicates in util.py.
+
+        Bundles the dialect-specific data the predicates need (reserved words,
+        illegal-identifier sets, legal-character regex) so call sites stay terse.
+        """
+        return {
+            "reserved_words": self.reserved_words,
+            "illegal_identifiers": self.illegal_identifiers,
+            "illegal_initial_characters": self.illegal_initial_characters,
+            "legal_characters": self.legal_characters,
+        }
+
     def _is_unsafe_unquoted(self, value: str) -> bool:
         """Return True if emitting ``value`` unquoted could alter SQL structure.
 
@@ -493,16 +510,11 @@ class SnowflakeIdentifierPreparer(compiler.IdentifierPreparer):
         it), whereas whitespace, quotes, dots, parentheses, semicolons, etc. are
         what require quoting.  Used to neutralise risky values while still
         preserving the historical bare rendering of legal identifiers.
+
+        Structural-only form of ``util.requires_quotes`` (``include_case=False``);
+        the dialect config is supplied via ``_identifier_cfg``.
         """
-        if not value:
-            return False
-        lc_value = value.lower()
-        return (
-            lc_value in self.reserved_words
-            or lc_value in self.illegal_identifiers
-            or value[0] in self.illegal_initial_characters
-            or not self.legal_characters.match(str(value))
-        )
+        return requires_quotes(value, include_case=False, **self._identifier_cfg)
 
     def quote_identifier_if_unsafe(self, value: str) -> str:
         """Quote each dot-separated part of ``value`` only when it is unsafe.
@@ -560,49 +572,18 @@ class SnowflakeIdentifierPreparer(compiler.IdentifierPreparer):
         return self._safe_quote(s)
 
     def _requires_quotes(self, value: str) -> bool:
-        """Return True if the given identifier requires quoting."""
-        lc_value = value.lower()
-        return (
-            lc_value in self.reserved_words
-            or lc_value in self.illegal_identifiers
-            or value[0] in self.illegal_initial_characters
-            or not self.legal_characters.match(str(value))
-            or (lc_value != value)
-        )
+        """Return True if the given identifier requires quoting.
+
+        Thin wrapper over ``util.requires_quotes`` (structural triggers plus the
+        case-only clause).
+        """
+        return requires_quotes(value, **self._identifier_cfg)
 
     def _split_schema_by_dot(self, schema):
-        # Each entry is (value, was_quoted) where was_quoted=True means the
-        # value was enclosed in double-quotes in the original string.
-        ret = []
-        idx = 0
-        pre_idx = 0
-        in_quote = False
-        while idx < len(schema):
-            if not in_quote:
-                if schema[idx] == "." and pre_idx < idx:
-                    ret.append((schema[pre_idx:idx], False))
-                    pre_idx = idx + 1
-                elif schema[idx] == '"':
-                    if pre_idx < idx:
-                        ret.append((schema[pre_idx:idx], False))
-                    in_quote = True
-                    pre_idx = idx + 1
-            else:
-                if schema[idx] == '"':
-                    # SQL double-quote escape: "" inside a quoted identifier is a
-                    # literal " character (e.g. "my""schema" → my"schema).
-                    if idx + 1 < len(schema) and schema[idx + 1] == '"':
-                        idx += 1  # skip the second quote; keep accumulating
-                    elif pre_idx < idx:
-                        value = schema[pre_idx:idx].replace('""', '"')
-                        ret.append((value, True))
-                        in_quote = False
-                        pre_idx = idx + 1
-            idx += 1
-            if pre_idx < len(schema) and schema[pre_idx] == ".":
-                pre_idx += 1
-        if pre_idx < idx:
-            ret.append((schema[pre_idx:idx], False))
+        # Scan the raw string into ``(value, was_quoted)`` parts; the pure
+        # scanner lives in util.split_identifier_parts so it can be unit-tested
+        # without a preparer.
+        ret = split_identifier_parts(schema)
 
         # Parts found inside "..." get ``quote=True`` only when the dialect
         # was constructed with ``case_sensitive_identifiers=True``.  Without
@@ -620,6 +601,15 @@ class SnowflakeIdentifierPreparer(compiler.IdentifierPreparer):
             )
             for value, was_quoted in ret
         ]
+
+    def _split_idents(self, *idents) -> list:
+        """Split each non-None identifier on its unquoted dots and concatenate
+        the parts; the all-None / empty case yields ``[]``."""
+        return reduce(
+            operator.add,
+            [self._split_schema_by_dot(i) for i in idents if i is not None],
+            [],
+        )
 
 
 def _render_storage_credentials(credentials_used, deterministic: bool = False) -> str:
@@ -896,20 +886,21 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         )
 
     def visit_external_stage(self, external_stage, **kw):
+        # Quote the stage's <namespace>.<name> prefix when required, consistently
+        # with CREATE STAGE, so the stage reference is always a well-formed
+        # identifier; the trailing path is a stage path, not an identifier.
+        prefix = self.preparer.quote_identifier_if_unsafe(
+            f"{external_stage.namespace}{external_stage.name}"
+        )
         if external_stage.file_format is None:
-            return (
-                f"@{external_stage.namespace}{external_stage.name}{external_stage.path}"
-            )
+            return f"@{prefix}{external_stage.path}"
         # file_format names a (possibly schema-qualified) file format object;
-        # quote any unsafe part so it cannot alter SQL in the stage
-        # reference (SNOW-3649881).
+        # quote any part that requires it so the stage reference stays
+        # well-formed.
         file_format = self.preparer.quote_identifier_if_unsafe(
             external_stage.file_format
         )
-        return (
-            f"@{external_stage.namespace}{external_stage.name}{external_stage.path}"
-            f" (file_format => {file_format})"
-        )
+        return f"@{prefix}{external_stage.path} (file_format => {file_format})"
 
     def delete_extra_from_clause(
         self, delete_stmt, from_table, extra_froms, from_hints, **kw
@@ -1042,16 +1033,6 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         # escape backslash
         return escape_backslashes(super().render_literal_value(value, type_))
 
-    def _escape_string_interior(self, value: str) -> str:
-        """Return ``value`` escaped for embedding inside a single-quoted literal.
-
-        Returns only the escaped interior (no surrounding quotes), so callers
-        that already supply the enclosing quotes can interpolate the result
-        directly.  Shares its escaping rules with the DDL compiler via
-        ``escape_string_literal_interior``.
-        """
-        return escape_string_literal_interior(value)
-
 
 class SnowflakeExecutionContext(default.DefaultExecutionContext):
     INSERT_SQL_RE = re.compile(r"^insert\s+into", flags=re.IGNORECASE)
@@ -1113,14 +1094,6 @@ _identity_pk_warned: set = set()
 
 
 class SnowflakeDDLCompiler(compiler.DDLCompiler):
-    def _escape_string_interior(self, value: str) -> str:
-        """Return ``value`` escaped for embedding inside a single-quoted literal.
-
-        DDL counterpart of ``SnowflakeCompiler._escape_string_interior``; both
-        share their escaping rules via ``escape_string_literal_interior``.
-        """
-        return escape_string_literal_interior(value)
-
     def denormalize_column_name(self, name):
         if name is None:
             return None

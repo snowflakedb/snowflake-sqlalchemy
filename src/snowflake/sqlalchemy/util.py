@@ -35,27 +35,56 @@ def _rfc_1738_quote(text):
     return re.sub(r"[:@/]", lambda m: "%%%X" % ord(m.group(0)), text)
 
 
-# Characters valid in the URL authority fields we interpolate (account, region —
-# both DNS labels).  Rejects URL metacharacters (?  & @ : / # …) that would otherwise
-# be misinterpreted as URL delimiters when the value is placed in the URL authority
-# component, introducing unintended query parameters.
+# --- connection-input handling --------------------------------------------
+# Rules for caller-controlled connection inputs: the URL-authority allowlist
+# (account/region), the denylist of connector kwargs that must not arrive via
+# the URL query string, and the shared reject-or-warn gate.
+
+# account/region are DNS labels; reject characters that would act as URL
+# delimiters in the authority component.
 _SAFE_URL_FIELD_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+
+# Connector kwargs that must travel via connect_args= rather than the URL query
+# string (they change the connection target, read/write local files, or relax a
+# connector safety check). Re-exported from snowdialect for backwards compat.
+_URL_QUERY_BLOCKED_KWARGS: frozenset = frozenset(
+    {
+        "host",
+        "protocol",
+        "token_file_path",
+        "private_key_file",
+        "ocsp_response_cache_filename",
+        "connection_diag_log_path",
+        "crl_cache_dir",
+        "unsafe_file_write",
+        "unsafe_skip_file_permissions_check",
+    }
+)
+
+
+def _reject_or_warn(message: str, *, legacy: bool, stacklevel: int = 2) -> None:
+    """Raise ``ArgumentError``, or warn under the legacy shim. ``stacklevel`` is
+    relative to this helper's caller."""
+    if legacy:
+        # +1 skips this helper's own frame so the warning is attributed to the
+        # caller that supplied ``stacklevel``.
+        warnings.warn(message, DeprecationWarning, stacklevel=stacklevel + 1)
+    else:
+        raise exc.ArgumentError(message)
 
 
 def _validate_url_field(field: str, value: str) -> None:
     if not _SAFE_URL_FIELD_RE.fullmatch(value):
-        msg = (
+        # The builder has no engine, so only the env var can relax this.
+        _reject_or_warn(
             f"'{field}' contains characters that cannot be safely placed in the "
             f"connection URL: {value!r}. "
-            "Only alphanumeric characters, hyphens, dots, and underscores are allowed."
+            "Only alphanumeric characters, hyphens, dots, and underscores are allowed. "
+            "To restore the previous behaviour temporarily, set the "
+            f"{SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS} environment variable.",
+            legacy=_legacy_url_params_enabled(),
+            stacklevel=3,  # caller's URL(...) site
         )
-        if _legacy_url_params_enabled():
-            # stacklevel=3 points the warning at the caller's ``URL(...)`` site:
-            # URL is an alias of _url (frame 2), which calls this function
-            # (frame 1); frame 3 is the user's call.
-            warnings.warn(msg, DeprecationWarning, stacklevel=3)
-        else:
-            raise exc.ArgumentError(msg)
 
 
 def _url(**db_parameters):
@@ -379,13 +408,125 @@ def escape_backslashes(value: str) -> str:
 
 
 def escape_string_literal_interior(value: str) -> str:
-    """Escape the *interior* of a single-quoted Snowflake string literal.
-
-    Doubles single quotes (standard SQL ``''`` escaping) and backslashes
-    (Snowflake ``ESCAPE_STRING_LITERALS`` semantics).  The two replacements are
-    order-independent.  Returns only the interior — **no surrounding quotes** —
-    and deliberately does **not** double percent signs, so the result is safe to
-    interpolate into a Python ``%``-formatted DDL template (unlike SQLAlchemy's
-    ``String`` literal processor, which both wraps in quotes and doubles ``%``).
+    """Escape the interior of a single-quoted Snowflake string literal: double
+    single quotes (standard SQL ``''``) and backslashes (Snowflake
+    ``ESCAPE_STRING_LITERALS``). Returns the interior only — no surrounding
+    quotes — and does not double percent signs, so it is safe to interpolate
+    into a ``%``-formatted DDL template.
     """
-    return value.replace("'", "''").replace("\\", "\\\\")
+    return escape_single_quotes(value).replace("\\", "\\\\")
+
+
+def escape_single_quotes(value: str) -> str:
+    """Double single quotes only, leaving backslashes untouched.
+
+    For single-quoted string-literal options where Snowflake backslash
+    sequences (``\\n``, ``\\134``, ``\\N``) must be preserved verbatim — unlike
+    ``escape_string_literal_interior``, which also doubles backslashes.
+    """
+    return value.replace("'", "''")
+
+
+# --- identifier quoting primitives -----------------------------------------
+#
+# Pure, config-free helpers shared by ``SnowflakeIdentifierPreparer`` (base.py)
+# and ``_NameUtils`` (name_utils.py).  Kept here, decoupled from the preparer,
+# so they can be unit-tested directly without constructing a dialect.  The
+# Snowflake-specific config (reserved words, illegal-identifier sets, the
+# legal-character regex, the case-sensitivity flag) stays on the preparer /
+# dialect and is passed in by the callers.
+
+
+def split_identifier_parts(text: str):
+    """Split a dotted identifier string into ``(value, was_quoted)`` parts.
+
+    Splits on unquoted dots while honouring double-quoted segments, so
+    ``"db.schema"`` -> ``[("db", False), ("schema", False)]`` and the quoted
+    ``'"my.schema"'`` -> ``[("my.schema", True)]``.  A doubled quote inside a
+    quoted segment (``"a""b"``) is unescaped to a single ``"`` (-> ``a"b``).
+
+    ``was_quoted`` records whether the part was enclosed in double quotes in the
+    source string; the caller decides what quoting that implies.  Returns only
+    the raw parts — **no** ``quoted_name`` wrapping and **no** case-sensitivity
+    policy (that lives in the preparer, which knows the dialect flag).
+
+    Parts must be dot-separated.  A quoted segment adjacent to other text without
+    a separating dot (``prefix"X"`` / ``"X"suffix``) or an unterminated quote is
+    malformed and raises ``ValueError`` rather than being parsed into an
+    arbitrary multi-part reference.
+    """
+    ret = []
+    idx = 0
+    pre_idx = 0
+    in_quote = False
+    while idx < len(text):
+        if not in_quote:
+            if text[idx] == "." and pre_idx < idx:
+                ret.append((text[pre_idx:idx], False))
+                pre_idx = idx + 1
+            elif text[idx] == '"':
+                # A quoted segment starts a part: unquoted text right before it
+                # (no separating dot) is malformed.
+                if pre_idx < idx:
+                    raise ValueError(
+                        f"invalid identifier {text!r}: unquoted text is adjacent "
+                        'to a quoted segment without a separating "."'
+                    )
+                in_quote = True
+                pre_idx = idx + 1
+        else:
+            if text[idx] == '"':
+                # "" inside a quoted segment is an escaped literal " character
+                # (e.g. "my""schema" -> my"schema).
+                if idx + 1 < len(text) and text[idx + 1] == '"':
+                    idx += 1  # skip the second quote; keep accumulating
+                else:
+                    value = text[pre_idx:idx].replace('""', '"')
+                    ret.append((value, True))
+                    in_quote = False
+                    pre_idx = idx + 1
+                    # A quoted segment ends a part: text other than a dot right
+                    # after the closing quote (no separating dot) is malformed.
+                    if idx + 1 < len(text) and text[idx + 1] != ".":
+                        raise ValueError(
+                            f"invalid identifier {text!r}: a quoted segment is "
+                            'adjacent to further text without a separating "."'
+                        )
+        idx += 1
+        if pre_idx < len(text) and text[pre_idx] == ".":
+            pre_idx += 1
+    if in_quote:
+        raise ValueError(f"invalid identifier {text!r}: unterminated quoted segment")
+    if pre_idx < idx:
+        ret.append((text[pre_idx:idx], False))
+    return ret
+
+
+def requires_quotes(
+    value: str,
+    *,
+    include_case: bool = True,
+    reserved_words,
+    illegal_identifiers,
+    illegal_initial_characters,
+    legal_characters,
+) -> bool:
+    """Return True if ``value`` requires double-quoting.
+
+    Structural triggers (reserved word, illegal identifier, illegal initial
+    character, or any character outside ``legal_characters``) always apply. With
+    ``include_case`` (the default) an upper/mixed-case identifier also requires
+    quotes to preserve its case against Snowflake's folding. Pass
+    ``include_case=False`` for the structural-only check, where a bare uppercase
+    name is fine because Snowflake folds it.
+    """
+    if not value:
+        return False
+    lc_value = value.lower()
+    structural = (
+        lc_value in reserved_words
+        or lc_value in illegal_identifiers
+        or value[0] in illegal_initial_characters
+        or not legal_characters.match(str(value))
+    )
+    return structural or (include_case and lc_value != value)
