@@ -59,11 +59,6 @@ _ALL_BLOCKED_PARAMS = [
 ]
 
 
-# ===========================================================================
-# URL() must validate / encode the account / user / region fields
-# ===========================================================================
-
-
 class TestURLFieldEncoding:
     """URL() must reject or encode account/user/region values that contain
     URL metacharacters so that no unintended query parameters are introduced.
@@ -239,11 +234,6 @@ class TestURLFieldEncoding:
             )
 
 
-# ===========================================================================
-# create_connect_args must keep sensitive connector kwargs out of the URL query
-# ===========================================================================
-
-
 class TestSensitiveParamsRequireConnectArgs:
     """Sensitive connector kwargs must be supplied via connect_args=,
     not the URL query string.
@@ -359,12 +349,6 @@ class TestSensitiveParamsRequireConnectArgs:
         assert opts.get("schema") == "MY_SCHEMA"
 
 
-# ===========================================================================
-# Block-list integrity — anchors the design decision behind
-# _URL_QUERY_BLOCKED_KWARGS (denylist, not an allowlist of DEFAULT_CONFIGURATION)
-# ===========================================================================
-
-
 class TestBlockedKwargsIntegrity:
     """Guard the block-list and document why an allowlist can't replace it.
 
@@ -402,11 +386,6 @@ class TestBlockedKwargsIntegrity:
     def test_common_safe_params_are_not_over_blocked(self, safe_param):
         """Routine connection params must never be swept into the block-list."""
         assert safe_param not in _URL_QUERY_BLOCKED_KWARGS
-
-
-# ===========================================================================
-# Happy-path tests — the recommended migration to connect_args=
-# ===========================================================================
 
 
 class TestConnectArgsMigration:
@@ -484,11 +463,6 @@ class TestConnectArgsMigration:
         _, opts = d.create_connect_args(url)
         assert "protocol" not in opts  # not in URL query string
         assert opts["warehouse"] == "WH"
-
-
-# ===========================================================================
-# Regression tests — legacy URL params compatibility shim (kwarg + env var)
-# ===========================================================================
 
 
 class TestLegacyURLParamsMode:
@@ -625,3 +599,46 @@ class TestLegacyURLParamsMode:
         monkeypatch.setenv(SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS, "1")
         with pytest.warns(DeprecationWarning):
             URL(account="x?extra=1", user="u", password="pw")
+
+
+class TestCacheColumnMetadataKwargPrecedence:
+    """create_connect_args must use the preserve-kwarg idiom for
+    cache_column_metadata, matching enable_decfloat / case_sensitive_identifiers."""
+
+    def _url(self, **query):
+        return SAUrl.create(
+            "snowflake",
+            username="u",
+            password="p",
+            host="testaccount",
+            query=query,
+        )
+
+    def test_constructor_true_survives_url_without_param(self):
+        """cache_column_metadata=True in the constructor must NOT be reset to
+        False when the URL query string omits the param."""
+        d = base.dialect(cache_column_metadata=True)
+        d.create_connect_args(self._url())
+        assert d._cache_column_metadata is True
+
+    def test_constructor_default_false_when_url_silent(self):
+        """Default stays False when neither constructor nor URL sets it."""
+        d = base.dialect()
+        d.create_connect_args(self._url())
+        assert d._cache_column_metadata is False
+
+    @pytest.mark.parametrize(
+        "url_value, expected",
+        [("True", True), ("False", False)],
+    )
+    def test_url_value_overrides_constructor(self, url_value, expected):
+        """An explicit URL value still wins over the constructor kwarg."""
+        d = base.dialect(cache_column_metadata=not expected)
+        d.create_connect_args(self._url(cache_column_metadata=url_value))
+        assert d._cache_column_metadata is expected
+
+    def test_url_param_not_forwarded_to_connector(self):
+        """cache_column_metadata is consumed by the dialect, never forwarded."""
+        d = base.dialect()
+        _, opts = d.create_connect_args(self._url(cache_column_metadata="True"))
+        assert "cache_column_metadata" not in opts

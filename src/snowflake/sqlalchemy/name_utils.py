@@ -1,22 +1,26 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 
-import operator
-from functools import reduce
-
 from sqlalchemy.sql.compiler import IdentifierPreparer
 from sqlalchemy.sql.elements import quoted_name
 
 
 class _NameUtils:
 
-    def __init__(
-        self,
-        identifier_preparer: IdentifierPreparer,
-        case_sensitive_identifiers: bool = False,
-    ) -> None:
+    def __init__(self, identifier_preparer: IdentifierPreparer) -> None:
         self.identifier_preparer = identifier_preparer
-        self.case_sensitive_identifiers = case_sensitive_identifiers
+
+    @property
+    def case_sensitive_identifiers(self) -> bool:
+        """Read the flag live from the dialect — the single source of truth.
+
+        ``_NameUtils`` keeps no copy of its own: the dialect owns
+        ``_case_sensitive_identifiers`` (and the preparer reads it live too), so
+        a URL-driven flip is reflected here without rebuilding this object.
+        """
+        return getattr(
+            self.identifier_preparer.dialect, "_case_sensitive_identifiers", False
+        )
 
     def normalize_name(self, name):
         if name is None:
@@ -82,24 +86,25 @@ class _NameUtils:
             return ip.quote_identifier(name)
         return ip.quote_identifier(self.denormalize_name(name))
 
+    def quote_components(self, parts) -> str:
+        """Unconditionally double-quote each pre-split component and dot-join them.
+
+        For parts already extracted by ``_split_schema_by_dot`` (which may
+        themselves contain literal dots) — unlike :meth:`always_quote_join`, this
+        does **not** split.  Public so the dialect can quote pre-split parts
+        without reaching into ``_quote_component``.
+        """
+        return ".".join(self._quote_component(p) for p in parts)
+
     def always_quote_join(self, *idents) -> str:
         """Build a dot-joined SQL identifier string that always quotes every part.
 
         Each identifier in *idents is split on unquoted dots via
         ``_split_schema_by_dot`` (so ``"db.schema"`` becomes two components),
-        then every component is unconditionally double-quoted via
-        ``_quote_component``.
+        then every component is unconditionally double-quoted.
 
         Do NOT pass pre-split parts that may contain literal dots (e.g. a
-        component extracted from ``'"my.schema"'``).  Use ``_quote_component``
-        directly on each pre-split part instead.
+        component extracted from ``'"my.schema"'``).  Use :meth:`quote_components`
+        on the pre-split parts instead.
         """
-        split_idents = reduce(
-            operator.add,
-            [
-                self.identifier_preparer._split_schema_by_dot(ids)
-                for ids in idents
-                if ids is not None
-            ],
-        )
-        return ".".join(self._quote_component(i) for i in split_idents)
+        return self.quote_components(self.identifier_preparer._split_idents(*idents))

@@ -12,7 +12,7 @@ from sqlalchemy.sql.elements import ClauseElement
 from sqlalchemy.sql.roles import FromClauseRole
 
 from .compat import string_types
-from .util import escape_string_literal_interior
+from .util import escape_single_quotes, escape_string_literal_interior
 
 NoneType = type(None)
 
@@ -237,7 +237,7 @@ class CopyFormatter(ClauseElement):
         """
         if name in _FULL_ESCAPE_OPTION_KEYS:
             return escape_string_literal_interior(value)
-        return value.replace("'", "''")
+        return escape_single_quotes(value)
 
     @staticmethod
     def value_repr(name, value):

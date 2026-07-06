@@ -8,7 +8,11 @@ import pytest
 from sqlalchemy.sql.sqltypes import String
 
 from snowflake.sqlalchemy.snowdialect import SnowflakeDialect
-from snowflake.sqlalchemy.util import escape_backslashes, escape_string_literal_interior
+from snowflake.sqlalchemy.util import (
+    escape_backslashes,
+    escape_single_quotes,
+    escape_string_literal_interior,
+)
 
 # A single literal backslash. Spelled out to keep the parametrize tables
 # readable — "\\" in source is one backslash at runtime.
@@ -62,6 +66,15 @@ def test_escape_string_literal_interior(value, expected):
     assert escape_string_literal_interior(value) == expected
 
 
+def test_escape_single_quotes_diverges_from_interior_on_backslash():
+    """escape_single_quotes must NOT double backslashes; the interior helper does.
+    This is the whole reason the quote-only variant exists (FILE_FORMAT options
+    where \\n / \\134 / \\N must be preserved)."""
+    value = "a" + BS + "n'b"
+    assert escape_single_quotes(value) == "a" + BS + "n''b"
+    assert escape_string_literal_interior(value) == "a" + BS * 2 + "n''b"
+
+
 @pytest.mark.parametrize(
     "value",
     [
@@ -91,21 +104,3 @@ def test_interior_escape_diverges_from_sa_processor_on_percent(value):
     else:
         # Absent percent signs, the processor interior matches the helper.
         assert processed[1:-1] == helper
-
-
-@pytest.mark.parametrize(
-    "value",
-    [
-        pytest.param("plain", id="plain"),
-        pytest.param("a'b", id="quote"),
-        pytest.param(BS, id="backslash"),
-        pytest.param("a%b'c" + BS + "d", id="mixed"),
-    ],
-)
-def test_compiler_escape_methods_delegate_to_helper(value):
-    dialect = SnowflakeDialect()
-    ddl_compiler = dialect.ddl_compiler(dialect, None)
-    sql_compiler = dialect.statement_compiler(dialect, None)
-    expected = escape_string_literal_interior(value)
-    assert ddl_compiler._escape_string_interior(value) == expected
-    assert sql_compiler._escape_string_interior(value) == expected

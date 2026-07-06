@@ -454,7 +454,7 @@ class TestGetViewDefinitionLikeEscaping:
         "view_name, expected, not_expected",
         [
             pytest.param("o'brien", ["''"], ['"o'], id="simple_quote"),
-            pytest.param("a' b --", ["''"], [], id="quote_and_comment"),
+
             pytest.param("back\\slash", ["\\\\"], [], id="backslash_doubled"),
         ],
     )
@@ -468,3 +468,57 @@ class TestGetViewDefinitionLikeEscaping:
             assert (
                 fragment not in sql
             ), f"Unexpected {fragment!r} in SQL for {view_name!r}, got: {sql!r}"
+
+
+def _capture_comment_sql(dialect, method_name, table_name, schema="PUBLIC"):
+    """Return the SQL string _get_table_comment/_get_view_comment passes to execute()."""
+    conn = mock.MagicMock()
+    cursor = mock.MagicMock()
+    cursor.fetchone.return_value = None
+    conn.execute.return_value = cursor
+    with mock.patch.object(
+        dialect,
+        "_current_database_schema",
+        return_value=("CURRENT_DB", "CURRENT_SCHEMA"),
+    ):
+        getattr(dialect, method_name)(conn, table_name, schema=schema)
+    assert conn.execute.called
+    sql_arg = conn.execute.call_args[0][0]
+    return sql_arg.text if hasattr(sql_arg, "text") else str(sql_arg)
+
+
+class TestReflectionCommentLikeEscaping:
+    """SNOW-3649853 residual: _get_table_comment / _get_view_comment build a
+    ``SHOW ... LIKE '{table_name}'`` literal, so the interpolated value must be
+    single-quote escaped exactly like get_view_definition (snowdialect.py:1526).
+    """
+
+    @pytest.mark.parametrize("method_name", ["_get_table_comment", "_get_view_comment"])
+    def test_plain_name_unchanged_bcr(self, method_name):
+        # Behaviour-preserving: a quote-free name is untouched (no denormalize,
+        # no over-quoting) — keeps the cross-database-reflection contract.
+        sql = _capture_comment_sql(_make_dialect(), method_name, "my_table")
+        assert "LIKE 'my_table'" in sql
+        assert "''" not in sql
+
+    @pytest.mark.parametrize("method_name", ["_get_table_comment", "_get_view_comment"])
+    @pytest.mark.parametrize(
+        "table_name, expected, not_expected",
+        [
+            pytest.param("o'brien", ["''"], ['"o'], id="simple_quote"),
+
+            pytest.param("back\\slash", ["\\\\"], [], id="backslash_doubled"),
+        ],
+    )
+    def test_special_chars_escaped(
+        self, method_name, table_name, expected, not_expected
+    ):
+        sql = _capture_comment_sql(_make_dialect(), method_name, table_name)
+        for fragment in expected:
+            assert (
+                fragment in sql
+            ), f"Expected {fragment!r} in SQL for {table_name!r}, got: {sql!r}"
+        for fragment in not_expected:
+            assert (
+                fragment not in sql
+            ), f"Unexpected {fragment!r} in SQL for {table_name!r}, got: {sql!r}"

@@ -3,11 +3,8 @@
 #
 import decimal
 import logging
-import operator
-import warnings
 from collections import defaultdict
 from enum import Enum
-from functools import reduce
 from logging import getLogger
 from time import time as time_in_seconds
 from typing import Any, Collection, NamedTuple, Optional, cast
@@ -54,7 +51,9 @@ from .parser.custom_type_parser import _CUSTOM_DECIMAL  # noqa
 from .parser.custom_type_parser import ischema_names, parse_index_columns, parse_type
 from .sql.custom_schema.custom_table_prefix import CustomTablePrefix
 from .util import (
+    _URL_QUERY_BLOCKED_KWARGS,
     _legacy_url_params_enabled,
+    _reject_or_warn,
     _update_connection_application_name,
     escape_string_literal_interior,
     parse_url_boolean,
@@ -71,38 +70,6 @@ colspecs = {
 _ENABLE_SQLALCHEMY_AS_APPLICATION_NAME = True
 
 logger = getLogger(__name__)
-
-# Query parameters that are not forwarded to snowflake.connector.connect()
-# when they arrive via the URL query string.  Each entry is a connector kwarg
-# that changes the connection target, reads a local file, writes to a local
-# path, or relaxes a connector-internal safety check.
-#
-# Callers who legitimately need one of these parameters should pass it via
-# connect_args= in create_engine() — that path skips URL parsing entirely
-# and is under the application's explicit control.
-_URL_QUERY_BLOCKED_KWARGS: frozenset = frozenset(
-    {
-        # Overrides the host derived from the URL authority; redirects the
-        # login request to a different server.
-        "host",
-        # Selects the transport; plain HTTP would expose credentials in transit.
-        "protocol",
-        # Connector reads the named file and sends its contents as an OAuth
-        # token — local file read.
-        "token_file_path",
-        # Connector opens the named file to load a private key — local file read.
-        "private_key_file",
-        # Connector writes OCSP / CRL / diagnostic artefacts to the given
-        # path — local file write.
-        "ocsp_response_cache_filename",
-        "connection_diag_log_path",
-        "crl_cache_dir",
-        # Connector-internal safety flags; relaxing them changes the safety
-        # posture of every subsequent file operation.
-        "unsafe_file_write",
-        "unsafe_skip_file_permissions_check",
-    }
-)
 
 
 class TelemetryEvents(Enum):
@@ -255,10 +222,7 @@ class SnowflakeDialect(default.DefaultDialect):
         self.force_div_is_floordiv = force_div_is_floordiv
         self.div_is_floordiv = force_div_is_floordiv
         self._case_sensitive_identifiers = case_sensitive_identifiers
-        self.name_utils = _NameUtils(
-            self.identifier_preparer,
-            case_sensitive_identifiers=case_sensitive_identifiers,
-        )
+        self.name_utils = _NameUtils(self.identifier_preparer)
         self._enable_decfloat = enable_decfloat
         # Initialised here so ``_log_new_connection_event`` and any other
         # pre-connect code path can read the attribute unconditionally.
@@ -342,31 +306,24 @@ class SnowflakeDialect(default.DefaultDialect):
 
         query = dict(**url.query)  # make mutable
         cache_column_metadata = query.pop("cache_column_metadata", None)
-        self._cache_column_metadata = (
-            parse_url_boolean(cache_column_metadata) if cache_column_metadata else False
-        )
+        if cache_column_metadata is not None:
+            # Preserve the constructor kwarg when the URL omits the param —
+            # matches enable_decfloat / case_sensitive_identifiers below.
+            self._cache_column_metadata = parse_url_boolean(cache_column_metadata)
 
         # Handle enable_decfloat URL parameter
         enable_decfloat = query.pop("enable_decfloat", None)
         if enable_decfloat is not None:
             self._enable_decfloat = parse_url_boolean(enable_decfloat)
 
-        # Handle case_sensitive_identifiers URL parameter
+        # Handle case_sensitive_identifiers URL parameter.  The dialect attribute
+        # is the single source of truth: the preparer and name_utils both read it
+        # live, so flipping it here takes effect everywhere with no rebuild.
         case_sensitive_identifiers = query.pop("case_sensitive_identifiers", None)
         if case_sensitive_identifiers is not None:
-            flag = parse_url_boolean(case_sensitive_identifiers)
-            if flag != self._case_sensitive_identifiers:
-                # Replace ``name_utils`` atomically rather than mutating the
-                # live instance's attribute.  Python attribute assignment is
-                # atomic at the bytecode level, so concurrent readers on
-                # other threads observe either the old ``_NameUtils`` or the
-                # new one — never a torn update where the flag and the
-                # cached preparer are briefly inconsistent.
-                self._case_sensitive_identifiers = flag
-                self.name_utils = _NameUtils(
-                    self.identifier_preparer,
-                    case_sensitive_identifiers=flag,
-                )
+            self._case_sensitive_identifiers = parse_url_boolean(
+                case_sensitive_identifiers
+            )
 
         # URL sets the query parameter values as strings, we need to cast to expected types when necessary
         #
@@ -378,23 +335,16 @@ class SnowflakeDialect(default.DefaultDialect):
         legacy = self._legacy_url_params
         for name, value in query.items():
             if name in _URL_QUERY_BLOCKED_KWARGS:
-                if legacy:
-                    warnings.warn(
-                        f"Connection parameter {name!r} is set via the URL query string. "
-                        "This is a deprecated practice that will stop working in a future release. "
-                        "Pass the parameter via connect_args= in create_engine() instead.",
-                        DeprecationWarning,
-                        stacklevel=2,
-                    )
-                else:
-                    raise sa_exc.ArgumentError(
-                        f"Connection parameter {name!r} cannot be set via the URL "
-                        "query string for safety reasons. "
-                        "Pass it via connect_args= in create_engine() instead. "
-                        "To restore the previous behaviour temporarily, pass "
-                        "legacy_url_params=True to create_engine() or set the "
-                        f"{SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS} environment variable."
-                    )
+                _reject_or_warn(
+                    f"Connection parameter {name!r} cannot be set via the URL "
+                    "query string for safety reasons. "
+                    "Pass it via connect_args= in create_engine() instead. "
+                    "To restore the previous behaviour temporarily, pass "
+                    "legacy_url_params=True to create_engine() or set the "
+                    f"{SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS} environment variable.",
+                    legacy=legacy,
+                    stacklevel=2,
+                )
             opts[name] = self.parse_query_param_type(name, value)
 
         return ([], opts)
@@ -456,10 +406,7 @@ class SnowflakeDialect(default.DefaultDialect):
 
     def _denormalize_quote_join(self, *idents):
         ip = self.identifier_preparer
-        split_idents = reduce(
-            operator.add,
-            [ip._split_schema_by_dot(ids) for ids in idents if ids is not None],
-        )
+        split_idents = ip._split_idents(*idents)
         return ".".join(ip._quote_free_identifiers(*split_idents))
 
     def _always_quote_join(self, *idents):
@@ -514,7 +461,7 @@ class SnowflakeDialect(default.DefaultDialect):
         # Quote each pre-split part unconditionally, preserving explicit
         # quoted-name boundaries.  Do NOT re-split via always_quote_join
         # because parts may contain literal dots (e.g. "schema.with.dots").
-        return ".".join(self.name_utils._quote_component(p) for p in parts)
+        return self.name_utils.quote_components(parts)
 
     @reflection.cache
     def _current_database_schema(self, connection, **kw):
@@ -1644,9 +1591,12 @@ class SnowflakeDialect(default.DefaultDialect):
         Returns comment of table in a dictionary as described by SQLAlchemy spec.
         """
         full_schema_name = self._get_full_schema_name(connection, schema, **kw)
+        # table_name is embedded in a single-quoted SHOW ... LIKE literal, so escape
+        # its interior (double ' and \) just like get_view_definition. SNOW-3649853.
+        like_value = escape_string_literal_interior(table_name)
         sql_command = (
             "SHOW /* sqlalchemy:_get_table_comment */ "
-            f"TABLES LIKE '{table_name}' IN SCHEMA {full_schema_name}"
+            f"TABLES LIKE '{like_value}' IN SCHEMA {full_schema_name}"
         )
         cursor = connection.execute(text(sql_command))
         return cursor.fetchone()
@@ -1656,9 +1606,12 @@ class SnowflakeDialect(default.DefaultDialect):
         Returns comment of view in a dictionary as described by SQLAlchemy spec.
         """
         full_schema_name = self._get_full_schema_name(connection, schema, **kw)
+        # table_name is embedded in a single-quoted SHOW ... LIKE literal, so escape
+        # its interior (double ' and \) just like get_view_definition. SNOW-3649853.
+        like_value = escape_string_literal_interior(table_name)
         sql_command = (
             "SHOW /* sqlalchemy:_get_view_comment */ "
-            f"VIEWS LIKE '{table_name}' IN SCHEMA {full_schema_name}"
+            f"VIEWS LIKE '{like_value}' IN SCHEMA {full_schema_name}"
         )
         cursor = connection.execute(text(sql_command))
         return cursor.fetchone()

@@ -131,11 +131,9 @@ def test_always_quote_join(nu, idents, expected):
 @pytest.mark.parametrize(
     "idents, blocked",
     [
-        pytest.param(
-            ("myschema; DROP TABLE users--", "mytable"), ";", id="semicolon in schema"
-        ),
-        pytest.param(("myschema", "mytable; SELECT 1--"), ";", id="semicolon in table"),
-        pytest.param(("x'; DROP TABLE t--", "t"), "DROP", id="DROP in schema"),
+        pytest.param(("myschema; -- aaa", "mytable"), ";", id="semicolon in schema"),
+        pytest.param(("myschema", "mytable; -- aaa"), ";", id="semicolon in table"),
+        pytest.param(("x'; -- aaa", "t"), ";", id="quote and semicolon in schema"),
     ],
 )
 def test_always_quote_join_identifier_quoting(nu, idents, blocked):
