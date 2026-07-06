@@ -1,7 +1,7 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 
-from typing import List
+from __future__ import annotations
 
 from sqlalchemy.exc import ArgumentError
 
@@ -26,7 +26,7 @@ class UnsupportedPrimaryKeysAndForeignKeysError(ArgumentError):
 
 
 class RequiredParametersNotProvidedError(ArgumentError):
-    def __init__(self, target: str, parameters: List[str]):  # noqa: B042
+    def __init__(self, target: str, parameters: list[str]):  # noqa: B042
         super().__init__(
             f"{target} requires the following parameters: %s." % ", ".join(parameters)
         )
@@ -46,7 +46,7 @@ class OptionKeyNotProvidedError(ArgumentError):
 
 class UnexpectedOptionParameterTypeError(ArgumentError):
     def __init__(  # noqa: B042
-        self, parameter_name: str, target: str, types: List[str]
+        self, parameter_name: str, target: str, types: list[str]
     ):
         super().__init__(
             f"Parameter {parameter_name} of {target} requires to be one"
@@ -62,7 +62,7 @@ class CustomOptionsAreOnlySupportedOnSnowflakeTables(ArgumentError):
 
 
 class UnexpectedOptionTypeError(ArgumentError):
-    def __init__(self, options: List[str]):
+    def __init__(self, options: list[str]):
         super().__init__(
             f"The following options are either unsupported or should be defined using a Snowflake table: {', '.join(options)}."
         )
@@ -70,7 +70,7 @@ class UnexpectedOptionTypeError(ArgumentError):
 
 class InvalidTableParameterTypeError(ArgumentError):
     def __init__(  # noqa: B042
-        self, name: str, input_type: str, expected_types: List[str]
+        self, name: str, input_type: str, expected_types: list[str]
     ):
         expected_types_str = "', '".join(expected_types)
         super().__init__(
