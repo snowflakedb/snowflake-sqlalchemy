@@ -51,10 +51,13 @@ def test_connect_sends_telemetry(mock_telemetry_client, mock_connect, fake_conne
 
     assert result is fake_connection
 
-    # Verify add_log_to_batch was called with correct payload
+    # Verify add_log_to_batch was called with correct payload.  The legacy
+    # ``sqlalchemy_new_connection`` event is the first log added to the batch
+    # (a second, structured event is added after it — see the structured-event
+    # tests below).
     telemetry_instance = mock_telemetry_client.return_value
 
-    payload = telemetry_instance.add_log_to_batch.call_args[0][0]
+    payload = telemetry_instance.add_log_to_batch.call_args_list[0].args[0]
     assert (
         payload.message[TelemetryField.KEY_TYPE.value]
         == TelemetryEvents.NEW_CONNECTION.value
@@ -86,7 +89,7 @@ def test_connect_telemetry_includes_pandas_when_available(
         dialect.connect()
 
     telemetry_instance = mock_telemetry_client.return_value
-    payload = telemetry_instance.add_log_to_batch.call_args[0][0]
+    payload = telemetry_instance.add_log_to_batch.call_args_list[0].args[0]
     telemetry_value = payload.message[TelemetryField.KEY_VALUE.value]
 
     assert telemetry_value == str(
@@ -113,7 +116,7 @@ def test_connect_telemetry_excludes_pandas_when_not_available(
         dialect.connect()
 
     telemetry_instance = mock_telemetry_client.return_value
-    payload = telemetry_instance.add_log_to_batch.call_args[0][0]
+    payload = telemetry_instance.add_log_to_batch.call_args_list[0].args[0]
     telemetry_value = payload.message[TelemetryField.KEY_VALUE.value]
 
     assert telemetry_value == str(
@@ -148,10 +151,16 @@ def test_connect_logs_when_telemetry_fails(
 
 
 def _telemetry_payload(dialect, telemetry_client_mock, fake_connection):
-    """Run ``dialect.connect()`` once and return the payload message dict."""
+    """Run ``dialect.connect()`` once and return the legacy payload message.
+
+    The legacy ``sqlalchemy_new_connection`` event is the first log added to
+    the batch; the structured event is second.
+    """
     fake_connection.rest = mock.MagicMock()
     dialect.connect()
-    payload = telemetry_client_mock.return_value.add_log_to_batch.call_args[0][0]
+    payload = telemetry_client_mock.return_value.add_log_to_batch.call_args_list[
+        0
+    ].args[0]
     return payload.message
 
 
@@ -249,3 +258,202 @@ def test_connect_telemetry_records_url_driven_flag(
     assert message[TelemetryField.KEY_VALUE.value] == str(
         {"SQLAlchemy": SQLALCHEMY_VERSION, **expected_flags}
     )
+
+
+# ---------------------------------------------------------------------------
+# Structured NEW_CONNECTION_PARAMETERS event
+# ---------------------------------------------------------------------------
+
+
+def _structured_message(telemetry_client_mock):
+    """Return the message dict of the structured connection-parameters event.
+
+    It is the *second* log added to the batch (after the legacy event).
+    """
+    payload = telemetry_client_mock.return_value.add_log_to_batch.call_args_list[
+        1
+    ].args[0]
+    return payload.message
+
+
+@mock.patch.object(sqla_default.DefaultDialect, "connect")
+@mock.patch("snowflake.sqlalchemy.snowdialect.TelemetryClient")
+def test_structured_event_is_emitted_alongside_legacy(
+    mock_telemetry_client, mock_connect, fake_connection
+):
+    """Both events are batched together and sent with a single send_batch."""
+    mock_connect.return_value = fake_connection
+
+    with mock.patch.dict(modules, {"pandas": None}):
+        fake_connection.rest = mock.MagicMock()
+        SnowflakeDialect().connect()
+
+    telemetry_instance = mock_telemetry_client.return_value
+    assert telemetry_instance.add_log_to_batch.call_count == 2
+    telemetry_instance.send_batch.assert_called_once()
+
+    legacy = telemetry_instance.add_log_to_batch.call_args_list[0].args[0]
+    structured = telemetry_instance.add_log_to_batch.call_args_list[1].args[0]
+    assert (
+        legacy.message[TelemetryField.KEY_TYPE.value]
+        == TelemetryEvents.NEW_CONNECTION.value
+    )
+    assert (
+        structured.message[TelemetryField.KEY_TYPE.value]
+        == TelemetryEvents.NEW_CONNECTION_PARAMETERS.value
+    )
+    # The structured value is a nested dict (queryable JSON), not str(dict).
+    assert isinstance(structured.message[TelemetryField.KEY_VALUE.value], dict)
+
+
+@mock.patch.object(sqla_default.DefaultDialect, "connect")
+@mock.patch("snowflake.sqlalchemy.snowdialect.TelemetryClient")
+def test_structured_event_records_keys_but_never_sensitive_values(
+    mock_telemetry_client, mock_connect, fake_connection
+):
+    """Every supplied option is recorded by key; only allow-listed, non-PII
+    values are copied.  Credentials/identifiers appear as keys only, and the
+    dialect's own injected application params are excluded entirely."""
+    mock_connect.return_value = fake_connection
+
+    with mock.patch.dict(modules, {"pandas": None}):
+        fake_connection.rest = mock.MagicMock()
+        SnowflakeDialect().connect(
+            user="ZZuserZZ",
+            password="ZZpasswordZZ",
+            token="ZZtokenvalueZZ",
+            private_key="ZZprivatekeyZZ",
+            account="ZZaccountZZ",
+            warehouse="ZZwarehouseZZ",
+            role="ZZroleZZ",
+            numpy=True,
+            paramstyle="qmark",
+            client_session_keep_alive=True,
+        )
+
+    value = _structured_message(mock_telemetry_client)[TelemetryField.KEY_VALUE.value]
+    conn = value["connection_parameters"]
+
+    # Presence: customer-supplied keys are all listed...
+    for key in (
+        "user",
+        "password",
+        "token",
+        "private_key",
+        "account",
+        "warehouse",
+        "role",
+        "numpy",
+        "paramstyle",
+        "client_session_keep_alive",
+    ):
+        assert key in conn["provided_keys"]
+    # ...but the dialect's injected application params are not.
+    for injected in (
+        "application",
+        "internal_application_name",
+        "internal_application_version",
+    ):
+        assert injected not in conn["provided_keys"]
+
+    # Values: only the non-PII allow-list is copied through.
+    assert conn["values"] == {
+        "numpy": True,
+        "paramstyle": "qmark",
+        "client_session_keep_alive": True,
+    }
+    # No credential/identifier value leaks anywhere in the serialized payload.
+    # (Sentinels are deliberately distinct from the key names so a match means
+    # a real value leak, not the key appearing in ``provided_keys``.)
+    serialized = str(value)
+    for secret in (
+        "ZZuserZZ",
+        "ZZpasswordZZ",
+        "ZZtokenvalueZZ",
+        "ZZprivatekeyZZ",
+        "ZZaccountZZ",
+        "ZZwarehouseZZ",
+        "ZZroleZZ",
+    ):
+        assert secret not in serialized
+
+
+@pytest.mark.parametrize(
+    "authenticator,expected",
+    [
+        ("externalbrowser", "externalbrowser"),
+        ("EXTERNALBROWSER", "externalbrowser"),
+        ("oauth", "oauth"),
+        ("https://acme.okta.com", "okta_url"),
+        ("something-custom", "other"),
+    ],
+)
+@mock.patch.object(sqla_default.DefaultDialect, "connect")
+@mock.patch("snowflake.sqlalchemy.snowdialect.TelemetryClient")
+def test_structured_event_normalizes_authenticator(
+    mock_telemetry_client, mock_connect, fake_connection, authenticator, expected
+):
+    """authenticator is normalized to a low-cardinality, non-identifying label."""
+    mock_connect.return_value = fake_connection
+
+    with mock.patch.dict(modules, {"pandas": None}):
+        fake_connection.rest = mock.MagicMock()
+        SnowflakeDialect().connect(authenticator=authenticator)
+
+    value = _structured_message(mock_telemetry_client)[TelemetryField.KEY_VALUE.value]
+    assert value["connection_parameters"]["values"]["authenticator"] == expected
+
+
+@mock.patch.object(sqla_default.DefaultDialect, "connect")
+@mock.patch("snowflake.sqlalchemy.snowdialect.TelemetryClient")
+def test_structured_event_records_flags_and_isolation_level(
+    mock_telemetry_client, mock_connect, fake_connection
+):
+    """dialect_flags carries the config booleans plus the isolation level."""
+    mock_connect.return_value = fake_connection
+
+    with mock.patch.dict(modules, {"pandas": None}):
+        fake_connection.rest = mock.MagicMock()
+        SnowflakeDialect(
+            isolation_level="AUTOCOMMIT",
+            enable_decfloat=True,
+        ).connect()
+
+    value = _structured_message(mock_telemetry_client)[TelemetryField.KEY_VALUE.value]
+    flags = value["dialect_flags"]
+    assert flags["isolation_level"] == "AUTOCOMMIT"
+    assert flags["enable_decfloat"] is True
+    assert flags["case_sensitive_identifiers"] is False
+    assert flags["cache_column_metadata"] is False
+    assert flags["force_div_is_floordiv"] is True
+
+
+@mock.patch.object(sqla_default.DefaultDialect, "connect")
+@mock.patch("snowflake.sqlalchemy.snowdialect.TelemetryClient")
+def test_structured_event_reflects_url_driven_params(
+    mock_telemetry_client, mock_connect, fake_connection
+):
+    """URL query params resolved by create_connect_args reach the structured
+    event's provided_keys/values (via the cparams passed to connect)."""
+    mock_connect.return_value = fake_connection
+
+    with mock.patch.dict(modules, {"pandas": None}):
+        fake_connection.rest = mock.MagicMock()
+        dialect = SnowflakeDialect()
+        url = SAUrl.create(
+            "snowflake",
+            username="u",
+            password="p",
+            host="testaccount",
+            query={"numpy": "True", "warehouse": "WH"},
+        )
+        _, cparams = dialect.create_connect_args(url)
+        dialect.connect(**cparams)
+
+    value = _structured_message(mock_telemetry_client)[TelemetryField.KEY_VALUE.value]
+    conn = value["connection_parameters"]
+    assert "numpy" in conn["provided_keys"]
+    assert "warehouse" in conn["provided_keys"]
+    assert conn["values"]["numpy"] is True
+    # warehouse is an identifier: recorded by presence only, never by value.
+    assert "warehouse" not in conn["values"]
