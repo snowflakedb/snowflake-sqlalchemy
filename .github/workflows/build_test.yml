@@ -199,7 +199,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-15, windows-latest]
-        cloud-provider: [aws]
+        cloud-provider: [aws, azure, gcp]
         hatch-env: [default, sa14]
     steps:
       - name: Checkout Code
@@ -287,7 +287,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-15, windows-latest]
-        cloud-provider: [aws]
+        cloud-provider: [aws, azure, gcp]
         hatch-env: [default, sa14]
     steps:
       - name: Checkout Code
@@ -368,7 +368,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-15, windows-latest]
         python-version: ["3.12"]
-        cloud-provider: [aws]
+        cloud-provider: [aws, azure, gcp]
     steps:
       - name: Checkout Code
         id: checkout_code
@@ -447,7 +447,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-15, windows-latest]
         python-version: ["3.12"]
-        cloud-provider: [aws]
+        cloud-provider: [aws, azure, gcp]
     steps:
       - name: Checkout Code
         id: checkout_code
@@ -493,7 +493,15 @@ jobs:
             ./coverage.xml
 
   combine-coverage:
-    needs: [verify-test-run, lint, test-dialect, test-dialect-compatibility, test-dialect-v14, test-dialect-compatibility-v14]
+    needs:
+      [
+        verify-test-run,
+        lint,
+        test-dialect,
+        test-dialect-compatibility,
+        test-dialect-v14,
+        test-dialect-compatibility-v14,
+      ]
     name: Combine coverage
     if: |
       !cancelled() && (success() || failure()) &&
