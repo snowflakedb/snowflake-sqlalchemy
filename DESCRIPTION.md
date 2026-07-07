@@ -9,6 +9,7 @@ Source code is also available at:
 
 # Unreleased Notes
 
+- Optimise single-table reflection (SNOW-3720548): reflecting one table no longer scans the entire schema, reducing latency and Snowflake credit usage for targeted `Inspector` calls.
 - Improve `_url()` helper and `create_connect_args` connection-parameter handling:
   - `account` and `region` values are now validated against an allowlist of DNS-safe characters (alphanumeric, `-`, `.`, `_`) before being interpolated into the connection URL, preventing URL-authority corruption from unexpected characters.
   - `user` values are percent-encoded before being placed in the URL userinfo component, preserving the original value delivered to the connector while preventing `@`, `?`, and `#` from being misinterpreted as URL delimiters.

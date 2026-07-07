@@ -1001,6 +1001,10 @@ class SnowflakeDialect(default.DefaultDialect):
         Falls back to DESC TABLE per-table for objects not in information_schema
         (temp tables, dynamic tables, etc.).
 
+        When filter_names is set and the full-schema cache is cold, issues a
+        targeted WHERE table_name IN (...) query so that both the SQL scan and
+        the DESC TABLE fan-out are limited to the requested tables only.
+
         Important: the return key must use the original ``schema`` value (which
         may be None), not a normalised substitute, so SA's _reflect_info lookup
         succeeds when schema was not explicitly provided.
@@ -1009,9 +1013,35 @@ class SnowflakeDialect(default.DefaultDialect):
         effective_schema = schema or self.default_schema_name
         if not effective_schema:
             _, effective_schema = self._current_database_schema(connection, **kw)
-        all_columns = self._get_schema_columns(connection, effective_schema, **kw)
-        if all_columns is None:
-            all_columns = {}
+
+        # If the full-schema result is already cached, use it as a superset for
+        # any filter_names request — no SQL needed.  The key format matches the
+        # @reflection.cache key produced by a plain _get_schema_columns call
+        # (positional schema arg, no extra kwargs).
+        info_cache = kw.get("info_cache")
+        full_schema_cache_key = ("_get_schema_columns", (effective_schema,), ())
+        if info_cache is not None and full_schema_cache_key in info_cache:
+            all_columns = info_cache[full_schema_cache_key] or {}
+        elif filter_names is not None:
+            # Cold cache, targeted request: pass filter_names as a tuple so
+            # @reflection.cache stores the result under a distinct key that
+            # does not pollute the full-schema entry.  _get_schema_columns will
+            # use _query_filtered_columns_info and only process the requested
+            # rows, which eliminates the DESC TABLE fan-out for other tables.
+            all_columns = (
+                self._get_schema_columns(
+                    connection,
+                    effective_schema,
+                    filter_names=tuple(filter_names),
+                    **kw,
+                )
+                or {}
+            )
+        else:
+            all_columns = (
+                self._get_schema_columns(connection, effective_schema, **kw) or {}
+            )
+
         tables = filter_names if filter_names is not None else list(all_columns.keys())
         mgr = _StructuredTypeInfoManager(
             connection, self.name_utils, self.default_schema_name
@@ -1242,25 +1272,40 @@ class SnowflakeDialect(default.DefaultDialect):
     @reflection.cache
     def _get_schema_columns(self, connection, schema, **kw):
         """
-        Get all columns in the schema with complete metadata.
+        Get columns for a schema (or a filtered subset) with complete metadata.
 
         Args:
             connection: Database connection
             schema: Schema name to reflect
-            **kw: Additional arguments including optional info_cache
+            **kw: Additional arguments including optional info_cache and
+                  filter_names (tuple of table names for a targeted query).
 
         Returns:
             Dictionary mapping table names to lists of column info dicts,
-            or None if information_schema query returned too much data
+            or None if information_schema query returned too much data.
 
         Note:
             Returns None (cacheable) when hitting Snowflake's information_schema
             result size limit, triggering fallback to per-table DESC queries.
+
+            When filter_names is present it is popped from **kw before calling
+            any sub-methods so that their @reflection.cache keys are not
+            contaminated by a kwarg they don't use.
         """
+        # Consume filter_names here so it does not propagate to sub-method
+        # calls (which are also @reflection.cache-decorated) and contaminate
+        # their cache keys.
+        filter_names = kw.pop("filter_names", None)
+
         # Get the fully-qualified database.schema name for SQL commands
         full_schema_name = self._get_full_schema_name(connection, schema, **kw)
 
-        result = self._query_all_columns_info(connection, full_schema_name, **kw)
+        if filter_names is not None:
+            result = self._query_filtered_columns_info(
+                connection, full_schema_name, filter_names
+            )
+        else:
+            result = self._query_all_columns_info(connection, full_schema_name, **kw)
         if result is None:
             return None
 
@@ -1470,6 +1515,82 @@ class SnowflakeDialect(default.DefaultDialect):
             if pe.orig.errno == 90030:
                 # This means that there are too many tables in the schema, we need to go more granular
                 return None  # None triggers get_table_columns while staying cacheable
+            raise
+
+    def _query_filtered_columns_info(self, connection, schema_name, filter_names):
+        """Targeted information_schema.columns query restricted to specific tables.
+
+        Adds ``AND ic.table_name IN (:t0, :t1, …)`` to the WHERE clause so
+        that only the requested rows are returned.  This eliminates both the
+        full-schema SQL scan and the DESC TABLE fan-out for other tables.
+
+        Not decorated with @reflection.cache — the caller (_get_schema_columns)
+        provides the caching boundary and stores the processed result under a
+        key that includes filter_names.
+
+        Args:
+            connection: Database connection.
+            schema_name: Fully-qualified ``"database"."schema"`` name produced
+                by _get_full_schema_name.
+            filter_names: Iterable of table names to query.  An empty iterable
+                returns ``[]`` immediately without issuing SQL (``IN ()`` is
+                invalid in Snowflake).
+
+        Returns:
+            Result set from information_schema.columns for the given tables,
+            or None on Snowflake result-size error 90030.
+        """
+        if not filter_names:
+            return []
+
+        database_raw, schema_raw = self._db_plus_schema(schema_name)
+        if database_raw is None:
+            raise ValueError(
+                f"Expected fully-qualified schema name 'database.schema', got '{schema_name}'"
+            )
+
+        database_part = self.identifier_preparer.quote(database_raw)
+        schema_only = self.denormalize_name(schema_raw)
+        info_schema_table = f"{database_part}.information_schema.columns"
+
+        # Denormalize so names match information_schema casing (uppercase for
+        # case-insensitive identifiers, preserved for quoted ones).
+        table_names = [self.denormalize_name(t) for t in filter_names]
+        placeholders = ", ".join(f":t{i}" for i in range(len(table_names)))
+        params: dict = {"table_schema": schema_only}
+        params.update({f"t{i}": name for i, name in enumerate(table_names)})
+
+        try:
+            return connection.execute(
+                text(
+                    f"""
+            SELECT /* sqlalchemy:_get_schema_columns */
+                   ic.table_name,
+                   ic.column_name,
+                   ic.data_type,
+                   ic.character_maximum_length,
+                   ic.numeric_precision,
+                   ic.numeric_scale,
+                   ic.is_nullable,
+                   ic.column_default,
+                   ic.is_identity,
+                   ic.comment,
+                   ic.identity_start,
+                   ic.identity_increment,
+                   ic.identity_generation,
+                   ic.identity_cycle,
+                   ic.identity_ordered,
+                   ic.data_type_alias
+              FROM {info_schema_table} ic
+             WHERE ic.table_schema=:table_schema
+               AND ic.table_name IN ({placeholders})
+             ORDER BY ic.ordinal_position"""
+                ),
+                params,
+            )
+        except sa_exc.ProgrammingError as pe:
+            if pe.orig.errno == 90030:
+                return None
             raise
 
     @reflection.cache
