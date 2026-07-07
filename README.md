@@ -8,6 +8,8 @@
 
 Snowflake SQLAlchemy runs on the top of the Snowflake Connector for Python as a [dialect](http://docs.sqlalchemy.org/en/latest/dialects/) to bridge a Snowflake database and SQLAlchemy applications.
 
+> **v1.11.0 — Sensitive connection parameters:** We curated a set of connector parameters (`host`, `protocol`, `token_file_path`, `private_key_file`, `ocsp_response_cache_filename`, `connection_diag_log_path`, `crl_cache_dir`, `unsafe_file_write`, `unsafe_skip_file_permissions_check`) that can no longer be supplied through the URL query string — pass them via `connect_args` in `create_engine()` instead. If you encounter a possible behavioral change, set `SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS=1` and follow the instructions in [Sensitive connection parameters](#sensitive-connection-parameters).
+
 ---
 
 **SQLAlchemy** version 1.4 is a legacy version (see [reference](https://docs.sqlalchemy.org/en/14/)), which is why we are working on a version that supports only **SQLAlchemy 2.x**. The version will be available as a _"release candidate"_ to enable earlier testing. We will publish more details together with its release. The current version will still be supported for two years in accordance with <https://docs.snowflake.com/en/release-notes/requirements#recommended-client-versions>
@@ -328,8 +330,7 @@ engine = create_engine(url, legacy_url_params=True)
 ```
 
 ```bash
-# Global fallback for the whole process; interpreted like other boolean flags
-# ("1" / "true", case-insensitive):
+# Global fallback for the whole process:
 export SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS=1
 ```
 
