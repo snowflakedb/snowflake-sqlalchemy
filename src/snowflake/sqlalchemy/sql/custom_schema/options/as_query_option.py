@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Union
 
 from snowflake.sqlalchemy.custom_commands import NoneType
 from sqlalchemy.sql import Selectable
-from sqlalchemy.sql.compiler import Compiled
 
 from .table_option import Priority, TableOption, TableOptionKey
 
@@ -62,7 +61,7 @@ class AsQueryOption(TableOption):
             )
         return self.query
 
-    def _render(self, compiler: Any) -> str:
+    def _render(self, compiler: SnowflakeDDLCompiler) -> str:
         return self.template() % (self.__get_expression(compiler))
 
     def __repr__(self) -> str:

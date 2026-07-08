@@ -224,6 +224,10 @@ class CopyFormatter(ClauseElement):
 
     __visit_name__ = "copy_formatter"
 
+    # Set by concrete subclasses (CSVFormatter="csv", JSONFormatter="json", …);
+    # declared here so type-checkers know the attribute exists on the base.
+    file_format: str
+
     def __init__(self, format_name: str | None = None) -> None:
         self.options: dict[str, Any] = dict()
         if format_name:

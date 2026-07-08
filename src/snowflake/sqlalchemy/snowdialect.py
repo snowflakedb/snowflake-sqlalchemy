@@ -6,10 +6,11 @@ from __future__ import annotations
 import decimal
 import logging
 from collections import defaultdict
+from collections.abc import Collection, Sequence
 from enum import Enum
 from logging import getLogger
 from time import time as time_in_seconds
-from typing import TYPE_CHECKING, Any, Collection, Iterable, NamedTuple, cast
+from typing import TYPE_CHECKING, Any, NamedTuple, cast
 
 if TYPE_CHECKING:
     from sqlalchemy.engine import CursorResult, Row
@@ -211,6 +212,9 @@ class SnowflakeDialect(default.DefaultDialect):
     supports_comments = True
 
     preparer = SnowflakeIdentifierPreparer  # type: ignore[assignment]
+    # Narrow the SA-inherited attribute to our subclass so its
+    # Snowflake-specific helpers (_split_idents, _safe_quote, …) type-check.
+    identifier_preparer: SnowflakeIdentifierPreparer
     ddl_compiler = SnowflakeDDLCompiler
     type_compiler = SnowflakeTypeCompiler
     statement_compiler = SnowflakeCompiler
@@ -237,7 +241,7 @@ class SnowflakeDialect(default.DefaultDialect):
         isolation_level: str | None = SnowflakeIsolationLevel.READ_COMMITTED.value,
         enable_decfloat: bool = False,
         case_sensitive_identifiers: bool = False,
-        legacy_url_params: Optional[bool] = None,
+        legacy_url_params: bool | None = None,
         redact_log_secrets: bool = True,
         **kwargs: Any,
     ):
@@ -458,9 +462,11 @@ class SnowflakeDialect(default.DefaultDialect):
     def _qualify_object_name(self, object_name, schema=None):
         """Return schema.object fully quoted, treating object_name as a single atomic identifier."""
         ip = self.identifier_preparer
-        parts = []
+        parts: list[str] = []
         if schema is not None:
-            schema_parts = ip._split_schema_by_dot(self.denormalize_name(schema))
+            schema_parts = ip._split_schema_by_dot(
+                self.denormalize_name(schema) or schema
+            )
             parts.extend(ip._quote_free_identifiers(*schema_parts))
         parts.append(ip._safe_quote(self.denormalize_name(object_name)))
         return ".".join(parts)
@@ -486,9 +492,9 @@ class SnowflakeDialect(default.DefaultDialect):
         )
 
         if not schema:
-            parts = [current_database, current_schema]
+            parts: Sequence[str | None] = [current_database, current_schema]
         else:
-            parts = self.identifier_preparer._split_schema_by_dot(schema)  # type: ignore[attr-defined]
+            parts = self.identifier_preparer._split_schema_by_dot(schema)
             if len(parts) == 1:
                 parts = [current_database, parts[0]]
             elif len(parts) != 2:
@@ -727,7 +733,7 @@ class SnowflakeDialect(default.DefaultDialect):
         Returns (None, schema) for a single-part schema name, or
         (database, schema_name) for 'database.schema' notation.
         """
-        parts = self.identifier_preparer._split_schema_by_dot(schema)  # type: ignore[attr-defined]
+        parts = self.identifier_preparer._split_schema_by_dot(schema)
         if len(parts) == 1:
             return None, str(parts[0])
         elif len(parts) == 2:
@@ -1535,7 +1541,7 @@ class SnowflakeDialect(default.DefaultDialect):
                 {"table_schema": schema_only},
             )
         except sa_exc.ProgrammingError as pe:
-            if pe.orig.errno == 90030:  # type: ignore[union-attr]
+            if getattr(pe.orig, "errno", None) == 90030:
                 # This means that there are too many tables in the schema, we need to go more granular
                 return None  # None triggers get_table_columns while staying cacheable
             raise
@@ -1612,7 +1618,7 @@ class SnowflakeDialect(default.DefaultDialect):
                 params,
             )
         except sa_exc.ProgrammingError as pe:
-            if pe.orig.errno == 90030:
+            if getattr(pe.orig, "errno", None) == 90030:
                 return None
             raise
 
@@ -1679,7 +1685,9 @@ class SnowflakeDialect(default.DefaultDialect):
         schema = schema or self.default_schema_name
         # denormalize_name gives the stored form without identifier quoting;
         # escape_string_literal_interior then doubles ' and \ for the LIKE string literal.
-        like_value = escape_string_literal_interior(self.denormalize_name(view_name))
+        like_value = escape_string_literal_interior(
+            self.denormalize_name(view_name) or view_name
+        )
         if schema:
             cursor = connection.execute(
                 text(
@@ -1742,7 +1750,7 @@ class SnowflakeDialect(default.DefaultDialect):
             cursor = connection.execute(text(sql_command))
             return [self.normalize_name(row[0]) for row in cursor]  # type: ignore[misc]
         except sa_exc.ProgrammingError as pe:
-            if pe.orig.errno == 2003:  # type: ignore[union-attr]
+            if getattr(pe.orig, "errno", None) == 2003:
                 # Schema does not exist
                 return []
             raise
@@ -1969,7 +1977,7 @@ class SnowflakeDialect(default.DefaultDialect):
             snowflake_connection = cast(SnowflakeConnection, cast(object, connection))
             snowflake_telemetry_client = TelemetryClient(rest=snowflake_connection.rest)  # type: ignore[arg-type]
 
-            telemetry_value = {
+            telemetry_value: dict[str, Any] = {
                 "SQLAlchemy": SQLALCHEMY_VERSION,
             }
             try:
@@ -1990,10 +1998,10 @@ class SnowflakeDialect(default.DefaultDialect):
             # are read from ``self`` so they reflect the final post-plugin
             # / post-URL state regardless of how they were configured.
             telemetry_value["case_sensitive_identifiers"] = (
-                self._case_sensitive_identifiers  # type: ignore[assignment]
+                self._case_sensitive_identifiers
             )
-            telemetry_value["enable_decfloat"] = self._enable_decfloat  # type: ignore[assignment]
-            telemetry_value["force_div_is_floordiv"] = self.force_div_is_floordiv  # type: ignore[assignment]
+            telemetry_value["enable_decfloat"] = self._enable_decfloat
+            telemetry_value["force_div_is_floordiv"] = self.force_div_is_floordiv
             telemetry_value["legacy_url_params"] = self._legacy_url_params
 
             snowflake_telemetry_client.add_log_to_batch(

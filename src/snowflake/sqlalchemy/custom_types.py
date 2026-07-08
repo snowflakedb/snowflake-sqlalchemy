@@ -145,12 +145,12 @@ class OBJECT(StructuredType):
     __visit_name__ = "OBJECT"
 
     def __init__(self, **items_types: TypeEngine | tuple[TypeEngine, bool]) -> None:
+        normalized: dict[str, tuple[TypeEngine, bool]] = {}
         for key, value in items_types.items():
-            if not isinstance(value, tuple):
-                items_types[key] = (value, False)
+            normalized[key] = value if isinstance(value, tuple) else (value, False)
 
-        self.items_types = items_types
-        self.is_semi_structured = len(items_types) == 0
+        self.items_types: dict[str, tuple[TypeEngine, bool]] = normalized
+        self.is_semi_structured = len(normalized) == 0
         super().__init__()
 
     def __repr__(self) -> str:

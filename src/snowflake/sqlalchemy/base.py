@@ -11,19 +11,6 @@ import warnings
 from functools import reduce
 from typing import Any
 
-from snowflake.sqlalchemy._constants import DIALECT_NAME
-from snowflake.sqlalchemy.custom_commands import (
-    AWSBucket,
-    AzureContainer,
-    CloudStorageLocation,
-    CopyFormatter,
-    CopyInto,
-    CreateFileFormat,
-    CreateStage,
-    ExternalStage,
-    GCSBucket,
-    MergeInto,
-)
 from sqlalchemy import exc as sa_exc
 from sqlalchemy import inspect, sql
 from sqlalchemy import util as sa_util
@@ -42,7 +29,19 @@ from sqlalchemy.sql.schema import Column, Identity, IdentityOptions
 from sqlalchemy.sql.selectable import Join, Lateral, SelectState
 from sqlalchemy.sql.type_api import TypeEngine
 
-from ._constants import NOT_NULL
+from ._constants import DIALECT_NAME, NOT_NULL
+from .custom_commands import (
+    AWSBucket,
+    AzureContainer,
+    CloudStorageLocation,
+    CopyFormatter,
+    CopyInto,
+    CreateFileFormat,
+    CreateStage,
+    ExternalStage,
+    GCSBucket,
+    MergeInto,
+)
 from .custom_types import (
     ARRAY,
     DECFLOAT,
@@ -703,6 +702,10 @@ def _render_storage_uri(container) -> str:
 
 
 class SnowflakeCompiler(compiler.SQLCompiler):
+    # Narrow the SA-inherited attribute to our subclass (Snowflake-specific
+    # preparer helpers used in the COPY/stage visitors below).
+    preparer: SnowflakeIdentifierPreparer
+
     def visit_sequence(self, sequence: Sequence, **kw: Any) -> str:
         return self.dialect.identifier_preparer.format_sequence(sequence) + ".nextval"
 
@@ -847,7 +850,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             )
             return f"FILE_FORMAT=(format_name = {format_name})"
         return "FILE_FORMAT=(TYPE={}{})".format(
-            formatter.file_format,  # type: ignore[attr-defined]
+            formatter.file_format,
             (
                 " "
                 + " ".join(
@@ -1161,6 +1164,10 @@ _identity_pk_warned: set[tuple[str, str]] = set()
 
 
 class SnowflakeDDLCompiler(compiler.DDLCompiler):
+    # Narrow the SA-inherited attribute to our subclass so its
+    # Snowflake-specific helpers (quote_identifier_if_unsafe, …) type-check.
+    preparer: SnowflakeIdentifierPreparer
+
     def denormalize_column_name(self, name: str | None) -> str | None:
         if name is None:
             return None
@@ -1320,14 +1327,19 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
         container = create_stage.container
         deterministic = kw.get("deterministic", False)
         uri = _render_storage_uri(container)
+        # credentials_used / encryption_used exist on CloudStorageLocation
+        # subclasses (buckets) but not on ExternalStage; read defensively so the
+        # union type checks and an ExternalStage container renders no creds.
+        credentials_used = getattr(container, "credentials_used", None)
         credentials = (
-            _render_storage_credentials(container.credentials_used, deterministic)
-            if getattr(container, "credentials_used", None)
+            _render_storage_credentials(credentials_used, deterministic)
+            if credentials_used
             else ""
         )
+        encryption_used = getattr(container, "encryption_used", None)
         encryption = (
-            _render_storage_encryption(container.encryption_used, deterministic)
-            if getattr(container, "encryption_used", None)
+            _render_storage_encryption(encryption_used, deterministic)
+            if encryption_used
             else ""
         )
         storage = "URL={}{}{}".format(
@@ -1473,8 +1485,8 @@ class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
                 quoted_key = ip.quote(inner)
                 row_text = f"{quoted_key} {type_.items_types[key][0].compile()}"
                 # Type and not null is specified
-                if len(type_.items_types[key]) > 1:  # type: ignore[arg-type]
-                    row_text += f"{' NOT NULL' if type_.items_types[key][1] else ''}"  # type: ignore[index]
+                if len(type_.items_types[key]) > 1:
+                    row_text += f"{' NOT NULL' if type_.items_types[key][1] else ''}"
                 contents.append(row_text)
             return "OBJECT" if contents == [] else f"OBJECT({', '.join(contents)})"
 

@@ -67,7 +67,7 @@ class ClusterByOption(TableOption):
                 )
         return ", ".join(parts)
 
-    def _render(self, compiler: Any) -> str:
+    def _render(self, compiler: SnowflakeDDLCompiler) -> str:
         return self.template() % (self.__get_expression(compiler))
 
     def __repr__(self) -> str:

@@ -60,7 +60,7 @@ class IdentifierOption(TableOption):
         assert name is not None, f"option_name not set on {self.__class__.__name__}"
         return f"{name.upper()} = %s"
 
-    def _render(self, compiler: Any) -> str:
+    def _render(self, compiler: SnowflakeDDLCompiler) -> str:
         return self.template() % self._quote_identifier_value(self.value, compiler)
 
     def __repr__(self) -> str:

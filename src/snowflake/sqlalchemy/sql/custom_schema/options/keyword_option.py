@@ -38,7 +38,7 @@ class KeywordOption(TableOption):
         assert name is not None, f"option_name not set on {self.__class__.__name__}"
         return f"{name.upper()} = %s"
 
-    def _render(self, compiler: Any) -> str:
+    def _render(self, compiler: SnowflakeDDLCompiler) -> str:
         # This function renders only keywords, so no additional processing is needed.
         return self.template() % self.value.upper()
 
