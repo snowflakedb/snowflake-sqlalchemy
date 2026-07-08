@@ -1354,32 +1354,42 @@ def test_many_table_column_metadta(db_parameters):
     assert cnt == total_objects * 2, "total number of test objects"
 
 
-@pytest.mark.skip(reason="Testaccount is not available, it returns 404 error.")
-@pytest.mark.timeout(10)
-@pytest.mark.parametrize(
-    "region",
-    (
-        pytest.param("eu-central-1", id="region"),
-        pytest.param("east-us-2.azure", id="azure"),
-    ),
-)
-def test_connection_timeout_error(region):
-    engine = create_engine(
-        URL(
-            user="testuser",
-            password="testpassword",
-            account="testaccount",
-            region="east-us-2.azure",
-            login_timeout=5,
-        )
+def test_connection_timeout_error():
+    """A connector connect-time failure must surface through the engine.
+
+    When ``snowflake.connector`` raises ``OperationalError`` (errno 250001,
+    "Could not connect to Snowflake backend") while establishing the raw DBAPI
+    connection, the engine must wrap it as ``sqlalchemy.exc.OperationalError``
+    and preserve the original connector error on ``.orig`` (errno + message
+    intact), so callers can inspect the failure.
+
+    The connector's actual timeout/retry behaviour is exercised by the
+    connector's own test-suite; here we mock it to keep this a deterministic,
+    network-free check of the dialect's error-propagation wiring.
+    """
+    from snowflake.connector.errors import (
+        OperationalError as SnowflakeConnectorOperationalError,
     )
 
-    with pytest.raises(OperationalError) as excinfo:
-        engine.connect()
+    connector_error = SnowflakeConnectorOperationalError(
+        msg="250001: Could not connect to Snowflake backend after 0 attempt(s)",
+        errno=250001,
+    )
 
+    engine = create_engine(
+        URL(user="testuser", password="testpassword", account="testaccount")
+    )
+    try:
+        with patch.object(SnowflakeDialect, "connect", side_effect=connector_error):
+            with pytest.raises(OperationalError) as excinfo:
+                engine.connect()
+    finally:
+        engine.dispose()
+
+    # The engine wraps the connector error; the original is preserved on .orig.
+    assert excinfo.value.orig is connector_error
     assert excinfo.value.orig.errno == 250001
     assert "Could not connect to Snowflake backend" in excinfo.value.orig.msg
-    assert region not in excinfo.value.orig.msg
 
 
 def test_load_dialect():
