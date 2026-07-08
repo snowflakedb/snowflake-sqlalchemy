@@ -1131,21 +1131,31 @@ def test_view_comment_reading(engine_testaccount, db_parameters):
             conn.execute(text(f"DROP VIEW IF EXISTS {test_view_name}"))
 
 
-@pytest.mark.skip("Temp table cannot be viewed for some reason")
 def test_get_temp_table_names(engine_testaccount):
     num_of_temp_tables = 2
     temp_table_name = "temp_table"
-    for idx in range(num_of_temp_tables):
-        engine_testaccount.execute(
-            text(
-                f"CREATE TEMPORARY TABLE {temp_table_name + str(idx)} (col1 integer, col2 string)"
-            ).execution_options(autocommit=True)
-        )
-    for row in engine_testaccount.execute("SHOW TABLES"):
-        print(row)
-    inspector = inspect(engine_testaccount)
-    temp_table_names = inspector.get_temp_table_names()
+    # Temporary tables are session-scoped: they are only visible to the
+    # connection (session) that created them. The inspector must therefore run
+    # on the *same* connection used to create them — reflecting via the engine
+    # would open a different session in which the temp tables do not exist
+    # (the historical reason this test was skipped).
+    with engine_testaccount.connect() as conn:
+        created = []
+        for idx in range(num_of_temp_tables):
+            name = f"{temp_table_name}{idx}"
+            conn.execute(
+                text(f"CREATE TEMPORARY TABLE {name} (col1 integer, col2 string)")
+            )
+            created.append(name)
+        inspector = inspect(conn)
+        temp_table_names = inspector.get_temp_table_names()
+
     assert len(temp_table_names) == num_of_temp_tables
+    returned = {name.lower() for name in temp_table_names}
+    for name in created:
+        assert (
+            name.lower() in returned
+        ), f"{name!r} missing from reflected temp tables {temp_table_names!r}"
 
 
 def test_create_table_with_schema(engine_testaccount, db_parameters):
