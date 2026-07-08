@@ -563,35 +563,6 @@ def test_table_does_not_exist(engine_testaccount):
         Table("does_not_exist", meta, autoload_with=engine_testaccount)
 
 
-@pytest.mark.skip(
-    """
-Reflection is not implemented yet.
-"""
-)
-def test_reflextion(engine_testaccount):
-    """
-    Tests Reflection
-    """
-    with engine_testaccount.connect() as conn:
-        engine_testaccount.execute(
-            textwrap.dedent(
-                """\
-            CREATE OR REPLACE TABLE user (
-                id       Integer primary key,
-                name     String,
-                fullname String
-            )
-            """
-            )
-        )
-        try:
-            meta = MetaData()
-            user_reflected = Table("user", meta, autoload_with=engine_testaccount)
-            assert user_reflected.c == ["user.id", "user.name", "user.fullname"]
-        finally:
-            conn.execute("DROP TABLE IF EXISTS user")
-
-
 def test_inspect_column(engine_testaccount):
     """
     Tests Inspect
