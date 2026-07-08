@@ -13,7 +13,6 @@ from sqlalchemy.sql.roles import FromClauseRole
 
 from .util import escape_single_quotes, escape_string_literal_interior
 
-
 NoneType = type(None)
 
 # Cloud-storage option keys whose values are bearer secrets (cloud access keys,
@@ -593,11 +592,7 @@ class AWSBucket(CloudStorageLocation):
         )
         encryption = "ENCRYPTION=({})".format(
             " ".join(
-                (
-                    f"{n}='{_redact_option(n, v)}'"
-                    if isinstance(v, str)
-                    else f"{n}={v}"
-                )
+                (f"{n}='{_redact_option(n, v)}'" if isinstance(v, str) else f"{n}={v}")
                 for n, v in self.encryption_used.items()
             )
         )
@@ -676,11 +671,7 @@ class AzureContainer(CloudStorageLocation):
         )
         encryption = "ENCRYPTION=({})".format(
             " ".join(
-                (
-                    f"{n}='{_redact_option(n, v)}'"
-                    if isinstance(v, str)
-                    else f"{n}={v}"
-                )
+                (f"{n}='{_redact_option(n, v)}'" if isinstance(v, str) else f"{n}={v}")
                 for n, v in self.encryption_used.items()
             )
         )
@@ -726,11 +717,7 @@ class GCSBucket(CloudStorageLocation):
     def __repr__(self):
         encryption = "ENCRYPTION=({})".format(
             " ".join(
-                (
-                    f"{n}='{_redact_option(n, v)}'"
-                    if isinstance(v, str)
-                    else f"{n}={v}"
-                )
+                (f"{n}='{_redact_option(n, v)}'" if isinstance(v, str) else f"{n}={v}")
                 for n, v in self.encryption_used.items()
             )
         )
