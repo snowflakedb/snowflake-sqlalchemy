@@ -7,7 +7,6 @@ import os
 import re
 import string
 import textwrap
-import time
 import uuid
 from datetime import date, datetime
 from unittest.mock import patch
@@ -1355,72 +1354,6 @@ def test_many_table_column_metadta(db_parameters):
     assert cnt == total_objects * 2, "total number of test objects"
 
 
-@pytest.mark.skip(
-    reason="SQLAlchemy 1.4 release seem to have caused a pretty big"
-    "performance degradation, but addressing this should also"
-    "address fully supporting SQLAlchemy 1.4 which has a lot "
-    "of changes"
-)
-def test_cache_time(engine_testaccount, db_parameters):
-    """Check whether Inspector cache is working"""
-    # Set up necessary tables
-    metadata = MetaData()
-    total_objects = 10
-    for idx in range(total_objects):
-        Table(
-            "mainusers" + str(idx),
-            metadata,
-            Column("id" + str(idx), Integer, Sequence("user_id_seq"), primary_key=True),
-            Column("name" + str(idx), String),
-            Column("fullname", String),
-            Column("password", String),
-        )
-        Table(
-            "mainaddresses" + str(idx),
-            metadata,
-            Column(
-                "id" + str(idx), Integer, Sequence("address_id_seq"), primary_key=True
-            ),
-            Column(
-                "user_id" + str(idx),
-                None,
-                ForeignKey("mainusers" + str(idx) + ".id" + str(idx)),
-            ),
-            Column("email_address" + str(idx), String, nullable=False),
-        )
-    metadata.create_all(engine_testaccount)
-    inspector = inspect(engine_testaccount)
-    schema = db_parameters["schema"]
-
-    def harass_inspector():
-        for table_name in inspector.get_table_names(schema):
-            inspector.get_columns(table_name, schema)
-            inspector.get_pk_constraint(table_name, schema)
-            inspector.get_foreign_keys(table_name, schema)
-
-    outcome = False
-    # Allow up to 5 times for the speed test to pass to avoid flaky test
-    for _ in range(5):
-        # Python 2.7 has no timeit.timeit with globals and locals parameters
-        s_time = time.time()
-        harass_inspector()
-        m_time = time.time()
-        harass_inspector()
-        time2 = time.time() - m_time
-        time1 = m_time - s_time
-        print(
-            f"Ran inspector through tables twice, times:\n\tfirst: {time1}\n\tsecond: {time2}"
-        )
-        if time2 < time1 * 0.01:
-            outcome = True
-            break
-        else:
-            # Reset inspector to reset cache
-            inspector = inspect(engine_testaccount)
-    metadata.drop_all(engine_testaccount)
-    assert outcome
-
-
 @pytest.mark.skip(reason="Testaccount is not available, it returns 404 error.")
 @pytest.mark.timeout(10)
 @pytest.mark.parametrize(
@@ -1779,83 +1712,6 @@ def test_autoincrement(engine_testaccount):
             ]
     finally:
         metadata.drop_all(engine_testaccount)
-
-
-@pytest.mark.skip(
-    reason="SQLAlchemy 1.4 release seem to have caused a pretty big"
-    "performance degradation, but addressing this should also"
-    "address fully supporting SQLAlchemy 1.4 which has a lot "
-    "of changes"
-)
-def test_get_too_many_columns(engine_testaccount, db_parameters):
-    """Check whether Inspector cache is working, when there are too many column to cache whole schema's columns"""
-    # Set up necessary tables
-    metadata = MetaData()
-    total_objects = 10
-    for idx in range(total_objects):
-        Table(
-            "mainuserss" + str(idx),
-            metadata,
-            Column("id" + str(idx), Integer, Sequence("user_id_seq"), primary_key=True),
-            Column("name" + str(idx), String),
-            Column("fullname", String),
-            Column("password", String),
-        )
-        Table(
-            "mainaddressess" + str(idx),
-            metadata,
-            Column(
-                "id" + str(idx), Integer, Sequence("address_id_seq"), primary_key=True
-            ),
-            Column(
-                "user_id" + str(idx),
-                None,
-                ForeignKey("mainuserss" + str(idx) + ".id" + str(idx)),
-            ),
-            Column("email_address" + str(idx), String, nullable=False),
-        )
-    metadata.create_all(engine_testaccount)
-    inspector = inspect(engine_testaccount)
-    schema = db_parameters["schema"]
-
-    # Emulate error
-    with patch.object(
-        inspector.dialect, "_get_schema_columns", return_value=None
-    ) as mock_method:
-
-        def harass_inspector():
-            for table_name in inspector.get_table_names(schema):
-                column_metadata = inspector.get_columns(table_name, schema)
-                inspector.get_pk_constraint(table_name, schema)
-                inspector.get_foreign_keys(table_name, schema)
-                assert (
-                    3 <= len(column_metadata) <= 4
-                )  # Either one of the tables should have 3 or 4 columns
-
-        outcome = False
-        # Allow up to 5 times for the speed test to pass to avoid flaky test
-        for _ in range(5):
-            # Python 2.7 has no timeit.timeit with globals and locals parameters
-            s_time = time.time()
-            harass_inspector()
-            m_time = time.time()
-            harass_inspector()
-            time2 = time.time() - m_time
-            time1 = m_time - s_time
-            print(
-                f"Ran inspector through tables twice, times:\n\tfirst: {time1}\n\tsecond: {time2}"
-            )
-            if time2 < time1 * 0.01:
-                outcome = True
-                break
-            else:
-                # Reset inspector to reset cache
-                inspector = inspect(engine_testaccount)
-        metadata.drop_all(engine_testaccount)
-        assert (
-            mock_method.call_count > 0
-        )  # Make sure we actually mocked the issue happening
-        assert outcome
 
 
 def test_for_exception_in_query_all_columns(engine_testaccount, db_parameters):
