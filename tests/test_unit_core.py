@@ -311,7 +311,6 @@ class TestSingleTableDispatchSA2:
         assert received["table_name"] == "my_table"
         assert type(received["table_name"]) is str
 
-    @pytest.mark.skipif(not IS_VERSION_20, reason="SA 2.x only")
     def test_get_columns_quoted_name_with_embedded_dot_is_atomic(self):
         """quoted_name with embedded dot must not be re-split into extra schema parts."""
         dialect = _make_dialect()
@@ -346,7 +345,6 @@ class TestSingleTableDispatchSA2:
             '"weird.name"' in full
         ), f"Expected quoted atomic identifier '\"weird.name\"' in {full!r}"
 
-    @pytest.mark.skipif(not IS_VERSION_20, reason="SA 2.x only")
     def test_get_columns_dotted_plain_string_uses_last_component(self):
         """A plain 'schema.table' string takes the last component as the table name."""
         dialect = _make_dialect()
