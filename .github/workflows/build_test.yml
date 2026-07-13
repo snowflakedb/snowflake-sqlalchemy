@@ -140,9 +140,7 @@ jobs:
       matrix:
         include:
           - hatch-env: default
-            python-version: "3.13"
-          - hatch-env: sa14
-            python-version: "3.12"
+            python-version: "3.9"
     steps:
       - name: Checkout Code
         id: checkout_code
@@ -182,7 +180,7 @@ jobs:
           needs.verify-test-run.outputs.got-testable-changes == 'true'
         )
       )
-    name: Test dialect ${{ matrix.os }}-${{ fromJson('{"default":"3.13","sa14":"3.12"}')[matrix.hatch-env] }}-${{ matrix.cloud-provider }}-${{ matrix.hatch-env }}
+    name: Test dialect ${{ matrix.os }}-3.9-${{ matrix.cloud-provider }}
     runs-on: ${{ matrix.os }}
     env:
       SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
@@ -200,7 +198,6 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-15, windows-latest]
         cloud-provider: [aws, azure, gcp]
-        hatch-env: [default, sa14]
     steps:
       - name: Checkout Code
         id: checkout_code
@@ -212,13 +209,13 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ fromJson('{"default":"3.13","sa14":"3.12"}')[matrix.hatch-env] }}
+          python-version: "3.9"
 
       - name: Upgrade pip and prepare environment
         run: |
           python -m pip install -U uv
           python -m uv pip install -U 'virtualenv<21.0' hatch
-          python -m hatch env create ${{ matrix.hatch-env }}
+          python -m hatch env create default
 
       - name: Setup parameters file
         shell: bash
@@ -236,25 +233,16 @@ jobs:
             --output tests/parameters.py \
             .github/workflows/parameters/parameters_${{ matrix.cloud-provider }}.py.gpg
 
-      - name: Run test for AWS (default)
-        if: matrix.cloud-provider == 'aws' && matrix.hatch-env == 'default'
+      - name: Run test for AWS
+        if: matrix.cloud-provider == 'aws'
         run: hatch run test-dialect-aws
 
-      - name: Run test for AWS (sa14)
-        if: matrix.cloud-provider == 'aws' && matrix.hatch-env == 'sa14'
-        run: hatch run sa14:test-dialect-aws
-
-      - name: Run tests (default)
-        if: matrix.hatch-env == 'default'
+      - name: Run tests
         run: hatch run test-dialect
-
-      - name: Run tests (sa14)
-        if: matrix.hatch-env == 'sa14'
-        run: hatch run sa14:test-dialect
 
       - uses: actions/upload-artifact@v4
         with:
-          name: coverage.xml_dialect-${{ matrix.os }}-${{ fromJson('{"default":"3.13","sa14":"3.12"}')[matrix.hatch-env] }}-${{ matrix.cloud-provider }}-${{ matrix.hatch-env }}
+          name: coverage.xml_dialect-${{ matrix.os }}-3.9-${{ matrix.cloud-provider }}
           path: |
             ./coverage.xml
 
@@ -270,7 +258,7 @@ jobs:
           needs.verify-test-run.outputs.got-testable-changes == 'true'
         )
       )
-    name: Test dialect compatibility ${{ matrix.os }}-${{ fromJson('{"default":"3.13","sa14":"3.12"}')[matrix.hatch-env] }}-${{ matrix.cloud-provider }}-${{ matrix.hatch-env }}
+    name: Test dialect compatibility ${{ matrix.os }}-3.9-${{ matrix.cloud-provider }}
     runs-on: ${{ matrix.os }}
     env:
       SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
@@ -288,7 +276,6 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-15, windows-latest]
         cloud-provider: [aws, azure, gcp]
-        hatch-env: [default, sa14]
     steps:
       - name: Checkout Code
         id: checkout_code
@@ -300,13 +287,13 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ fromJson('{"default":"3.13","sa14":"3.12"}')[matrix.hatch-env] }}
+          python-version: "3.9"
 
       - name: Upgrade pip and install hatch
         run: |
           python -m pip install -U uv
           python -m uv pip install -U 'virtualenv<21.0' hatch
-          python -m hatch env create ${{ matrix.hatch-env }}
+          python -m hatch env create default
 
       - name: Setup parameters file
         shell: bash
@@ -324,184 +311,17 @@ jobs:
             --output tests/parameters.py \
             .github/workflows/parameters/parameters_${{ matrix.cloud-provider }}.py.gpg
 
-      - name: Run tests (default)
-        if: matrix.hatch-env == 'default'
+      - name: Run tests
         run: hatch run test-dialect-compatibility
 
-      - name: Run tests (sa14)
-        if: matrix.hatch-env == 'sa14'
-        run: hatch run sa14:test-dialect-compatibility
-
       - uses: actions/upload-artifact@v4
         with:
-          name: coverage.xml_dialect-compatibility-${{ matrix.os }}-${{ fromJson('{"default":"3.13","sa14":"3.12"}')[matrix.hatch-env] }}-${{ matrix.cloud-provider }}-${{ matrix.hatch-env }}
-          path: |
-            ./coverage.xml
-
-  test-dialect-v14:
-    needs: [verify-test-run, lint, build-install]
-    if: |
-      !cancelled() &&
-      (
-        (github.event_name == 'workflow_dispatch' && needs.verify-test-run.result == 'success') ||
-        (
-          github.event_name == 'pull_request' &&
-          github.event.pull_request.head.repo.full_name == github.repository &&
-          needs.verify-test-run.outputs.got-testable-changes == 'true'
-        )
-      )
-    name: Test dialect v14 ${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
-    runs-on: ${{ matrix.os }}
-    env:
-      SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
-      SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
-      SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
-      SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
-      SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
-      SNOWFLAKE_HOST: ${{ secrets.SNOWFLAKE_HOST }}
-      SNOWFLAKE_PORT: ${{ secrets.SNOWFLAKE_PORT }}
-      SNOWFLAKE_PROTOCOL: ${{ secrets.SNOWFLAKE_PROTOCOL }}
-      SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
-      SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-15, windows-latest]
-        python-version: ["3.12"]
-        cloud-provider: [aws, azure, gcp]
-    steps:
-      - name: Checkout Code
-        id: checkout_code
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.commit-sha || '' }}
-          persist-credentials: false
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Setup parameters file
-        shell: bash
-        env:
-          PARAMETERS_SECRET: ${{ secrets.PARAMETERS_SECRET }}
-        run: |
-          if [ -z "$PARAMETERS_SECRET" ]; then
-            echo "PARAMETERS_SECRET not set; skipping decryption (env-var mode)"
-            exit 0
-          fi
-          printf "%s" "$PARAMETERS_SECRET" | gpg --quiet --batch --yes \
-            --decrypt \
-            --passphrase-fd 0 \
-            --pinentry-mode loopback \
-            --output tests/parameters.py \
-            .github/workflows/parameters/parameters_${{ matrix.cloud-provider }}.py.gpg
-
-      - name: Upgrade pip and install hatch
-        run: |
-          python -m pip install -U uv
-          python -m uv pip install -U 'virtualenv<21.0' hatch
-          python -m hatch env create default
-
-      - name: Run test for AWS
-        run: hatch run sa14:test-dialect-aws
-        if: matrix.cloud-provider == 'aws'
-
-      - name: Run tests
-        run: hatch run sa14:test-dialect
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: coverage.xml_dialect-v14-${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
-          path: |
-            ./coverage.xml
-
-  test-dialect-compatibility-v14:
-    needs: [verify-test-run, lint, build-install]
-    if: |
-      !cancelled() &&
-      (
-        (github.event_name == 'workflow_dispatch' && needs.verify-test-run.result == 'success') ||
-        (
-          github.event_name == 'pull_request' &&
-          github.event.pull_request.head.repo.full_name == github.repository &&
-          needs.verify-test-run.outputs.got-testable-changes == 'true'
-        )
-      )
-    name: Test dialect v14 compatibility ${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
-    runs-on: ${{ matrix.os }}
-    env:
-      SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
-      SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
-      SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
-      SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
-      SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
-      SNOWFLAKE_HOST: ${{ secrets.SNOWFLAKE_HOST }}
-      SNOWFLAKE_PORT: ${{ secrets.SNOWFLAKE_PORT }}
-      SNOWFLAKE_PROTOCOL: ${{ secrets.SNOWFLAKE_PROTOCOL }}
-      SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
-      SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-15, windows-latest]
-        python-version: ["3.12"]
-        cloud-provider: [aws, azure, gcp]
-    steps:
-      - name: Checkout Code
-        id: checkout_code
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.commit-sha || '' }}
-          persist-credentials: false
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Upgrade pip and install hatch
-        run: |
-          python -m pip install -U uv
-          python -m uv pip install -U 'virtualenv<21.0' hatch
-          python -m hatch env create default
-
-      - name: Setup parameters file
-        shell: bash
-        env:
-          PARAMETERS_SECRET: ${{ secrets.PARAMETERS_SECRET }}
-        run: |
-          if [ -z "$PARAMETERS_SECRET" ]; then
-            echo "PARAMETERS_SECRET not set; skipping decryption (env-var mode)"
-            exit 0
-          fi
-          printf "%s" "$PARAMETERS_SECRET" | gpg --quiet --batch --yes \
-            --decrypt \
-            --passphrase-fd 0 \
-            --pinentry-mode loopback \
-            --output tests/parameters.py \
-            .github/workflows/parameters/parameters_${{ matrix.cloud-provider }}.py.gpg
-
-      - name: Run tests
-        run: hatch run sa14:test-dialect-compatibility
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: coverage.xml_dialect-v14-compatibility-${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.cloud-provider }}
+          name: coverage.xml_dialect-compatibility-${{ matrix.os }}-3.9-${{ matrix.cloud-provider }}
           path: |
             ./coverage.xml
 
   combine-coverage:
-    needs:
-      [
-        verify-test-run,
-        lint,
-        test-dialect,
-        test-dialect-compatibility,
-        test-dialect-v14,
-        test-dialect-compatibility-v14,
-      ]
+    needs: [verify-test-run, lint, test-dialect, test-dialect-compatibility]
     name: Combine coverage
     if: |
       !cancelled() && (success() || failure()) &&

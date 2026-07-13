@@ -7,7 +7,6 @@ import os
 import re
 import string
 import textwrap
-import time
 import uuid
 from datetime import date, datetime
 from unittest.mock import patch
@@ -563,35 +562,6 @@ def test_table_does_not_exist(engine_testaccount):
         Table("does_not_exist", meta, autoload_with=engine_testaccount)
 
 
-@pytest.mark.skip(
-    """
-Reflection is not implemented yet.
-"""
-)
-def test_reflextion(engine_testaccount):
-    """
-    Tests Reflection
-    """
-    with engine_testaccount.connect() as conn:
-        engine_testaccount.execute(
-            textwrap.dedent(
-                """\
-            CREATE OR REPLACE TABLE user (
-                id       Integer primary key,
-                name     String,
-                fullname String
-            )
-            """
-            )
-        )
-        try:
-            meta = MetaData()
-            user_reflected = Table("user", meta, autoload_with=engine_testaccount)
-            assert user_reflected.c == ["user.id", "user.name", "user.fullname"]
-        finally:
-            conn.execute("DROP TABLE IF EXISTS user")
-
-
 def test_inspect_column(engine_testaccount):
     """
     Tests Inspect
@@ -848,7 +818,6 @@ def test_get_foreign_keys_multi_schema(engine_testaccount, db_parameters):
             conn.commit()
 
 
-@pytest.mark.feature_v20
 def test_get_multi_foreign_keys_multi_schema(engine_testaccount, db_parameters):
     """Verify get_multi_foreign_keys (SA 2.x bulk path) returns correct referred_schema."""
     engine = engine_testaccount
@@ -1161,21 +1130,31 @@ def test_view_comment_reading(engine_testaccount, db_parameters):
             conn.execute(text(f"DROP VIEW IF EXISTS {test_view_name}"))
 
 
-@pytest.mark.skip("Temp table cannot be viewed for some reason")
 def test_get_temp_table_names(engine_testaccount):
     num_of_temp_tables = 2
     temp_table_name = "temp_table"
-    for idx in range(num_of_temp_tables):
-        engine_testaccount.execute(
-            text(
-                f"CREATE TEMPORARY TABLE {temp_table_name + str(idx)} (col1 integer, col2 string)"
-            ).execution_options(autocommit=True)
-        )
-    for row in engine_testaccount.execute("SHOW TABLES"):
-        print(row)
-    inspector = inspect(engine_testaccount)
-    temp_table_names = inspector.get_temp_table_names()
+    # Temporary tables are session-scoped: they are only visible to the
+    # connection (session) that created them. The inspector must therefore run
+    # on the *same* connection used to create them — reflecting via the engine
+    # would open a different session in which the temp tables do not exist
+    # (the historical reason this test was skipped).
+    with engine_testaccount.connect() as conn:
+        created = []
+        for idx in range(num_of_temp_tables):
+            name = f"{temp_table_name}{idx}"
+            conn.execute(
+                text(f"CREATE TEMPORARY TABLE {name} (col1 integer, col2 string)")
+            )
+            created.append(name)
+        inspector = inspect(conn)
+        temp_table_names = inspector.get_temp_table_names()
+
     assert len(temp_table_names) == num_of_temp_tables
+    returned = {name.lower() for name in temp_table_names}
+    for name in created:
+        assert (
+            name.lower() in returned
+        ), f"{name!r} missing from reflected temp tables {temp_table_names!r}"
 
 
 def test_create_table_with_schema(engine_testaccount, db_parameters):
@@ -1307,14 +1286,11 @@ def test_many_table_column_metadta(db_parameters):
     """
     Get dozens of table metadata with column metadata cache.
 
-    cache_column_metadata=True will cache all column metadata for all tables
-    in the schema.
-
     Optimized: Uses TRANSIENT tables with autoincrement (no explicit sequences)
     and fewer tables to significantly reduce test duration while maintaining
     coverage of multi-table metadata caching.
     """
-    url = url_factory(cache_column_metadata=True)
+    url = url_factory()
     engine = get_engine(url)
 
     RE_SUFFIX_NUM = re.compile(r".*(\d+)$")
@@ -1378,98 +1354,42 @@ def test_many_table_column_metadta(db_parameters):
     assert cnt == total_objects * 2, "total number of test objects"
 
 
-@pytest.mark.skip(
-    reason="SQLAlchemy 1.4 release seem to have caused a pretty big"
-    "performance degradation, but addressing this should also"
-    "address fully supporting SQLAlchemy 1.4 which has a lot "
-    "of changes"
-)
-def test_cache_time(engine_testaccount, db_parameters):
-    """Check whether Inspector cache is working"""
-    # Set up necessary tables
-    metadata = MetaData()
-    total_objects = 10
-    for idx in range(total_objects):
-        Table(
-            "mainusers" + str(idx),
-            metadata,
-            Column("id" + str(idx), Integer, Sequence("user_id_seq"), primary_key=True),
-            Column("name" + str(idx), String),
-            Column("fullname", String),
-            Column("password", String),
-        )
-        Table(
-            "mainaddresses" + str(idx),
-            metadata,
-            Column(
-                "id" + str(idx), Integer, Sequence("address_id_seq"), primary_key=True
-            ),
-            Column(
-                "user_id" + str(idx),
-                None,
-                ForeignKey("mainusers" + str(idx) + ".id" + str(idx)),
-            ),
-            Column("email_address" + str(idx), String, nullable=False),
-        )
-    metadata.create_all(engine_testaccount)
-    inspector = inspect(engine_testaccount)
-    schema = db_parameters["schema"]
+def test_connection_timeout_error():
+    """A connector connect-time failure must surface through the engine.
 
-    def harass_inspector():
-        for table_name in inspector.get_table_names(schema):
-            inspector.get_columns(table_name, schema)
-            inspector.get_pk_constraint(table_name, schema)
-            inspector.get_foreign_keys(table_name, schema)
+    When ``snowflake.connector`` raises ``OperationalError`` (errno 250001,
+    "Could not connect to Snowflake backend") while establishing the raw DBAPI
+    connection, the engine must wrap it as ``sqlalchemy.exc.OperationalError``
+    and preserve the original connector error on ``.orig`` (errno + message
+    intact), so callers can inspect the failure.
 
-    outcome = False
-    # Allow up to 5 times for the speed test to pass to avoid flaky test
-    for _ in range(5):
-        # Python 2.7 has no timeit.timeit with globals and locals parameters
-        s_time = time.time()
-        harass_inspector()
-        m_time = time.time()
-        harass_inspector()
-        time2 = time.time() - m_time
-        time1 = m_time - s_time
-        print(
-            f"Ran inspector through tables twice, times:\n\tfirst: {time1}\n\tsecond: {time2}"
-        )
-        if time2 < time1 * 0.01:
-            outcome = True
-            break
-        else:
-            # Reset inspector to reset cache
-            inspector = inspect(engine_testaccount)
-    metadata.drop_all(engine_testaccount)
-    assert outcome
-
-
-@pytest.mark.skip(reason="Testaccount is not available, it returns 404 error.")
-@pytest.mark.timeout(10)
-@pytest.mark.parametrize(
-    "region",
-    (
-        pytest.param("eu-central-1", id="region"),
-        pytest.param("east-us-2.azure", id="azure"),
-    ),
-)
-def test_connection_timeout_error(region):
-    engine = create_engine(
-        URL(
-            user="testuser",
-            password="testpassword",
-            account="testaccount",
-            region="east-us-2.azure",
-            login_timeout=5,
-        )
+    The connector's actual timeout/retry behaviour is exercised by the
+    connector's own test-suite; here we mock it to keep this a deterministic,
+    network-free check of the dialect's error-propagation wiring.
+    """
+    from snowflake.connector.errors import (
+        OperationalError as SnowflakeConnectorOperationalError,
     )
 
-    with pytest.raises(OperationalError) as excinfo:
-        engine.connect()
+    connector_error = SnowflakeConnectorOperationalError(
+        msg="250001: Could not connect to Snowflake backend after 0 attempt(s)",
+        errno=250001,
+    )
 
+    engine = create_engine(
+        URL(user="testuser", password="testpassword", account="testaccount")
+    )
+    try:
+        with patch.object(SnowflakeDialect, "connect", side_effect=connector_error):
+            with pytest.raises(OperationalError) as excinfo:
+                engine.connect()
+    finally:
+        engine.dispose()
+
+    # The engine wraps the connector error; the original is preserved on .orig.
+    assert excinfo.value.orig is connector_error
     assert excinfo.value.orig.errno == 250001
     assert "Could not connect to Snowflake backend" in excinfo.value.orig.msg
-    assert region not in excinfo.value.orig.msg
 
 
 def test_load_dialect():
@@ -1804,83 +1724,6 @@ def test_autoincrement(engine_testaccount):
         metadata.drop_all(engine_testaccount)
 
 
-@pytest.mark.skip(
-    reason="SQLAlchemy 1.4 release seem to have caused a pretty big"
-    "performance degradation, but addressing this should also"
-    "address fully supporting SQLAlchemy 1.4 which has a lot "
-    "of changes"
-)
-def test_get_too_many_columns(engine_testaccount, db_parameters):
-    """Check whether Inspector cache is working, when there are too many column to cache whole schema's columns"""
-    # Set up necessary tables
-    metadata = MetaData()
-    total_objects = 10
-    for idx in range(total_objects):
-        Table(
-            "mainuserss" + str(idx),
-            metadata,
-            Column("id" + str(idx), Integer, Sequence("user_id_seq"), primary_key=True),
-            Column("name" + str(idx), String),
-            Column("fullname", String),
-            Column("password", String),
-        )
-        Table(
-            "mainaddressess" + str(idx),
-            metadata,
-            Column(
-                "id" + str(idx), Integer, Sequence("address_id_seq"), primary_key=True
-            ),
-            Column(
-                "user_id" + str(idx),
-                None,
-                ForeignKey("mainuserss" + str(idx) + ".id" + str(idx)),
-            ),
-            Column("email_address" + str(idx), String, nullable=False),
-        )
-    metadata.create_all(engine_testaccount)
-    inspector = inspect(engine_testaccount)
-    schema = db_parameters["schema"]
-
-    # Emulate error
-    with patch.object(
-        inspector.dialect, "_get_schema_columns", return_value=None
-    ) as mock_method:
-
-        def harass_inspector():
-            for table_name in inspector.get_table_names(schema):
-                column_metadata = inspector.get_columns(table_name, schema)
-                inspector.get_pk_constraint(table_name, schema)
-                inspector.get_foreign_keys(table_name, schema)
-                assert (
-                    3 <= len(column_metadata) <= 4
-                )  # Either one of the tables should have 3 or 4 columns
-
-        outcome = False
-        # Allow up to 5 times for the speed test to pass to avoid flaky test
-        for _ in range(5):
-            # Python 2.7 has no timeit.timeit with globals and locals parameters
-            s_time = time.time()
-            harass_inspector()
-            m_time = time.time()
-            harass_inspector()
-            time2 = time.time() - m_time
-            time1 = m_time - s_time
-            print(
-                f"Ran inspector through tables twice, times:\n\tfirst: {time1}\n\tsecond: {time2}"
-            )
-            if time2 < time1 * 0.01:
-                outcome = True
-                break
-            else:
-                # Reset inspector to reset cache
-                inspector = inspect(engine_testaccount)
-        metadata.drop_all(engine_testaccount)
-        assert (
-            mock_method.call_count > 0
-        )  # Make sure we actually mocked the issue happening
-        assert outcome
-
-
 def test_for_exception_in_query_all_columns(engine_testaccount, db_parameters):
     """This tests whether a too many column error actually triggers the more granular table version"""
     # Set up a single table
@@ -1989,8 +1832,7 @@ def test_single_table_reflection_uses_optimized_path(engine_testaccount):
     Verify that single-table reflection uses table-specific queries (DESC TABLE)
     instead of querying the entire schema via information_schema.
 
-    SA 2.x: get_columns is always a single-table call (IS_VERSION_20 guard).
-    SA 1.4: opt-in via cache_column_metadata=True.
+    SA 2.x: get_columns is always a single-table call.
     """
     table_name = random_string(5, choices=string.ascii_uppercase)
     with engine_testaccount.connect() as conn:
@@ -2000,10 +1842,8 @@ def test_single_table_reflection_uses_optimized_path(engine_testaccount):
                 text(f'create table public.{table_name} ("col1" text, "col2" integer);')
             )
 
-            # SA 2.x: DESC TABLE is used unconditionally (IS_VERSION_20 guard).
-            # SA 1.4: opt-in via cache_column_metadata=True.
+            # SA 2.x: DESC TABLE is used unconditionally.
             inspector = inspect(engine_testaccount)
-            inspector.dialect._cache_column_metadata = True
 
             # Mock _query_all_columns_info to detect if it's called
             # If optimization works, this should NOT be called
@@ -2031,6 +1871,15 @@ def test_single_table_reflection_uses_optimized_path(engine_testaccount):
 
 
 def test_column_type_schema(engine_testaccount):
+    types_not_created = frozenset(
+        {
+            "FIXED",  # Snowflake rejects FIXED in DDL.
+            "MAP",  # Requires structured type syntax not covered here.
+            "UUID",  # Snowflake stores UUID as text; no native UUID column is created.
+        }
+    )
+    reflected_schema_type_names = frozenset(ischema_names_baseline) - types_not_created
+
     with engine_testaccount.connect() as conn:
         table_name = random_string(5)
         # column type FIXED not supported, triggers SQL compilation error: Unsupported data type 'FIXED'.
@@ -2048,9 +1897,7 @@ CREATE TEMP TABLE {table_name} (
 
         table_reflected = Table(table_name, MetaData(), autoload_with=conn)
         columns = table_reflected.columns
-        assert len(columns) == (
-            len(ischema_names_baseline) - 2
-        )  # -2 because FIXED and MAP is not supported
+        assert len(columns) == len(reflected_schema_type_names)
 
 
 def test_result_type_and_value(engine_testaccount):
@@ -2418,7 +2265,6 @@ def test_snowflake_sqlalchemy_as_valid_client_type():
         [literal(5.5), literal(8), 0.6875],
     ],
 )
-@pytest.mark.feature_v20
 def test_true_division_operation(engine_testaccount, operation):
     # expected_warning = "div_is_floordiv value will be changed to False in a future release. This will generate a behavior change on true and floor division. Please review https://docs.sqlalchemy.org/en/20/changelog/whatsnew_20.html#python-division-operator-performs-true-division-for-all-backends-added-floor-division"
     # with pytest.warns(PendingDeprecationWarning, match=expected_warning):
@@ -2444,10 +2290,9 @@ def test_true_division_operation(engine_testaccount, operation):
         [literal(3), literal(2), 1.5, 1.5],
         [literal(4), literal(1.5), 2.6666666666666665, 2.0],
         [literal(5.5), literal(10.7), 0.5140186915887851, 0],
-        [literal(5.5), literal(8), 0.6875, 0.0],
+        [literal(5.5), literal(8), 0.6875, 0],
     ],
 )
-@pytest.mark.feature_v20
 def test_division_force_div_is_floordiv_default(engine_testaccount, operation):
     expected_warning = "div_is_floordiv value will be changed to False in a future release. This will generate a behavior change on true and floor division. Please review https://docs.sqlalchemy.org/en/20/changelog/whatsnew_20.html#python-division-operator-performs-true-division-for-all-backends-added-floor-division"
     with pytest.warns(PendingDeprecationWarning, match=expected_warning):
@@ -2473,7 +2318,6 @@ def test_division_force_div_is_floordiv_default(engine_testaccount, operation):
         [literal(5.5), literal(8), 0.6875, 0],
     ],
 )
-@pytest.mark.feature_v20
 def test_division_force_div_is_floordiv_false(db_parameters, operation):
     engine = get_engine(URL(**db_parameters), **{"force_div_is_floordiv": False})
     with engine.connect() as conn:

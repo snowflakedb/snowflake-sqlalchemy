@@ -23,7 +23,6 @@ from snowflake.sqlalchemy.snowdialect import (
 _DEFAULT_FLAG_PAYLOAD = {
     "case_sensitive_identifiers": False,
     "enable_decfloat": False,
-    "cache_column_metadata": False,
     "force_div_is_floordiv": True,
     "legacy_url_params": False,
 }
@@ -168,10 +167,6 @@ def _telemetry_payload(dialect, telemetry_client_mock, fake_connection):
             {"enable_decfloat": True},
         ),
         (
-            {"cache_column_metadata": True},
-            {"cache_column_metadata": True},
-        ),
-        (
             {"force_div_is_floordiv": False},
             {"force_div_is_floordiv": False},
         ),
@@ -180,13 +175,11 @@ def _telemetry_payload(dialect, telemetry_client_mock, fake_connection):
             {
                 "case_sensitive_identifiers": True,
                 "enable_decfloat": True,
-                "cache_column_metadata": True,
                 "force_div_is_floordiv": False,
             },
             {
                 "case_sensitive_identifiers": True,
                 "enable_decfloat": True,
-                "cache_column_metadata": True,
                 "force_div_is_floordiv": False,
             },
         ),
@@ -194,7 +187,6 @@ def _telemetry_payload(dialect, telemetry_client_mock, fake_connection):
     ids=[
         "case_sensitive_identifiers_true",
         "enable_decfloat_true",
-        "cache_column_metadata_true",
         "force_div_is_floordiv_false",
         "all_flipped",
     ],
