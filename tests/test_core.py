@@ -1152,9 +1152,9 @@ def test_get_temp_table_names(engine_testaccount):
     assert len(temp_table_names) == num_of_temp_tables
     returned = {name.lower() for name in temp_table_names}
     for name in created:
-        assert (
-            name.lower() in returned
-        ), f"{name!r} missing from reflected temp tables {temp_table_names!r}"
+        assert name.lower() in returned, (
+            f"{name!r} missing from reflected temp tables {temp_table_names!r}"
+        )
 
 
 def test_create_table_with_schema(engine_testaccount, db_parameters):

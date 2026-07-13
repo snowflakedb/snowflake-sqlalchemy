@@ -39,8 +39,8 @@ same behaviour as stock SQLAlchemy and is not made worse by this module.
 from __future__ import annotations
 
 import itertools
-from typing import Any
 from collections.abc import Iterable
+from typing import Any
 
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.orm import DeclarativeBase, Session, attributes

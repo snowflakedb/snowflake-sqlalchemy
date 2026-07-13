@@ -10,7 +10,7 @@ from snowflake.sqlalchemy.custom_commands import NoneType
 from .table_option import Priority, TableOption, TableOptionKey
 
 if TYPE_CHECKING:
-    from snowflake.sqlalchemy.base import SnowflakeDDLCompiler
+    pass
 
 
 class LiteralOption(TableOption):

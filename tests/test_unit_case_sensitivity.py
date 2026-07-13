@@ -463,9 +463,9 @@ class TestHasObjectNormalization:
         d._has_object(conn, "TABLE", object_name, schema=schema)
         sql_text = str(conn.execute.call_args[0][0])
         for fragment in expected_fragments:
-            assert (
-                fragment in sql_text
-            ), f"Expected {fragment!r} in DESC SQL, got: {sql_text!r}"
+            assert fragment in sql_text, (
+                f"Expected {fragment!r} in DESC SQL, got: {sql_text!r}"
+            )
 
     def test_programming_error_returns_false(self):
         """_has_object returns False when DESC raises ProgrammingError."""

@@ -153,9 +153,9 @@ def test_quote_semicolon_in_table_name_is_quoted():
     sql = _first_sql(captured)
     assert f'"{payload}"' in sql, f"Payload not enclosed in double-quotes; got: {sql!r}"
     stripped = re.sub(r'"[^"]*"', "", sql)
-    assert (
-        ";" not in stripped
-    ), f"Semicolon escaped double-quote enclosure; got: {sql!r}"
+    assert ";" not in stripped, (
+        f"Semicolon escaped double-quote enclosure; got: {sql!r}"
+    )
 
 
 def test_newline_injection_in_table_name_is_quoted():
@@ -216,9 +216,9 @@ def test_unquoted_database_qualified_schema_is_split_and_quoted():
     manager.get_table_columns("mytable", schema="mydb.myschema")
 
     sql = _first_sql(captured)
-    assert (
-        '"MYDB"."MYSCHEMA"."MYTABLE"' in sql
-    ), f"Qualified schema not split into quoted components; got: {sql!r}"
+    assert '"MYDB"."MYSCHEMA"."MYTABLE"' in sql, (
+        f"Qualified schema not split into quoted components; got: {sql!r}"
+    )
 
 
 def test_quoted_database_qualified_schema_is_not_double_escaped():
@@ -228,12 +228,12 @@ def test_quoted_database_qualified_schema_is_not_double_escaped():
     manager.get_table_columns("mytable", schema='"MYDB"."MYSCHEMA"')
 
     sql = _first_sql(captured)
-    assert (
-        '"MYDB"."MYSCHEMA"."MYTABLE"' in sql
-    ), f"Already-quoted qualified schema was double-escaped; got: {sql!r}"
-    assert (
-        '"""' not in sql
-    ), f"Found triple double-quote (double escaping); got: {sql!r}"
+    assert '"MYDB"."MYSCHEMA"."MYTABLE"' in sql, (
+        f"Already-quoted qualified schema was double-escaped; got: {sql!r}"
+    )
+    assert '"""' not in sql, (
+        f"Found triple double-quote (double escaping); got: {sql!r}"
+    )
 
 
 def test_quoted_component_with_literal_dot_is_preserved():
@@ -242,6 +242,6 @@ def test_quoted_component_with_literal_dot_is_preserved():
     manager.get_table_columns("mytable", schema='"my.schema"')
 
     sql = _first_sql(captured)
-    assert (
-        '"my.schema"."MYTABLE"' in sql
-    ), f"Quoted component with a literal dot was mis-split; got: {sql!r}"
+    assert '"my.schema"."MYTABLE"' in sql, (
+        f"Quoted component with a literal dot was mis-split; got: {sql!r}"
+    )
