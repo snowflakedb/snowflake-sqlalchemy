@@ -85,16 +85,14 @@ def patch_column_query_methods(dialect, filtered_rows=(), all_rows=()):
     mock_all_columns_query = MagicMock(return_value=iter(all_rows))
     mock_targeted_query = MagicMock(return_value=iter(filtered_rows))
     mock_primary_keys = MagicMock(return_value={})
-    with patch.object(
-        dialect, "_get_full_schema_name", return_value=_FULL_SCHEMA
-    ), patch.object(
-        dialect, "_current_database_schema", return_value=(_DB, "MYSCHEMA")
-    ), patch.object(
-        dialect, "_get_schema_primary_keys", mock_primary_keys
-    ), patch.object(
-        dialect, "_query_all_columns_info", mock_all_columns_query
-    ), patch.object(
-        dialect, "_query_filtered_columns_info", mock_targeted_query
+    with (
+        patch.object(dialect, "_get_full_schema_name", return_value=_FULL_SCHEMA),
+        patch.object(
+            dialect, "_current_database_schema", return_value=(_DB, "MYSCHEMA")
+        ),
+        patch.object(dialect, "_get_schema_primary_keys", mock_primary_keys),
+        patch.object(dialect, "_query_all_columns_info", mock_all_columns_query),
+        patch.object(dialect, "_query_filtered_columns_info", mock_targeted_query),
     ):
         yield mock_all_columns_query, mock_targeted_query, mock_primary_keys
 
@@ -268,12 +266,12 @@ def test_schema_columns_filter_names_creates_distinct_cache_entry(dialect_no_db)
         (_SCHEMA,),
         (("filter_names", ("TABLE_A",)),),
     )
-    assert (
-        filtered_key in info_cache
-    ), "filtered result should be cached under its own key"
-    assert (
-        _FULL_SCHEMA_CACHE_KEY not in info_cache
-    ), "filtered result must not be stored under the full-schema key"
+    assert filtered_key in info_cache, (
+        "filtered result should be cached under its own key"
+    )
+    assert _FULL_SCHEMA_CACHE_KEY not in info_cache, (
+        "filtered result must not be stored under the full-schema key"
+    )
 
 
 def test_schema_columns_full_schema_result_cached_under_schema_only_key(dialect_no_db):
@@ -375,9 +373,9 @@ def test_multi_columns_cold_cache_filter_names_normalised_to_tuple(dialect_no_db
             info_cache={},
         )
 
-    assert isinstance(
-        captured[0], tuple
-    ), "filter_names must be a tuple for stable cache keys"
+    assert isinstance(captured[0], tuple), (
+        "filter_names must be a tuple for stable cache keys"
+    )
 
 
 def test_multi_columns_cold_cache_no_filter_names_calls_full_schema_path(dialect_no_db):
@@ -441,6 +439,6 @@ def test_multi_columns_warm_cache_takes_priority_over_targeted_path(dialect_no_d
             info_cache=info_cache,
         )
 
-    assert (
-        schema_columns_calls == []
-    ), "_get_schema_columns was called despite a warm full-schema cache entry"
+    assert schema_columns_calls == [], (
+        "_get_schema_columns was called despite a warm full-schema cache entry"
+    )

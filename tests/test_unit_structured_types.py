@@ -188,12 +188,12 @@ class TestObjectTypeParsing:
     def test_object_with_comma_in_field_name_parses_cleanly(self):
         """OBJECT("foo,bar" TEXT) must yield exactly one field with the full name."""
         obj = parse_type('OBJECT("foo,bar" TEXT)')
-        assert (
-            len(obj.items_types) == 1
-        ), f"Expected 1 field, got {list(obj.items_types.keys())!r}"
-        assert (
-            '"foo,bar"' in obj.items_types
-        ), f"Expected key '\"foo,bar\"', got {list(obj.items_types.keys())!r}"
+        assert len(obj.items_types) == 1, (
+            f"Expected 1 field, got {list(obj.items_types.keys())!r}"
+        )
+        assert '"foo,bar"' in obj.items_types, (
+            f"Expected key '\"foo,bar\"', got {list(obj.items_types.keys())!r}"
+        )
 
     def test_object_with_normal_fields_parses_correctly(self):
         """Baseline: OBJECT with normal field names still parses correctly."""
@@ -212,9 +212,9 @@ class TestVisitObjectKeyQuoting:
         obj = OBJECT(normal_field=VARCHAR(10))
         obj.items_types = {"field)injected": (VARCHAR(10), False)}
         result = self._type_compiler().process(obj)
-        assert (
-            '"field)injected"' in result
-        ), f"Expected quoted key in DDL, got {result!r}"
+        assert '"field)injected"' in result, (
+            f"Expected quoted key in DDL, got {result!r}"
+        )
 
     def test_already_quoted_key_is_not_double_quoted(self):
         """A key already stored with double-quotes (from parse_type) must not be re-quoted."""
@@ -227,9 +227,9 @@ class TestVisitObjectKeyQuoting:
         """A plain identifier key must appear in DDL (quoted only if required by dialect rules)."""
         obj = OBJECT(my_field=VARCHAR(10))
         result = self._type_compiler().process(obj)
-        assert (
-            "my_field" in result
-        ), f"Expected key 'my_field' in DDL output, got {result!r}"
+        assert "my_field" in result, (
+            f"Expected key 'my_field' in DDL output, got {result!r}"
+        )
 
     def test_fake_quoted_key_is_re_quoted(self):
         """A key that starts and ends with '"' but contains structure must be re-quoted, not passed verbatim."""
@@ -268,9 +268,9 @@ class TestObjectRepr:
     def test_double_quoted_field_name_stripped_in_repr(self):
         """The surrounding double-quotes are stripped so the kwarg is a valid identifier."""
         obj = parse_type('OBJECT("WeirdField" VARCHAR(10))')
-        assert "WeirdField=" in repr(
-            obj
-        ), f"Expected 'WeirdField=' in repr, got: {repr(obj)!r}"
-        assert '"WeirdField"=' not in repr(
-            obj
-        ), f"Double-quotes must be stripped from repr kwarg: {repr(obj)!r}"
+        assert "WeirdField=" in repr(obj), (
+            f"Expected 'WeirdField=' in repr, got: {repr(obj)!r}"
+        )
+        assert '"WeirdField"=' not in repr(obj), (
+            f"Double-quotes must be stripped from repr kwarg: {repr(obj)!r}"
+        )
