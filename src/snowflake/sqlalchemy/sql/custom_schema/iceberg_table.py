@@ -1,8 +1,8 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
+from __future__ import annotations
 
-import typing
 from typing import Any
 
 from sqlalchemy.sql.schema import MetaData, SchemaItem
@@ -47,24 +47,24 @@ class IcebergTable(TableFromQueryBase):
     _support_structured_types = True
 
     @property
-    def external_volume(self) -> typing.Optional[LiteralOption]:
-        return self._get_dialect_option(TableOptionKey.EXTERNAL_VOLUME)
+    def external_volume(self) -> LiteralOption | None:
+        return self._get_dialect_option(TableOptionKey.EXTERNAL_VOLUME, LiteralOption)
 
     @property
-    def base_location(self) -> typing.Optional[LiteralOption]:
-        return self._get_dialect_option(TableOptionKey.BASE_LOCATION)
+    def base_location(self) -> LiteralOption | None:
+        return self._get_dialect_option(TableOptionKey.BASE_LOCATION, LiteralOption)
 
     @property
-    def catalog(self) -> typing.Optional[LiteralOption]:
-        return self._get_dialect_option(TableOptionKey.CATALOG)
+    def catalog(self) -> LiteralOption | None:
+        return self._get_dialect_option(TableOptionKey.CATALOG, LiteralOption)
 
     def __init__(
         self,
         name: str,
         metadata: MetaData,
         *args: SchemaItem,
-        external_volume: LiteralOptionType = None,
-        base_location: LiteralOptionType = None,
+        external_volume: LiteralOptionType | None = None,
+        base_location: LiteralOptionType | None = None,
         **kw: Any,
     ) -> None:
         if kw.get("_no_init", True):
@@ -86,7 +86,7 @@ class IcebergTable(TableFromQueryBase):
         *args: SchemaItem,
         **kw: Any,
     ) -> None:
-        self.__init__(name, metadata, *args, _no_init=False, **kw)
+        self.__init__(name, metadata, *args, _no_init=False, **kw)  # type: ignore[misc]  # SA Table.__init__ pattern
 
     def __repr__(self) -> str:
         return "IcebergTable(%s)" % ", ".join(

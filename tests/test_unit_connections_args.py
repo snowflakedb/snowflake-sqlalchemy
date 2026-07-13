@@ -12,11 +12,11 @@
 import re
 
 import pytest
+from snowflake.connector.connection import DEFAULT_CONFIGURATION
 from sqlalchemy import exc
 from sqlalchemy.engine.url import URL as SAUrl
 from sqlalchemy.engine.url import make_url
 
-from snowflake.connector.connection import DEFAULT_CONFIGURATION
 from snowflake.sqlalchemy import URL, base
 from snowflake.sqlalchemy._constants import SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS
 from snowflake.sqlalchemy.snowdialect import _URL_QUERY_BLOCKED_KWARGS
@@ -116,9 +116,9 @@ class TestURLFieldEncoding:
 
         # Must not produce a netloc whose host part includes other.com
         netloc = _url_netloc(result)
-        assert (
-            "other.com" not in netloc.split("@")[-1]
-        ), f"@ in account changed the host to include other.com; netloc={netloc!r}"
+        assert "other.com" not in netloc.split("@")[-1], (
+            f"@ in account changed the host to include other.com; netloc={netloc!r}"
+        )
 
     def test_account_with_slash_raises_or_is_safe(self):
         """account containing '/' would change the path component."""
@@ -142,9 +142,9 @@ class TestURLFieldEncoding:
             return
 
         q = _url_query(result)
-        assert (
-            "warehouse" not in q or q.get("warehouse") != "OTHER"
-        ), f"& in account introduced warehouse query param; query={q}"
+        assert "warehouse" not in q or q.get("warehouse") != "OTHER", (
+            f"& in account introduced warehouse query param; query={q}"
+        )
 
     # --- user field ---------------------------------------------------------
 
@@ -155,9 +155,9 @@ class TestURLFieldEncoding:
         # The host derived from account must still be myaccount (+ .snowflakecomputing.com)
         netloc = _url_netloc(result)
         host_part = netloc.split("@")[-1]
-        assert (
-            "example.com" not in host_part
-        ), f"@ in user changed the host; netloc={netloc!r}"
+        assert "example.com" not in host_part, (
+            f"@ in user changed the host; netloc={netloc!r}"
+        )
 
     def test_user_with_question_mark_is_encoded(self):
         """user containing '?' must be encoded, not treated as start of query string."""
@@ -165,9 +165,9 @@ class TestURLFieldEncoding:
 
         # The extra parameter must not appear as a real query param
         q = _url_query(result)
-        assert (
-            "host" not in q
-        ), f"'?' in user introduced 'host' query param; URL was {result!r}, query={q}"
+        assert "host" not in q, (
+            f"'?' in user introduced 'host' query param; URL was {result!r}, query={q}"
+        )
 
     def test_user_with_hash_is_encoded(self):
         """user containing '#' must be encoded so it doesn't start a fragment."""
@@ -176,9 +176,9 @@ class TestURLFieldEncoding:
         from urllib.parse import urlsplit
 
         parsed_raw = urlsplit(result)
-        assert (
-            parsed_raw.fragment == ""
-        ), f"'#' in user leaked into URL fragment; URL was {result!r}"
+        assert parsed_raw.fragment == "", (
+            f"'#' in user leaked into URL fragment; URL was {result!r}"
+        )
 
     # --- region field -------------------------------------------------------
 
@@ -195,9 +195,9 @@ class TestURLFieldEncoding:
             return
 
         q = _url_query(result)
-        assert (
-            "host" not in q
-        ), f"'?' in region introduced 'host' query param; query={q}"
+        assert "host" not in q, (
+            f"'?' in region introduced 'host' query param; query={q}"
+        )
 
     # --- valid inputs still work --------------------------------------------
 
@@ -431,9 +431,9 @@ class TestConnectArgsMigration:
 
         netloc = urlsplit(result).netloc
         host_part = netloc.split("@")[-1]
-        assert (
-            "example.com" not in host_part
-        ), f"@ in user leaked into host; netloc={netloc!r}"
+        assert "example.com" not in host_part, (
+            f"@ in user leaked into host; netloc={netloc!r}"
+        )
         # The encoded form must be present so SQLAlchemy can decode it back
         assert "alice" in result
 
@@ -499,9 +499,9 @@ class TestLegacyURLParamsMode:
         )
         with pytest.warns(DeprecationWarning, match=re.escape(param)):
             _, opts = legacy_dialect.create_connect_args(url)
-        assert (
-            opts.get(param) is not None
-        ), f"legacy mode: {param!r} was not forwarded to opts"
+        assert opts.get(param) is not None, (
+            f"legacy mode: {param!r} was not forwarded to opts"
+        )
 
     def test_kwarg_enables_shim_without_env(self):
         """legacy_url_params=True must enable the shim with no env variable set."""

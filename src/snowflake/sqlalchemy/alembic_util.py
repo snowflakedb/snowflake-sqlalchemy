@@ -27,6 +27,8 @@ callback in ``env.py`` is the only injection point and requires a two-line
 opt-in per project.
 """
 
+from __future__ import annotations
+
 from sqlalchemy.sql.elements import quoted_name
 
 
@@ -44,10 +46,12 @@ class _ReprExpr(str):
     autoincrement, comment, server_default, column kwargs, …).
     """
 
-    def __new__(cls, value: str, expr: str):
-        obj = super().__new__(cls, value)
-        obj._expr = expr
-        return obj
+    def __new__(cls, value: str, expr: str) -> _ReprExpr:
+        return super().__new__(cls, value)
+
+    def __init__(self, value: str, expr: str) -> None:
+        super().__init__()
+        self._expr = expr
 
     def __repr__(self) -> str:
         return self._expr

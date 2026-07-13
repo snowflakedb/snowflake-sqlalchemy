@@ -21,7 +21,7 @@ def test_indexes_reflection(engine_testaccount, db_parameters, sql_compiler):
         id INT primary key,
         name VARCHAR,
         name2 VARCHAR,
-        INDEX {index_name} ({', '.join(index_columns)})
+        INDEX {index_name} ({", ".join(index_columns)})
     );
     """
 

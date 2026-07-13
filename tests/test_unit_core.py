@@ -274,12 +274,13 @@ class TestSingleTableDispatchSA2:
         dialect = _make_dialect()
         connection = mock.Mock()
 
-        with mock.patch.object(
-            dialect, table_method, return_value=expected
-        ) as tbl_mock, mock.patch.object(
-            dialect,
-            schema_method,
-            side_effect=AssertionError(f"{schema_method} must not be called"),
+        with (
+            mock.patch.object(dialect, table_method, return_value=expected) as tbl_mock,
+            mock.patch.object(
+                dialect,
+                schema_method,
+                side_effect=AssertionError(f"{schema_method} must not be called"),
+            ),
         ):
             result = getattr(dialect, public_method)(connection, "foo", schema="PUBLIC")
 
@@ -338,12 +339,12 @@ class TestSingleTableDispatchSA2:
                 in_quote = not in_quote
             elif ch == "." and not in_quote:
                 parts += 1
-        assert (
-            parts == 1
-        ), f"Expected 2-part reference (schema.table), got {parts + 1} parts: {full!r}"
-        assert (
-            '"weird.name"' in full
-        ), f"Expected quoted atomic identifier '\"weird.name\"' in {full!r}"
+        assert parts == 1, (
+            f"Expected 2-part reference (schema.table), got {parts + 1} parts: {full!r}"
+        )
+        assert '"weird.name"' in full, (
+            f"Expected quoted atomic identifier '\"weird.name\"' in {full!r}"
+        )
 
     def test_get_columns_dotted_plain_string_uses_last_component(self):
         """A plain 'schema.table' string takes the last component as the table name."""
@@ -363,9 +364,9 @@ class TestSingleTableDispatchSA2:
 
         full = received["full"]
         assert '"MYTABLE"' in full, f"Expected last component 'MYTABLE' in {full!r}"
-        assert (
-            '"MYSCHEMA"' not in full
-        ), f"Schema component from table_name must be dropped; got {full!r}"
+        assert '"MYSCHEMA"' not in full, (
+            f"Schema component from table_name must be dropped; got {full!r}"
+        )
 
 
 def _capture_view_sql(dialect, view_name, schema="PUBLIC"):
@@ -404,13 +405,13 @@ class TestGetViewDefinitionLikeEscaping:
     def test_special_chars_are_escaped(self, view_name, expected, not_expected):
         sql = _capture_view_sql(_make_dialect(), view_name)
         for fragment in expected:
-            assert (
-                fragment in sql
-            ), f"Expected {fragment!r} in SQL for {view_name!r}, got: {sql!r}"
+            assert fragment in sql, (
+                f"Expected {fragment!r} in SQL for {view_name!r}, got: {sql!r}"
+            )
         for fragment in not_expected:
-            assert (
-                fragment not in sql
-            ), f"Unexpected {fragment!r} in SQL for {view_name!r}, got: {sql!r}"
+            assert fragment not in sql, (
+                f"Unexpected {fragment!r} in SQL for {view_name!r}, got: {sql!r}"
+            )
 
 
 def _capture_comment_sql(dialect, method_name, table_name, schema="PUBLIC"):
@@ -457,10 +458,10 @@ class TestReflectionCommentLikeEscaping:
     ):
         sql = _capture_comment_sql(_make_dialect(), method_name, table_name)
         for fragment in expected:
-            assert (
-                fragment in sql
-            ), f"Expected {fragment!r} in SQL for {table_name!r}, got: {sql!r}"
+            assert fragment in sql, (
+                f"Expected {fragment!r} in SQL for {table_name!r}, got: {sql!r}"
+            )
         for fragment in not_expected:
-            assert (
-                fragment not in sql
-            ), f"Unexpected {fragment!r} in SQL for {table_name!r}, got: {sql!r}"
+            assert fragment not in sql, (
+                f"Unexpected {fragment!r} in SQL for {table_name!r}, got: {sql!r}"
+            )

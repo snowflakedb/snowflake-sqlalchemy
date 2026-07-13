@@ -88,7 +88,7 @@ from .sql.custom_schema.options import (  # noqa
 from .util import _url as URL  # noqa
 from .util import create_snowflake_engine  # noqa
 
-base.dialect = dialect = snowdialect.dialect
+base.dialect = dialect = snowdialect.dialect  # type: ignore[attr-defined]
 
 __version__ = _get_version("snowflake-sqlalchemy")
 

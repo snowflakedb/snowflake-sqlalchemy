@@ -138,7 +138,9 @@ def test_alembic_autogenerate_multi_schema_fk(engine_testaccount):
                     "compare_type": True,
                     "compare_server_default": True,
                     "include_schemas": True,
-                    "include_object": lambda obj, name, type_, reflected, compare_to: True,
+                    "include_object": lambda obj, name, type_, reflected, compare_to: (
+                        True
+                    ),
                     "include_name": lambda name, type_, parent_names: (
                         name in test_schemas if type_ == "schema" else True
                     ),
@@ -239,9 +241,9 @@ def test_alembic_autogenerate_default_schema_fk(engine_testaccount):
 
     # The extra column proves autogenerate actually ran.
     add_column_op = _find_added_column(diff, "action_type")
-    assert (
-        add_column_op is not None
-    ), f"Expected 'add_column action_type' but got: {diff}"
+    assert add_column_op is not None, (
+        f"Expected 'add_column action_type' but got: {diff}"
+    )
     # The key assertion: no spurious FK drop/create (#145).
     fk_ops = [op for op in diff if _diff_op_name(op) in ("remove_fk", "add_fk")]
     assert fk_ops == [], f"Spurious FK operations detected (#145): {fk_ops}"

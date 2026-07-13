@@ -198,9 +198,9 @@ class TestDECFLOATIntegration:
                 ).fetchone()[0]
                 digits = len(result.as_tuple().digits)
 
-                assert (
-                    digits == 38
-                ), "enable_decfloat=True should preserve full precision"
+                assert digits == 38, (
+                    "enable_decfloat=True should preserve full precision"
+                )
                 assert result == value_38_digits
 
     @pytest.mark.skipif(
@@ -268,9 +268,9 @@ class TestDECFLOATIntegration:
         metadata.create_all(engine_testaccount)
         try:
             inspector = inspect(engine_testaccount)
-            assert inspector.has_table(
-                table_name
-            ), f"Table {table_name} was not created"
+            assert inspector.has_table(table_name), (
+                f"Table {table_name} was not created"
+            )
 
             columns = inspector.get_columns(table_name)
             value_col = next(c for c in columns if c["name"].lower() == "value")

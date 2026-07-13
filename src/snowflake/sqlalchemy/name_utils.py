@@ -1,13 +1,17 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
+from __future__ import annotations
 
-from sqlalchemy.sql.compiler import IdentifierPreparer
+from typing import TYPE_CHECKING
+
 from sqlalchemy.sql.elements import quoted_name
+
+if TYPE_CHECKING:
+    from snowflake.sqlalchemy.base import SnowflakeIdentifierPreparer
 
 
 class _NameUtils:
-
-    def __init__(self, identifier_preparer: IdentifierPreparer) -> None:
+    def __init__(self, identifier_preparer: SnowflakeIdentifierPreparer) -> None:
         self.identifier_preparer = identifier_preparer
 
     @property
@@ -22,7 +26,7 @@ class _NameUtils:
             self.identifier_preparer.dialect, "_case_sensitive_identifiers", False
         )
 
-    def normalize_name(self, name):
+    def normalize_name(self, name: str | None) -> str | quoted_name | None:
         if name is None:
             return None
         if name == "":
@@ -58,7 +62,7 @@ class _NameUtils:
             # observable difference is the Python type and .quote attribute.
             return name
 
-    def denormalize_name(self, name):
+    def denormalize_name(self, name: str | None) -> str | None:
         if name is None:
             return None
         if name == "":
@@ -84,7 +88,7 @@ class _NameUtils:
         name = str(component)
         if getattr(component, "quote", None):
             return ip.quote_identifier(name)
-        return ip.quote_identifier(self.denormalize_name(name))
+        return ip.quote_identifier(self.denormalize_name(name) or name)
 
     def quote_components(self, parts) -> str:
         """Unconditionally double-quote each pre-split component and dot-join them.

@@ -1,13 +1,17 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
-from typing import List, Union
+from __future__ import annotations
 
-from sqlalchemy.sql.expression import TextClause
+from typing import TYPE_CHECKING, Union
 
 from snowflake.sqlalchemy.custom_commands import NoneType
+from sqlalchemy.sql.expression import TextClause
 
 from .table_option import Priority, TableOption, TableOptionKey
+
+if TYPE_CHECKING:
+    from snowflake.sqlalchemy.base import SnowflakeDDLCompiler
 
 
 class ClusterByOption(TableOption):
@@ -21,16 +25,18 @@ class ClusterByOption(TableOption):
         cluster by (name, id > 0)
     """
 
-    def __init__(self, *expressions: Union[str, TextClause]) -> None:
+    def __init__(self, *expressions: str | TextClause) -> None:
         super().__init__()
         self._name: TableOptionKey = TableOptionKey.CLUSTER_BY
         self.expressions = expressions
 
     @staticmethod
-    def create(value: "ClusterByOptionType") -> "TableOption":
+    def create(  # type: ignore[override]
+        value: ClusterByOptionType | None,
+    ) -> TableOption | None:
         if isinstance(value, (NoneType, ClusterByOption)):
             return value
-        if isinstance(value, List):
+        if isinstance(value, list):
             return ClusterByOption(*value)
         return TableOption._get_invalid_table_option(
             TableOptionKey.CLUSTER_BY,
@@ -39,7 +45,9 @@ class ClusterByOption(TableOption):
         )
 
     def template(self) -> str:
-        return f"{self.option_name.upper()} (%s)"
+        name = self.option_name
+        assert name is not None, f"option_name not set on {self.__class__.__name__}"
+        return f"{name.upper()} (%s)"
 
     @property
     def priority(self) -> Priority:
@@ -59,11 +67,11 @@ class ClusterByOption(TableOption):
                 )
         return ", ".join(parts)
 
-    def _render(self, compiler) -> str:
+    def _render(self, compiler: SnowflakeDDLCompiler) -> str:
         return self.template() % (self.__get_expression(compiler))
 
     def __repr__(self) -> str:
         return "ClusterByOption(%s)" % self.__get_expression()
 
 
-ClusterByOptionType = Union[ClusterByOption, List[Union[str, TextClause]]]
+ClusterByOptionType = Union[ClusterByOption, list[Union[str, TextClause]]]

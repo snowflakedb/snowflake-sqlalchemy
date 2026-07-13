@@ -68,9 +68,9 @@ def test_create_table_with_text_type(engine_testaccount):
                 query = text(f"SELECT GET_DDL('TABLE', '{table_name}')")
                 result = conn.execute(query)
                 row = str(result.mappings().fetchone())
-                assert (
-                    "VARCHAR(134217728)" in row
-                ), f"Expected VARCHAR(134217728) in {row}"
+                assert "VARCHAR(134217728)" in row, (
+                    f"Expected VARCHAR(134217728) in {row}"
+                )
 
     finally:
         test_max_lob_size.drop(engine_testaccount)

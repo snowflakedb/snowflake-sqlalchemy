@@ -1,14 +1,19 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
+from __future__ import annotations
 
 import re
+import warnings
+from typing import TYPE_CHECKING, Any, cast
 
-from sqlalchemy import exc as sa_exc
-from sqlalchemy import util as sa_util
-from sqlalchemy.sql import text
+if TYPE_CHECKING:
+    from sqlalchemy.engine.interfaces import ReflectedColumn, ReflectedIdentity
 
 from snowflake.sqlalchemy.name_utils import _NameUtils
 from snowflake.sqlalchemy.parser.custom_type_parser import NullType, parse_type
+from sqlalchemy import text
+from sqlalchemy.engine import Connection, CursorResult
+from sqlalchemy.exc import ProgrammingError, SAWarning
 
 
 class _StructuredTypeInfoManager:
@@ -24,15 +29,22 @@ class _StructuredTypeInfoManager:
         default_schema (str): The default schema to use when none is specified
     """
 
-    def __init__(self, connection, name_utils: _NameUtils, default_schema: str):
+    def __init__(
+        self,
+        connection: Connection,
+        name_utils: _NameUtils,
+        default_schema: str,
+    ) -> None:
         self.connection = connection
-        self.full_columns_descriptions = {}
+        self.full_columns_descriptions: dict[
+            tuple[str, str], dict[str, ReflectedColumn]
+        ] = {}
         self.name_utils = name_utils
         self.default_schema = default_schema
 
     def get_column_info(
-        self, schema_name: str, table_name: str, column_name: str, **kwargs
-    ):
+        self, schema_name: str, table_name: str, column_name: str, **kwargs: Any
+    ) -> ReflectedColumn | None:
         self._load_structured_type_info(schema_name, table_name)
         if (
             (schema_name, table_name) in self.full_columns_descriptions
@@ -43,10 +55,9 @@ class _StructuredTypeInfoManager:
             ]
         return None
 
-    def _load_structured_type_info(self, schema_name: str, table_name: str):
+    def _load_structured_type_info(self, schema_name: str, table_name: str) -> bool:
         """Get column information for a structured type"""
         if (schema_name, table_name) not in self.full_columns_descriptions:
-
             column_definitions = self.get_table_columns(table_name, schema_name)
             if not column_definitions:
                 self.full_columns_descriptions[(schema_name, table_name)] = {}
@@ -57,13 +68,17 @@ class _StructuredTypeInfoManager:
             )
         return True
 
-    def _table_columns_as_dict(self, columns: list):
-        result = {}
+    def _table_columns_as_dict(
+        self, columns: list[ReflectedColumn]
+    ) -> dict[str, ReflectedColumn]:
+        result: dict[str, ReflectedColumn] = {}
         for column in columns:
             result[column["name"]] = column
         return result
 
-    def get_table_columns_by_full_name(self, full_table_name: str):
+    def get_table_columns_by_full_name(
+        self, full_table_name: str
+    ) -> list[ReflectedColumn]:
         """
         Get all columns in a table using a fully-qualified table name.
 
@@ -79,7 +94,9 @@ class _StructuredTypeInfoManager:
 
         return self._parse_desc_result(result)
 
-    def get_table_columns(self, table_name: str, schema: str = None):
+    def get_table_columns(
+        self, table_name: str, schema: str | None = None
+    ) -> list[ReflectedColumn]:
         """Get all columns in a table in a schema"""
         schema = schema if schema else self.default_schema
 
@@ -91,9 +108,9 @@ class _StructuredTypeInfoManager:
             self.name_utils.always_quote_join(schema, table_name)
         )
 
-    def _parse_desc_result(self, result):
+    def _parse_desc_result(self, result: CursorResult) -> list[ReflectedColumn]:
         """Parse DESC TABLE result into column information"""
-        ans = []
+        ans: list[ReflectedColumn] = []
 
         for desc_data in result:
             column_name = desc_data[0]
@@ -104,12 +121,15 @@ class _StructuredTypeInfoManager:
             comment = desc_data[9]
 
             column_name = self.name_utils.normalize_name(column_name)
+            assert column_name is not None  # DESC TABLE always returns a column name
             if column_name.startswith("sys_clustering_column"):
                 continue  # ignoring clustering column
             type_instance = parse_type(coltype)
             if isinstance(type_instance, NullType):
-                sa_util.warn(
-                    f"Did not recognize type '{coltype}' of column '{column_name}'"
+                warnings.warn(
+                    f"Did not recognize type '{coltype}' of column '{column_name}'",
+                    SAWarning,
+                    stacklevel=2,
                 )
 
             identity = None
@@ -119,36 +139,43 @@ class _StructuredTypeInfoManager:
             )
             if match:
                 # Build complete identity metadata for SQLAlchemy 2.0+ ReflectedIdentity convention
-                identity = {
-                    "start": int(match.group("start")),
-                    "increment": int(match.group("increment")),
-                    # Snowflake-specific defaults (same as main reflection path)
-                    "always": False,  # Snowflake only supports BY DEFAULT
-                    "on_null": None,  # Not separately tracked
-                    "cycle": False,  # Snowflake only supports NO CYCLE
-                    "order": match.group("order_type") == "ORDER",
-                    # Not available via DESC TABLE
-                    "minvalue": None,
-                    "maxvalue": None,
-                    "nominvalue": None,
-                    "nomaxvalue": None,
-                    "cache": None,
-                }
+                identity = cast(
+                    "ReflectedIdentity",
+                    {
+                        "start": int(match.group("start")),
+                        "increment": int(match.group("increment")),
+                        # Snowflake-specific defaults (same as main reflection path)
+                        "always": False,  # Snowflake only supports BY DEFAULT
+                        "on_null": None,  # Not separately tracked
+                        "cycle": False,  # Snowflake only supports NO CYCLE
+                        "order": match.group("order_type") == "ORDER",
+                        # Not available via DESC TABLE
+                        "minvalue": None,
+                        "maxvalue": None,
+                        "nominvalue": None,
+                        "nomaxvalue": None,
+                        "cache": None,
+                    },
+                )
             is_identity = identity is not None
 
             ans.append(
-                {
-                    "name": column_name,
-                    "type": type_instance,
-                    "nullable": is_nullable == "Y",
-                    "default": None if is_identity else column_default,
-                    "autoincrement": is_identity,
-                    "comment": comment if comment != "" else None,
-                    "primary_key": primary_key == "Y",
-                }
+                cast(
+                    "ReflectedColumn",
+                    {
+                        "name": column_name,
+                        "type": type_instance,
+                        "nullable": is_nullable == "Y",
+                        "default": None if is_identity else column_default,
+                        "autoincrement": is_identity,
+                        "comment": comment if comment != "" else None,
+                        "primary_key": primary_key == "Y",
+                    },
+                )
             )
 
             if is_identity:
+                assert identity is not None
                 ans[-1]["identity"] = identity
 
         # If we didn't find any columns for the table, the table doesn't exist.
@@ -156,7 +183,7 @@ class _StructuredTypeInfoManager:
             return []
         return ans
 
-    def _execute_desc(self, full_table_name: str):
+    def _execute_desc(self, full_table_name: str) -> CursorResult | None:
         """
         Execute a DESC TABLE command handling possible exceptions.
 
@@ -178,8 +205,10 @@ class _StructuredTypeInfoManager:
                     f"DESC /* sqlalchemy:_get_schema_columns */ TABLE {full_table_name} TYPE = COLUMNS"
                 )
             )
-        except sa_exc.ProgrammingError:
-            sa_util.warn(
-                f"Failed to reflect table '{full_table_name}' using sqlalchemy:_get_schema_columns"
+        except ProgrammingError:
+            warnings.warn(
+                f"Failed to reflect table '{full_table_name}' using sqlalchemy:_get_schema_columns",
+                SAWarning,
+                stacklevel=2,
             )
         return None

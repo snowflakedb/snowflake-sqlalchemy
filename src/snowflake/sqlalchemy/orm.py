@@ -39,12 +39,14 @@ same behaviour as stock SQLAlchemy and is not made worse by this module.
 from __future__ import annotations
 
 import itertools
+from collections.abc import Iterable
+from typing import Any
 
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.orm import DeclarativeBase, Session, attributes
 
 
-def _snowflake_constructor(self, **kwargs):
+def _snowflake_constructor(self: Any, **kwargs: Any) -> None:
     """Custom ORM instance constructor that pre-populates mapped columns.
 
     Mirrors SA's own ``mapper._insert_cols_as_none`` logic (SA 2.x
@@ -113,7 +115,7 @@ def _snowflake_constructor(self, **kwargs):
             setattr(self, attr.key, None)
 
 
-def snowflake_declarative_base(**kw):
+def snowflake_declarative_base(**kw: Any) -> Any:
     """Create a declarative base with the Snowflake bulk-insert constructor.
 
     The returned base class installs ``_snowflake_constructor`` as
@@ -157,7 +159,7 @@ class SnowflakeBase(DeclarativeBase):
         # Both objects go in a single INSERT (executemany).
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Any) -> None:
         _snowflake_constructor(self, **kwargs)
 
 
@@ -182,18 +184,18 @@ class SnowflakeSession(Session):
 
     def bulk_save_objects(
         self,
-        objects,
-        return_defaults=False,
-        update_changed_only=True,
-        preserve_order=True,
-    ):
+        objects: Iterable[Any],
+        return_defaults: bool = False,
+        update_changed_only: bool = True,
+        preserve_order: bool = True,
+    ) -> None:
         """Bulk-save ORM objects using a single batched INSERT per mapper.
 
         Identical to :meth:`sqlalchemy.orm.Session.bulk_save_objects` except
         that ``render_nulls=True`` is passed to the underlying
         ``_bulk_save_mappings`` call.  See the class docstring for details.
         """
-        obj_states = (attributes.instance_state(obj) for obj in objects)
+        obj_states: Any = (attributes.instance_state(obj) for obj in objects)
 
         if not preserve_order:
             # Group common mappers/persistence states together so that

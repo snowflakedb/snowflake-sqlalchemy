@@ -1,9 +1,9 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
+from __future__ import annotations
 
-import typing
-from typing import Any, Union
+from typing import Any
 
 from sqlalchemy.sql.schema import MetaData, SchemaItem
 
@@ -66,21 +66,21 @@ class DynamicTable(TableFromQueryBase):
     ]
 
     @property
-    def warehouse(self) -> typing.Optional[IdentifierOption]:
-        return self._get_dialect_option(TableOptionKey.WAREHOUSE)
+    def warehouse(self) -> IdentifierOption | None:
+        return self._get_dialect_option(TableOptionKey.WAREHOUSE, IdentifierOption)
 
     @property
-    def target_lag(self) -> typing.Optional[TargetLagOption]:
-        return self._get_dialect_option(TableOptionKey.TARGET_LAG)
+    def target_lag(self) -> TargetLagOption | None:
+        return self._get_dialect_option(TableOptionKey.TARGET_LAG, TargetLagOption)
 
     def __init__(
         self,
         name: str,
         metadata: MetaData,
         *args: SchemaItem,
-        warehouse: IdentifierOptionType = None,
-        target_lag: Union[TargetLagOptionType, KeywordOptionType] = None,
-        refresh_mode: KeywordOptionType = None,
+        warehouse: IdentifierOptionType | None = None,
+        target_lag: TargetLagOptionType | KeywordOptionType | None = None,
+        refresh_mode: KeywordOptionType | None = None,
         **kw: Any,
     ) -> None:
         if kw.get("_no_init", True):
@@ -102,7 +102,7 @@ class DynamicTable(TableFromQueryBase):
         *args: SchemaItem,
         **kw: Any,
     ) -> None:
-        self.__init__(name, metadata, *args, _no_init=False, **kw)
+        self.__init__(name, metadata, *args, _no_init=False, **kw)  # type: ignore[misc]  # SA Table.__init__ pattern
 
     def __repr__(self) -> str:
         return "DynamicTable(%s)" % ", ".join(
