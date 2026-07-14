@@ -364,7 +364,7 @@ class SnowflakeDialect(default.DefaultDialect):
         redact_log_secrets: bool = True,
         **kwargs: Any,
     ):
-        super().__init__(isolation_level=isolation_level, **kwargs)
+        super().__init__(isolation_level=isolation_level, **kwargs)  # type: ignore[arg-type]
         # ``DefaultDialect`` does not reliably expose the configured isolation
         # level as an attribute, so keep the constructor value for telemetry.
         self._isolation_level = isolation_level
