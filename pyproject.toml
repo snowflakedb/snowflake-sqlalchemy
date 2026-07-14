@@ -47,7 +47,7 @@ path = "src/snowflake/sqlalchemy/version.py"
 [project.optional-dependencies]
 development = [
   "alembic",
-  "mypy>=1.0,<2.0",
+  "mypy>=1.0,<3.0",
   "pre-commit",
   "pytest",
   "setuptools",
