@@ -2107,7 +2107,7 @@ class SnowflakeDialect(default.DefaultDialect):
         flags = {
             "case_sensitive_identifiers": self._case_sensitive_identifiers,
             "enable_decfloat": self._enable_decfloat,
-            "cache_column_metadata": self._cache_column_metadata,
+            "cache_column_metadata": getattr(self, "_cache_column_metadata", False),
             "force_div_is_floordiv": self.force_div_is_floordiv,
             "isolation_level": self._isolation_level,
         }
