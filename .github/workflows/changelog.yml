@@ -5,6 +5,7 @@ on:
     types: [opened, synchronize, labeled, unlabeled]
     branches:
       - main
+      - release/1.x
 
 jobs:
   check_change_log:
