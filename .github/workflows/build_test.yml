@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - prep-**
+      - release/1.x
   workflow_dispatch:
     inputs:
       pr-number:
