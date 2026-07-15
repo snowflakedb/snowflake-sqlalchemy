@@ -58,6 +58,13 @@ _ALL_BLOCKED_PARAMS = [
     ("unsafe_skip_file_permissions_check", "true"),
 ]
 
+# Blocked kwargs that were introduced in connector 4.x and are legitimately
+# absent from DEFAULT_CONFIGURATION when running against connector 3.x.
+# The dialect still blocks them on 3.x (harmless) so they stay in
+# _URL_QUERY_BLOCKED_KWARGS; this set lets the integrity test below skip the
+# DEFAULT_CONFIGURATION presence check for version-specific entries.
+_BLOCKED_KWARGS_4X_ONLY: frozenset = frozenset({"crl_cache_dir"})
+
 
 class TestURLFieldEncoding:
     """URL() must reject or encode account/user/region values that contain
@@ -365,11 +372,18 @@ class TestBlockedKwargsIntegrity:
         Doubles as drift protection: if a future connector release renames or
         removes one of these kwargs, this test fails and prompts a review of the
         block-list rather than letting it quietly point at a non-existent name.
+
+        Kwargs listed in ``_BLOCKED_KWARGS_4X_ONLY`` were added in connector 4.x
+        and are legitimately absent when running against 3.x; they are excluded
+        from the hard assertion so the suite passes on both versions.
         """
-        missing = sorted(_URL_QUERY_BLOCKED_KWARGS - set(DEFAULT_CONFIGURATION))
-        assert not missing, (
+        connector_keys = set(DEFAULT_CONFIGURATION)
+        missing = sorted(_URL_QUERY_BLOCKED_KWARGS - connector_keys)
+        # Exclude version-specific kwargs (absent in 3.x, present in 4.x+).
+        unexpected_missing = sorted(set(missing) - _BLOCKED_KWARGS_4X_ONLY)
+        assert not unexpected_missing, (
             "blocked kwargs missing from connector DEFAULT_CONFIGURATION "
-            f"(renamed/removed upstream?): {missing}. "
+            f"(renamed/removed upstream?): {unexpected_missing}. "
             "This also confirms an allowlist of DEFAULT_CONFIGURATION would still "
             "admit the remaining blocked params."
         )
