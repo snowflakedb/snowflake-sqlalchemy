@@ -19,6 +19,8 @@ jobs:
           GITHUB_ISSUE_TITLE: ${{ github.event.issue.title }}
           GITHUB_ISSUE_BODY: ${{ github.event.issue.body }}
           JIRA_EPIC: ${{ secrets.JIRA_ISSUES_EPIC }}
+          JIRA_COMPONENT: ${{ secrets.JIRA_COMPONENT }}
+          JIRA_LABELS: ${{ secrets.JIRA_LABELS }}
         run: |
           PAYLOAD=$(jq -n \
             --arg github_issue_number "$GITHUB_ISSUE_NUMBER" \
@@ -26,12 +28,16 @@ jobs:
             --arg github_issue_title "$GITHUB_ISSUE_TITLE" \
             --arg github_issue_body "$GITHUB_ISSUE_BODY" \
             --arg jira_epic "$JIRA_EPIC" \
+            --arg jira_component "$JIRA_COMPONENT" \
+            --argjson jira_labels "$JIRA_LABELS" \
             '{
               issues: [$jira_epic],
               data: {
                 summary: ("snowflake-sqlalchemy issue " + $github_issue_number),
                 description: ("*URL*\n" + $github_issue_url + "\n\n*Title*\n" + $github_issue_title + "\n\n*Description*\n" + $github_issue_body),
-                parent: $jira_epic
+                parent: $jira_epic,
+                component: $jira_component,
+                label: $jira_labels
               }
             }')
 
