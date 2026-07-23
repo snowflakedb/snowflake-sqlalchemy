@@ -3,16 +3,20 @@
 #
 from __future__ import annotations
 
+import base64
+import json
 import logging.handlers
 import os
 import time
+import urllib.error
+import urllib.request
 import uuid
 from logging import getLogger
 from typing import Literal
 
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.engine import make_url
+from sqlalchemy import create_engine, event
+from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.exc import ProgrammingError as SAProgrammingError
 from sqlalchemy.pool import NullPool
 
@@ -20,6 +24,7 @@ import snowflake.connector
 import snowflake.connector.connection
 import snowflake.connector.errors
 from snowflake.connector.compat import IS_WINDOWS
+from snowflake.connector.network import WORKLOAD_IDENTITY_AUTHENTICATOR
 from snowflake.sqlalchemy import URL, dialect
 from snowflake.sqlalchemy._constants import (
     APPLICATION_NAME,
@@ -87,7 +92,6 @@ DEFAULT_TZ_VALUE: Literal["UTC"] = "UTC"
 DEFAULT_PARAMETERS = {
     "account": "<account_name>",
     "user": "<user_name>",
-    "password": "<password>",
     "database": "<database_name>",
     "schema": "<schema_name>",
     "protocol": "https",
@@ -96,22 +100,138 @@ DEFAULT_PARAMETERS = {
 }
 
 
+# Single source of truth for Snowflake connection parameters, as
+# ``(env var, connector param, forward_to_raw_connector)`` triples.  Both the
+# environment-reading map and the raw-connector allowlist are derived from this
+# list so the two can never drift apart.  ``forward`` is ``False`` only for
+# ``schema``: ``get_db_parameters`` sets ``schema`` to the per-run ``TEST_SCHEMA``
+# that does not exist yet, so it must not be sent to the raw connector (which
+# would try to ``USE`` it) in the ``init_test_schema`` fixture.
+_PARAM_SPEC: tuple[tuple[str, str, bool], ...] = (
+    ("SNOWFLAKE_ACCOUNT", "account", True),
+    ("SNOWFLAKE_USER", "user", True),
+    ("SNOWFLAKE_PASSWORD", "password", True),
+    ("SNOWFLAKE_DATABASE", "database", True),
+    ("SNOWFLAKE_SCHEMA", "schema", False),
+    ("SNOWFLAKE_HOST", "host", True),
+    ("SNOWFLAKE_PORT", "port", True),
+    ("SNOWFLAKE_PROTOCOL", "protocol", True),
+    ("SNOWFLAKE_WAREHOUSE", "warehouse", True),
+    ("SNOWFLAKE_ROLE", "role", True),
+    ("SNOWFLAKE_AUTHENTICATOR", "authenticator", True),
+    ("SNOWFLAKE_TOKEN", "token", True),
+    ("SNOWFLAKE_WORKLOAD_IDENTITY_PROVIDER", "workload_identity_provider", True),
+)
+_ENV_MAP = {env: param for env, param, _ in _PARAM_SPEC}
+_CONNECTOR_KEYS = frozenset(param for _, param, forward in _PARAM_SPEC if forward)
+
+
+def _build_connector_kwargs(ret: dict) -> dict:
+    return {k: ret[k] for k in _CONNECTOR_KEYS if ret.get(k)}
+
+
+def _jwt_exp(token: str) -> float:
+    """Best-effort read of a JWT's ``exp`` (epoch seconds); 0.0 if unparseable."""
+    try:
+        payload = token.split(".")[1]
+        payload += "=" * (-len(payload) % 4)  # restore base64 padding
+        return float(json.loads(base64.urlsafe_b64decode(payload)).get("exp", 0.0))
+    except (IndexError, ValueError, TypeError):
+        # Malformed token (bad segments/base64/JSON or non-numeric exp): treat as
+        # already expired so the caller mints a fresh one.  binascii.Error and
+        # json.JSONDecodeError both subclass ValueError.
+        return 0.0
+
+
+class WifTokenProvider:
+    """Mints and caches a fresh GitHub OIDC token for Snowflake WIF.
+
+    GitHub Actions OIDC tokens are short-lived.  ``snowflake-actions`` mints one
+    ``SNOWFLAKE_TOKEN`` at job start, but a full test run opens many new
+    connections (NullPool) over 10+ minutes and outlives that token, causing
+    "JWT is outside its validity period" failures partway through.  This provider
+    re-mints a fresh token on demand from the GitHub endpoint (available for the
+    whole job via ``ACTIONS_ID_TOKEN_REQUEST_URL``/``TOKEN``), re-minting once the
+    cached token is within ``safety_seconds`` of its own ``exp`` claim so a cached
+    token is never served expired.  Falls back to the static ``SNOWFLAKE_TOKEN``
+    when the GitHub OIDC request endpoint is not available (e.g. local runs).
+    """
+
+    def __init__(self, safety_seconds: int = 60) -> None:
+        self._token: str | None = None
+        self._exp: float = 0.0
+        self._safety = safety_seconds
+
+    def __call__(self) -> str | None:
+        req_url = os.environ.get("ACTIONS_ID_TOKEN_REQUEST_URL")
+        req_token = os.environ.get("ACTIONS_ID_TOKEN_REQUEST_TOKEN")
+        if not req_url or not req_token:
+            return os.environ.get("SNOWFLAKE_TOKEN")
+
+        if self._token is not None and time.time() < self._exp - self._safety:
+            return self._token
+
+        token = self._mint(req_url, req_token)
+        self._token = token
+        self._exp = _jwt_exp(token) if token else 0.0
+        return token
+
+    @staticmethod
+    def _mint(req_url: str, req_token: str) -> str | None:
+        request = urllib.request.Request(
+            f"{req_url}&audience=snowflakecomputing.com",
+            headers={"Authorization": f"bearer {req_token}"},
+        )
+        # The GitHub OIDC token endpoint intermittently returns transient 5xx/429
+        # responses.  A long test run re-mints many times (the do_connect listener
+        # fires on every new connection), so retry with exponential backoff rather
+        # than failing a single connection on a blip.
+        for attempt in range(5):
+            try:
+                with urllib.request.urlopen(request, timeout=30) as response:
+                    return json.load(response)["value"]
+            except urllib.error.HTTPError as err:
+                if err.code not in (429, 500, 502, 503, 504) or attempt == 4:
+                    raise
+            except urllib.error.URLError:
+                if attempt == 4:
+                    raise
+            time.sleep(2**attempt)
+        return None
+
+
+# Single instance owns the token cache; both the env-parameter path and the
+# per-connection do_connect listener re-mint through it, so the WIF token logic
+# lives in exactly one place.
+_wif_token = WifTokenProvider()
+
+
 def _connection_parameters_from_env() -> dict:
-    _env_map = {
-        "SNOWFLAKE_ACCOUNT": "account",
-        "SNOWFLAKE_USER": "user",
-        "SNOWFLAKE_PASSWORD": "password",
-        "SNOWFLAKE_DATABASE": "database",
-        "SNOWFLAKE_SCHEMA": "schema",
-        "SNOWFLAKE_HOST": "host",
-        "SNOWFLAKE_PORT": "port",
-        "SNOWFLAKE_PROTOCOL": "protocol",
-        "SNOWFLAKE_WAREHOUSE": "warehouse",
-        "SNOWFLAKE_ROLE": "role",
+    params = {
+        param: os.environ[env] for env, param in _ENV_MAP.items() if os.environ.get(env)
     }
-    return {
-        param: os.environ[env] for env, param in _env_map.items() if os.environ.get(env)
-    }
+    # Under WIF, replace the (possibly stale) static token with a freshly minted
+    # one so long test runs do not fail once the initial token expires.
+    if params.get("authenticator") == WORKLOAD_IDENTITY_AUTHENTICATOR:
+        fresh = _wif_token()
+        if fresh:
+            params["token"] = fresh
+    return params
+
+
+@event.listens_for(Engine, "do_connect")
+def _inject_wif_token(dialect, conn_rec, cargs, cparams):
+    """Inject a fresh OIDC token into every engine connection under WIF.
+
+    Engines (notably the sqlalchemy compliance-suite engine) are created once
+    but connect repeatedly over a long run; the token embedded in the URL at
+    engine-creation time expires.  Refreshing here keeps every new connection
+    authenticated regardless of how/when the engine was built.
+    """
+    if cparams.get("authenticator") == WORKLOAD_IDENTITY_AUTHENTICATOR:
+        token = _wif_token()
+        if token:
+            cparams["token"] = token
 
 
 @pytest.fixture(scope="session")
@@ -264,6 +384,9 @@ def _without_blocked_query_params(url):
 
 
 def url_factory(**kwargs):
+    # ``password`` is only present when a password is configured (there is no
+    # ``None`` sentinel under WIF), so ``URL()`` never receives a NoneType to
+    # rfc-1738-quote.
     url_params = get_db_parameters()
     url_params.update(kwargs)
     return _without_blocked_query_params(URL(**url_params))
@@ -357,28 +480,18 @@ def engine_testaccount_with_qmark(request):
 
 @pytest.fixture(scope="session", autouse=True)
 def init_test_schema(request, db_parameters):
-    ret = db_parameters
+    # Fetch parameters fresh (rather than reusing the session-scoped
+    # ``db_parameters``) so the raw-connector connection uses a currently-valid
+    # WIF token.  The teardown runs at the end of a long session, well after the
+    # token captured at session start would have expired.
     with snowflake.connector.connect(
-        user=ret["user"],
-        password=ret["password"],
-        host=ret["host"],
-        port=ret["port"],
-        database=ret["database"],
-        account=ret["account"],
-        protocol=ret["protocol"],
+        **_build_connector_kwargs(get_db_parameters())
     ) as con:
         con.cursor().execute(f"CREATE SCHEMA IF NOT EXISTS {TEST_SCHEMA}")
 
     def fin():
-        ret1 = db_parameters
         with snowflake.connector.connect(
-            user=ret1["user"],
-            password=ret1["password"],
-            host=ret1["host"],
-            port=ret1["port"],
-            database=ret1["database"],
-            account=ret1["account"],
-            protocol=ret1["protocol"],
+            **_build_connector_kwargs(get_db_parameters())
         ) as con1:
             con1.cursor().execute(f"DROP SCHEMA IF EXISTS {TEST_SCHEMA}")
 
