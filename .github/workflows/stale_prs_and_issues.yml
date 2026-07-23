@@ -1,0 +1,45 @@
+name: "Manage stale PRs and issues"
+on:
+  schedule:
+    - cron: "0 6 * * *" # every day at 8:00 AM CEST time
+  workflow_dispatch:
+
+permissions:
+  contents: write # Needed for delete-branch option
+  pull-requests: write
+  issues: write
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v10.4.0
+        env:
+          ACTIONS_STEP_DEBUG: true # Enable debug mode to see additional logs
+        with:
+          debug-only: true # Dry-run mode (no actual changes will be made)
+          ascending: true # Process oldest PRs first
+          days-before-stale: 30 # Both for PRs and issues
+          days-before-close: 7 # Both for PRs and issues
+          start-date: '2026-07-23' # Start processing from this date
+          operations-per-run: 100 # Process up to 100 PRs and issues per run
+          # PR-specific
+          exempt-pr-labels: 'nostale' # Ignore PRs with this label
+          delete-branch: true
+          exempt-draft-prs: true # Ignore draft PRs
+          stale-pr-message: >
+            This pull request has had no activity for 30 days and is now marked as stale.
+            Please leave a comment, push an update, or remove the `stale` label if you still plan to work on it.
+            Otherwise it will be closed in 7 days (the branch will also be deleted).
+          close-pr-message: >
+            Closing this pull request because it remained stale for 7 days with no activity.
+            Feel free to reopen it (or open a new PR) if you want to continue the work.
+          # Issue-specific
+          exempt-issue-labels: 'nostale' # Ignore issues with this label
+          stale-issue-message: >
+            This issue has had no activity for 30 days and is now marked as stale.
+            Please leave a comment or remove the `stale` label if it is still relevant.
+            Otherwise it will be closed in 7 days.
+          close-issue-message: >
+            Closing this issue because it remained stale for 7 days with no activity.
+            Feel free to reopen it if the problem is still present or you have new information to share.
