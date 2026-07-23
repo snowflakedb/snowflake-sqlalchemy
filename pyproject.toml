@@ -96,7 +96,7 @@ python = "3.12"
 
 [tool.hatch.envs.sa14.scripts]
 test-dialect = "pytest --ignore_v20_test -ra -vvv --tb=short --cov snowflake.sqlalchemy --cov-append --junitxml ./junit.xml --ignore=tests/sqlalchemy_test_suite tests/"
-test-dialect-compatibility = "pytest --ignore_v20_test -ra -vvv --tb=short --cov snowflake.sqlalchemy --cov-append --junitxml ./junit.xml tests/sqlalchemy_test_suite"
+test-dialect-compatibility = "pytest -ra -vvv --tb=short --cov snowflake.sqlalchemy --cov-append --junitxml ./junit.xml tests/sqlalchemy_test_suite"
 test-dialect-aws = "pytest --ignore_v20_test -m \"aws\" -ra -vvv --tb=short --cov snowflake.sqlalchemy --cov-append --junitxml ./junit.xml --ignore=tests/sqlalchemy_test_suite tests/"
 
 [tool.hatch.envs.default.env-vars]

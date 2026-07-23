@@ -16,9 +16,8 @@ from sqlalchemy.testing.plugin.pytestplugin import (
 import snowflake.connector
 from snowflake.sqlalchemy import URL
 from snowflake.sqlalchemy.compat import IS_VERSION_20
-
-from ..conftest import _without_blocked_query_params, get_db_parameters
-from ..util import random_string
+from tests.conftest import _without_blocked_query_params, get_db_parameters
+from tests.util import random_string
 
 registry.register("snowflake", "snowflake.sqlalchemy", "dialect")
 registry.register("snowflake.snowflake", "snowflake.sqlalchemy", "dialect")
