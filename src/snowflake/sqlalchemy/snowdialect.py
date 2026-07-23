@@ -47,7 +47,13 @@ from sqlalchemy.sql import text
 from sqlalchemy.sql.sqltypes import NullType
 from sqlalchemy.types import FLOAT, Date, DateTime, Float, Time
 
-from ._constants import DIALECT_NAME, SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS
+from ._constants import (
+    DIALECT_NAME,
+    PARAM_APPLICATION,
+    PARAM_INTERNAL_APPLICATION_NAME,
+    PARAM_INTERNAL_APPLICATION_VERSION,
+    SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS,
+)
 from .base import (
     SnowflakeCompiler,
     SnowflakeDDLCompiler,
@@ -98,8 +104,121 @@ _ENABLE_SQLALCHEMY_AS_APPLICATION_NAME = True
 logger = getLogger(__name__)
 
 
+# ---------------------------------------------------------------------------
+# Connection-parameter telemetry
+# ---------------------------------------------------------------------------
+# Connector connection kwargs whose *values* are safe (non-PII, low
+# cardinality) to record on the NEW_CONNECTION_PARAMETERS telemetry event.
+# Anything not listed here is recorded by key-presence only (see
+# ``SnowflakeDialect._build_connection_parameters_telemetry``); identifier-like
+# params (warehouse/role/database/schema) and every credential are deliberately
+# excluded so their values never leave the client.
+_TELEMETRY_SAFE_VALUE_PARAMS = frozenset(
+    {
+        "authenticator",  # normalised via _normalize_authenticator
+        "paramstyle",
+        "numpy",
+        "client_session_keep_alive",
+        "protocol",
+        "ocsp_fail_open",
+        "validate_default_parameters",
+        "client_prefetch_threads",
+        "login_timeout",
+        "network_timeout",
+        "autocommit",
+        "arrow_number_to_decimal",
+        "client_store_temporary_credential",
+        "disable_request_pooling",
+    }
+)
+
+# Connection kwargs the dialect injects itself (see
+# ``_update_connection_application_name``).  Excluded from the recorded key set
+# so telemetry reflects the customer's own choices, not our defaults.
+_TELEMETRY_INJECTED_PARAMS = frozenset(
+    {
+        PARAM_APPLICATION,
+        PARAM_INTERNAL_APPLICATION_NAME,
+        PARAM_INTERNAL_APPLICATION_VERSION,
+    }
+)
+
+try:  # Keep the known-authenticator set in sync with the connector.
+    from snowflake.connector.network import (
+        DEFAULT_AUTHENTICATOR,
+        EXTERNAL_BROWSER_AUTHENTICATOR,
+        ID_TOKEN_AUTHENTICATOR,
+        KEY_PAIR_AUTHENTICATOR,
+        OAUTH_AUTHENTICATOR,
+        OAUTH_AUTHORIZATION_CODE,
+        OAUTH_CLIENT_CREDENTIALS,
+        PROGRAMMATIC_ACCESS_TOKEN,
+        USR_PWD_MFA_AUTHENTICATOR,
+        WORKLOAD_IDENTITY_AUTHENTICATOR,
+    )
+
+    _TELEMETRY_KNOWN_AUTHENTICATORS = frozenset(
+        a.lower()
+        for a in (
+            DEFAULT_AUTHENTICATOR,
+            EXTERNAL_BROWSER_AUTHENTICATOR,
+            ID_TOKEN_AUTHENTICATOR,
+            KEY_PAIR_AUTHENTICATOR,
+            OAUTH_AUTHENTICATOR,
+            OAUTH_AUTHORIZATION_CODE,
+            OAUTH_CLIENT_CREDENTIALS,
+            PROGRAMMATIC_ACCESS_TOKEN,
+            USR_PWD_MFA_AUTHENTICATOR,
+            WORKLOAD_IDENTITY_AUTHENTICATOR,
+        )
+    )
+except Exception:  # pragma: no cover - defensive fallback
+    _TELEMETRY_KNOWN_AUTHENTICATORS = frozenset(
+        {
+            "snowflake",
+            "externalbrowser",
+            "snowflake_jwt",
+            "oauth",
+            "oauth_authorization_code",
+            "oauth_client_credentials",
+            "id_token",
+            "username_password_mfa",
+            "programmatic_access_token",
+            "workload_identity",
+        }
+    )
+
+
+def _normalize_authenticator(value: Any) -> str:
+    """Reduce an authenticator to a low-cardinality, non-identifying label.
+
+    Known connector authenticators are returned verbatim (lower-cased).  A
+    custom authenticator is usually an IdP URL (e.g. an Okta endpoint) which
+    identifies the customer, so anything unrecognised collapses to
+    ``"okta_url"`` (URL-shaped) or ``"other"``.
+    """
+    if not isinstance(value, str):
+        return "other"
+    v = value.strip().lower()
+    if v in _TELEMETRY_KNOWN_AUTHENTICATORS:
+        return v
+    if "okta" in v or "://" in v:
+        return "okta_url"
+    return "other"
+
+
+def _telemetry_safe_value(name: str, value: Any) -> Any:
+    """Coerce an allow-listed param value to a JSON-friendly primitive."""
+    if name == "authenticator":
+        return _normalize_authenticator(value)
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    return str(value)
+
+
 class TelemetryEvents(Enum):
     NEW_CONNECTION = "sqlalchemy_new_connection"
+    NEW_CONNECTION_PARAMETERS = "sqlalchemy_new_connection_parameters"
 
 
 class SnowflakeIsolationLevel(Enum):
@@ -246,6 +365,9 @@ class SnowflakeDialect(default.DefaultDialect):
         **kwargs: Any,
     ):
         super().__init__(isolation_level=isolation_level, **kwargs)  # type: ignore[arg-type]
+        # ``DefaultDialect`` does not reliably expose the configured isolation
+        # level as an attribute, so keep the constructor value for telemetry.
+        self._isolation_level = isolation_level
         self.force_div_is_floordiv = force_div_is_floordiv
         self.div_is_floordiv = force_div_is_floordiv
         self._case_sensitive_identifiers = case_sensitive_identifiers
@@ -1968,11 +2090,56 @@ class SnowflakeDialect(default.DefaultDialect):
             decimal.getcontext().prec = DECFLOAT_PRECISION
 
         connection = super().connect(*cargs, **cparams)
-        self._log_new_connection_event(connection)  # type: ignore[arg-type]
+        self._log_new_connection_event(connection, cparams)
 
         return connection  # type: ignore[return-value]
 
-    def _log_new_connection_event(self, connection: SnowflakeConnection) -> None:
+    def _build_connection_parameters_telemetry(self, cparams: dict) -> dict:
+        """Structured, queryable telemetry describing the dialect
+        configuration and the connection options the customer supplied.
+
+        PII-safe: credential and identifier *values* are never included.
+        Every supplied option is recorded by key-presence only
+        (``provided_keys``); values are copied solely for the curated
+        ``_TELEMETRY_SAFE_VALUE_PARAMS`` allow-list, with ``authenticator``
+        normalised to a non-identifying label.
+        """
+        flags = {
+            "case_sensitive_identifiers": self._case_sensitive_identifiers,
+            "enable_decfloat": self._enable_decfloat,
+            "cache_column_metadata": getattr(self, "_cache_column_metadata", False),
+            "force_div_is_floordiv": self.force_div_is_floordiv,
+            "isolation_level": self._isolation_level,
+        }
+
+        versions = {"sqlalchemy": SQLALCHEMY_VERSION}
+        try:
+            from pandas import __version__ as PANDAS_VERSION
+
+            versions["pandas"] = PANDAS_VERSION
+        except ImportError:
+            pass
+
+        cparams = cparams or {}
+        provided_keys = sorted(
+            k for k in cparams if k not in _TELEMETRY_INJECTED_PARAMS
+        )
+        values = {
+            name: _telemetry_safe_value(name, cparams[name])
+            for name in _TELEMETRY_SAFE_VALUE_PARAMS
+            if name in cparams
+        }
+
+        return {
+            "versions": versions,
+            "dialect_flags": flags,
+            "connection_parameters": {
+                "provided_keys": provided_keys,
+                "values": values,
+            },
+        }
+
+    def _log_new_connection_event(self, connection, cparams=None):
         try:
             snowflake_connection = cast(SnowflakeConnection, cast(object, connection))
             snowflake_telemetry_client = TelemetryClient(rest=snowflake_connection.rest)  # type: ignore[arg-type]
@@ -2004,16 +2171,39 @@ class SnowflakeDialect(default.DefaultDialect):
             telemetry_value["force_div_is_floordiv"] = self.force_div_is_floordiv
             telemetry_value["legacy_url_params"] = self._legacy_url_params
 
+            timestamp = int(time_in_seconds() * 1000)
+
             snowflake_telemetry_client.add_log_to_batch(
                 TelemetryData.from_telemetry_data_dict(
                     from_dict={
                         TelemetryField.KEY_TYPE.value: TelemetryEvents.NEW_CONNECTION.value,
                         TelemetryField.KEY_VALUE.value: str(telemetry_value),
                     },
-                    timestamp=int(time_in_seconds() * 1000),
+                    timestamp=timestamp,
                     connection=snowflake_connection,
                 )
             )
+
+            # Structured, queryable companion event.  Emitted alongside the
+            # legacy event (same batch) so downstream analysis can migrate to
+            # structured connection-option data — including which connection
+            # options customers actually set — without disturbing the existing
+            # event until the new one is validated against real data.  Unlike
+            # the legacy payload this is a nested dict rather than ``str(...)``
+            # so it lands as queryable JSON.
+            snowflake_telemetry_client.add_log_to_batch(
+                TelemetryData.from_telemetry_data_dict(
+                    from_dict={
+                        TelemetryField.KEY_TYPE.value: TelemetryEvents.NEW_CONNECTION_PARAMETERS.value,
+                        TelemetryField.KEY_VALUE.value: self._build_connection_parameters_telemetry(
+                            cparams
+                        ),
+                    },
+                    timestamp=timestamp,
+                    connection=snowflake_connection,
+                )
+            )
+
             snowflake_telemetry_client.send_batch()
         except Exception as e:
             logger.debug(
