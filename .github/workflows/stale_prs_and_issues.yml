@@ -21,10 +21,10 @@ jobs:
           ascending: true # Process oldest PRs first
           days-before-stale: 30 # Both for PRs and issues
           days-before-close: 7 # Both for PRs and issues
-          exempt-pr-labels: 'nostale' # Ignore PRs and issues with this label
           start-date: '2026-07-23' # Start processing from this date
           operations-per-run: 100 # Process up to 100 PRs and issues per run
           # PR-specific
+          exempt-pr-labels: 'nostale' # Ignore PRs with this label
           delete-branch: true
           exempt-draft-prs: true # Ignore draft PRs
           stale-pr-message: >
@@ -35,6 +35,7 @@ jobs:
             Closing this pull request because it remained stale for 7 days with no activity.
             Feel free to reopen it (or open a new PR) if you want to continue the work.
           # Issue-specific
+          exempt-issue-labels: 'nostale' # Ignore issues with this label
           stale-issue-message: >
             This issue has had no activity for 30 days and is now marked as stale.
             Please leave a comment or remove the `stale` label if it is still relevant.
