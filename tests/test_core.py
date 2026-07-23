@@ -106,15 +106,6 @@ def _create_users_addresses_tables_without_sequence(engine_testaccount, metadata
 def verify_engine_connection(engine):
     with engine.connect() as conn:
         results = conn.execute(text("select current_version()")).fetchone()
-        assert conn.connection.driver_connection.application == APPLICATION_NAME
-        assert (
-            conn.connection.driver_connection._internal_application_name
-            == APPLICATION_NAME
-        )
-        assert (
-            conn.connection.driver_connection._internal_application_version
-            == SNOWFLAKE_SQLALCHEMY_VERSION
-        )
         assert results is not None
 
 
@@ -125,7 +116,29 @@ def test_connect_args():
     Snowflake connect string supports account name as a replacement of
     host:port
     """
+    engine = get_engine(url_factory())
+    try:
+        verify_engine_connection(engine)
+    finally:
+        engine.dispose()
+
+    engine = get_engine(url_factory(warehouse="testwh"))
+    try:
+        verify_engine_connection(engine)
+    finally:
+        engine.dispose()
+
+
+def test_connect_args_password():
+    """The explicit ``user:password@`` connect string.
+
+    Skipped under Workload Identity Federation, which authenticates with an OIDC
+    token and has no password.
+    """
     params = get_db_parameters()
+    if not params.get("password"):
+        pytest.skip("no password configured (Workload Identity Federation)")
+
     server = ""
     if "host" in params and "port" in params:
         server = "{host}:{port}".format(host=params["host"], port=params["port"])
@@ -147,7 +160,7 @@ def test_connect_args():
             database=params["database"],
             schema=params["schema"],
         ),
-        # protocol is a blocked URL query param under the strict default, so
+        # protocol is a blocked URL query param under the hardened default, so
         # it must be supplied via connect_args= rather than the query string;
         # this keeps the test exercising a real (non-default) protocol instead
         # of having it silently stripped by _without_blocked_query_params.
@@ -158,15 +171,19 @@ def test_connect_args():
     finally:
         engine.dispose()
 
+
+def test_application_name_parameters():
+    """The dialect stamps the Snowflake application-name parameters on every connection."""
     engine = get_engine(url_factory())
     try:
-        verify_engine_connection(engine)
-    finally:
-        engine.dispose()
-
-    engine = get_engine(url_factory(warehouse="testwh"))
-    try:
-        verify_engine_connection(engine)
+        with engine.connect() as conn:
+            driver_connection = conn.connection.driver_connection
+            assert driver_connection.application == APPLICATION_NAME
+            assert driver_connection._internal_application_name == APPLICATION_NAME
+            assert (
+                driver_connection._internal_application_version
+                == SNOWFLAKE_SQLALCHEMY_VERSION
+            )
     finally:
         engine.dispose()
 

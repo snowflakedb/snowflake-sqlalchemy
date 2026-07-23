@@ -15,9 +15,8 @@ from sqlalchemy.testing.plugin.pytestplugin import (
 )
 
 from snowflake.sqlalchemy import URL
-
-from ..conftest import _without_blocked_query_params, get_db_parameters
-from ..util import random_string
+from tests.conftest import _without_blocked_query_params, get_db_parameters
+from tests.util import random_string
 
 registry.register("snowflake", "snowflake.sqlalchemy", "dialect")
 registry.register("snowflake.snowflake", "snowflake.sqlalchemy", "dialect")
@@ -46,7 +45,7 @@ sqlalchemy.testing.config.Config.__init__ = config_patched__init__
 
 def pytest_sessionstart(session):
     db_parameters = get_db_parameters()
-    # Build the compliance-suite dburi on the default, strict code path:
+    # Build the compliance-suite dburi on the default, hardened code path:
     # connector-only parameters (e.g. protocol) are not carried in the URL query
     # string.  ``snowflake.connector.connect`` below still receives the full set.
     # ``render_as_string(hide_password=False)`` is required because ``str(URL)``
