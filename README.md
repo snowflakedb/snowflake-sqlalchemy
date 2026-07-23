@@ -1210,7 +1210,7 @@ To ensure the authenticity and integrity of the Python package, follow the steps
 
 ## Support
 
-Feel free to file an issue or submit a PR here for general cases. For official support, contact Snowflake support at:
+Feel free to file an issue or submit a PR here for general cases. For contributor guidelines, development setup, and how to run the tests, see [CONTRIBUTING.md](CONTRIBUTING.md). For official support, contact Snowflake support at:
 <https://community.snowflake.com/s/article/How-To-Submit-a-Support-Case-in-Snowflake-Lodge>
 
 ## Known Limitations
