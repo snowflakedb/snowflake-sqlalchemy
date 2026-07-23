@@ -1,0 +1,193 @@
+name: Build and Test (cloud template)
+
+# Reusable workflow holding every cloud-specific job.  It is invoked once per
+# cloud provider by build_test.yml; everything that differs between AWS, Azure
+# and GCP is derived from the ``cloud_provider`` input.
+on:
+  workflow_call:
+    inputs:
+      cloud_provider:
+        type: string
+        required: true
+        description: "Cloud provider: aws | azure | gcp"
+      commit-sha:
+        type: string
+        required: false
+        default: ""
+        description: "Commit SHA to check out (workflow_dispatch runs only)"
+
+permissions:
+  contents: read
+
+jobs:
+  test-dialect:
+    name: Test dialect ${{ matrix.os }}-3.9-${{ inputs.cloud_provider }}
+    runs-on: ${{ matrix.os }}
+    environment: ${{ inputs.cloud_provider }}
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+      SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+      SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+      SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
+      SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+      SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
+      cloud_provider: ${{ inputs.cloud_provider }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-15, windows-latest]
+    steps:
+      - name: Checkout Code
+        id: checkout_code
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.commit-sha }}
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+
+      - name: Upgrade pip and prepare environment
+        run: |
+          python -m pip install -U uv
+          python -m uv pip install -U 'virtualenv<21.0' hatch
+          python -m hatch env create default
+
+      # GCP-only: the connector/tests key off SNOWFLAKE_GCP being present (they
+      # test ``is not None``), so it must be unset on AWS/Azure rather than empty.
+      - name: Flag GCP environment
+        if: inputs.cloud_provider == 'gcp'
+        shell: bash
+        run: echo "SNOWFLAKE_GCP=true" >> "$GITHUB_ENV"
+
+      - name: Authenticate with Snowflake (WIF)
+        uses: snowflakedb/snowflake-actions@v3
+        with:
+          cli-version: "3.16"
+          use-oidc: true
+
+      - name: Run test for AWS
+        if: inputs.cloud_provider == 'aws'
+        run: hatch run test-dialect-aws
+
+      - name: Run tests
+        run: hatch run test-dialect
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage.xml_dialect-${{ matrix.os }}-3.9-${{ inputs.cloud_provider }}
+          path: |
+            ./coverage.xml
+
+  test-dialect-compatibility:
+    name: Test dialect compatibility ${{ matrix.os }}-3.9-${{ inputs.cloud_provider }}
+    runs-on: ${{ matrix.os }}
+    environment: ${{ inputs.cloud_provider }}
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+      SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+      SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+      SNOWFLAKE_SCHEMA: ${{ secrets.SNOWFLAKE_SCHEMA }}
+      SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+      SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
+      cloud_provider: ${{ inputs.cloud_provider }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-15, windows-latest]
+    steps:
+      - name: Checkout Code
+        id: checkout_code
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.commit-sha }}
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+
+      - name: Upgrade pip and install hatch
+        run: |
+          python -m pip install -U uv
+          python -m uv pip install -U 'virtualenv<21.0' hatch
+          python -m hatch env create default
+
+      - name: Flag GCP environment
+        if: inputs.cloud_provider == 'gcp'
+        shell: bash
+        run: echo "SNOWFLAKE_GCP=true" >> "$GITHUB_ENV"
+
+      - name: Authenticate with Snowflake (WIF)
+        uses: snowflakedb/snowflake-actions@v3
+        with:
+          cli-version: "3.16"
+          use-oidc: true
+
+      - name: Run tests
+        run: hatch run test-dialect-compatibility
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage.xml_dialect-compatibility-${{ matrix.os }}-3.9-${{ inputs.cloud_provider }}
+          path: |
+            ./coverage.xml
+
+  combine-coverage:
+    needs: [test-dialect, test-dialect-compatibility]
+    name: Combine coverage (${{ inputs.cloud_provider }})
+    if: ${{ !cancelled() && (success() || failure()) }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        id: checkout_code
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.commit-sha }}
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Prepare environment
+        run: |
+          python -m pip install -U uv
+          python -m uv pip install -U 'virtualenv<21.0' hatch
+          hatch env create default
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Combine coverage files
+        run: |
+          hatch run coverage combine -a artifacts/coverage.xml_*/coverage.xml
+          hatch run coverage report -m
+
+      - name: Store coverage reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage.xml-${{ inputs.cloud_provider }}
+          path: coverage.xml
+
+      - name: Upload to codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: coverage.xml
+          env_vars: OS,PYTHON
+          fail_ci_if_error: false
+          flags: unittests-${{ inputs.cloud_provider }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+          verbose: true
+          url: https://snowflake.codecov.io/
