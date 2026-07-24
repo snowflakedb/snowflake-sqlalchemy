@@ -158,4 +158,20 @@ The built wheel and sdist appear in `dist/`.
 3. **Pass CI** — `hatch run check` and `hatch run test-dialect` must pass locally before you push.
 4. Fill out the PR description using the template provided by GitHub, including a short explanation of how your change solves the issue.
 
+### PR lifecycle
+
+- **Open as a draft** — push your branch and open the pull request in draft mode while it is still a work in progress. This keeps CI feedback flowing without requesting reviewer attention prematurely.
+- **Mark ready for review** — once the implementation is complete, and you have reviewed your own diff, convert the PR from draft to ready for review.
+- **Requesting a follow-up review** — after addressing feedback from a review round, leave a GitHub comment tagging the reviewer (e.g. `@username changes done, ready for another look`) so they know the PR is ready for another pass.
+
+#### PR staleness
+
+PR staleness is monitored by the [stale workflow](.github/workflows/stale_prs_and_issues.yml), which runs daily and enforces the following rules:
+
+- A PR with no activity for **30 days** is marked as stale with a comment asking for an update.
+- If there is still no activity after another **7 days**, the PR is closed and its branch is deleted.
+- **Draft PRs are exempt** from the stale process (those will be monitored and eventually closed by the repository maintainers).
+
+If a PR is closed due to inactivity, feel free to reopen it or open a new PR when you are ready to continue the work.
+
 For questions or general support, see the [Support](README.md#support) section in the README.
