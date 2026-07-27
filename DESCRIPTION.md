@@ -11,6 +11,7 @@ Source code is also available at:
 
 - Document SSO/Okta authentication via the `authenticator` connect_args parameter (SNOW-715550).
 - Document how to enable connector bulk array binding for large `executemany` inserts via `qmark` paramstyle (SNOW-710474).
+- Document using a SQLAlchemy `VALUES` source with `MergeInto` (no staging table needed) (SNOW-889678 / GH #435).
 
 # Release Notes
 

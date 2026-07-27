@@ -962,6 +962,28 @@ merge.when_not_matched_then_insert().values(val=t2.c.newval, status=t2.c.newstat
 connection.execute(merge)
 ```
 
+#### Using a `VALUES` source (no staging table required)
+
+`MergeInto`'s `source` accepts any SQLAlchemy `Selectable`, so you can merge from an inline
+`VALUES` list (wrapped in a subquery) instead of an existing table:
+
+```python
+from sqlalchemy import values, column, Integer, String, select
+
+src = select(
+    values(
+        column("id", Integer),
+        column("status", String),
+        name="src",
+    ).data([(1, "active"), (2, "inactive")])
+).subquery()
+
+merge = MergeInto(target=t1, source=src, on=t1.c.id == src.c.id)
+merge.when_matched_then_update().values(status=src.c.status)
+merge.when_not_matched_then_insert().values(id=src.c.id, status=src.c.status)
+connection.execute(merge)
+```
+
 ### Bulk Insert Optimization for ORM Models
 
 When using `Session.bulk_save_objects()` with models that have nullable optional
