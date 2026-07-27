@@ -16,6 +16,7 @@ Source code is also available at:
 - Document the raw-connector workaround for `PUT` with an in-memory `file_stream` (`BytesIO`) (SNOW-645168 / [#337](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/337)).
 - Document `CLUSTER BY` usage in ORM/declarative models via `SnowflakeTable` (SNOW-638838 / [#313](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/313)).
 - Document AUTOINCREMENT and IDENTITY column usage, including Sequence vs Identity trade-offs for Hybrid tables (SNOW-1232362).
+- Document that Snowflake lacks `IS TRUE`/`IS FALSE`; use `col == true()`/`col == false()` (GH #680).
 
 # Release Notes
 

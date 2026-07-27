@@ -1036,6 +1036,30 @@ engine = create_engine(
 See Snowflake's [federated authentication and SSO documentation](https://docs.snowflake.com/en/user-guide/admin-security-fed-auth-overview)
 for identity-provider setup instructions.
 
+### Boolean Column Comparisons (`IS TRUE` / `IS FALSE`)
+
+SQLAlchemy's idiomatic `col.is_(True)` / `col.is_(False)` compile to `IS TRUE` / `IS FALSE`,
+which **Snowflake does not support** (Snowflake only allows `IS [NOT] NULL`). Using them raises a
+syntax error.
+
+Use equality against SQLAlchemy's `true()` / `false()` helpers instead:
+
+```python
+from sqlalchemy import true, false, select
+
+select(t).where(t.c.flag == true())     # WHERE flag = TRUE
+select(t).where(t.c.flag == false())    # WHERE flag = FALSE
+```
+
+Note the NULL semantics differ from `IS TRUE`/`IS FALSE`: `flag = TRUE` yields `NULL` for a
+`NULL` row (which filters it out), whereas `flag IS TRUE` would yield `FALSE`. If you need the
+strict `IS TRUE` behavior, add an explicit null check:
+
+```python
+from sqlalchemy import and_, true
+select(t).where(and_(t.c.flag.isnot(None), t.c.flag == true()))
+```
+
 ### Merge Command Support
 
 Snowflake SQLAlchemy supports upserting with its `MergeInto` custom expression.
