@@ -756,6 +756,37 @@ data_object  = json.loads(row[1])
 data_array   = json.loads(row[2])
 ```
 
+#### Writing Python dicts/lists to VARIANT, OBJECT and ARRAY
+
+Snowflake does **not** accept a bound Python `dict`/`list` for a semi-structured column, and it
+rejects a function expression such as `PARSE_JSON(?)` inside an `INSERT ... VALUES` clause. Binding
+a raw `dict` raises `255001: Binding data in type (dict) is not supported`, and binding a JSON
+string fails with an `expecting VARIANT but got VARCHAR` type mismatch.
+
+The supported pattern is `INSERT ... SELECT` (or `UPDATE`) with `PARSE_JSON` applied to a
+JSON string:
+
+```python
+import json
+from sqlalchemy import select, literal, func
+
+# INSERT ... SELECT PARSE_JSON(?)
+connection.execute(
+    t.insert().from_select(
+        ["id", "va"],
+        select(literal(1), func.parse_json(json.dumps({"a": 1, "b": [2, 3]}))),
+    )
+)
+
+# UPDATE ... SET va = PARSE_JSON(?)
+connection.execute(
+    t.update().where(t.c.id == 1).values(va=func.parse_json(json.dumps({"a": 2})))
+)
+```
+
+Use `func.parse_json(json.dumps(value))` anywhere you would otherwise bind a dict/list to a
+`VARIANT`, `OBJECT`, or `ARRAY` column.
+
 ### Structured Data Types Support
 
 This module defines custom SQLAlchemy types for Snowflake structured data, specifically for **Iceberg tables**.
