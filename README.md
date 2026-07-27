@@ -877,7 +877,8 @@ metadata.create_all(engine)
 #### ORM / Declarative usage
 
 For declarative models, use the `SnowflakeTable` construct, which accepts a `cluster_by`
-argument (plain column names and/or `text()` expressions):
+argument (plain column names and/or `text()` expressions) — see
+[#313](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/313):
 
 ```python
 from sqlalchemy import Column, Integer, String, text
