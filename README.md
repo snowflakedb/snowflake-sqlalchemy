@@ -397,14 +397,29 @@ t = Table('mytable', metadata,
 ```
 
 **Sequences and Hybrid tables.** For Hybrid tables (which require a defined primary key), both
-`Sequence`-backed and `AUTOINCREMENT` columns work for DDL. Note that when a `Sequence` is used,
-SQLAlchemy's ORM fetches the next value with a separate `SELECT <seq>.nextval` before the
-`INSERT`. To emit a single statement, use a Core insert instead of ORM `session.add()`:
+`Sequence`-backed and `AUTOINCREMENT` columns work. Note the difference in how the key is
+produced (`MyModel` below is an ORM-mapped class over such a table):
 
-```python
-from sqlalchemy import insert
-connection.execute(insert(t).values(name="abc"))
-```
+- With a `Sequence`, SQLAlchemy fetches the next value with a separate `SELECT <seq>.nextval`
+  before the `INSERT` — on both the ORM and Core paths:
+
+  ```python
+  from sqlalchemy import insert
+
+  # ORM — issues SELECT id_seq.nextval, then INSERT
+  session.add(MyModel(name="abc"))
+  session.commit()
+
+  # Core — same two-step behavior
+  connection.execute(insert(MyModel).values(name="abc"))
+  ```
+
+- With `AUTOINCREMENT` (no `Sequence`), Snowflake assigns the value server-side, so a plain
+  insert is a single statement:
+
+  ```python
+  connection.execute(insert(MyModel).values(name="abc"))  # single INSERT; id assigned by Snowflake
+  ```
 
 ### Object Name Case Handling
 
