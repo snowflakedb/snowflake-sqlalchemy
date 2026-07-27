@@ -898,6 +898,41 @@ Where `PRIVATE_KEY_PASSPHRASE` is a passphrase to decrypt the private key file, 
 
 Currently a private key parameter is not accepted by the `snowflake.sqlalchemy.URL` method.
 
+### SSO Authentication (Okta, Azure AD, etc.)
+
+Snowflake SQLAlchemy supports federated/SSO authentication by forwarding the `authenticator`
+parameter to the Snowflake Connector for Python. No dialect-specific configuration is required.
+
+For native Okta, pass your Okta endpoint URL as the `authenticator`:
+
+```python
+from sqlalchemy import create_engine
+from snowflake.sqlalchemy import URL
+
+engine = create_engine(
+    URL(
+        account="abc123",
+        user="testuser1",
+        database="testdb",
+        schema="public",
+    ),
+    connect_args={"authenticator": "https://your-okta-domain.okta.com"},
+)
+```
+
+For browser-based SSO (any configured identity provider, including Azure AD), use
+`externalbrowser`, which opens your default browser to complete the login:
+
+```python
+engine = create_engine(
+    URL(account="abc123", user="testuser1"),
+    connect_args={"authenticator": "externalbrowser"},
+)
+```
+
+See Snowflake's [federated authentication and SSO documentation](https://docs.snowflake.com/en/user-guide/admin-security-fed-auth-overview)
+for identity-provider setup instructions.
+
 ### Merge Command Support
 
 Snowflake SQLAlchemy supports upserting with its `MergeInto` custom expression.

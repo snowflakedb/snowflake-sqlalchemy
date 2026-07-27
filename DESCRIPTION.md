@@ -9,6 +9,8 @@ Source code is also available at:
 
 # Unreleased Notes
 
+- Document SSO/Okta authentication via the `authenticator` connect_args parameter (SNOW-715550).
+
 # Release Notes
 
 - v2.0.0a0 (July 16, 2026)
