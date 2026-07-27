@@ -1046,6 +1046,53 @@ session.commit()
   the base class is required to unify the column-key sets before `SnowflakeSession`
   can batch them together.
 
+### Bulk Array Binding for Large `executemany` Inserts
+
+For large batch inserts (e.g. `Connection.execute(insert(t), [row1, row2, ...])`,
+`session.bulk_insert_mappings()`, or any `cursor.executemany`-backed path), the Snowflake
+Connector for Python can upload the bind values to a temporary internal stage as CSV and run a
+single insert that reads them from the stage, instead of embedding a large inline `VALUES`
+payload. This "bulk array binding" is faster and far more scalable for high row counts.
+
+This optimization is only used when the paramstyle is `qmark` (or `numeric`). The dialect defaults
+to `pyformat` (to match the connector default), so you must switch **both** the SQLAlchemy engine
+and the underlying connector connection to `qmark` — they must agree, or binding will fail:
+
+```python
+from sqlalchemy import create_engine
+
+engine = create_engine(
+    "snowflake://<account>/<db>/<schema>",
+    paramstyle="qmark",                 # SQLAlchemy renders positional "?" placeholders
+    connect_args={
+        "paramstyle": "qmark",          # connector uses qmark -> enables stage array binding
+    },
+)
+```
+
+Optionally tune when the stage upload kicks in with the connector session parameter
+`CLIENT_STAGE_ARRAY_BINDING_THRESHOLD` (total bind size in bytes; `0` disables the optimization):
+
+```python
+engine = create_engine(
+    "snowflake://<account>/<db>/<schema>",
+    paramstyle="qmark",
+    connect_args={
+        "paramstyle": "qmark",
+        "CLIENT_STAGE_ARRAY_BINDING_THRESHOLD": 65536,
+    },
+)
+```
+
+Notes:
+
+* Both `paramstyle` settings must match. Setting only one side causes a placeholder/binding
+  mismatch — the engine `paramstyle` controls how SQLAlchemy renders the SQL, while the
+  `connect_args["paramstyle"]` controls how the connector processes the parameters.
+* `qmark` applies engine-wide: every statement compiled by that engine uses positional binds.
+* Below the threshold (or for smaller batches) the connector sends the binds inline as usual;
+  the staged path is transparent to your code either way.
+
 ### CopyIntoStorage Support
 
 Snowflake SQLAlchemy supports saving tables/query results into different stages, as well as into Azure Containers and

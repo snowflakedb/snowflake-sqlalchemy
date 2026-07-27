@@ -10,6 +10,7 @@ Source code is also available at:
 # Unreleased Notes
 
 - Document SSO/Okta authentication via the `authenticator` connect_args parameter (SNOW-715550).
+- Document how to enable connector bulk array binding for large `executemany` inserts via `qmark` paramstyle (SNOW-710474).
 
 # Release Notes
 
