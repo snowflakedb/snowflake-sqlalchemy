@@ -381,6 +381,31 @@ t = Table('mytable', metadata,
 )
 ```
 
+`Sequence` is the recommended approach for ORM primary keys because the generated value is
+available to the ORM after insert. See [Identity columns as primary keys](#identity-columns-as-primary-keys)
+in Known Limitations for why `Identity()` does not work as an ORM primary key.
+
+**`AUTOINCREMENT` columns.** The dialect renders a column as `AUTOINCREMENT` when it is the
+table's autoincrement column and has no other server default. This is driven by SQLAlchemy's
+standard `autoincrement=True`:
+
+```python
+t = Table('mytable', metadata,
+    Column('id', Integer, primary_key=True, autoincrement=True),  # rendered as AUTOINCREMENT
+    Column('name', String),
+)
+```
+
+**Sequences and Hybrid tables.** For Hybrid tables (which require a defined primary key), both
+`Sequence`-backed and `AUTOINCREMENT` columns work for DDL. Note that when a `Sequence` is used,
+SQLAlchemy's ORM fetches the next value with a separate `SELECT <seq>.nextval` before the
+`INSERT`. To emit a single statement, use a Core insert instead of ORM `session.add()`:
+
+```python
+from sqlalchemy import insert
+connection.execute(insert(t).values(name="abc"))
+```
+
 ### Object Name Case Handling
 
 Snowflake stores all case-insensitive object names in uppercase text. In contrast, SQLAlchemy considers all lowercase object names to be case-insensitive. Snowflake SQLAlchemy converts the object name case during schema-level communication, i.e. during table and index reflection. If you use uppercase object names, SQLAlchemy assumes they are case-sensitive and encloses the names with quotes. This behavior will cause mismatches against data dictionary data received from Snowflake, so unless identifier names have been truly created as case sensitive using quotes, e.g., `"TestDb"`, all lowercase names should be used on the SQLAlchemy side.
