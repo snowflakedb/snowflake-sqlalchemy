@@ -370,6 +370,24 @@ finally:
     engine.dispose()
 ```
 
+#### Automatic reconnection on expired sessions
+
+The dialect flags Snowflake session/token-loss errors (for example *"Authentication token has
+expired"* or *"Session no longer exists"*) as disconnects. This lets SQLAlchemy's connection
+pool transparently discard the dead connection and open a fresh one, so long-lived engines
+recover instead of raising. Combine it with `pool_pre_ping=True` to validate connections before
+use:
+
+```python
+from sqlalchemy import create_engine
+from snowflake.sqlalchemy import URL
+
+engine = create_engine(
+    URL(account="myaccount", user="me", password="secret"),
+    pool_pre_ping=True,  # invalidate + reconnect stale/expired connections automatically
+)
+```
+
 ### Auto-increment Behavior
 
 Auto-incrementing a value requires the `Sequence` object. Include the `Sequence` object in the primary key column to automatically increment the value as each new record is inserted. For example:
