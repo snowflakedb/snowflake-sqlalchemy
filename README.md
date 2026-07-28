@@ -1067,6 +1067,7 @@ strict `IS TRUE` behavior, add an explicit null check:
 ```python
 from sqlalchemy import and_, true
 select(t).where(and_(t.c.flag.isnot(None), t.c.flag == true()))
+# WHERE flag IS NOT NULL AND flag = TRUE
 ```
 
 ### Merge Command Support
