@@ -14,6 +14,7 @@ Source code is also available at:
 - Document using a SQLAlchemy `VALUES` source with `MergeInto` (no staging table needed) (SNOW-889678 / GH #435).
 - Document writing dicts/lists to VARIANT/OBJECT/ARRAY via `INSERT ... SELECT` with `PARSE_JSON` (SNOW-801402 / GH #411).
 - Document the raw-connector workaround for `PUT` with an in-memory `file_stream` (`BytesIO`) (SNOW-645168 / [#337](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/337)).
+- Document `CLUSTER BY` usage in ORM/declarative models via `SnowflakeTable` (SNOW-638838 / [#313](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/313)).
 
 # Release Notes
 

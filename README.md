@@ -874,6 +874,38 @@ t = Table('myuser', metadata,
 metadata.create_all(engine)
 ```
 
+#### ORM / Declarative usage
+
+For declarative models, use the `SnowflakeTable` construct, which accepts a `cluster_by`
+argument (plain column names and/or `text()` expressions) — see
+[#313](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/313):
+
+```python
+from sqlalchemy import Column, Integer, String, text
+from snowflake.sqlalchemy.sql.custom_schema import SnowflakeTable
+
+my_table = SnowflakeTable(
+    "my_table",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("name", String),
+    cluster_by=["id", text("date_trunc('hour', ts)")],
+)
+```
+
+`CLUSTER BY` is a storage optimization applied at DDL time and does not change query semantics —
+you query a clustered table exactly as any other table. To filter on a clustering expression,
+build it in the `WHERE` clause as usual:
+
+```python
+from datetime import datetime, timedelta
+from sqlalchemy import func, select
+
+stmt = select(my_table).where(
+    func.date_trunc("hour", my_table.c.ts) > datetime.utcnow() - timedelta(hours=1)
+)
+```
+
 ### Alembic Support
 
 [Alembic](http://alembic.zzzcomputing.com) is a database migration tool on top of `SQLAlchemy`. Snowflake SQLAlchemy works by adding the following code to `alembic/env.py` so that Alembic can recognize Snowflake SQLAlchemy.
