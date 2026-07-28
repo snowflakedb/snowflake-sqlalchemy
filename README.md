@@ -1040,7 +1040,16 @@ for identity-provider setup instructions.
 
 SQLAlchemy's idiomatic `col.is_(True)` / `col.is_(False)` compile to `IS TRUE` / `IS FALSE`,
 which **Snowflake does not support** (Snowflake only allows `IS [NOT] NULL`). Using them raises a
-syntax error.
+syntax error (see [#680](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/680)):
+
+```python
+from sqlalchemy import select
+
+# ❌ Fails — Snowflake has no IS TRUE / IS FALSE:
+select(t).where(t.c.flag.is_(True))
+# snowflake.connector.errors.ProgrammingError: 001003 (42000):
+#   SQL compilation error: syntax error ... unexpected 'IS'.
+```
 
 Use equality against SQLAlchemy's `true()` / `false()` helpers instead:
 
