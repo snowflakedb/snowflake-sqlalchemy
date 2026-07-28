@@ -1421,6 +1421,56 @@ with Session(engine) as session:
 
 ---
 
+### `PUT` with a file stream (`BytesIO`)
+
+The Snowflake connector's `PUT` command accepts an in-memory `file_stream` keyword, but
+SQLAlchemy's execution API treats every keyword passed to `Connection.execute()` as a bound
+SQL parameter. Passing `file_stream` through SQLAlchemy therefore fails
+(see [#337](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/337)):
+
+```
+snowflake.connector.errors.ProgrammingError: 255001: Binding data in type (bytesio) is not supported.
+```
+
+For example, the intuitive call below does **not** work:
+
+```python
+from io import BytesIO
+from sqlalchemy import text
+
+buf = BytesIO()
+# ❌ Fails — SQLAlchemy binds file_stream as a SQL parameter:
+connection.execute(text("PUT file://example.txt @my_stage"), {"file_stream": buf})
+# snowflake.connector.errors.ProgrammingError: 255001:
+#   Binding data in type (bytesio) is not supported.
+```
+
+**Workaround — use the raw connector cursor** for `PUT`/`GET` file-stream operations. You can
+obtain one from the SQLAlchemy engine without opening a second connection:
+
+```python
+from io import BytesIO
+
+buf = BytesIO()
+df.to_json(buf, orient="records", date_format="iso")
+buf.seek(0)
+
+raw = engine.raw_connection()
+try:
+    cur = raw.cursor()
+    cur.execute(
+        f"PUT file://example.txt @{stage} auto_compress=true",
+        file_stream=buf,
+    )
+finally:
+    raw.close()
+```
+
+Regular SQL (including `COPY INTO`) continues to work through SQLAlchemy as usual; only the
+file-stream keyword of `PUT`/`GET` requires the raw cursor.
+
+---
+
 ### Case-sensitive identifiers
 
 Snowflake stores unquoted identifiers in UPPERCASE and treats them case-insensitively.  SQLAlchemy uses lowercase for case-insensitive identifiers.  The dialect bridges this gap via `normalize_name` / `denormalize_name`, but a few edge cases require explicit opt-in.

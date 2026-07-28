@@ -13,6 +13,7 @@ Source code is also available at:
 - Document how to enable connector bulk array binding for large `executemany` inserts via `qmark` paramstyle (SNOW-710474).
 - Document using a SQLAlchemy `VALUES` source with `MergeInto` (no staging table needed) (SNOW-889678 / GH #435).
 - Document writing dicts/lists to VARIANT/OBJECT/ARRAY via `INSERT ... SELECT` with `PARSE_JSON` (SNOW-801402 / GH #411).
+- Document the raw-connector workaround for `PUT` with an in-memory `file_stream` (`BytesIO`) (SNOW-645168 / [#337](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/337)).
 
 # Release Notes
 
