@@ -130,3 +130,77 @@ def test_create_parquet_format(sql_compiler):
         "TYPE='parquet' COMPRESSION = 'AUTO'"
     )
     assert actual == expected
+
+
+def test_create_format_if_not_exists(sql_compiler):
+    """CREATE FILE FORMAT should support the IF NOT EXISTS option."""
+    create_format = CreateFileFormat(
+        format_name="ML_POC.PUBLIC.CSV_FILE_FORMAT",
+        formatter=CSVFormatter().field_delimiter(","),
+        if_not_exists=True,
+    )
+    actual = sql_compiler(create_format)
+    expected = (
+        "CREATE FILE FORMAT IF NOT EXISTS ML_POC.PUBLIC.CSV_FILE_FORMAT "
+        "TYPE='csv' FIELD_DELIMITER = ','"
+    )
+    assert actual == expected
+
+
+def test_create_format_with_comment(sql_compiler):
+    """CREATE FILE FORMAT should support a trailing COMMENT clause."""
+    create_format = CreateFileFormat(
+        format_name="ML_POC.PUBLIC.CSV_FILE_FORMAT",
+        formatter=CSVFormatter().field_delimiter(","),
+        comment="my csv format",
+    )
+    actual = sql_compiler(create_format)
+    expected = (
+        "CREATE FILE FORMAT ML_POC.PUBLIC.CSV_FILE_FORMAT "
+        "TYPE='csv' FIELD_DELIMITER = ',' COMMENT = 'my csv format'"
+    )
+    assert actual == expected
+
+
+def test_create_format_comment_escapes_single_quotes(sql_compiler):
+    """Single quotes and backslashes in a comment must be escaped for Snowflake."""
+    create_format = CreateFileFormat(
+        format_name="ML_POC.PUBLIC.CSV_FILE_FORMAT",
+        formatter=CSVFormatter().field_delimiter(","),
+        comment="it's a\\b",
+    )
+    actual = sql_compiler(create_format)
+    expected = (
+        "CREATE FILE FORMAT ML_POC.PUBLIC.CSV_FILE_FORMAT "
+        "TYPE='csv' FIELD_DELIMITER = ',' COMMENT = 'it''s a\\\\b'"
+    )
+    assert actual == expected
+
+
+def test_create_format_if_not_exists_with_comment(sql_compiler):
+    """IF NOT EXISTS and COMMENT can be combined."""
+    create_format = CreateFileFormat(
+        format_name="ML_POC.PUBLIC.CSV_FILE_FORMAT",
+        formatter=CSVFormatter().field_delimiter(","),
+        if_not_exists=True,
+        comment="hello",
+    )
+    actual = sql_compiler(create_format)
+    expected = (
+        "CREATE FILE FORMAT IF NOT EXISTS ML_POC.PUBLIC.CSV_FILE_FORMAT "
+        "TYPE='csv' FIELD_DELIMITER = ',' COMMENT = 'hello'"
+    )
+    assert actual == expected
+
+
+def test_create_format_replace_and_if_not_exists_are_mutually_exclusive():
+    """OR REPLACE and IF NOT EXISTS cannot be requested together."""
+    import pytest
+
+    with pytest.raises(ValueError):
+        CreateFileFormat(
+            format_name="ML_POC.PUBLIC.CSV_FILE_FORMAT",
+            formatter=CSVFormatter().field_delimiter(","),
+            replace_if_exists=True,
+            if_not_exists=True,
+        )

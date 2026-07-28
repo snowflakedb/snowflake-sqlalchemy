@@ -657,11 +657,20 @@ class CreateFileFormat(DDLElement):
         format_name: str,
         formatter: CopyFormatter,
         replace_if_exists: bool = False,
+        if_not_exists: bool = False,
+        comment: str | None = None,
     ) -> None:
         super().__init__()
+        if replace_if_exists and if_not_exists:
+            raise ValueError(
+                "replace_if_exists and if_not_exists are mutually exclusive; "
+                "Snowflake does not allow OR REPLACE together with IF NOT EXISTS."
+            )
         self.format_name = format_name
         self.formatter = formatter
         self.replace_if_exists = replace_if_exists
+        self.if_not_exists = if_not_exists
+        self.comment = comment
 
 
 class CreateStage(DDLElement):
