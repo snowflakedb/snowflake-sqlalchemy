@@ -827,6 +827,26 @@ connection.execute(
 Use `func.parse_json(json.dumps(value))` anywhere you would otherwise bind a dict/list to a
 `VARIANT`, `OBJECT`, or `ARRAY` column.
 
+#### Customizing JSON serialization (`json_serializer` / `json_deserializer`)
+
+Snowflake SQLAlchemy accepts the standard SQLAlchemy engine-level `json_serializer` and
+`json_deserializer` callables, matching the built-in dialects. Use them to plug in a custom
+JSON encoder/decoder — for example to preserve `Decimal` precision instead of parsing floats:
+
+```python
+import json
+import decimal
+import simplejson
+from sqlalchemy import create_engine
+from snowflake.sqlalchemy import URL
+
+engine = create_engine(
+    URL(account="myaccount", user="me", password="secret"),
+    json_serializer=lambda obj: simplejson.dumps(obj, use_decimal=True),
+    json_deserializer=lambda value: json.loads(value, parse_float=decimal.Decimal),
+)
+```
+
 ### Structured Data Types Support
 
 This module defines custom SQLAlchemy types for Snowflake structured data, specifically for **Iceberg tables**.

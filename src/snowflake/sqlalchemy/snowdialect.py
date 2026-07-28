@@ -243,6 +243,8 @@ class SnowflakeDialect(default.DefaultDialect):
         case_sensitive_identifiers: bool = False,
         legacy_url_params: bool | None = None,
         redact_log_secrets: bool = True,
+        json_serializer: Any = None,
+        json_deserializer: Any = None,
         **kwargs: Any,
     ):
         super().__init__(isolation_level=isolation_level, **kwargs)  # type: ignore[arg-type]
@@ -251,6 +253,11 @@ class SnowflakeDialect(default.DefaultDialect):
         self._case_sensitive_identifiers = case_sensitive_identifiers
         self.name_utils = _NameUtils(self.identifier_preparer)
         self._enable_decfloat = enable_decfloat
+        # Serializers used for JSON (de)serialization of semi-structured data.
+        # Accepting these keeps parity with the built-in SQLAlchemy dialects so
+        # ``create_engine(..., json_serializer=..., json_deserializer=...)`` works.
+        self._json_serializer = json_serializer
+        self._json_deserializer = json_deserializer
         # Opt-in compatibility shim for the legacy URL/query behaviour.
         # An explicit ``legacy_url_params`` kwarg wins; when it is left unset
         # (None) the env variable acts as a global fallback.  It is deliberately

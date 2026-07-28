@@ -13,6 +13,7 @@ Source code is also available at:
 - Add a `python_type` property to Snowflake custom types (`VARIANT`, `OBJECT`, `MAP`, `ARRAY`, `VECTOR`, `TIMESTAMP_*`, `GEOGRAPHY`, `GEOMETRY`, `DECFLOAT`) for SQLAlchemy compatibility (SNOW-1866493 / GH #562).
 - Fix `URL` failing to encode `[`, `]`, `?` and `#` in passwords, which produced connect strings that could not be parsed (SNOW-828206 / GH #415).
 - Enhance `JSONFormatter` with the full Snowflake `TYPE=JSON` option set (`date_format`, `time_format`, `timestamp_format`, `binary_format`, `trim_space`, `null_if`, `enable_octal`, `allow_duplicate`, `strip_outer_array`, `strip_null_values`, `replace_invalid_characters`, `ignore_utf8_errors`, `skip_byte_order_mark`) (SNOW-589946).
+- Support `json_serializer` and `json_deserializer` parameters in `create_engine`, matching the built-in SQLAlchemy dialects (SNOW-889293 / GH #433).
 - Document SSO/Okta authentication via the `authenticator` connect_args parameter (SNOW-715550).
 - Document how to enable connector bulk array binding for large `executemany` inserts via `qmark` paramstyle (SNOW-710474).
 - Document using a SQLAlchemy `VALUES` source with `MergeInto` (no staging table needed) (SNOW-889678 / GH #435).
