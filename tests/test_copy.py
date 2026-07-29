@@ -520,3 +520,53 @@ def test_copy_into_storage_parquet_pattern(sql_compiler):
         "(file_format => parquet_file_format))   FORCE = true PATTERN = '.*csv'"
     )
     assert result == expected
+
+
+def test_json_formatter_options(sql_compiler):
+    """JSONFormatter exposes the full Snowflake TYPE=JSON option set (SNOW-589946)."""
+    formatter = (
+        JSONFormatter()
+        .date_format("YYYY-MM-DD")
+        .time_format("HH24:MI:SS")
+        .timestamp_format("YYYY-MM-DD HH24:MI:SS")
+        .binary_format("hex")
+        .trim_space(True)
+        .null_if(["null", "Null"])
+        .enable_octal(True)
+        .allow_duplicate(False)
+        .strip_outer_array(True)
+        .strip_null_values(False)
+        .replace_invalid_characters(True)
+        .ignore_utf8_errors(False)
+        .skip_byte_order_mark(True)
+    )
+    assert sql_compiler(formatter) == (
+        "FILE_FORMAT=(TYPE=json "
+        "ALLOW_DUPLICATE=False "
+        "BINARY_FORMAT='hex' "
+        "DATE_FORMAT='YYYY-MM-DD' "
+        "ENABLE_OCTAL=True "
+        "IGNORE_UTF8_ERRORS=False "
+        "NULL_IF=('null', 'Null') "
+        "REPLACE_INVALID_CHARACTERS=True "
+        "SKIP_BYTE_ORDER_MARK=True "
+        "STRIP_NULL_VALUES=False "
+        "STRIP_OUTER_ARRAY=True "
+        "TIMESTAMP_FORMAT='YYYY-MM-DD HH24:MI:SS' "
+        "TIME_FORMAT='HH24:MI:SS' "
+        "TRIM_SPACE=True)"
+    )
+
+
+def test_json_formatter_validation():
+    """Invalid option values raise TypeError (SNOW-589946)."""
+    with pytest.raises(TypeError):
+        JSONFormatter().date_format(123)
+    with pytest.raises(TypeError):
+        JSONFormatter().binary_format("bogus")
+    with pytest.raises(TypeError):
+        JSONFormatter().trim_space("yes")
+    with pytest.raises(TypeError):
+        JSONFormatter().strip_outer_array("no")
+    with pytest.raises(TypeError):
+        JSONFormatter().null_if(123)

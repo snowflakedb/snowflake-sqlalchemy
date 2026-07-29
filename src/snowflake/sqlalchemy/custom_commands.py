@@ -472,6 +472,100 @@ class JSONFormatter(CopyFormatter):
         self.options["FILE_EXTENSION"] = ext
         return self
 
+    def date_format(self, dt_frmt: str) -> JSONFormatter:
+        """String that defines the format of date values in the data files."""
+        if not isinstance(dt_frmt, str):
+            raise TypeError("Date format should be a string")
+        self.options["DATE_FORMAT"] = dt_frmt
+        return self
+
+    def time_format(self, tm_frmt: str) -> JSONFormatter:
+        """String that defines the format of time values in the data files."""
+        if not isinstance(tm_frmt, str):
+            raise TypeError("Time format should be a string")
+        self.options["TIME_FORMAT"] = tm_frmt
+        return self
+
+    def timestamp_format(self, tmstmp_frmt: str) -> JSONFormatter:
+        """String that defines the format of timestamp values in the data files."""
+        if not isinstance(tmstmp_frmt, str):
+            raise TypeError("Timestamp format should be a string")
+        self.options["TIMESTAMP_FORMAT"] = tmstmp_frmt
+        return self
+
+    def binary_format(self, bin_fmt: str) -> JSONFormatter:
+        """Encoding format for binary input or output: one of hex, base64 or utf8."""
+        if isinstance(bin_fmt, str):
+            bin_fmt = bin_fmt.lower()
+        _available_options = ["hex", "base64", "utf8"]
+        if bin_fmt not in _available_options:
+            raise TypeError(f"Binary format should be one of : {_available_options}")
+        self.options["BINARY_FORMAT"] = bin_fmt
+        return self
+
+    def trim_space(self, trim_space: bool) -> JSONFormatter:
+        """Remove leading and trailing white space from strings."""
+        if not isinstance(trim_space, bool):
+            raise TypeError("trim_space should be a bool")
+        self.options["TRIM_SPACE"] = trim_space
+        return self
+
+    def null_if(self, null_value: Sequence) -> JSONFormatter:
+        """Strings to convert to and from SQL NULL."""
+        if not isinstance(null_value, Sequence):
+            raise TypeError("Parameter null_value should be an iterable")
+        self.options["NULL_IF"] = tuple(null_value)
+        return self
+
+    def enable_octal(self, value: bool) -> JSONFormatter:
+        """Enable parsing of octal numbers."""
+        if not isinstance(value, bool):
+            raise TypeError("enable_octal should be a bool")
+        self.options["ENABLE_OCTAL"] = value
+        return self
+
+    def allow_duplicate(self, value: bool) -> JSONFormatter:
+        """Allow duplicate object field names (only the last one is preserved)."""
+        if not isinstance(value, bool):
+            raise TypeError("allow_duplicate should be a bool")
+        self.options["ALLOW_DUPLICATE"] = value
+        return self
+
+    def strip_outer_array(self, value: bool) -> JSONFormatter:
+        """Remove the outer array brackets and load each element as its own row."""
+        if not isinstance(value, bool):
+            raise TypeError("strip_outer_array should be a bool")
+        self.options["STRIP_OUTER_ARRAY"] = value
+        return self
+
+    def strip_null_values(self, value: bool) -> JSONFormatter:
+        """Remove object fields or array elements containing SQL NULL."""
+        if not isinstance(value, bool):
+            raise TypeError("strip_null_values should be a bool")
+        self.options["STRIP_NULL_VALUES"] = value
+        return self
+
+    def replace_invalid_characters(self, value: bool) -> JSONFormatter:
+        """Replace invalid UTF-8 characters with the Unicode replacement character."""
+        if not isinstance(value, bool):
+            raise TypeError("replace_invalid_characters should be a bool")
+        self.options["REPLACE_INVALID_CHARACTERS"] = value
+        return self
+
+    def ignore_utf8_errors(self, value: bool) -> JSONFormatter:
+        """Replace UTF-8 encoding errors with the Unicode replacement character."""
+        if not isinstance(value, bool):
+            raise TypeError("ignore_utf8_errors should be a bool")
+        self.options["IGNORE_UTF8_ERRORS"] = value
+        return self
+
+    def skip_byte_order_mark(self, value: bool) -> JSONFormatter:
+        """Skip any byte order mark (BOM) present in an input file."""
+        if not isinstance(value, bool):
+            raise TypeError("skip_byte_order_mark should be a bool")
+        self.options["SKIP_BYTE_ORDER_MARK"] = value
+        return self
+
 
 class PARQUETFormatter(CopyFormatter):
     """Format specific functions"""
