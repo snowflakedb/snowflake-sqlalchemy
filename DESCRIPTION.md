@@ -9,6 +9,7 @@ Source code is also available at:
 
 # Unreleased Notes
 
+- Add opt-in `snowflake_rely=True` to render `RELY` on `PRIMARY KEY` / `FOREIGN KEY` / `UNIQUE` constraints so the optimizer can trust them for query rewrites such as join elimination (SNOW-1023317 / GH #463).
 - Document SSO/Okta authentication via the `authenticator` connect_args parameter (SNOW-715550).
 - Document how to enable connector bulk array binding for large `executemany` inserts via `qmark` paramstyle (SNOW-710474).
 - Document using a SQLAlchemy `VALUES` source with `MergeInto` (no staging table needed) (SNOW-889678 / GH #435).

@@ -946,6 +946,37 @@ stmt = select(my_table).where(
 )
 ```
 
+### RELY Constraint Property
+
+Snowflake does not enforce `PRIMARY KEY`, `UNIQUE`, or `FOREIGN KEY` constraints — they are metadata only. The `RELY` property tells the query optimizer it may **trust** such a constraint for rewrites like join elimination, even though it isn't enforced. Set the opt-in `snowflake_rely=True` dialect keyword on a constraint to emit it:
+
+```python
+from sqlalchemy import (
+    Column, ForeignKeyConstraint, Integer, MetaData,
+    PrimaryKeyConstraint, String, Table, UniqueConstraint,
+)
+
+metadata = MetaData()
+
+dim = Table(
+    "dim", metadata,
+    Column("id", Integer),
+    Column("email", String),
+    PrimaryKeyConstraint("id", snowflake_rely=True),
+    UniqueConstraint("email", snowflake_rely=True),
+)
+# ... PRIMARY KEY (id) RELY ... UNIQUE (email) RELY
+
+fact = Table(
+    "fact", metadata,
+    Column("dim_id", Integer),
+    ForeignKeyConstraint(["dim_id"], ["dim.id"], snowflake_rely=True),
+)
+# ... FOREIGN KEY(dim_id) REFERENCES dim (id) RELY
+```
+
+> **Warning:** `RELY` is an unverified promise. Snowflake trusts it without checking the data. If the data actually violates the constraint (duplicate keys, orphan foreign keys), the optimizer may rewrite queries based on a false assumption and return **incorrect results**. Only set `snowflake_rely=True` when you are certain the data satisfies the constraint. It defaults to off, so existing DDL is unaffected.
+
 ### Alembic Support
 
 [Alembic](http://alembic.zzzcomputing.com) is a database migration tool on top of `SQLAlchemy`. Snowflake SQLAlchemy works by adding the following code to `alembic/env.py` so that Alembic can recognize Snowflake SQLAlchemy.

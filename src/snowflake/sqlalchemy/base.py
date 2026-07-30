@@ -18,7 +18,13 @@ from sqlalchemy.engine import default
 from sqlalchemy.engine.interfaces import Dialect
 from sqlalchemy.orm import context
 from sqlalchemy.orm.context import _MapperEntity
-from sqlalchemy.schema import Sequence, Table
+from sqlalchemy.schema import (
+    ForeignKeyConstraint,
+    PrimaryKeyConstraint,
+    Sequence,
+    Table,
+    UniqueConstraint,
+)
 from sqlalchemy.sql import compiler, expression, functions, sqltypes
 from sqlalchemy.sql.base import CompileState
 from sqlalchemy.sql.ddl import DropColumnComment, DropTableComment
@@ -1300,6 +1306,35 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
             raise CustomOptionsAreOnlySupportedOnSnowflakeTables()
 
         return text
+
+    def _append_rely(self, constraint: Any, text: str) -> str:
+        """Append the Snowflake ``RELY`` constraint property when opted in.
+
+        Snowflake does not enforce PRIMARY KEY / UNIQUE / FOREIGN KEY
+        constraints; ``RELY`` tells the optimizer it may trust them for query
+        rewrites such as join elimination. It is opt-in per constraint via the
+        ``snowflake_rely=True`` dialect keyword (SNOW-1023317) and defaults off
+        so existing DDL is unchanged.
+        """
+        if text and constraint.dialect_options[DIALECT_NAME].get("rely"):
+            text += " RELY"
+        return text
+
+    def visit_primary_key_constraint(
+        self, constraint: PrimaryKeyConstraint, **kw: Any
+    ) -> str:
+        text = super().visit_primary_key_constraint(constraint, **kw)
+        return self._append_rely(constraint, text)
+
+    def visit_foreign_key_constraint(
+        self, constraint: ForeignKeyConstraint, **kw: Any
+    ) -> str:
+        text = super().visit_foreign_key_constraint(constraint, **kw)
+        return self._append_rely(constraint, text)
+
+    def visit_unique_constraint(self, constraint: UniqueConstraint, **kw: Any) -> str:
+        text = super().visit_unique_constraint(constraint, **kw)
+        return self._append_rely(constraint, text)
 
     def _format_stage_prefix(self, stage) -> str:
         """Identifier-quote a stage's ``<namespace>.<name>`` prefix.
