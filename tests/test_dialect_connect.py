@@ -7,10 +7,12 @@ from types import SimpleNamespace
 from unittest import mock
 
 import pytest
+import sqlalchemy
 from sqlalchemy import __version__ as SQLALCHEMY_VERSION
 from sqlalchemy.engine import default as sqla_default
 from sqlalchemy.engine.url import URL as SAUrl
 
+from snowflake.sqlalchemy import URL
 from snowflake.sqlalchemy.snowdialect import (
     SnowflakeDialect,
     TelemetryEvents,
@@ -249,3 +251,52 @@ def test_connect_telemetry_records_url_driven_flag(
     assert message[TelemetryField.KEY_VALUE.value] == str(
         {"SQLAlchemy": SQLALCHEMY_VERSION, **expected_flags}
     )
+
+
+# ---------------------------------------------------------------------------
+# json_serializer / json_deserializer engine parameters (SNOW-889293)
+# ---------------------------------------------------------------------------
+
+
+def test_dialect_accepts_json_serializer_and_deserializer_kwargs():
+    """Constructor accepts and stores json_serializer/json_deserializer."""
+
+    def serializer(obj):
+        return obj
+
+    def deserializer(value):
+        return value
+
+    dialect = SnowflakeDialect(
+        json_serializer=serializer, json_deserializer=deserializer
+    )
+
+    assert dialect._json_serializer is serializer
+    assert dialect._json_deserializer is deserializer
+
+
+def test_dialect_json_serializers_default_to_none():
+    """When not provided the json (de)serializers default to None."""
+    dialect = SnowflakeDialect()
+
+    assert dialect._json_serializer is None
+    assert dialect._json_deserializer is None
+
+
+def test_create_engine_routes_json_serializer_and_deserializer():
+    """create_engine no longer raises when json (de)serializers are passed."""
+
+    def serializer(obj):
+        return obj
+
+    def deserializer(value):
+        return value
+
+    engine = sqlalchemy.create_engine(
+        URL(account="testaccount", user="u", password="p"),
+        json_serializer=serializer,
+        json_deserializer=deserializer,
+    )
+
+    assert engine.dialect._json_serializer is serializer
+    assert engine.dialect._json_deserializer is deserializer
