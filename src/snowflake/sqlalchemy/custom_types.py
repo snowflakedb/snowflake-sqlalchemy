@@ -51,6 +51,10 @@ class SnowflakeType(sqltypes.TypeEngine):
 class VARIANT(SnowflakeType):
     __visit_name__ = "VARIANT"
 
+    @property
+    def python_type(self) -> type:
+        return dict
+
 
 class VECTOR(SnowflakeType):
     """
@@ -119,6 +123,10 @@ class VECTOR(SnowflakeType):
     def __repr__(self) -> str:
         return f"VECTOR({self.element_type}, {self.dimension})"
 
+    @property
+    def python_type(self) -> type:
+        return list
+
 
 class StructuredType(SnowflakeType):
     def __init__(self, is_semi_structured: bool = False) -> None:
@@ -140,6 +148,10 @@ class MAP(StructuredType):
         self.not_null = not_null
         super().__init__()
 
+    @property
+    def python_type(self) -> type:
+        return dict
+
 
 class OBJECT(StructuredType):
     __visit_name__ = "OBJECT"
@@ -152,6 +164,10 @@ class OBJECT(StructuredType):
         self.items_types: dict[str, tuple[TypeEngine, bool]] = normalized
         self.is_semi_structured = len(normalized) == 0
         super().__init__()
+
+    @property
+    def python_type(self) -> type:
+        return dict
 
     def __repr__(self) -> str:
         dq = '"'
@@ -181,25 +197,49 @@ class ARRAY(StructuredType):
         self.not_null = not_null
         super().__init__(is_semi_structured=value_type is None)
 
+    @property
+    def python_type(self) -> type:
+        return list
+
 
 class TIMESTAMP_TZ(SnowflakeType):
     __visit_name__ = "TIMESTAMP_TZ"
+
+    @property
+    def python_type(self) -> type:
+        return datetime
 
 
 class TIMESTAMP_LTZ(SnowflakeType):
     __visit_name__ = "TIMESTAMP_LTZ"
 
+    @property
+    def python_type(self) -> type:
+        return datetime
+
 
 class TIMESTAMP_NTZ(SnowflakeType):
     __visit_name__ = "TIMESTAMP_NTZ"
+
+    @property
+    def python_type(self) -> type:
+        return datetime
 
 
 class GEOGRAPHY(SnowflakeType):
     __visit_name__ = "GEOGRAPHY"
 
+    @property
+    def python_type(self) -> type:
+        return str
+
 
 class GEOMETRY(SnowflakeType):
     __visit_name__ = "GEOMETRY"
+
+    @property
+    def python_type(self) -> type:
+        return str
 
 
 class DECFLOAT(SnowflakeType):
@@ -228,6 +268,10 @@ class DECFLOAT(SnowflakeType):
 
     __visit_name__ = "DECFLOAT"
     _warned_precision: ClassVar[bool] = False
+
+    @property
+    def python_type(self) -> type:
+        return decimal.Decimal
 
     def result_processor(
         self, dialect: Dialect, coltype: object
