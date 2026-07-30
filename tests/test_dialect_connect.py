@@ -13,6 +13,7 @@ from sqlalchemy.engine import default as sqla_default
 from sqlalchemy.engine.url import URL as SAUrl
 
 from snowflake.sqlalchemy import URL
+from snowflake.sqlalchemy._constants import DISCONNECT_ERROR_CODES
 from snowflake.sqlalchemy.snowdialect import (
     SnowflakeDialect,
     TelemetryEvents,
@@ -300,3 +301,38 @@ def test_create_engine_routes_json_serializer_and_deserializer():
 
     assert engine.dialect._json_serializer is serializer
     assert engine.dialect._json_deserializer is deserializer
+
+
+# ---------------------------------------------------------------------------
+# is_disconnect / connection_invalidated detection (SNOW-669163)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("errno", sorted(DISCONNECT_ERROR_CODES))
+def test_is_disconnect_true_for_session_and_token_errors(errno):
+    """Session/token loss must be reported as a disconnect."""
+    from snowflake.connector.errors import ProgrammingError
+
+    dialect = SnowflakeDialect()
+    error = ProgrammingError(msg="boom", errno=errno)
+
+    assert dialect.is_disconnect(error, None, None) is True
+
+
+def test_is_disconnect_false_for_regular_sql_error():
+    """A plain SQL error (e.g. compilation) is not a disconnect."""
+    from snowflake.connector.errors import ProgrammingError
+
+    dialect = SnowflakeDialect()
+    error = ProgrammingError(msg="SQL compilation error", errno=1003)
+
+    assert dialect.is_disconnect(error, None, None) is False
+
+
+def test_is_disconnect_false_for_non_snowflake_error():
+    """Non-connector exceptions with a matching errno are ignored."""
+    dialect = SnowflakeDialect()
+    error = OSError("broken pipe")
+    error.errno = 390111
+
+    assert dialect.is_disconnect(error, None, None) is False

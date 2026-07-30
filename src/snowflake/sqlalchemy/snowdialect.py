@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from sqlalchemy.engine import CursorResult, Row
     from sqlalchemy.engine.interfaces import (
         DBAPIConnection,
+        DBAPIModule,
         ReflectedCheckConstraint,
         ReflectedColumn,
         ReflectedForeignKeyConstraint,
@@ -47,7 +48,11 @@ from sqlalchemy.sql import text
 from sqlalchemy.sql.sqltypes import NullType
 from sqlalchemy.types import FLOAT, Date, DateTime, Float, Time
 
-from ._constants import DIALECT_NAME, SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS
+from ._constants import (
+    DIALECT_NAME,
+    DISCONNECT_ERROR_CODES,
+    SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS,
+)
 from .base import (
     SnowflakeCompiler,
     SnowflakeDDLCompiler,
@@ -274,6 +279,22 @@ class SnowflakeDialect(default.DefaultDialect):
         self.div_is_floordiv = self.force_div_is_floordiv
         if self._redact_log_secrets:
             _ensure_engine_log_redaction()
+
+    def is_disconnect(
+        self,
+        e: DBAPIModule.Error,
+        connection: Any,
+        cursor: Any,
+    ) -> bool:
+        """Detect connection/session loss so SQLAlchemy can invalidate the pool.
+
+        Returning True marks the DBAPI error's ``connection_invalidated`` flag,
+        which lets generic reconnect logic recover from expired sessions/tokens
+        (e.g. "Authentication token has expired", "Session no longer exists").
+        """
+        if isinstance(e, sf_errors.Error) and e.errno in DISCONNECT_ERROR_CODES:
+            return True
+        return super().is_disconnect(e, connection, cursor)
 
     @classmethod
     def dbapi(cls) -> Any:  # type: ignore[override]
