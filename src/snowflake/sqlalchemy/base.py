@@ -948,6 +948,17 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         )
         return f"@{prefix}{external_stage.path} (file_format => {file_format})"
 
+    def limit_clause(self, select, **kw):
+        # Replica of base SQLCompiler, but with `LIMIT NULL` instead of `LIMIT -1`
+        text = ""
+        if select._limit_clause is not None:
+            text += "\n LIMIT " + self.process(select._limit_clause, **kw)
+        if select._offset_clause is not None:
+            if select._limit_clause is None:
+                text += "\n LIMIT NULL"
+            text += " OFFSET " + self.process(select._offset_clause, **kw)
+        return text
+
     def delete_extra_from_clause(
         self,
         delete_stmt: Any,
