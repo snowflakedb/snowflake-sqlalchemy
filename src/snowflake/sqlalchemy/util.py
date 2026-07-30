@@ -34,7 +34,11 @@ from ._constants import (
 
 
 def _rfc_1738_quote(text: str) -> str:
-    return re.sub(r"[:@/]", lambda m: "%%%X" % ord(m.group(0)), text)
+    # Encode the characters that would otherwise terminate or corrupt the URL
+    # authority component when the value is placed in ``user:password@host``:
+    # ``: @ /`` (RFC 1738 userinfo delimiters), ``[ ]`` (IPv6 host literal
+    # brackets) and ``? #`` (query/fragment delimiters). See SNOW-828206.
+    return re.sub(r"[\[\]?#:@/]", lambda m: "%%%X" % ord(m.group(0)), text)
 
 
 # --- connection-input handling --------------------------------------------

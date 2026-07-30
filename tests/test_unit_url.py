@@ -3,6 +3,8 @@
 #
 import urllib.parse
 
+from sqlalchemy.engine.url import make_url
+
 from snowflake.sqlalchemy import URL
 
 
@@ -132,3 +134,51 @@ def test_url():
         "snowflake://testuser:test@testaccount"
         "/?authenticator=https%3A%2F%2Ftestokta.okta.com"
     )
+
+
+def test_url_password_with_square_brackets():
+    """Square brackets in a password must be percent-encoded (SNOW-828206).
+
+    Otherwise urllib's URL parser treats ``[``/``]`` as an IPv6 host literal and
+    raises, breaking otherwise valid RFC 1738 passwords.
+    """
+    assert (
+        URL(account="testaccount", user="admin", password="mypass]")
+        == "snowflake://admin:mypass%5D@testaccount/"
+    )
+    assert (
+        URL(account="testaccount", user="admin", password="[mypass")
+        == "snowflake://admin:%5Bmypass@testaccount/"
+    )
+    assert (
+        URL(account="testaccount", user="admin", password="a[b]c:@/")
+        == "snowflake://admin:a%5Bb%5Dc%3A%40%2F@testaccount/"
+    )
+
+
+def test_url_password_with_query_and_fragment_delimiters():
+    """``?`` and ``#`` in a password must be encoded (SNOW-828206).
+
+    They are URL query/fragment delimiters; if left raw they terminate the
+    authority component and push the host into the query/fragment.
+    """
+    assert (
+        URL(account="testaccount", user="admin", password="pa?ss")
+        == "snowflake://admin:pa%3Fss@testaccount/"
+    )
+    assert (
+        URL(account="testaccount", user="admin", password="pa#ss")
+        == "snowflake://admin:pa%23ss@testaccount/"
+    )
+
+
+def test_url_password_with_brackets_roundtrips():
+    """The generated URL parses and decodes back to the original password."""
+    password = "p[a]s:s@w/o[rd]?x#y"
+    generated = URL(account="testaccount", user="admin", password=password)
+
+    # Should not raise (previously ``[``/``]``/``?``/``#`` broke the parser).
+    urllib.parse.urlsplit(generated)
+
+    parsed = make_url(generated)
+    assert parsed.password == password
