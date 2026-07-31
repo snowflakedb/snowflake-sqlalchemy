@@ -1394,19 +1394,26 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
         This visitor will create the SQL representation for a CREATE FILE FORMAT
         command.
         """
-        return "CREATE {}FILE FORMAT {} TYPE='{}' {}".format(
+        options = " ".join(
+            [
+                f"{name} = {file_format.formatter.value_repr(name, value)}"
+                for name, value in file_format.formatter.options.items()
+            ]
+        )
+        text = "CREATE {}FILE FORMAT {}{} TYPE='{}' {}".format(
             "OR REPLACE " if file_format.replace_if_exists else "",
+            "IF NOT EXISTS " if file_format.if_not_exists else "",
             # format_name is a (possibly schema-qualified) identifier; quote any
             # unsafe part to prevent unintended DDL (SNOW-3649881).
             self.preparer.quote_identifier_if_unsafe(file_format.format_name),
             file_format.formatter.file_format,
-            " ".join(
-                [
-                    f"{name} = {file_format.formatter.value_repr(name, value)}"
-                    for name, value in file_format.formatter.options.items()
-                ]
-            ),
+            options,
         )
+        if file_format.comment is not None:
+            text += " COMMENT = '{}'".format(
+                escape_string_literal_interior(file_format.comment)
+            )
+        return text
 
     def visit_drop_table_comment(self, drop: DropTableComment, **kw: Any) -> str:
         """Snowflake does not support setting table comments as NULL.

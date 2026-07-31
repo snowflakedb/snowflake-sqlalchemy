@@ -1384,6 +1384,26 @@ sink. That logger is independent of the Snowflake connector's secret masking.
   directly. Note that object `repr()` (`AWSBucket`, `AzureContainer`,
   `CopyIntoStorage`, ...) already masks these secrets.
 
+### Creating a named file format
+
+Use `CreateFileFormat` together with a formatter to emit a `CREATE FILE FORMAT` statement.
+It supports `OR REPLACE` (`replace_if_exists=True`), `IF NOT EXISTS` (`if_not_exists=True`,
+which is mutually exclusive with `OR REPLACE`) and an optional `comment`:
+
+```python
+from snowflake.sqlalchemy import CreateFileFormat, CSVFormatter
+
+create_format = CreateFileFormat(
+    format_name="my_db.my_schema.my_csv_format",
+    formatter=CSVFormatter().field_delimiter(","),
+    if_not_exists=True,
+    comment="CSV format for ingestion",
+)
+connection.execute(create_format)
+# CREATE FILE FORMAT IF NOT EXISTS my_db.my_schema.my_csv_format
+#     TYPE='csv' FIELD_DELIMITER = ',' COMMENT = 'CSV format for ingestion'
+```
+
 ### Iceberg Table with Snowflake Catalog support
 
 Snowflake SQLAlchemy supports Iceberg Tables with the Snowflake Catalog, along with various related parameters. For detailed information about Iceberg Tables, refer to the Snowflake [CREATE ICEBERG](https://docs.snowflake.com/en/sql-reference/sql/create-iceberg-table-snowflake) documentation.
