@@ -161,6 +161,11 @@ class SnowflakeDialect(default.DefaultDialect):
     max_identifier_length = 255
     cte_follows_insert = True
 
+    # Snowflake SHOW commands cap output at 10,000 rows; _get_schema_tables_info
+    # pages through SHOW TABLES using this size (SNOW-796954). Overridable so the
+    # pagination loop can be unit-tested without creating 10,000+ tables.
+    _SHOW_TABLES_PAGE_SIZE = 10000
+
     # TODO: support SQL caching, for more info see: https://docs.sqlalchemy.org/en/14/core/connections.html#caching-for-third-party-dialects
     supports_statement_cache = False
 
@@ -1650,28 +1655,76 @@ class SnowflakeDialect(default.DefaultDialect):
                 return None
             raise
 
+    def _show_in_schema_rows(
+        self, connection: Connection, show_sql_prefix: str
+    ) -> tuple[dict[str, int], list[Any]]:
+        """Run an object-listing ``SHOW`` command with pagination and return
+        ``(name_to_index_map, all_rows)``.
+
+        Snowflake ``SHOW`` commands cap their output at 10,000 rows, so larger
+        object sets are paged past the previous page's last ``name`` using
+        ``LIMIT ... FROM ...`` (SNOW-796954). Only valid for ``SHOW`` commands
+        that expose a ``name`` column and support ``LIMIT ... FROM`` (e.g.
+        TABLES, VIEWS, SCHEMAS, SEQUENCES). ``show_sql_prefix`` is the full
+        command up to but excluding ``LIMIT``.
+        """
+        # Snowflake caps SHOW output at 10,000 rows and rejects a larger LIMIT,
+        # so clamp any override into the valid 1..10,000 range.
+        page_size = max(1, min(10000, int(self._SHOW_TABLES_PAGE_SIZE)))
+        from_name: str | None = None
+        prev_from_name: str | None = None
+        all_rows: list[Any] = []
+        name_to_index_map: dict[str, int] = {}
+
+        while True:
+            paging = "" if from_name is None else f" FROM '{from_name}'"
+            result = connection.execute(
+                text(f"{show_sql_prefix} LIMIT {page_size}{paging}")
+            )
+            name_to_index_map = self._map_name_to_idx(result)
+            rows = result.cursor.fetchall()
+            all_rows.extend(rows)
+
+            # A short page means we've reached the end.
+            if len(rows) < page_size:
+                break
+            # The FROM cursor is a case-sensitive string literal, so page past the
+            # raw SHOW output name (escaped) of the last row.
+            from_name = escape_string_literal_interior(
+                str(rows[-1][name_to_index_map["name"]])
+            )
+            # Defensive guard: SHOW ... FROM returns names strictly greater than
+            # the cursor, so it must advance every full page. If it does not
+            # (unexpected server behavior), stop instead of looping forever.
+            if from_name == prev_from_name:
+                break
+            prev_from_name = from_name
+
+        return name_to_index_map, all_rows
+
     @reflection.cache
     def _get_schema_tables_info(
         self, connection: Connection, schema: str | None = None, **kw: Any
     ) -> Any:
         """
         Retrieves information about all tables in the specified schema.
+
+        ``SHOW TABLES`` is retained (rather than ``INFORMATION_SCHEMA``) so the
+        row shape consumed by ``get_prefixes_from_data`` — and the ``SHOW``
+        privilege semantics — stay unchanged; the 10,000-row cap is handled by
+        ``_show_in_schema_rows`` (SNOW-796954).
         """
-
         full_schema_name = self._get_full_schema_name(connection, schema, **kw)
-        result = connection.execute(
-            text(
-                f"SHOW /* sqlalchemy:get_schema_tables_info */ TABLES IN SCHEMA {full_schema_name}"
-            )
+        name_to_index_map, rows = self._show_in_schema_rows(
+            connection,
+            "SHOW /* sqlalchemy:get_schema_tables_info */ "
+            f"TABLES IN SCHEMA {full_schema_name}",
         )
-
-        name_to_index_map = self._map_name_to_idx(result)
         tables = {}
-        for row in result.cursor.fetchall():
+        for row in rows:
             table_name = self.normalize_name(str(row[name_to_index_map["name"]]))
             table_prefixes = self.get_prefixes_from_data(name_to_index_map, row)
             tables[table_name] = {"prefixes": table_prefixes}
-
         return tables
 
     def get_table_names(
@@ -1693,11 +1746,11 @@ class SnowflakeDialect(default.DefaultDialect):
         Gets all view names
         """
         full_schema_name = self._get_full_schema_name(connection, schema, **kw)
-        cursor = connection.execute(
-            text(f"SHOW /* sqlalchemy:get_view_names */ VIEWS IN {full_schema_name}")
+        _, rows = self._show_in_schema_rows(
+            connection,
+            f"SHOW /* sqlalchemy:get_view_names */ VIEWS IN {full_schema_name}",
         )
-
-        return [self.normalize_name(row[1]) for row in cursor]  # type: ignore[misc]
+        return [self.normalize_name(row[1]) for row in rows]  # type: ignore[misc]
 
     @reflection.cache
     def get_view_definition(
@@ -1744,15 +1797,14 @@ class SnowflakeDialect(default.DefaultDialect):
         self, connection: Connection, schema: str | None = None, **kw: Any
     ) -> list[str]:
         full_schema_name = self._get_full_schema_name(connection, schema, **kw)
-        cursor = connection.execute(
-            text(
-                f"SHOW /* sqlalchemy:get_temp_table_names */ TABLES IN SCHEMA {full_schema_name}"
-            )
+        name_to_index_map, rows = self._show_in_schema_rows(
+            connection,
+            "SHOW /* sqlalchemy:get_temp_table_names */ "
+            f"TABLES IN SCHEMA {full_schema_name}",
         )
 
         ret = []
-        name_to_index_map = self.__class__._map_name_to_idx(cursor)
-        for row in cursor:
+        for row in rows:
             if row[name_to_index_map["kind"]] == "TEMPORARY":
                 ret.append(self.normalize_name(row[name_to_index_map["name"]]))
 
@@ -1762,21 +1814,21 @@ class SnowflakeDialect(default.DefaultDialect):
         """
         Gets all schema names.
         """
-        cursor = connection.execute(
-            text("SHOW /* sqlalchemy:get_schema_names */ SCHEMAS")
+        _, rows = self._show_in_schema_rows(
+            connection, "SHOW /* sqlalchemy:get_schema_names */ SCHEMAS"
         )
-
-        return [self.normalize_name(row[1]) for row in cursor]  # type: ignore[misc]
+        return [self.normalize_name(row[1]) for row in rows]  # type: ignore[misc]
 
     @reflection.cache
     def get_sequence_names(
         self, connection: Connection, schema: str | None = None, **kw: Any
     ) -> list[str]:
         full_schema_name = self._get_full_schema_name(connection, schema, **kw)
-        sql_command = f"SHOW SEQUENCES IN SCHEMA {full_schema_name}"
         try:
-            cursor = connection.execute(text(sql_command))
-            return [self.normalize_name(row[0]) for row in cursor]  # type: ignore[misc]
+            _, rows = self._show_in_schema_rows(
+                connection, f"SHOW SEQUENCES IN SCHEMA {full_schema_name}"
+            )
+            return [self.normalize_name(row[0]) for row in rows]  # type: ignore[misc]
         except sa_exc.ProgrammingError as pe:
             if getattr(pe.orig, "errno", None) == 2003:
                 # Schema does not exist

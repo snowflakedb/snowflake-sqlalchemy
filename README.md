@@ -42,6 +42,7 @@ Table of contents:
     * [UUID Data Type Support](#uuid-data-type-support)
     * [Cache Column Metadata](#cache-column-metadata)
     * [Cross-Database Reflection](#cross-database-reflection)
+    * [Reflecting Large Schemas (10,000+ objects)](#reflecting-large-schemas-10000-objects)
     * [VARIANT, ARRAY and OBJECT Support](#variant-array-and-object-support)
     * [Structured Data Types Support](#structured-data-types-support)
       * [MAP](#map)
@@ -785,6 +786,56 @@ table = Table('mytable', metadata, schema='database_b."my.schema"', autoload_wit
 ```
 
 The SQL compilation layer already treats unquoted dots as separators. This cross-database reflection feature makes the reflection layer consistent with that existing behavior.
+
+### Reflecting Large Schemas (10,000+ objects)
+
+Snowflake `SHOW` commands return at most **10,000 rows** per call. Reflection helpers that list objects in a schema issue `SHOW ... IN SCHEMA`, so before this was addressed a schema (or database) with more than 10,000 objects would fail with an error like:
+
+```
+090201 (22000): SHOW ... returned more than the maximum of 10000 results.
+Use LIMIT to reduce the number of results.
+```
+
+Snowflake SQLAlchemy now transparently pages through these object-listing `SHOW` commands using `LIMIT <n> FROM '<last_name>'`, so reflection works regardless of object count. No code change is required on your side:
+
+```python
+from sqlalchemy import create_engine, inspect
+
+engine = create_engine("snowflake://<user>:<password>@<account>/<db>/<schema>")
+inspector = inspect(engine)
+
+# All of these page automatically and no longer fail past 10,000 objects:
+inspector.get_table_names(schema="my_schema")     # SHOW TABLES IN SCHEMA
+inspector.get_view_names(schema="my_schema")      # SHOW VIEWS IN
+inspector.get_sequence_names(schema="my_schema")  # SHOW SEQUENCES IN SCHEMA
+inspector.get_schema_names()                       # SHOW SCHEMAS
+inspector.get_temp_table_names(schema="my_schema")  # SHOW TABLES IN SCHEMA (temp)
+```
+
+`MetaData.reflect()` / `Table(..., autoload_with=engine)` benefit as well, since they call these helpers internally.
+
+#### How paging works
+
+Each command is fetched in pages ordered lexicographically by object name; each page after the first seeks past the previous page's last name:
+
+```sql
+SHOW TABLES IN SCHEMA "MY_DB"."MY_SCHEMA" LIMIT 10000
+SHOW TABLES IN SCHEMA "MY_DB"."MY_SCHEMA" LIMIT 10000 FROM '<last name of previous page>'
+-- ...repeated until a page returns fewer than 10000 rows
+```
+
+The page size defaults to Snowflake's 10,000 maximum. It is exposed as `SnowflakeDialect._SHOW_TABLES_PAGE_SIZE` (clamped to 1–10,000) primarily so tests can exercise the paging loop with a small value; you normally do not need to change it.
+
+#### Known limitations
+
+Only the **object-listing** `SHOW ... IN [SCHEMA]` commands are paged (tables, views, temp tables, schemas, sequences). The **schema-wide constraint/index** commands are *not* yet paged and can still hit the 10,000-row cap on very large schemas when using the bulk `MetaData.reflect()` path:
+
+- `SHOW PRIMARY KEYS IN SCHEMA`
+- `SHOW UNIQUE KEYS IN SCHEMA`
+- `SHOW IMPORTED KEYS IN SCHEMA`
+- `SHOW INDEXES IN SCHEMA`
+
+These lack a `name` column to page by and generally do not support `LIMIT ... FROM`, so they require a different approach (per-table fallback) tracked separately. Reflecting a **single** table's primary key, unique/foreign keys, or indexes is unaffected — those use the bounded `SHOW ... IN TABLE` form. Single-object lookups such as `get_view_definition()` (`SHOW VIEWS LIKE ...`) are likewise unaffected.
 
 ### VARIANT, ARRAY and OBJECT Support
 
