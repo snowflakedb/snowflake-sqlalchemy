@@ -1287,6 +1287,49 @@ merge.when_not_matched_then_insert().values(id=src.c.id, status=src.c.status)
 connection.execute(merge)
 ```
 
+### Multi-Table Insert (`INSERT ALL` / `INSERT FIRST`)
+
+Snowflake SQLAlchemy supports Snowflake's multi-table
+[`INSERT ALL` / `INSERT FIRST`](https://docs.snowflake.com/en/sql-reference/sql/insert-multi-table)
+statements through the `InsertMulti` custom command. Build it from a source
+`SELECT` and add one or more targets.
+
+Unconditional insert with `.into(...)`:
+
+```python
+from sqlalchemy import select
+from snowflake.sqlalchemy import InsertMulti
+
+stmt = (
+    InsertMulti(select(source_table))
+    .into(target1, columns=["id", "name", "value"])
+    .into(target2, columns=["id", "name", "value"])
+)
+connection.execute(stmt)
+# INSERT ALL INTO target1 (...) INTO target2 (...) SELECT ... FROM source_table
+```
+
+Each target may map specific source columns/expressions via `values`; when omitted,
+the subquery output columns are used positionally.
+
+Conditional insert with `.when(...)` / `.else_(...)` (use `first=True` for
+`INSERT FIRST`, `overwrite=True` for `INSERT OVERWRITE`):
+
+```python
+stmt = select(src.c.id, src.c.name, src.c.active)
+insert = (
+    InsertMulti(stmt)
+    .when(stmt.selected_columns.active, active_users,
+          values=[stmt.selected_columns.id, stmt.selected_columns.name])
+    .when(~stmt.selected_columns.active, inactive_users,
+          values=[stmt.selected_columns.id, stmt.selected_columns.name])
+    .else_(other_users)
+)
+connection.execute(insert)
+```
+
+`InsertMulti` is a new, additive construct; existing code is unaffected.
+
 ### Bulk Insert Optimization for ORM Models
 
 When using `Session.bulk_save_objects()` with models that have nullable optional
