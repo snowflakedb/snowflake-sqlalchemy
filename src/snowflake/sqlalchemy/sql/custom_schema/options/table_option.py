@@ -105,6 +105,7 @@ class TableOptionKey(Enum):
     EXTERNAL_VOLUME = "external_volume"
     MAX_DATA_EXTENSION_TIME_IN_DAYS = "max_data_extension_time_in_days"
     REFRESH_MODE = "refresh_mode"
+    ROW_ACCESS_POLICY = "row access policy"
     STORAGE_SERIALIZATION_POLICY = "storage_serialization_policy"
     TARGET_LAG = "target_lag"
     WAREHOUSE = "warehouse"

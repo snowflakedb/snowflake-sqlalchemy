@@ -80,6 +80,7 @@ from .sql.custom_schema.options import (  # noqa
     IdentifierOption,
     KeywordOption,
     LiteralOption,
+    RowAccessPolicyOption,
     SnowflakeKeyword,
     TableOptionKey,
     TargetLagOption,
@@ -158,6 +159,7 @@ _custom_table_options = (
     "IdentifierOption",
     "KeywordOption",
     "ClusterByOption",
+    "RowAccessPolicyOption",
 )
 
 _enums = (

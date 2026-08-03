@@ -1061,6 +1061,41 @@ stmt = select(my_table).where(
 )
 ```
 
+### Row Access Policy Support
+
+Snowflake SQLAlchemy can attach an existing [row access policy](https://docs.snowflake.com/en/user-guide/security-row-intro)
+to a table at `CREATE TABLE` time. Use the `SnowflakeTable` construct and pass
+`row_access_policy` as a `(policy_name, [columns])` tuple:
+
+```python
+from sqlalchemy import Column, Integer, MetaData, String
+from snowflake.sqlalchemy.sql.custom_schema import SnowflakeTable
+
+metadata = MetaData()
+
+my_table = SnowflakeTable(
+    "my_table",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("geom", String),
+    Column("name", String),
+    row_access_policy=("my_policy", ["geom", "name"]),
+)
+metadata.create_all(engine)
+# CREATE TABLE my_table (...) WITH ROW ACCESS POLICY my_policy ON (geom, name)
+```
+
+You can also pass an explicit `RowAccessPolicyOption` instead of a tuple:
+
+```python
+from snowflake.sqlalchemy import RowAccessPolicyOption
+
+row_access_policy = RowAccessPolicyOption("my_policy", ["geom", "name"])
+```
+
+The policy itself must already exist in Snowflake. The option is opt-in and additive —
+tables declared without `row_access_policy` are unaffected.
+
 ### RELY Constraint Property
 
 Snowflake does not enforce `PRIMARY KEY`, `UNIQUE`, or `FOREIGN KEY` constraints — they are metadata only. The `RELY` property tells the query optimizer it may **trust** such a constraint for rewrites like join elimination, even though it isn't enforced. Set the opt-in `snowflake_rely=True` dialect keyword on a constraint to emit it:
