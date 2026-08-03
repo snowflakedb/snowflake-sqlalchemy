@@ -9,6 +9,7 @@ Source code is also available at:
 
 # Unreleased Notes
 
+- Treat error code `390195` (authentication token expired, variant) as a session disconnect in `is_disconnect`, so `pool_pre_ping` / `connection_invalidated` recover from it like the other token/session-loss codes (SNOW-3882904 / GH #702).
 - Fix reflection failing on schemas/databases with more than 10,000 objects by paginating the underlying object-listing `SHOW` commands (`get_table_names`, `get_view_names`, `get_temp_table_names`, `get_schema_names`, `get_sequence_names`) with `LIMIT ... FROM ...` (SNOW-796954 / GH #406).
 - Add opt-in `snowflake_rely=True` to render `RELY` on `PRIMARY KEY` / `FOREIGN KEY` / `UNIQUE` constraints so the optimizer can trust them for query rewrites such as join elimination (SNOW-1023317 / GH #463).
 - Add a `python_type` property to Snowflake custom types (`VARIANT`, `OBJECT`, `MAP`, `ARRAY`, `VECTOR`, `TIMESTAMP_*`, `GEOGRAPHY`, `GEOMETRY`, `DECFLOAT`) for SQLAlchemy compatibility (SNOW-1866493 / GH #562).

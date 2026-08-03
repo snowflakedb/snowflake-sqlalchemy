@@ -336,3 +336,26 @@ def test_is_disconnect_false_for_non_snowflake_error():
     error.errno = 390111
 
     assert dialect.is_disconnect(error, None, None) is False
+
+
+def test_is_disconnect_true_for_token_expired_variant():
+    """390195 (authentication token expired, variant) is recoverable by
+    reconnect and must be reported as a disconnect (GH #702)."""
+    from snowflake.connector.errors import ProgrammingError
+
+    dialect = SnowflakeDialect()
+    error = ProgrammingError(msg="token expired", errno=390195)
+
+    assert dialect.is_disconnect(error, None, None) is True
+
+
+def test_is_disconnect_false_for_revoked_token():
+    """390302 (authentication failed, token revoked) is a permanent auth
+    failure — reconnecting cannot succeed, so it is intentionally NOT treated
+    as a disconnect (GH #702)."""
+    from snowflake.connector.errors import ProgrammingError
+
+    dialect = SnowflakeDialect()
+    error = ProgrammingError(msg="authentication failed", errno=390302)
+
+    assert dialect.is_disconnect(error, None, None) is False
