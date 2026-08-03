@@ -4,6 +4,7 @@
 
 from datetime import datetime
 
+import pytest
 from sqlalchemy import (
     Boolean,
     Column,
@@ -553,7 +554,16 @@ def test_conditional_insert_multi(sql_compiler):
         sql_compiler(insert_all) == "INSERT ALL "
         'WHEN "delete" THEN INTO users1 VALUES (id, name, fullname) '
         'WHEN NOT "delete" THEN INTO users2 (id, name, "full/name") VALUES (id, name, fullname) '
-        "ELSE users1 "
+        "ELSE INTO users1 "
         "SELECT onboarding_users.id AS id, onboarding_users.name AS name, onboarding_users.fullname AS fullname, "
         'onboarding_users."delete" AS "delete" FROM onboarding_users'
     )
+
+
+def test_insert_multi_else_requires_when():
+    meta = MetaData()
+    src = Table("src", meta, Column("id", Integer))
+    target = Table("t", meta, Column("id", Integer))
+    im = InsertMulti(select(src.c.id))
+    with pytest.raises(ValueError):
+        im.else_(target)

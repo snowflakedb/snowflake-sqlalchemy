@@ -806,7 +806,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
 
         if insert_all.else__:
             else_ = (
-                f" ELSE {insert_all.else__[0]._compiler_dispatch(self, asfrom=True, **kw)}"
+                f" ELSE INTO {insert_all.else__[0]._compiler_dispatch(self, asfrom=True, **kw)}"
                 + (
                     f" ({', '.join(c._compiler_dispatch(self, include_table=False, **kw) for c in insert_all.else__[1])})"
                     if insert_all.else__[1]

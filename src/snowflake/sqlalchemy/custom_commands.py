@@ -220,8 +220,11 @@ class InsertMulti(UpdateBase):
         return self
 
     def else_(self, table: Any, columns: Any = None, values: Any = None) -> InsertMulti:
-        if self.clauses and not self.is_conditional:
-            raise ValueError("Cannot set ELSE on an unconditional multi-table insert")
+        if not self.is_conditional:
+            raise ValueError(
+                "ELSE requires at least one conditional WHEN clause; add .when(...) "
+                "before .else_(...)"
+            )
         self.else__ = (
             table,
             self._adapt_columns(columns, table.c),
