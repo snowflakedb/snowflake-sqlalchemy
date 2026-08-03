@@ -353,6 +353,17 @@ class _CUSTOM_Float(SnowflakeType, sqltypes.Float):
 
 
 class _CUSTOM_DECIMAL(SnowflakeType, sqltypes.DECIMAL):
+    def __init__(
+        self,
+        precision: int | None = None,
+        scale: int | None = None,
+        asdecimal: bool = True,
+        **kw: Any,
+    ) -> None:
+        super().__init__(  # type: ignore[call-overload]
+            precision=precision, scale=scale, asdecimal=asdecimal, **kw
+        )
+
     @util.memoized_property
     def _type_affinity(self) -> type:
         return sqltypes.INTEGER if self.scale == 0 else sqltypes.DECIMAL
