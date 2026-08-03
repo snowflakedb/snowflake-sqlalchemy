@@ -32,7 +32,7 @@ from sqlalchemy.sql.elements import BinaryExpression, BindParameter, Label, quot
 from sqlalchemy.sql.expression import Executable
 from sqlalchemy.sql.operators import OperatorType
 from sqlalchemy.sql.schema import Column, Identity, IdentityOptions
-from sqlalchemy.sql.selectable import Join, Lateral, SelectState
+from sqlalchemy.sql.selectable import Join, Lateral, Select, SelectState
 from sqlalchemy.sql.type_api import TypeEngine
 
 from ._constants import DIALECT_NAME, NOT_NULL
