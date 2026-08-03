@@ -5,7 +5,7 @@ import urllib.parse
 
 from sqlalchemy.engine.url import make_url
 
-from snowflake.sqlalchemy import URL
+from snowflake.sqlalchemy import URL, base
 
 
 def test_url():
@@ -182,3 +182,35 @@ def test_url_password_with_brackets_roundtrips():
 
     parsed = make_url(generated)
     assert parsed.password == password
+
+
+def test_account_parsing_plain():
+    """Plain account notation (no dot) should be used as-is."""
+    url = make_url("snowflake://user:pass@myaccount/")
+    dialect = base.dialect()
+    opts = dialect.create_connect_args(url)[1]
+    assert opts["account"] == "myaccount"
+
+
+def test_account_parsing_regional():
+    """Regional notation (account.region) should extract account part only."""
+    url = make_url("snowflake://user:pass@myaccount.eu-central-1/")
+    dialect = base.dialect()
+    opts = dialect.create_connect_args(url)[1]
+    assert opts["account"] == "myaccount"
+
+
+def test_account_parsing_regional_privatelink():
+    """Regional PrivateLink (account.region.privatelink) should extract account."""
+    url = make_url("snowflake://user:pass@myaccount.eu-central-1.privatelink/")
+    dialect = base.dialect()
+    opts = dialect.create_connect_args(url)[1]
+    assert opts["account"] == "myaccount"
+
+
+def test_account_parsing_regionless_privatelink_with_dash():
+    """Regionless PrivateLink with dash in account (gnamsrm-vi65876.privatelink) should preserve dash."""
+    url = make_url("snowflake://user:pass@gnamsrm-vi65876.privatelink/")
+    dialect = base.dialect()
+    opts = dialect.create_connect_args(url)[1]
+    assert opts["account"] == "gnamsrm-vi65876"

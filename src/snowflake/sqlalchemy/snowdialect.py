@@ -351,12 +351,32 @@ class SnowflakeDialect(default.DefaultDialect):
             and ".snowflakecomputing.com" not in opts["host"]
             and not opts.get("port")
         ):
-            opts["account"] = opts["host"]
-            if "." in opts["account"]:
-                # remove region subdomain
-                opts["account"] = opts["account"][0 : opts["account"].find(".")]
-                # remove external ID
-                opts["account"] = opts["account"].split("-")[0]
+
+            def account_from_host(host: str) -> str:
+                """Derive the Snowflake account name from a non-fully-qualified host.
+
+                Handles the notations the connector accepts:
+                  * ``account``                            -> ``account``
+                  * ``account.region``                     -> ``account``
+                  * ``account.region.privatelink``         -> ``account``
+                  * ``account.privatelink`` (regionless)   -> ``account`` (dash kept)
+                  * ``account-externalid.global`` (org)    -> ``account``
+                """
+                if "." not in host:
+                    return host
+                if host.endswith(".privatelink"):
+                    # PrivateLink: drop the suffix and any region subdomain, but keep
+                    # dashes so a regionless account name stays intact (SNOW-730644).
+                    account = host[: -len(".privatelink")]
+                    if "." in account:
+                        account = account[: account.find(".")]
+                    return account
+                # Regional or ``.global`` notation: drop the region/.global subdomain
+                # and the external-ID suffix after the first dash.
+                account = host[: host.find(".")]
+                return account.split("-")[0]
+
+            opts["account"] = account_from_host(opts["host"])
             opts["host"] = opts["host"] + ".snowflakecomputing.com"
             opts["port"] = "443"
         opts["autocommit"] = False  # autocommit is disabled by default

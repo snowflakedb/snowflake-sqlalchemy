@@ -1147,6 +1147,23 @@ Where `PRIVATE_KEY_PASSPHRASE` is a passphrase to decrypt the private key file, 
 
 Currently a private key parameter is not accepted by the `snowflake.sqlalchemy.URL` method.
 
+### PrivateLink and Account Name Handling
+
+When connecting over [AWS PrivateLink](https://docs.snowflake.com/en/user-guide/admin-security-privatelink),
+the host uses the `.privatelink` notation. Snowflake SQLAlchemy derives the account name from
+the host for all supported notations:
+
+| Host notation | Derived account |
+|---|---|
+| `myaccount` | `myaccount` |
+| `myaccount.us-east-1` | `myaccount` |
+| `myaccount.us-east-1.privatelink` | `myaccount` |
+| `orgname-account_name.privatelink` (regionless) | `orgname-account_name` |
+
+Regionless PrivateLink account names that contain a dash (for example
+`orgname-account_name.privatelink`) are preserved intact, so the account name in a Key Pair /
+JWT token matches the account used to connect. No extra configuration is required.
+
 ### SSO Authentication (Okta, Azure AD, etc.)
 
 Snowflake SQLAlchemy supports federated/SSO authentication by forwarding the `authenticator`
