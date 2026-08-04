@@ -168,6 +168,13 @@ class TestSnowflakeCompiler(AssertsCompiledSQL):
             "ALTER TABLE test.table2 ALTER COLUMN id UNSET COMMENT",
         )
 
+    def test_offset_without_limit(self):
+        self.assert_compile(
+            select(table1.c.id).offset(10),
+            "SELECT table1.id FROM table1 LIMIT NULL OFFSET %(param_1)s",
+            dialect="snowflake",
+        )
+
 
 def test_quoted_name_label(engine_testaccount):
     test_cases = [
