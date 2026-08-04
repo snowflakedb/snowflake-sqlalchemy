@@ -25,7 +25,7 @@
 # ---
 # name: test_compile_snowflake_table_with_invalid_row_access_policy_type
   '''
-  Invalid parameter type 'str' provided for 'row access policy'. Expected one of the following types: 'RowAccessPolicyOption', 'tuple[str, list[str]]'.
+  Invalid parameter type 'str' provided for 'row access policy'. Expected one of the following types: 'RowAccessPolicyOption', 'tuple[str | FQN, list[str]]'.
   
   '''
 # ---

@@ -15,7 +15,7 @@ from sqlalchemy.exc import ArgumentError
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.sql.ddl import CreateTable
 
-from snowflake.sqlalchemy import SnowflakeTable
+from snowflake.sqlalchemy import FQN, SnowflakeTable
 from snowflake.sqlalchemy.sql.custom_schema.options import (
     AsQueryOption,
     ClusterByOption,
@@ -256,3 +256,31 @@ def test_compile_snowflake_table_with_invalid_row_access_policy_type(snapshot):
         )
 
     assert str(argument_error.value) == snapshot
+
+
+@pytest.mark.parametrize(
+    "policy, expected",
+    [
+        # simple name is unchanged
+        ("my_policy", "my_policy"),
+        # qualified string is split and each part quoted independently
+        ("gov_db.sec.pii_policy", "gov_db.sec.pii_policy"),
+        # a pre-quoted part is preserved verbatim
+        ('gov_db."Sec".pii_policy', 'gov_db."Sec".pii_policy'),
+        # an FQN object renders the same as its string form
+        (FQN.from_string("gov_db.sec.pii_policy"), "gov_db.sec.pii_policy"),
+    ],
+)
+def test_compile_snowflake_table_row_access_policy_names(
+    sql_compiler, policy, expected
+):
+    metadata = MetaData()
+    test_table = SnowflakeTable(
+        "test_table_rap_names",
+        metadata,
+        Column("geom", String),
+        Column("name", String),
+        row_access_policy=(policy, ["geom", "name"]),
+    )
+    sql = sql_compiler(CreateTable(test_table))
+    assert f"WITH ROW ACCESS POLICY {expected} ON (geom, name)" in sql

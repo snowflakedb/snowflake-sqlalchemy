@@ -1093,6 +1093,19 @@ from snowflake.sqlalchemy import RowAccessPolicyOption
 row_access_policy = RowAccessPolicyOption("my_policy", ["geom", "name"])
 ```
 
+The policy name may be fully qualified. A string is parsed as `[[database.]schema.]name`
+(each part quoted independently), or you can pass a `FQN` explicitly:
+
+```python
+from snowflake.sqlalchemy import FQN
+
+# both render: WITH ROW ACCESS POLICY gov_db.security.my_policy ON (geom, name)
+row_access_policy = ("gov_db.security.my_policy", ["geom", "name"])
+row_access_policy = RowAccessPolicyOption(
+    FQN.from_string("gov_db.security.my_policy"), ["geom", "name"]
+)
+```
+
 The policy itself must already exist in Snowflake. The option is opt-in and additive —
 tables declared without `row_access_policy` are unaffected.
 
