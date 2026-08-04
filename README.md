@@ -569,6 +569,27 @@ engine = create_engine(URL(
 
 **Why is `enable_decfloat` not enabled by default?** Enabling it sets `decimal.getcontext().prec = 38`, which modifies Python's thread-local decimal context and affects all `Decimal` operations in that thread, not just database queries. To avoid unexpected side effects on application code, the dialect emits a warning when `DECFLOAT` values are retrieved without full precision enabled, guiding users to opt-in explicitly.
 
+### Returning `float` Instead of `Decimal`
+
+By default, Snowflake `NUMBER` / `DECIMAL` columns are returned as Python
+`decimal.Decimal` values. If you prefer plain `float` results for a column, set
+`asdecimal=False` on its numeric type:
+
+```python
+from sqlalchemy import Column, Integer, MetaData, Table
+from snowflake.sqlalchemy import NUMBER
+
+metadata = MetaData()
+prices = Table(
+    "prices",
+    metadata,
+    Column("id", Integer, primary_key=True),
+    Column("amount", NUMBER(10, 2, asdecimal=False)),  # rows return float, not Decimal
+)
+```
+
+The default remains `asdecimal=True` (Decimal), so existing behavior is unchanged.
+
 ### VECTOR Data Type Support
 
 Snowflake SQLAlchemy supports the `VECTOR` data type with varying element type and dimension.
