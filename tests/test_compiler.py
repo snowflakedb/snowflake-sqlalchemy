@@ -567,3 +567,13 @@ def test_insert_multi_else_requires_when():
     im = InsertMulti(select(src.c.id))
     with pytest.raises(ValueError):
         im.else_(target)
+
+
+def test_insert_multi_when_requires_condition():
+    meta = MetaData()
+    src = Table("src", meta, Column("id", Integer))
+    t1 = Table("t1", meta, Column("id", Integer))
+    t2 = Table("t2", meta, Column("id", Integer))
+    im = InsertMulti(select(src.c.id)).when(src.c.id == 1, t1)
+    with pytest.raises(ValueError):
+        im.when(None, t2)

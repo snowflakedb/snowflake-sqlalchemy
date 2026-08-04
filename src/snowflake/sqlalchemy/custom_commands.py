@@ -201,6 +201,11 @@ class InsertMulti(UpdateBase):
     def when(
         self, condition: Any, table: Any, columns: Any = None, values: Any = None
     ) -> InsertMulti:
+        if condition is None:
+            raise ValueError(
+                "when() requires a non-None condition; use into() for an "
+                "unconditional multi-table insert"
+            )
         if self.clauses and not self.is_conditional:
             raise ValueError(
                 "Cannot add a conditional clause to an unconditional multi-table insert"
