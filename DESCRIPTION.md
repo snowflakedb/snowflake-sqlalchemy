@@ -25,6 +25,7 @@ Source code is also available at:
 - Document `CLUSTER BY` usage in ORM/declarative models via `SnowflakeTable` (SNOW-638838 / [#313](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/313)).
 - Document AUTOINCREMENT and IDENTITY column usage, including Sequence vs Identity trade-offs for Hybrid tables (SNOW-1232362).
 - Document that Snowflake lacks `IS TRUE`/`IS FALSE`; use `col == true()`/`col == false()` ([#680](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/680)).
+- Fix invalid `LIMIT -1` SQL generated for a `SELECT` with `OFFSET` but no `LIMIT`; the `SnowflakeCompiler` now emits `LIMIT NULL OFFSET ...` as Snowflake requires (NO-SNOW / GH #745).
 
 # Release Notes
 
