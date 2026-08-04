@@ -373,11 +373,11 @@ finally:
 
 #### Automatic reconnection on expired sessions
 
-The dialect flags Snowflake session/token-loss errors (for example *"Authentication token has
-expired"* or *"Session no longer exists"*) as disconnects. This lets SQLAlchemy's connection
-pool transparently discard the dead connection and open a fresh one, so long-lived engines
-recover instead of raising. Combine it with `pool_pre_ping=True` to validate connections before
-use:
+The dialect implements `is_disconnect`, flagging Snowflake session/token-loss errors (for example
+*"Authentication token has expired"* or *"Session no longer exists"*) as disconnects based on the
+connector's structured error codes. This lets SQLAlchemy's connection pool transparently discard
+the dead connection and open a fresh one, so long-lived engines recover instead of raising. Combine
+it with `pool_pre_ping=True` to validate connections before use:
 
 ```python
 from sqlalchemy import create_engine
@@ -388,6 +388,11 @@ engine = create_engine(
     pool_pre_ping=True,  # invalidate + reconnect stale/expired connections automatically
 )
 ```
+
+> **Note:** only *recoverable* session/token-loss errors are treated as disconnects. Permanent
+> authentication failures (for example revoked credentials) are **not** flagged as disconnects,
+> because reconnecting cannot recover them — they surface as errors so the underlying problem stays
+> visible.
 
 ### Auto-increment Behavior
 

@@ -28,6 +28,7 @@ DISCONNECT_ERROR_CODES = frozenset(
         390112,  # session expired
         390113,  # master token not found
         390114,  # authentication/master token expired
+        390195,  # authentication token expired (variant)
         390115,  # master token invalid
         390318,  # OAuth access token expired
         ER_CONNECTION_IS_CLOSED,  # 250002, connection is closed (client side)
