@@ -577,3 +577,23 @@ def test_insert_multi_when_requires_condition():
     im = InsertMulti(select(src.c.id)).when(src.c.id == 1, t1)
     with pytest.raises(ValueError):
         im.when(None, t2)
+
+
+def test_insert_multi_not_safe_to_cache():
+    # InsertMulti's SQL depends on builder state (clauses/else__/overwrite/first/
+    # source) that is not part of any cache-key traversal, so it must opt out of
+    # SQLAlchemy statement caching to avoid reusing another statement's SQL.
+    assert InsertMulti.inherit_cache is False
+
+
+def test_insert_multi_repr_has_no_comma_between_targets():
+    meta = MetaData()
+    src = Table("src", meta, Column("id", Integer))
+    t1 = Table("t1", meta, Column("id", Integer))
+    t2 = Table("t2", meta, Column("id", Integer))
+    im = InsertMulti(select(src.c.id)).into(t1).into(t2)
+    text = repr(im)
+    # Snowflake separates INTO clauses with whitespace, not commas (matching the
+    # compiled SQL); the comma-join artifact ", INTO" must not appear.
+    assert ", INTO" not in text
+    assert text.count("INTO ") == 2

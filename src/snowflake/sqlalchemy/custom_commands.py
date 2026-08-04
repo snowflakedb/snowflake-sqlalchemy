@@ -138,11 +138,16 @@ class InsertMulti(UpdateBase):
     :meth:`when` / :meth:`else_`.  Each target may optionally specify ``columns``
     and matching source ``values``; when omitted, the subquery output columns are
     used positionally.
+
+    See https://docs.snowflake.com/en/sql-reference/sql/insert-multi-table
     """
 
     __visit_name__ = "insert_multi"
     _bind = None
-    inherit_cache = True
+    # The compiled SQL depends on builder state (clauses/else__/overwrite/first/
+    # source) that is not covered by any cache-key traversal, so this construct
+    # cannot inherit UpdateBase's cache key; opt out of statement caching.
+    inherit_cache = False
 
     def __init__(
         self, source: Any, overwrite: bool = False, first: bool = False
@@ -162,16 +167,14 @@ class InsertMulti(UpdateBase):
         for condition, table, columns, values in self.clauses:
             clauses.append(
                 (f"WHEN {condition!r} THEN " if condition is not None else "")
-                + f" INTO {table!r}"
+                + f"INTO {table!r}"
                 + (f"({', '.join(repr(c) for c in columns)})" if columns else "")
                 + (f" VALUES ({', '.join(str(v) for v in values)})" if values else "")
             )
         else_ = f" ELSE {self.else__!r}" if self.else__ else ""
         overwrite = " OVERWRITE" if self.overwrite else ""
         condition = "FIRST" if self.is_conditional and self.first else "ALL"
-        return (
-            f"INSERT{overwrite} {condition} {', '.join(clauses)}{else_} {self.source}"
-        )
+        return f"INSERT{overwrite} {condition} {' '.join(clauses)}{else_} {self.source}"
 
     def _adapt_columns(self, columns: Any, coll: Any) -> Any:
         """Make sure all columns are column instances from the given table, not strings."""
