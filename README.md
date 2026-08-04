@@ -1094,7 +1094,8 @@ row_access_policy = RowAccessPolicyOption("my_policy", ["geom", "name"])
 ```
 
 The policy name may be fully qualified. A string is parsed as `[[database.]schema.]name`
-(each part quoted independently), or you can pass a `FQN` explicitly:
+(each part is quoted independently, and only when it requires quoting or was already
+quoted), or you can pass a `FQN` explicitly:
 
 ```python
 from snowflake.sqlalchemy import FQN
@@ -1104,6 +1105,10 @@ row_access_policy = ("gov_db.security.my_policy", ["geom", "name"])
 row_access_policy = RowAccessPolicyOption(
     FQN.from_string("gov_db.security.my_policy"), ["geom", "name"]
 )
+
+# a quoted part is preserved verbatim; unquoted parts stay bare:
+# renders: WITH ROW ACCESS POLICY gov_db."Sec".my_policy ON (geom, name)
+row_access_policy = ('gov_db."Sec".my_policy', ["geom", "name"])
 ```
 
 The policy itself must already exist in Snowflake. The option is opt-in and additive —
