@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Union
 
-from snowflake.sqlalchemy._identifiers import FQN, is_valid_quoted_identifier
+from snowflake.sqlalchemy._identifiers import FQN
 from snowflake.sqlalchemy.custom_commands import NoneType
 
 from .table_option import Priority, TableOption, TableOptionKey
@@ -98,7 +98,11 @@ class RowAccessPolicyOption(TableOption):
 
     def _render(self, compiler: SnowflakeDDLCompiler) -> str:
         policy_name = ".".join(
-            part if is_valid_quoted_identifier(part) else compiler.preparer.quote(part)
+            (
+                compiler.preparer.quote_identifier(str(part))
+                if getattr(part, "quote", None)
+                else compiler.preparer.quote(str(part))
+            )
             for part in self._policy_fqn.parts
         )
         columns_str = ", ".join(
