@@ -1195,6 +1195,26 @@ Where `PRIVATE_KEY_PASSPHRASE` is a passphrase to decrypt the private key file, 
 
 Currently a private key parameter is not accepted by the `snowflake.sqlalchemy.URL` method.
 
+### PrivateLink and Account Name Handling
+
+When connecting over [AWS PrivateLink](https://docs.snowflake.com/en/user-guide/admin-security-privatelink),
+the host uses the `.privatelink` notation. Snowflake SQLAlchemy normalizes the account name from
+the host using the Snowflake Connector's own account parsing, so behavior matches the driver for
+all supported notations:
+
+| Host notation | Derived account |
+|---|---|
+| `myaccount` | `myaccount` |
+| `myaccount.us-east-1` | `myaccount` |
+| `orgname-account_name.us-east-1` (regional) | `orgname-account_name` |
+| `myaccount.us-east-1.privatelink` | `myaccount` |
+| `orgname-account_name.privatelink` (regionless) | `orgname-account_name` |
+| `myaccount-<external_id>.global` | `myaccount` |
+
+Account names that contain a dash (org-style `orgname-account_name`, for example over regionless
+PrivateLink) are preserved intact, so the account name in a Key Pair / JWT token matches the
+account used to connect. No extra configuration is required.
+
 ### SSO Authentication (Okta, Azure AD, etc.)
 
 Snowflake SQLAlchemy supports federated/SSO authentication by forwarding the `authenticator`
@@ -1314,6 +1334,49 @@ merge.when_matched_then_update().values(status=src.c.status)
 merge.when_not_matched_then_insert().values(id=src.c.id, status=src.c.status)
 connection.execute(merge)
 ```
+
+### Multi-Table Insert (`INSERT ALL` / `INSERT FIRST`)
+
+Snowflake SQLAlchemy supports Snowflake's multi-table
+[`INSERT ALL` / `INSERT FIRST`](https://docs.snowflake.com/en/sql-reference/sql/insert-multi-table)
+statements through the `InsertMulti` custom command. Build it from a source
+`SELECT` and add one or more targets.
+
+Unconditional insert with `.into(...)`:
+
+```python
+from sqlalchemy import select
+from snowflake.sqlalchemy import InsertMulti
+
+stmt = (
+    InsertMulti(select(source_table))
+    .into(target1, columns=["id", "name", "value"])
+    .into(target2, columns=["id", "name", "value"])
+)
+connection.execute(stmt)
+# INSERT ALL INTO target1 (...) INTO target2 (...) SELECT ... FROM source_table
+```
+
+Each target may map specific source columns/expressions via `values`; when omitted,
+the subquery output columns are used positionally.
+
+Conditional insert with `.when(...)` / `.else_(...)` (use `first=True` for
+`INSERT FIRST`, `overwrite=True` for `INSERT OVERWRITE`):
+
+```python
+stmt = select(src.c.id, src.c.name, src.c.active)
+insert = (
+    InsertMulti(stmt)
+    .when(stmt.selected_columns.active, active_users,
+          values=[stmt.selected_columns.id, stmt.selected_columns.name])
+    .when(~stmt.selected_columns.active, inactive_users,
+          values=[stmt.selected_columns.id, stmt.selected_columns.name])
+    .else_(other_users)
+)
+connection.execute(insert)
+```
+
+`InsertMulti` is a new, additive construct; existing code is unaffected.
 
 ### Bulk Insert Optimization for ORM Models
 

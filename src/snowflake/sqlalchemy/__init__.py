@@ -36,6 +36,7 @@ from .custom_commands import (  # noqa
     CSVFormatter,
     ExternalStage,
     GCSBucket,
+    InsertMulti,
     JSONFormatter,
     MergeInto,
     PARQUETFormatter,
@@ -137,6 +138,7 @@ _custom_types = (
 
 _custom_commands = (
     "MergeInto",
+    "InsertMulti",
     "CSVFormatter",
     "JSONFormatter",
     "PARQUETFormatter",

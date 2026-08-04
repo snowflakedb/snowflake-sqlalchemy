@@ -30,6 +30,7 @@ from snowflake.connector import errors as sf_errors
 from snowflake.connector.connection import DEFAULT_CONFIGURATION, SnowflakeConnection
 from snowflake.connector.constants import UTF8
 from snowflake.connector.telemetry import TelemetryClient, TelemetryData, TelemetryField
+from snowflake.connector.util_text import parse_account
 
 import sqlalchemy.sql.sqltypes as sqltypes
 from snowflake.sqlalchemy.name_utils import _NameUtils
@@ -351,12 +352,14 @@ class SnowflakeDialect(default.DefaultDialect):
             and ".snowflakecomputing.com" not in opts["host"]
             and not opts.get("port")
         ):
-            opts["account"] = opts["host"]
-            if "." in opts["account"]:
-                # remove region subdomain
-                opts["account"] = opts["account"][0 : opts["account"].find(".")]
-                # remove external ID
-                opts["account"] = opts["account"].split("-")[0]
+            # The URL host slot carries the Snowflake account identifier (possibly
+            # with a region and/or ``.privatelink``/``.global`` suffix). ``account``
+            # is required by the connector (it is not derived from ``host``), so
+            # normalize it with the connector's own ``parse_account`` instead of
+            # re-implementing the rules here. This keeps dashes in org-style account
+            # names (e.g. ``gnamsrm-vi65876``) intact and stays consistent with the
+            # driver across all notations (SNOW-730644).
+            opts["account"] = parse_account(opts["host"])
             opts["host"] = opts["host"] + ".snowflakecomputing.com"
             opts["port"] = "443"
         opts["autocommit"] = False  # autocommit is disabled by default
