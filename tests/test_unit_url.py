@@ -214,3 +214,19 @@ def test_account_parsing_regionless_privatelink_with_dash():
     dialect = base.dialect()
     opts = dialect.create_connect_args(url)[1]
     assert opts["account"] == "gnamsrm-vi65876"
+
+
+def test_account_parsing_regional_org_account_with_dash():
+    """Regional notation with an org-style dashed account must keep the dash."""
+    url = make_url("snowflake://user:pass@orgname-accountname.us-west-2/")
+    dialect = base.dialect()
+    opts = dialect.create_connect_args(url)[1]
+    assert opts["account"] == "orgname-accountname"
+
+
+def test_account_parsing_global_removes_only_external_id():
+    """.global notation drops only the trailing external id (after the last dash)."""
+    url = make_url("snowflake://user:pass@orgname-account-gext123.global/")
+    dialect = base.dialect()
+    opts = dialect.create_connect_args(url)[1]
+    assert opts["account"] == "orgname-account"
