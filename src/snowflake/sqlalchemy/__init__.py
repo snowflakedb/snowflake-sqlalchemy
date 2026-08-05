@@ -24,6 +24,7 @@ from sqlalchemy.types import (  # noqa
 )
 
 from . import base, snowdialect  # noqa
+from ._identifiers import FQN  # noqa
 from .custom_commands import (  # noqa
     AWSBucket,
     AzureContainer,
@@ -81,6 +82,7 @@ from .sql.custom_schema.options import (  # noqa
     IdentifierOption,
     KeywordOption,
     LiteralOption,
+    RowAccessPolicyOption,
     SnowflakeKeyword,
     TableOptionKey,
     TargetLagOption,
@@ -160,6 +162,7 @@ _custom_table_options = (
     "IdentifierOption",
     "KeywordOption",
     "ClusterByOption",
+    "RowAccessPolicyOption",
 )
 
 _enums = (
@@ -174,7 +177,7 @@ _orm = (
     "snowflake_declarative_base",
 )
 
-_helpers = ("create_snowflake_engine",)
+_helpers = ("create_snowflake_engine", "FQN")
 
 _secret_logging = (
     "SnowflakeSecretRedactionFilter",

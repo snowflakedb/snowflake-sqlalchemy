@@ -8,12 +8,12 @@ from typing import Any
 from sqlalchemy.sql import Selectable
 from sqlalchemy.sql.schema import Column, MetaData, SchemaItem
 
-from .clustered_table import ClusteredTableBase
 from .options.as_query_option import AsQueryOption, AsQueryOptionType
 from .options.table_option import TableOptionKey
+from .row_access_policy_table import RowAccessPolicyTableBase
 
 
-class TableFromQueryBase(ClusteredTableBase):
+class TableFromQueryBase(RowAccessPolicyTableBase):
     @property
     def as_query(self) -> AsQueryOption | None:
         return self._get_dialect_option(TableOptionKey.AS_QUERY, AsQueryOption)

@@ -8,6 +8,7 @@ from .identifier_option import IdentifierOption, IdentifierOptionType
 from .keyword_option import KeywordOption, KeywordOptionType
 from .keywords import SnowflakeKeyword
 from .literal_option import LiteralOption, LiteralOptionType
+from .row_access_policy_option import RowAccessPolicyOption, RowAccessPolicyOptionType
 from .table_option import TableOptionKey
 from .target_lag_option import TargetLagOption, TargetLagOptionType, TimeUnit
 
@@ -19,6 +20,7 @@ __all__ = [
     "AsQueryOption",
     "TargetLagOption",
     "ClusterByOption",
+    "RowAccessPolicyOption",
     # Enums
     "TimeUnit",
     "SnowflakeKeyword",
@@ -30,4 +32,5 @@ __all__ = [
     "TargetLagOptionType",
     "KeywordOptionType",
     "ClusterByOptionType",
+    "RowAccessPolicyOptionType",
 ]
