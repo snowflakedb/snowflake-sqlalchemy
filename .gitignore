@@ -18,6 +18,9 @@ downloads/
 eggs/
 .eggs/
 lib/
+# scripts/mirroring/lib/ is our own helper directory (config.sh,
+# copybara-run.sh), not a Python build artifact — re-include it.
+!scripts/mirroring/lib/
 lib64/
 parts/
 sdist/
