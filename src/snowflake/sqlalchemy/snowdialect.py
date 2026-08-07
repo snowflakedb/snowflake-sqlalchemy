@@ -1932,17 +1932,18 @@ class SnowflakeDialect(default.DefaultDialect):
         """
         Gets the indexes definition
         """
-        schema = schema or self.default_schema_name
+        resolved_schema = schema or self.default_schema_name
         hybrid_table_names = self.get_table_names_with_prefix(
             connection,
-            schema=schema,
+            schema=resolved_schema,
             prefix=CustomTablePrefix.HYBRID.name,
             info_cache=kw.get("info_cache", None),
         )
+
         if len(hybrid_table_names) == 0:
             return []
 
-        full_schema_name = self._get_full_schema_name(connection, schema, **kw)
+        full_schema_name = self._get_full_schema_name(connection, resolved_schema, **kw)
         result = connection.execute(
             text(
                 f"SHOW /* sqlalchemy:get_multi_indexes */ INDEXES IN SCHEMA {full_schema_name}"
@@ -1984,7 +1985,7 @@ class SnowflakeDialect(default.DefaultDialect):
             table_name = self.normalize_name(str(row[name_to_index_map["table"]]))
             indexes[table_name].append(
                 {
-                    "name": row[name_to_index_map["name"]],
+                    "name": self.normalize_name(row[name_to_index_map["name"]]),
                     "unique": row[name_to_index_map["is_unique"]] == "Y",
                     "column_names": [
                         self.normalize_name(column)

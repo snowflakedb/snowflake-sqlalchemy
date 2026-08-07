@@ -10,18 +10,28 @@ from tests.util import random_string
 
 
 @pytest.mark.aws
-def test_indexes_reflection(engine_testaccount, db_parameters, sql_compiler):
+@pytest.mark.parametrize(
+    "name_case", [str.upper, str.lower], ids=["uppercase", "lowercase"]
+)
+@pytest.mark.parametrize(
+    "include_columns", [[], ["name3"]], ids=["no_include", "include"]
+)
+def test_indexes_reflection(
+    engine_testaccount, db_parameters, sql_compiler, name_case, include_columns
+):
     table_name = "test_hybrid_table_" + random_string(6)
-    index_name = "INDEX_NAME_" + random_string(6).upper()
+    index_name = name_case("index_name_" + random_string(6))
     schema = db_parameters["schema"]
     index_columns = ["name", "name2"]
+    include_sql = f" INCLUDE ({', '.join(include_columns)})" if include_columns else ""
 
     create_table_sql = f"""
    CREATE HYBRID TABLE {schema}.{table_name} (
         id INT primary key,
         name VARCHAR,
         name2 VARCHAR,
-        INDEX {index_name} ({", ".join(index_columns)})
+        name3 VARCHAR,
+        INDEX {index_name} ({", ".join(index_columns)}){include_sql}
     );
     """
 
@@ -39,8 +49,9 @@ def test_indexes_reflection(engine_testaccount, db_parameters, sql_compiler):
         )
 
         assert len(indexes) == 1
-        assert indexes[0].get("name") == index_name
+        assert indexes[0].get("name") == index_name.lower()
         assert indexes[0].get("column_names") == index_columns
+        assert indexes[0].get("include_columns") == include_columns
 
     finally:
         with engine_testaccount.connect() as connection:
