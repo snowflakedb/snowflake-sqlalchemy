@@ -223,13 +223,39 @@ def db_parameters():
     yield get_db_parameters()
 
 
-@pytest.fixture(scope="session")
-def external_volume():
-    db_parameters = get_db_parameters()
-    if "external_volume" in db_parameters:
-        yield db_parameters["external_volume"]
-    else:
-        raise ValueError("External_volume is not set")
+@pytest.fixture()
+def external_volume(engine_testaccount):
+    """Create a uniquely-named external volume for the test and drop it after.
+
+    The name carries a random suffix so CI identities that share a Snowflake
+    account (e.g. the public repo and the internal mirror) never collide or
+    fight over ownership: whichever role creates the volume owns it and drops
+    it. The storage location is a placeholder — the external volume object is
+    created without validating S3 access.
+    """
+    external_volume_name = f"exvol_{uuid.uuid4().hex}"
+    create_external_volume = f"""
+        CREATE EXTERNAL VOLUME {external_volume_name}
+          STORAGE_LOCATIONS =
+          (
+            (
+                NAME = 'my-s3-us-west-2'
+                STORAGE_PROVIDER = 'S3'
+                STORAGE_BASE_URL = 's3://myexamplebucket/'
+                STORAGE_AWS_ROLE_ARN = 'arn:aws:iam::123456789012:role/myrole'
+                ENCRYPTION=(TYPE='AWS_SSE_KMS' KMS_KEY_ID='1234abcd-12ab-34cd-56ef-1234567890ab')
+            )
+          )
+        """
+    with engine_testaccount.connect() as connection:
+        connection.exec_driver_sql(create_external_volume)
+    try:
+        yield external_volume_name
+    finally:
+        with engine_testaccount.connect() as connection:
+            connection.exec_driver_sql(
+                f"DROP EXTERNAL VOLUME IF EXISTS {external_volume_name}"
+            )
 
 
 @pytest.fixture(scope="session")
