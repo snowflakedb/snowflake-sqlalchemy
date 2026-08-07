@@ -133,7 +133,10 @@ def parse_index_columns(columns: str) -> list[str]:
     :example:
         For input `"[A, B, C]"`, the output is `['A', 'B', 'C']`.
     """
-    return [column.strip() for column in columns.strip("[]").split(",")]
+    inner = columns.strip("[]")
+    if not inner:
+        return []
+    return [column.strip() for column in inner.split(",")]
 
 
 def parse_type(type_text: str) -> TypeEngine:

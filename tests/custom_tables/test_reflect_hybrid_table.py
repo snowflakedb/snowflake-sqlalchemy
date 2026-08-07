@@ -5,6 +5,8 @@ import pytest
 from sqlalchemy import MetaData, Table
 from sqlalchemy.sql.ddl import CreateTable
 
+from tests.util import random_string
+
 
 @pytest.mark.aws
 def test_simple_reflection_hybrid_table_as_table(
@@ -40,14 +42,23 @@ def test_simple_reflection_hybrid_table_as_table(
 
 
 @pytest.mark.aws
+@pytest.mark.parametrize(
+    "name_case", [str.upper, str.lower], ids=["uppercase", "lowercase"]
+)
+@pytest.mark.parametrize(
+    "explicit_schema", [True, False], ids=["explicit_schema", "default_schema"]
+)
 def test_reflect_hybrid_table_with_index(
-    engine_testaccount, db_parameters, sql_compiler
+    engine_testaccount, db_parameters, sql_compiler, name_case, explicit_schema
 ):
     metadata = MetaData()
-    schema = db_parameters["schema"]
+    # Reflecting through the connection's default schema (schema=None) keys
+    # the multi-reflection results differently from an explicit schema — the
+    # index must survive both paths.
+    schema = db_parameters["schema"] if explicit_schema else None
 
-    table_name = "test_hybrid_table_2"
-    index_name = "INDEX_NAME_2"
+    table_name = "test_hybrid_table_2_" + random_string(6)
+    index_name = name_case("index_name_2")
 
     create_table_sql = f"""
        CREATE HYBRID TABLE {table_name} (id INT primary key, name VARCHAR, INDEX {index_name} (name));
@@ -59,7 +70,11 @@ def test_reflect_hybrid_table_with_index(
     table = Table(table_name, metadata, schema=schema, autoload_with=engine_testaccount)
 
     try:
-        assert len(table.indexes) == 1 and table.indexes.pop().name == index_name
+        assert len(table.indexes) == 1
+        # Unquoted identifiers are case-insensitive whichever case they were
+        # written in, so reflection returns SQLAlchemy's normalized
+        # (lowercase) form.
+        assert table.indexes.pop().name == index_name.lower()
 
     finally:
         metadata.drop_all(engine_testaccount)
