@@ -57,7 +57,6 @@ class Requirements(SuiteRequirements):
     4. sqlalchemy potentially missing feature
     note: not sure whether these to be supported
 
-    - collate: TODO: order_by_collation
     - datetime_timezone: supported via TIMESTAMP_TZ (DateTime(timezone=True) and TIMESTAMP(timezone=True)
                           compile to TIMESTAMP_TZ; Snowflake-specific TIMESTAMP_TZ/TIMESTAMP_LTZ/TIMESTAMP_NTZ
                           types are also available directly)
@@ -227,6 +226,14 @@ class Requirements(SuiteRequirements):
     @property
     def order_by_label_with_expression(self):
         return exclusions.open()
+
+    def get_order_by_collation(self, config):
+        """Return a Snowflake collation spec for the suite's CollateTest.
+
+        Providing this (used as ``ORDER BY <col> COLLATE '<spec>'``) also
+        opens the inherited ``order_by_collation`` requirement.
+        """
+        return "en-ci"
 
     @property
     def regexp_match(self):

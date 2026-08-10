@@ -719,6 +719,16 @@ class SnowflakeCompiler(compiler.SQLCompiler):
     def visit_now_func(self, now: functions.GenericFunction, **kw: Any) -> str:
         return "CURRENT_TIMESTAMP"
 
+    def visit_collation(self, element: Any, **kw: Any) -> str:
+        """Render a collation as a single-quoted Snowflake string literal.
+
+        Snowflake expects the collation specification as a single-quoted
+        string literal (e.g. ``COLLATE 'en-ci'``), not the double-quoted
+        identifier produced by SQLAlchemy's default preparer.
+        """
+        collation = element.collation.replace("'", "''")
+        return f"'{collation}'"
+
     def visit_sysdate_func(self, sysdate: functions.GenericFunction, **kw: Any) -> str:
         return "SYSDATE()"
 
@@ -1523,6 +1533,23 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
 
 
 class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
+    def _render_string_type(
+        self, name: str, length: int | None, collation: str | None
+    ) -> str:
+        """Render a string type, emitting collation as a Snowflake literal.
+
+        Snowflake renders column collation as a single-quoted string literal
+        (e.g. ``VARCHAR(100) COLLATE 'en-ci'``); SQLAlchemy's default emits a
+        double-quoted identifier, which is invalid Snowflake syntax.
+        """
+        text = name
+        if length:
+            text += f"({length})"
+        if collation:
+            escaped = collation.replace("'", "''")
+            text += f" COLLATE '{escaped}'"
+        return text
+
     def visit_BYTEINT(self, type_: sqltypes.SmallInteger, **kw: Any) -> str:
         return "BYTEINT"
 

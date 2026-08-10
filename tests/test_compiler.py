@@ -58,6 +58,34 @@ class TestSnowflakeCompiler(AssertsCompiledSQL):
             dialect="snowflake",
         )
 
+    def test_collate_order_by(self):
+        # Snowflake requires the collation spec as a single-quoted string
+        # literal, not a double-quoted identifier (SNOW-629086).
+        t = table("some_table", column("id", Integer), column("data", String))
+        statement = select(t.c.data).order_by(t.c.data.collate("en-ci").asc())
+        self.assert_compile(
+            statement,
+            "SELECT some_table.data FROM some_table "
+            "ORDER BY some_table.data COLLATE 'en-ci' ASC",
+            dialect="snowflake",
+        )
+
+    def test_collation_in_column_type(self):
+        # Column-level collation renders as COLLATE '<spec>' in DDL.
+        from sqlalchemy.schema import CreateTable
+
+        metadata = MetaData()
+        t = Table(
+            "collated_table",
+            metadata,
+            Column("data", String(100, collation="en-ci")),
+        )
+        self.assert_compile(
+            CreateTable(t),
+            "CREATE TABLE collated_table (data VARCHAR(100) COLLATE 'en-ci')",
+            dialect="snowflake",
+        )
+
     def test_underscore_as_valid_identifier(self):
         _table = table(
             "table_1745924",
