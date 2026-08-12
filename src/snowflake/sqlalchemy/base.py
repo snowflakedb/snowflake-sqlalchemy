@@ -732,6 +732,23 @@ class SnowflakeCompiler(compiler.SQLCompiler):
     def visit_sysdate_func(self, sysdate: functions.GenericFunction, **kw: Any) -> str:
         return "SYSDATE()"
 
+    def visit_json_getitem_op_binary(
+        self, binary: BinaryExpression, operator: Any, **kw: Any
+    ) -> str:
+        """Render subscript access on semi-structured columns.
+
+        Enables ``col["key"]`` / ``col[index]`` on ``VARIANT`` / ``OBJECT`` /
+        ``ARRAY`` / ``MAP`` columns, compiling to Snowflake's native bracket
+        accessor (e.g. ``col['key']``, ``col[0]``). Nested access chains
+        (``col["a"]["b"]``) compose because the result is itself indexable.
+        """
+        return (
+            self.process(binary.left, **kw)
+            + "["
+            + self.process(binary.right, **kw)
+            + "]"
+        )
+
     def visit_merge_into(self, merge_into: MergeInto, **kw: Any) -> str:
         clauses = " ".join(
             clause._compiler_dispatch(self, **kw) for clause in merge_into.clauses

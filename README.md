@@ -922,6 +922,44 @@ connection.execute(
 Use `func.parse_json(json.dumps(value))` anywhere you would otherwise bind a dict/list to a
 `VARIANT`, `OBJECT`, or `ARRAY` column.
 
+#### Reading keys and elements with subscript access
+
+`VARIANT`, `OBJECT`, `ARRAY` and `MAP` columns support Python subscript syntax in queries.
+`col["key"]` and `col[index]` compile to Snowflake's native bracket accessor, and access chains
+can be nested:
+
+```python
+from sqlalchemy import select
+
+# SELECT tbl.ob['name'], tbl.ar[0], tbl.mp['k'], tbl.ob['address']['city'] FROM tbl
+select(
+    t.c.ob["name"],
+    t.c.ar[0],
+    t.c.mp["k"],
+    t.c.ob["address"]["city"],
+)
+```
+
+Subscript expressions can also be used in `WHERE`, `ORDER BY`, and other clauses:
+
+```python
+# SELECT tbl.id FROM tbl WHERE tbl.ob['status'] = 'active'
+select(t.c.id).where(t.c.ob["status"] == "active")
+```
+
+The extracted value is itself semi-structured; cast it (for example `t.c.ob["age"].cast(Integer)`)
+when you need a specific SQL type.
+
+A few limitations follow from Snowflake's bracket accessor:
+
+* **Negative indices are not supported.** `col[-1]` compiles as-is, but Snowflake raises a
+  runtime error for negative array indices — use a non-negative index.
+* **A key/index bound as a parameter needs client-side substitution.** With the default
+  `pyformat` paramstyle the driver substitutes the bound value before the statement reaches
+  Snowflake, so `col[some_bindparam]` works. Under a positional `qmark` paramstyle the bracket
+  accessor cannot take a placeholder; pass the key/index as a literal (for example
+  `col["name"]` or `col[0]`) instead of a bound parameter.
+
 #### Customizing JSON serialization (`json_serializer` / `json_deserializer`)
 
 Snowflake SQLAlchemy accepts the standard SQLAlchemy engine-level `json_serializer` and

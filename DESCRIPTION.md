@@ -10,7 +10,7 @@ Source code is also available at:
 # Unreleased Notes
 
 - Add `COLLATE` support: expression-level `Column.collate('<spec>')` and column-type collation (`String(collation='<spec>')`) now render the collation as a single-quoted Snowflake string literal (e.g. `COLLATE 'en-ci'`) instead of an invalid double-quoted identifier. Enables the SQLAlchemy suite `CollateTest` (SNOW-629086).
-
+- Add subscript access for semi-structured columns: `col["key"]` and `col[index]` on `VARIANT`, `OBJECT`, `ARRAY` and `MAP` columns now compile to Snowflake's native bracket accessor (e.g. `col['key']`, `col[0]`), including nested chains such as `col["a"]["b"]`. See [Reading keys and elements with subscript access](README.md#reading-keys-and-elements-with-subscript-access) (SNOW-1820647 / GH #546).
 - Treat error code `390195` (authentication token expired, variant) as a session disconnect in `is_disconnect`, so `pool_pre_ping` / `connection_invalidated` recover from it like the other token/session-loss codes (SNOW-3882904 / GH #702).
 - Support `asdecimal` parameter on `_CUSTOM_DECIMAL` type to allow opt-in conversion of numeric results to float instead of Decimal; default remains Decimal for backward compatibility (SNOW-728151 / GH #373).
 - Fix PrivateLink/regional account parsing where org-style accounts with dashes (e.g., `gnamsrm-vi65876.privatelink`) were incorrectly truncated at the dash, breaking JWT/key-pair authentication. Account derivation now delegates to the Snowflake Connector's own `parse_account`, so all host notations (plain, regional, regional/regionless PrivateLink, and `.global`) match the driver (SNOW-730644, also fixes SNOW-1209099).

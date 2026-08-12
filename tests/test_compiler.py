@@ -23,7 +23,15 @@ from sqlalchemy.schema import DropColumnComment, DropTableComment
 from sqlalchemy.sql import column, quoted_name, table
 from sqlalchemy.testing.assertions import AssertsCompiledSQL
 
-from snowflake.sqlalchemy import InsertMulti, MergeInto, snowdialect
+from snowflake.sqlalchemy import (
+    ARRAY,
+    MAP,
+    OBJECT,
+    VARIANT,
+    InsertMulti,
+    MergeInto,
+    snowdialect,
+)
 from src.snowflake.sqlalchemy.snowdialect import SnowflakeDialect
 
 table1 = table(
@@ -625,3 +633,184 @@ def test_insert_multi_repr_has_no_comma_between_targets():
     # compiled SQL); the comma-join artifact ", INTO" must not appear.
     assert ", INTO" not in text
     assert text.count("INTO ") == 2
+
+
+class TestStructuredTypeGetItem(AssertsCompiledSQL):
+    """Subscript access (``col["key"]`` / ``col[index]``) on semi-structured
+    columns must compile to Snowflake's native bracket syntax."""
+
+    __dialect__ = "snowflake"
+
+    @staticmethod
+    def _table():
+        meta = MetaData()
+        return Table(
+            "semi",
+            meta,
+            Column("id", Integer),
+            Column("va", VARIANT),
+            Column("ob", OBJECT),
+            Column("ar", ARRAY),
+            Column("mp", MAP(String(), String())),
+            Column("mp_int", MAP(Integer(), String())),
+        )
+
+    def test_object_key_access_literal(self):
+        t = self._table()
+        self.assert_compile(
+            select(t.c.ob["name"]),
+            "SELECT semi.ob['name'] AS anon_1 FROM semi",
+            dialect="snowflake",
+            literal_binds=True,
+        )
+
+    def test_variant_key_access_literal(self):
+        t = self._table()
+        self.assert_compile(
+            select(t.c.va["a"]),
+            "SELECT semi.va['a'] AS anon_1 FROM semi",
+            dialect="snowflake",
+            literal_binds=True,
+        )
+
+    def test_array_index_access_literal(self):
+        t = self._table()
+        self.assert_compile(
+            select(t.c.ar[0]),
+            "SELECT semi.ar[0] AS anon_1 FROM semi",
+            dialect="snowflake",
+            literal_binds=True,
+        )
+
+    def test_nested_object_access_literal(self):
+        t = self._table()
+        self.assert_compile(
+            select(t.c.ob["a"]["b"]),
+            "SELECT semi.ob['a']['b'] AS anon_1 FROM semi",
+            dialect="snowflake",
+            literal_binds=True,
+        )
+
+    def test_object_key_access_bound_param(self):
+        t = self._table()
+        self.assert_compile(
+            select(t.c.ob["name"]),
+            "SELECT semi.ob[%(ob_1)s] AS anon_1 FROM semi",
+            dialect="snowflake",
+        )
+
+    def test_getitem_in_where_clause(self):
+        t = self._table()
+        self.assert_compile(
+            select(t.c.id).where(t.c.ob["status"] == "active"),
+            "SELECT semi.id FROM semi WHERE semi.ob['status'] = 'active'",
+            dialect="snowflake",
+            literal_binds=True,
+        )
+
+    def test_object_key_with_single_quote_is_escaped_literal(self):
+        # Keys are rendered by SQLAlchemy's JSON index bind; with literal_binds
+        # single quotes are doubled (ANSI/Snowflake string-literal escaping), so
+        # a quote-containing key cannot break out of the literal.
+        t = self._table()
+        self.assert_compile(
+            select(t.c.ob["a'b"]),
+            "SELECT semi.ob['a''b'] AS anon_1 FROM semi",
+            dialect="snowflake",
+            literal_binds=True,
+        )
+
+    def test_object_key_is_bound_not_interpolated(self):
+        # Without literal_binds the key is a bound parameter (carried in params,
+        # never interpolated into the SQL text) — no injection surface.
+        t = self._table()
+        self.assert_compile(
+            select(t.c.ob["a'; DROP TABLE t;--"]),
+            "SELECT semi.ob[%(ob_1)s] AS anon_1 FROM semi",
+            dialect="snowflake",
+            checkparams={"ob_1": "a'; DROP TABLE t;--"},
+        )
+
+    def test_map_key_access_literal(self):
+        t = self._table()
+        self.assert_compile(
+            select(t.c.mp["k"]),
+            "SELECT semi.mp['k'] AS anon_1 FROM semi",
+            dialect="snowflake",
+            literal_binds=True,
+        )
+
+    def test_array_index_access_bound_param(self):
+        # Integer index also renders as a bound parameter by default.
+        t = self._table()
+        self.assert_compile(
+            select(t.c.ar[0]),
+            "SELECT semi.ar[%(ar_1)s] AS anon_1 FROM semi",
+            dialect="snowflake",
+            checkparams={"ar_1": 0},
+        )
+
+    def test_getitem_statement_is_cacheable(self):
+        # Making the types Indexable must not disable statement caching.
+        t = self._table()
+        key = select(t.c.id).where(t.c.ob["status"] == "active")._generate_cache_key()
+        assert key is not None
+
+    def test_negative_index_compiles_verbatim(self):
+        # Snowflake rejects negative array indices at runtime, but the dialect
+        # renders whatever index is given; -1 must pass through unchanged (the
+        # limitation is the user's responsibility, documented in the README).
+        t = self._table()
+        self.assert_compile(
+            select(t.c.ar[-1]),
+            "SELECT semi.ar[-1] AS anon_1 FROM semi",
+            dialect="snowflake",
+            literal_binds=True,
+        )
+
+    def test_getitem_in_order_by(self):
+        t = self._table()
+        self.assert_compile(
+            select(t.c.id).order_by(t.c.ob["status"]),
+            "SELECT semi.id FROM semi ORDER BY semi.ob['status']",
+            dialect="snowflake",
+            literal_binds=True,
+        )
+
+    def test_getitem_in_group_by(self):
+        t = self._table()
+        self.assert_compile(
+            select(t.c.ob["status"]).group_by(t.c.ob["status"]),
+            "SELECT semi.ob['status'] AS anon_1 FROM semi GROUP BY semi.ob['status']",
+            dialect="snowflake",
+            literal_binds=True,
+        )
+
+    def test_map_string_key_access_bound_param(self):
+        # MAP with string keys: default (bound) rendering.
+        t = self._table()
+        self.assert_compile(
+            select(t.c.mp["k"]),
+            "SELECT semi.mp[%(mp_1)s] AS anon_1 FROM semi",
+            dialect="snowflake",
+            checkparams={"mp_1": "k"},
+        )
+
+    def test_map_integer_key_access_literal(self):
+        # MAP with a non-string (integer) key type: numeric keys render verbatim.
+        t = self._table()
+        self.assert_compile(
+            select(t.c.mp_int[1]),
+            "SELECT semi.mp_int[1] AS anon_1 FROM semi",
+            dialect="snowflake",
+            literal_binds=True,
+        )
+
+    def test_map_integer_key_access_bound_param(self):
+        t = self._table()
+        self.assert_compile(
+            select(t.c.mp_int[1]),
+            "SELECT semi.mp_int[%(mp_int_1)s] AS anon_1 FROM semi",
+            dialect="snowflake",
+            checkparams={"mp_int_1": 1},
+        )

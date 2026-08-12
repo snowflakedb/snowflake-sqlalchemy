@@ -48,8 +48,12 @@ class SnowflakeType(sqltypes.TypeEngine):
         return __import__("snowflake.sqlalchemy").sqlalchemy.dialect()
 
 
-class VARIANT(SnowflakeType):
+class VARIANT(sqltypes.Indexable, SnowflakeType):
     __visit_name__ = "VARIANT"
+
+    # Enable subscript access (``col["key"]`` / ``col[index]``) with JSON
+    # semantics; the compiler renders it as Snowflake's bracket accessor.
+    comparator_factory = sqltypes.JSON.Comparator
 
     @property
     def python_type(self) -> type:
@@ -128,7 +132,12 @@ class VECTOR(SnowflakeType):
         return list
 
 
-class StructuredType(SnowflakeType):
+class StructuredType(sqltypes.Indexable, SnowflakeType):
+    # Enable subscript access (``col["key"]`` / ``col[index]``) with JSON
+    # semantics on OBJECT / ARRAY / MAP; the compiler renders it as
+    # Snowflake's bracket accessor.
+    comparator_factory = sqltypes.JSON.Comparator
+
     def __init__(self, is_semi_structured: bool = False) -> None:
         self.is_semi_structured = is_semi_structured
         super().__init__()
