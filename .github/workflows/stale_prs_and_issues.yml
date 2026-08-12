@@ -17,7 +17,7 @@ jobs:
         env:
           ACTIONS_STEP_DEBUG: true # Enable debug mode to see additional logs
         with:
-          debug-only: true # Dry-run mode (no actual changes will be made)
+          # debug-only: true # Dry-run mode (no actual changes will be made)
           ascending: true # Process oldest PRs first
           days-before-stale: 30 # Both for PRs and issues
           days-before-close: 7 # Both for PRs and issues
