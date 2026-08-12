@@ -26,6 +26,7 @@ from snowflake.sqlalchemy.snowdialect import (
 _DEFAULT_FLAG_PAYLOAD = {
     "case_sensitive_identifiers": False,
     "enable_decfloat": False,
+    "enable_structured_type_json": False,
     "force_div_is_floordiv": True,
     "legacy_url_params": False,
 }
@@ -174,15 +175,21 @@ def _telemetry_payload(dialect, telemetry_client_mock, fake_connection):
             {"force_div_is_floordiv": False},
         ),
         (
+            {"enable_structured_type_json": True},
+            {"enable_structured_type_json": True},
+        ),
+        (
             # All flags flipped at once
             {
                 "case_sensitive_identifiers": True,
                 "enable_decfloat": True,
+                "enable_structured_type_json": True,
                 "force_div_is_floordiv": False,
             },
             {
                 "case_sensitive_identifiers": True,
                 "enable_decfloat": True,
+                "enable_structured_type_json": True,
                 "force_div_is_floordiv": False,
             },
         ),
@@ -191,6 +198,7 @@ def _telemetry_payload(dialect, telemetry_client_mock, fake_connection):
         "case_sensitive_identifiers_true",
         "enable_decfloat_true",
         "force_div_is_floordiv_false",
+        "enable_structured_type_json_true",
         "all_flipped",
     ],
 )

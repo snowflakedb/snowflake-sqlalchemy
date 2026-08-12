@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import decimal
+import json
 import keyword
 import warnings
 from datetime import date, datetime, time
@@ -48,7 +49,37 @@ class SnowflakeType(sqltypes.TypeEngine):
         return __import__("snowflake.sqlalchemy").sqlalchemy.dialect()
 
 
-class VARIANT(sqltypes.Indexable, SnowflakeType):
+class _SemiStructuredJSONMixin:
+    """Opt-in JSON deserialization for semi-structured columns.
+
+    When ``enable_structured_type_json`` is set on the dialect, reading a
+    VARIANT / OBJECT / ARRAY / MAP column deserializes the JSON text Snowflake
+    returns into native Python (``dict`` / ``list`` / ...). The dialect's
+    ``json_deserializer`` is used when provided, otherwise ``json.loads``.
+
+    The flag defaults to off, so without it these types behave exactly as
+    before (raw passthrough) and existing code is unaffected — no BCR.
+    """
+
+    def result_processor(
+        self, dialect: Dialect, coltype: object
+    ) -> Callable[[Any], Any] | None:
+        if not getattr(dialect, "_enable_structured_type_json", False):
+            return None
+
+        deserializer = getattr(dialect, "_json_deserializer", None) or json.loads
+
+        def process(value: Any) -> Any:
+            # Only decode the textual form Snowflake returns for semi-structured
+            # columns; leave None and any already-parsed value untouched.
+            if isinstance(value, (str, bytes, bytearray)):
+                return deserializer(value)
+            return value
+
+        return process
+
+
+class VARIANT(_SemiStructuredJSONMixin, sqltypes.Indexable, SnowflakeType):
     __visit_name__ = "VARIANT"
 
     # Enable subscript access (``col["key"]`` / ``col[index]``) with JSON
@@ -132,7 +163,7 @@ class VECTOR(SnowflakeType):
         return list
 
 
-class StructuredType(sqltypes.Indexable, SnowflakeType):
+class StructuredType(_SemiStructuredJSONMixin, sqltypes.Indexable, SnowflakeType):
     # Enable subscript access (``col["key"]`` / ``col[index]``) with JSON
     # semantics on OBJECT / ARRAY / MAP; the compiler renders it as
     # Snowflake's bracket accessor.
@@ -284,7 +315,7 @@ class DECFLOAT(SnowflakeType):
 
     def result_processor(
         self, dialect: Dialect, coltype: object
-    ) -> Callable[[Any], Any]:
+    ) -> Callable[[Any], Any] | None:
         """Check decimal context precision and warn if it may truncate DECFLOAT values."""
         # Check if dialect has enable_decfloat configured
         decfloat_enabled = getattr(dialect, "_enable_decfloat", False)

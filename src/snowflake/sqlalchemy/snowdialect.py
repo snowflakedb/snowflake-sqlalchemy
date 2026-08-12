@@ -251,6 +251,7 @@ class SnowflakeDialect(default.DefaultDialect):
         force_div_is_floordiv: bool = True,
         isolation_level: str | None = SnowflakeIsolationLevel.READ_COMMITTED.value,
         enable_decfloat: bool = False,
+        enable_structured_type_json: bool = False,
         case_sensitive_identifiers: bool = False,
         legacy_url_params: bool | None = None,
         redact_log_secrets: bool = True,
@@ -264,6 +265,10 @@ class SnowflakeDialect(default.DefaultDialect):
         self._case_sensitive_identifiers = case_sensitive_identifiers
         self.name_utils = _NameUtils(self.identifier_preparer)
         self._enable_decfloat = enable_decfloat
+        # Opt-in JSON (de)serialization for semi-structured columns
+        # (VARIANT/OBJECT/ARRAY/MAP). Off by default so existing code that reads
+        # raw JSON strings / writes pre-serialized values is unaffected.
+        self._enable_structured_type_json = enable_structured_type_json
         # Serializers used for JSON (de)serialization of semi-structured data.
         # Accepting these keeps parity with the built-in SQLAlchemy dialects so
         # ``create_engine(..., json_serializer=..., json_deserializer=...)`` works.
@@ -370,6 +375,13 @@ class SnowflakeDialect(default.DefaultDialect):
         enable_decfloat = query.pop("enable_decfloat", None)
         if enable_decfloat is not None:
             self._enable_decfloat = parse_url_boolean(enable_decfloat)
+
+        # Handle enable_structured_type_json URL parameter
+        enable_structured_type_json = query.pop("enable_structured_type_json", None)
+        if enable_structured_type_json is not None:
+            self._enable_structured_type_json = parse_url_boolean(
+                enable_structured_type_json
+            )
 
         # Handle case_sensitive_identifiers URL parameter.  The dialect attribute
         # is the single source of truth: the preparer and name_utils both read it
@@ -2084,6 +2096,9 @@ class SnowflakeDialect(default.DefaultDialect):
                 self._case_sensitive_identifiers
             )
             telemetry_value["enable_decfloat"] = self._enable_decfloat
+            telemetry_value["enable_structured_type_json"] = (
+                self._enable_structured_type_json
+            )
             telemetry_value["force_div_is_floordiv"] = self.force_div_is_floordiv
             telemetry_value["legacy_url_params"] = self._legacy_url_params
 
