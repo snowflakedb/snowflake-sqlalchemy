@@ -22,11 +22,20 @@ class _Dialect:
 
 
 def _semi_structured_types():
+    # Untyped (semi-structured) forms are deserialized on read.
     return [
         VARIANT(),
         OBJECT(),
         ARRAY(),
+    ]
+
+
+def _structured_types():
+    # Typed/structured forms keep native connector handling (no deserialization).
+    return [
         MAP(sqltypes.VARCHAR(), sqltypes.VARCHAR()),
+        OBJECT(name=sqltypes.VARCHAR()),
+        ARRAY(sqltypes.VARCHAR()),
     ]
 
 
@@ -78,6 +87,12 @@ class TestStructuredTypeJsonResultProcessor:
         )
         assert proc('{"a": 1}') is sentinel
         assert seen == ['{"a": 1}']
+
+    @pytest.mark.parametrize("typ", _structured_types())
+    def test_structured_types_not_deserialized(self, typ):
+        # Typed/structured columns keep native connector handling even flag-on,
+        # matching the write path and documented scope.
+        assert typ.result_processor(_Dialect(enabled=True), None) is None
 
     def test_malformed_json_propagates(self):
         # Corrupt JSON surfaces as JSONDecodeError rather than being swallowed.

@@ -12,6 +12,9 @@ from typing import TYPE_CHECKING, Any, Callable, ClassVar
 
 import sqlalchemy.types as sqltypes
 import sqlalchemy.util as util
+from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.sql.expression import ColumnElement
+from sqlalchemy.sql.visitors import InternalTraversal
 from sqlalchemy.types import TypeEngine
 
 if TYPE_CHECKING:
@@ -49,6 +52,44 @@ class SnowflakeType(sqltypes.TypeEngine):
         return __import__("snowflake.sqlalchemy").sqlalchemy.dialect()
 
 
+class _ParseJSONBind(ColumnElement):
+    """Wrap a bound semi-structured value so it renders as ``PARSE_JSON(:p)``.
+
+    ``TypeEngine.bind_expression`` has no access to the dialect, so the wrapping
+    element defers the decision to render ``PARSE_JSON`` to compile time, where
+    ``compiler.dialect`` is available. On Snowflake with
+    ``enable_structured_type_json`` set it renders ``PARSE_JSON(<inner>)``;
+    otherwise (flag off, or a non-Snowflake dialect) it renders the bare value,
+    so the presence of this wrapper is a no-op by default.
+    """
+
+    inherit_cache = True
+    # Without an explicit traversal, a custom ColumnElement falls back to
+    # NO_CACHE, which disables statement caching for every INSERT/UPDATE/WHERE
+    # that binds a value to a semi-structured column — even when the flag is off
+    # (bind_expression wraps unconditionally). Traversing ``wrapped`` keeps such
+    # statements cacheable; the dialect flag is fixed per engine, so it need not
+    # be part of the key.
+    _cache_key_traversal = [("wrapped", InternalTraversal.dp_clauseelement)]
+
+    def __init__(self, wrapped: ColumnElement) -> None:
+        self.wrapped = wrapped
+        self.type = sqltypes.NULLTYPE
+
+
+@compiles(_ParseJSONBind)
+def _render_parse_json_bind_default(element: _ParseJSONBind, compiler, **kw) -> str:
+    return compiler.process(element.wrapped, **kw)
+
+
+@compiles(_ParseJSONBind, "snowflake")
+def _render_parse_json_bind_snowflake(element: _ParseJSONBind, compiler, **kw) -> str:
+    inner = compiler.process(element.wrapped, **kw)
+    if getattr(compiler.dialect, "_enable_structured_type_json", False):
+        return f"PARSE_JSON({inner})"
+    return inner
+
+
 class _SemiStructuredJSONMixin:
     """Opt-in JSON deserialization for semi-structured columns.
 
@@ -66,6 +107,11 @@ class _SemiStructuredJSONMixin:
     ) -> Callable[[Any], Any] | None:
         if not getattr(dialect, "_enable_structured_type_json", False):
             return None
+        # Scope deserialization to the semi-structured (untyped) form, matching
+        # the write path and the documented behavior. Typed/structured columns
+        # (OBJECT(a=...), ARRAY(<type>), MAP) keep their native connector handling.
+        if not self._is_untyped_semi_structured():
+            return None
 
         deserializer = getattr(dialect, "_json_deserializer", None) or json.loads
 
@@ -77,6 +123,72 @@ class _SemiStructuredJSONMixin:
             return value
 
         return process
+
+    def _is_untyped_semi_structured(self) -> bool:
+        # Semi-structured (untyped) when no element/field/key typing is declared:
+        # VARIANT, OBJECT() and ARRAY(). Typed forms — OBJECT(a=...), ARRAY(<type>)
+        # and MAP(k, v) — are structured and keep their native connector handling.
+        if getattr(self, "items_types", None):
+            return False
+        if getattr(self, "value_type", None) is not None:
+            return False
+        if getattr(self, "key_type", None) is not None:
+            return False
+        return True
+
+    def _json_write_enabled(self, dialect: Dialect) -> bool:
+        # The PARSE_JSON write path only applies to the semi-structured (untyped)
+        # form; typed/structured columns keep their native connector handling.
+        return (
+            getattr(dialect, "_enable_structured_type_json", False)
+            and self._is_untyped_semi_structured()
+        )
+
+    def bind_processor(self, dialect: Dialect) -> Callable[[Any], Any] | None:
+        if not self._json_write_enabled(dialect):
+            return None
+
+        serializer = getattr(dialect, "_json_serializer", None) or json.dumps
+
+        def process(value: Any) -> Any:
+            # Serialize native Python objects to JSON text for PARSE_JSON; leave
+            # None and already-serialized text untouched (avoids double-encoding
+            # the documented ``json.dumps`` workaround).
+            if value is None or isinstance(value, (str, bytes, bytearray)):
+                return value
+            return serializer(value)
+
+        return process
+
+    def literal_processor(self, dialect: Dialect) -> Callable[[Any], str] | None:
+        if not self._json_write_enabled(dialect):
+            return None
+
+        def process(value: Any) -> str:
+            if value is None:
+                # SQL NULL, not the JSON literal 'null'.
+                return "NULL"
+            # Rendering the JSON as an inline SQL literal is unsafe: Snowflake
+            # unescapes backslashes in single-quoted literals *before* PARSE_JSON
+            # runs, so escaping cannot both preserve the data and prevent a
+            # crafted value from breaking out of the literal (SQL injection).
+            # The bound-parameter path (the default) is correct and safe, so
+            # refuse to inline instead of emitting an unsafe literal.
+            raise NotImplementedError(
+                "Rendering a semi-structured JSON value as a SQL literal is not "
+                "supported with enable_structured_type_json; execute the "
+                "statement with bound parameters (the default) instead of "
+                "literal_binds."
+            )
+
+        return process
+
+    def bind_expression(self, bindvalue: Any) -> Any:
+        # Wrap so the compiler renders PARSE_JSON(:p) on Snowflake when the flag
+        # is on. Skipped for typed/structured columns (see _json_write_enabled).
+        if not self._is_untyped_semi_structured():
+            return bindvalue
+        return _ParseJSONBind(bindvalue)
 
 
 class VARIANT(_SemiStructuredJSONMixin, sqltypes.Indexable, SnowflakeType):
@@ -197,6 +309,17 @@ class OBJECT(StructuredType):
     __visit_name__ = "OBJECT"
 
     def __init__(self, **items_types: TypeEngine | tuple[TypeEngine, bool]) -> None:
+        """Build an OBJECT type from optional ``field=type`` specifications.
+
+        ``is_semi_structured`` is a ``StructuredType`` constructor parameter, not
+        a field. SQLAlchemy's type-copy machinery
+        (``get_cls_kwargs``/``constructor_copy``) forwards base-class ``__init__``
+        params into this ``**items_types`` catch-all when copying/adapting the
+        type during compilation, so it is dropped here; otherwise a copied
+        ``OBJECT`` would gain a bogus ``is_semi_structured`` field, flipping an
+        untyped ``OBJECT`` to "typed" and breaking the semi-structured write path.
+        """
+        items_types.pop("is_semi_structured", None)
         normalized: dict[str, tuple[TypeEngine, bool]] = {}
         for key, value in items_types.items():
             normalized[key] = value if isinstance(value, tuple) else (value, False)
@@ -204,6 +327,22 @@ class OBJECT(StructuredType):
         self.items_types: dict[str, tuple[TypeEngine, bool]] = normalized
         self.is_semi_structured = len(normalized) == 0
         super().__init__()
+
+    def adapt(self, cls: type, **kw: Any) -> Any:
+        """Copy/adapt the type while preserving its field specification.
+
+        The field spec lives in ``items_types`` (a dict), which the default
+        ``constructor_copy`` cannot reconstruct — it only forwards named
+        ``__init__`` params, so fields are lost on copy/adapt. The real
+        ``items_types``/``is_semi_structured`` are restored here so both typed and
+        untyped ``OBJECT`` survive copy/adapt (e.g. when the column type is copied
+        during INSERT compilation, reflection, or ``Table.to_metadata``).
+        """
+        adapted: Any = super().adapt(cls, **kw)
+        if isinstance(adapted, OBJECT):
+            adapted.items_types = dict(self.items_types)
+            adapted.is_semi_structured = self.is_semi_structured
+        return adapted
 
     @property
     def python_type(self) -> type:

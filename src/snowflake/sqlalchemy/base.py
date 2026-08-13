@@ -25,7 +25,7 @@ from sqlalchemy.schema import (
     Table,
     UniqueConstraint,
 )
-from sqlalchemy.sql import compiler, expression, functions, sqltypes
+from sqlalchemy.sql import compiler, crud, expression, functions, sqltypes
 from sqlalchemy.sql.base import CompileState
 from sqlalchemy.sql.ddl import DropColumnComment, DropTableComment
 from sqlalchemy.sql.elements import BinaryExpression, BindParameter, Label, quoted_name
@@ -61,6 +61,7 @@ from .custom_types import (
     TIMESTAMP_TZ,
     VARIANT,
     VECTOR,
+    _SemiStructuredJSONMixin,
 )
 from .exc import (
     CustomOptionsAreOnlySupportedOnSnowflakeTables,
@@ -748,6 +749,147 @@ class SnowflakeCompiler(compiler.SQLCompiler):
             + self.process(binary.right, **kw)
             + "]"
         )
+
+    def _insert_targets_semi_structured(self, insert_stmt: Any) -> bool:
+        """Whether the INSERT writes to a semi-structured column.
+
+        Such columns have a ``PARSE_JSON``-wrapped value (see
+        ``_SemiStructuredJSONMixin.bind_expression``); Snowflake rejects
+        functions in a ``VALUES`` clause, so those inserts must be rendered as
+        ``INSERT ... SELECT`` instead.
+        """
+
+        def _is_semi(name_or_col: Any) -> bool:
+            if isinstance(name_or_col, str):
+                if name_or_col not in table.c:
+                    return False
+                col = table.c[name_or_col]
+            else:
+                col = name_or_col
+            col_type = getattr(col, "type", None)
+            return (
+                isinstance(col_type, _SemiStructuredJSONMixin)
+                and col_type._is_untyped_semi_structured()
+            )
+
+        table = insert_stmt.table
+        values = getattr(insert_stmt, "_values", None)
+        if values:
+            if any(_is_semi(key) for key in values.keys()):
+                return True
+        multi_values = getattr(insert_stmt, "_multi_values", None)
+        if multi_values:
+            # Every row in a multi-values insert shares the same column keys, so
+            # inspecting the first non-empty row is enough (avoids O(rows x cols)).
+            for param_list in multi_values:
+                if param_list and any(_is_semi(key) for key in param_list[0].keys()):
+                    return True
+        if self.column_keys:
+            if any(_is_semi(key) for key in self.column_keys):
+                return True
+        return False
+
+    def visit_insert(
+        self,
+        insert_stmt: Any,
+        visited_bindparam: Any = None,
+        visiting_cte: Any = None,
+        **kw: Any,
+    ) -> str:
+        # Only intervene when structured-type JSON is enabled AND the statement
+        # writes a semi-structured column via a VALUES clause. ``INSERT FROM
+        # SELECT`` already renders as a SELECT (PARSE_JSON is valid there), and
+        # everything else is left to the base compiler unchanged.
+        if (
+            not getattr(self.dialect, "_enable_structured_type_json", False)
+            or insert_stmt.select is not None
+            or not self._insert_targets_semi_structured(insert_stmt)
+        ):
+            return super().visit_insert(
+                insert_stmt,
+                visited_bindparam=visited_bindparam,
+                visiting_cte=visiting_cte,
+                **kw,
+            )
+        return self._render_insert_from_values_select(
+            insert_stmt, visiting_cte=visiting_cte, **kw
+        )
+
+    def _render_insert_from_values_select(
+        self, insert_stmt: Any, visiting_cte: Any = None, **kw: Any
+    ) -> str:
+        """Render ``INSERT INTO t (cols) SELECT ...`` for semi-structured writes.
+
+        Multi-row ``values([...])`` becomes ``SELECT ... UNION ALL SELECT ...``.
+        Mirrors the crud-param setup of the base ``visit_insert`` but emits a
+        SELECT source so the ``PARSE_JSON(...)`` value expressions are valid.
+        """
+        compile_state = insert_stmt._compile_state_factory(insert_stmt, self, **kw)
+        insert_stmt = compile_state.statement
+
+        if insert_stmt._returning or self.implicit_returning:
+            raise NotImplementedError(
+                "RETURNING is not supported for INSERT into semi-structured "
+                "columns (VARIANT/OBJECT/ARRAY) with enable_structured_type_json."
+            )
+
+        toplevel = not self.stack
+        if toplevel:
+            self.isinsert = True
+            if not self.dml_compile_state:
+                self.dml_compile_state = compile_state
+            if not self.compile_state:
+                self.compile_state = compile_state
+
+        self.stack.append(
+            {
+                "correlate_froms": set(),
+                "asfrom_froms": set(),
+                "selectable": insert_stmt,
+            }
+        )
+
+        # positional dialects (e.g. qmark) count VALUES binds; mirror base.
+        if self.positional and visiting_cte is None:
+            visited_bindparam: Any = []
+        else:
+            visited_bindparam = None
+
+        crud_params_struct = crud._get_crud_params(
+            self,
+            insert_stmt,
+            compile_state,
+            toplevel,
+            visited_bindparam=visited_bindparam,
+            **kw,
+        )
+        crud_params_single = crud_params_struct.single_params
+
+        preparer = self.preparer
+        text = "INSERT "
+        if insert_stmt._prefixes:
+            text += self._generate_prefixes(insert_stmt, insert_stmt._prefixes, **kw)
+        text += "INTO "
+        table_text = preparer.format_table(insert_stmt.table)
+        if insert_stmt._hints:
+            _, table_text = self._setup_crud_hints(insert_stmt, table_text)
+        text += table_text
+
+        text += " (%s)" % ", ".join([expr for _, expr, _, _ in crud_params_single])
+
+        if compile_state._has_multi_parameters:
+            selects = [
+                "SELECT %s" % ", ".join(value for _, _, value, _ in crud_param_set)
+                for crud_param_set in crud_params_struct.all_multi_params
+            ]
+            text += " " + " UNION ALL ".join(selects)
+        else:
+            text += " SELECT %s" % ", ".join(
+                value for _, _, value, _ in crud_params_single
+            )
+
+        self.stack.pop(-1)
+        return text
 
     def visit_merge_into(self, merge_into: MergeInto, **kw: Any) -> str:
         clauses = " ".join(

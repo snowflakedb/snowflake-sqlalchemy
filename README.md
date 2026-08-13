@@ -922,6 +922,63 @@ connection.execute(
 Use `func.parse_json(json.dumps(value))` anywhere you would otherwise bind a dict/list to a
 `VARIANT`, `OBJECT`, or `ARRAY` column.
 
+#### Automatic JSON handling with `enable_structured_type_json`
+
+The manual `PARSE_JSON` / `json.loads` steps above can be handled automatically by opting in to
+`enable_structured_type_json` — either as a `create_engine` argument or a URL parameter:
+
+```python
+from sqlalchemy import create_engine
+from snowflake.sqlalchemy import URL
+
+engine = create_engine(URL(account="myaccount", user="me", password="secret"),
+                       enable_structured_type_json=True)
+# or: create_engine("snowflake://...?enable_structured_type_json=true")
+```
+
+When enabled, for **semi-structured (untyped)** `VARIANT`, `OBJECT` and `ARRAY` columns:
+
+- **Writing** a native `dict`/`list` serializes it and wraps it in `PARSE_JSON`. Because Snowflake
+  rejects functions in a `VALUES` clause, inserts are rendered as `INSERT ... SELECT` (multi-row
+  inserts become `SELECT ... UNION ALL SELECT ...`); `UPDATE` renders `SET col = PARSE_JSON(...)`.
+- **Reading** deserializes the JSON text Snowflake returns back into native Python (`dict`/`list`).
+
+```python
+with engine.begin() as conn:
+    conn.execute(t.insert().values(id=1, va={"a": 1, "b": [2, 3]}))          # single row
+    conn.execute(t.insert().values([{"id": 2, "va": {"a": 2}},
+                                    {"id": 3, "va": {"a": 3}}]))             # multi-row (UNION ALL)
+
+with engine.connect() as conn:
+    row = conn.execute(select(t.c.va).where(t.c.id == 1)).one()
+    assert row.va == {"a": 1, "b": [2, 3]}   # dict, not a JSON string
+```
+
+Notes:
+
+- The flag is **off by default**, so existing code that reads raw JSON strings or writes
+  pre-serialized values with the `PARSE_JSON` pattern above is unaffected.
+- Typed/structured columns (`OBJECT(...)` with fields, `ARRAY(<type>)`, `MAP(...)`) keep their
+  native connector handling and are not wrapped in `PARSE_JSON`.
+- The engine-level `json_serializer` / `json_deserializer` (below) are used when provided.
+- `RETURNING` is not supported for inserts into semi-structured columns while this flag is on.
+- **`executemany` (2+ parameter sets) is not supported** while this flag is on. Passing a list of
+  two or more parameter dicts — `conn.execute(t.insert(), [row1, row2, ...])`, and equivalently ORM
+  bulk flushes that batch multiple new objects in one commit — raises
+  `252001: Failed to rewrite multi-row insert`. The driver tries to fold the rows into a single
+  `VALUES (...)` clause, which the `INSERT ... SELECT PARSE_JSON(...)` rewrite does not have. Use a
+  single-row insert, a single parameter dict (`conn.execute(t.insert(), {...})`), or the multi-row
+  `insert().values([...])` form shown above (rendered as `SELECT ... UNION ALL`).
+- For **large data volumes**, prefer staging + `COPY INTO` (or `write_pandas`) over the `PARSE_JSON`
+  write path. Because `PARSE_JSON` must be inlined into the statement text, both per-row and
+  `UNION ALL` rewrites are bounded by Snowflake's ~1 MB statement-size limit and are inefficient for
+  bulk loads.
+- **`literal_binds` is not supported** for semi-structured writes. Compiling an insert/update of a
+  `dict`/`list` with `compile_kwargs={"literal_binds": True}` raises, because inlining the JSON as a
+  SQL literal is unsafe (Snowflake unescapes backslashes in single-quoted literals *before*
+  `PARSE_JSON` runs, so escaping cannot both preserve the data and prevent literal breakout). Execute
+  with bound parameters (the default) instead; a `None` value still renders as SQL `NULL`.
+
 #### Reading keys and elements with subscript access
 
 `VARIANT`, `OBJECT`, `ARRAY` and `MAP` columns support Python subscript syntax in queries.
