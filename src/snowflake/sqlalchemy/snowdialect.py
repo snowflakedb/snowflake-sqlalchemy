@@ -9,7 +9,6 @@ from collections import defaultdict
 from collections.abc import Collection, Sequence
 from enum import Enum
 from logging import getLogger
-from time import time as time_in_seconds
 from typing import TYPE_CHECKING, Any, NamedTuple, cast
 
 if TYPE_CHECKING:
@@ -29,13 +28,11 @@ from urllib.parse import unquote_plus
 from snowflake.connector import errors as sf_errors
 from snowflake.connector.connection import DEFAULT_CONFIGURATION, SnowflakeConnection
 from snowflake.connector.constants import UTF8
-from snowflake.connector.telemetry import TelemetryClient, TelemetryData, TelemetryField
 from snowflake.connector.util_text import parse_account
 
 import sqlalchemy.sql.sqltypes as sqltypes
 from snowflake.sqlalchemy.name_utils import _NameUtils
 from snowflake.sqlalchemy.structured_type_info_manager import _StructuredTypeInfoManager
-from sqlalchemy import __version__ as SQLALCHEMY_VERSION
 from sqlalchemy import event as sa_vnt
 from sqlalchemy import exc as sa_exc
 from sqlalchemy import util as sa_util
@@ -104,8 +101,16 @@ _ENABLE_SQLALCHEMY_AS_APPLICATION_NAME = True
 logger = getLogger(__name__)
 
 
-class TelemetryEvents(Enum):
-    NEW_CONNECTION = "sqlalchemy_new_connection"
+# ``TelemetryEvents`` now lives in the ``_telemetry`` package; re-export it
+# here so existing imports (and tests) that reference it via ``snowdialect``
+# keep working.  ``TelemetryField`` is re-exported for tests that build or
+# inspect connector ``TelemetryData`` in mocks.
+from snowflake.sqlalchemy._telemetry import TelemetryEvents  # noqa: E402,F401
+
+try:  # noqa: E402
+    from snowflake.connector.telemetry import TelemetryField  # noqa: F401
+except Exception:  # pragma: no cover - connector without a telemetry module
+    TelemetryField = None  # type: ignore[assignment,misc]
 
 
 class SnowflakeIsolationLevel(Enum):
@@ -260,6 +265,9 @@ class SnowflakeDialect(default.DefaultDialect):
         **kwargs: Any,
     ):
         super().__init__(isolation_level=isolation_level, **kwargs)  # type: ignore[arg-type]
+        # ``DefaultDialect`` does not reliably expose the configured isolation
+        # level as an attribute, so keep the constructor value for telemetry.
+        self._isolation_level = isolation_level
         self.force_div_is_floordiv = force_div_is_floordiv
         self.div_is_floordiv = force_div_is_floordiv
         self._case_sensitive_identifiers = case_sensitive_identifiers
@@ -2063,56 +2071,17 @@ class SnowflakeDialect(default.DefaultDialect):
             decimal.getcontext().prec = DECFLOAT_PRECISION
 
         connection = super().connect(*cargs, **cparams)
-        self._log_new_connection_event(connection)  # type: ignore[arg-type]
+        self._log_new_connection_event(connection, cparams)  # type: ignore[arg-type]
 
         return connection  # type: ignore[return-value]
 
-    def _log_new_connection_event(self, connection: SnowflakeConnection) -> None:
+    def _log_new_connection_event(
+        self, connection: SnowflakeConnection, cparams: dict | None = None
+    ) -> None:
         try:
-            snowflake_connection = cast(SnowflakeConnection, cast(object, connection))
-            snowflake_telemetry_client = TelemetryClient(rest=snowflake_connection.rest)  # type: ignore[arg-type]
+            from snowflake.sqlalchemy._telemetry import record_new_connection
 
-            telemetry_value: dict[str, Any] = {
-                "SQLAlchemy": SQLALCHEMY_VERSION,
-            }
-            try:
-                from pandas import __version__ as PANDAS_VERSION
-
-                telemetry_value["pandas"] = PANDAS_VERSION
-            except ImportError:
-                pass
-
-            # Dialect-level configuration flags.  These are user-chosen
-            # booleans that do not contain PII but meaningfully change how
-            # the dialect normalises identifiers, generates SQL, and
-            # reflects schemas.  Recording them on the NEW_CONNECTION event
-            # lets us answer adoption questions ("how many users have
-            # enabled case_sensitive_identifiers?") without separate
-            # instrumentation, and gives support engineers visibility into
-            # a customer's configuration when diagnosing issues.  Values
-            # are read from ``self`` so they reflect the final post-plugin
-            # / post-URL state regardless of how they were configured.
-            telemetry_value["case_sensitive_identifiers"] = (
-                self._case_sensitive_identifiers
-            )
-            telemetry_value["enable_decfloat"] = self._enable_decfloat
-            telemetry_value["enable_structured_type_json"] = (
-                self._enable_structured_type_json
-            )
-            telemetry_value["force_div_is_floordiv"] = self.force_div_is_floordiv
-            telemetry_value["legacy_url_params"] = self._legacy_url_params
-
-            snowflake_telemetry_client.add_log_to_batch(
-                TelemetryData.from_telemetry_data_dict(
-                    from_dict={
-                        TelemetryField.KEY_TYPE.value: TelemetryEvents.NEW_CONNECTION.value,
-                        TelemetryField.KEY_VALUE.value: str(telemetry_value),
-                    },
-                    timestamp=int(time_in_seconds() * 1000),
-                    connection=snowflake_connection,
-                )
-            )
-            snowflake_telemetry_client.send_batch()
+            record_new_connection(self, connection, cparams)
         except Exception as e:
             logger.debug(
                 "Failed to send telemetry data for %s event: %s: %s",
