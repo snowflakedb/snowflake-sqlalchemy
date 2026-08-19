@@ -11,6 +11,7 @@ mapping per type.
 """
 
 import uuid
+import warnings
 
 import pytest
 from sqlalchemy import Column, Integer, MetaData, Table, create_engine, select
@@ -59,11 +60,14 @@ def test_each_type_maps_to_python_when_enabled(read_table):
 
 def test_types_stay_raw_json_when_flag_off(read_table):
     _, t = read_table
-    # A separate engine with the flag OFF must return raw JSON text (no BCR).
-    engine_off = create_engine(url_factory())
-    try:
-        with engine_off.connect() as conn:
-            row = conn.execute(select(t.c.v, t.c.o, t.c.a).where(t.c.id == 1)).one()
-        assert all(isinstance(val, str) for val in (row.v, row.o, row.a))
-    finally:
-        engine_off.dispose()
+    # A separate engine with the flag explicitly OFF must return raw JSON text.
+    # The flag now defaults to on, so opting out is deprecated and warns.
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        engine_off = create_engine(url_factory(enable_structured_type_json=False))
+        try:
+            with engine_off.connect() as conn:
+                row = conn.execute(select(t.c.v, t.c.o, t.c.a).where(t.c.id == 1)).one()
+            assert all(isinstance(val, str) for val in (row.v, row.o, row.a))
+        finally:
+            engine_off.dispose()

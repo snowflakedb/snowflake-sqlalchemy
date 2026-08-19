@@ -2,7 +2,6 @@
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
 
-import json
 import textwrap
 
 import pytest
@@ -101,11 +100,13 @@ def test_inspect_semi_structured_datatypes(engine_testaccount):
                 rows = results.fetchone()
                 results.close()
                 assert rows[0] == 1
-                data = json.loads(rows[1])
+                # enable_structured_type_json defaults to True, so VARIANT/ARRAY
+                # values are returned as native Python (dict/list), not JSON text.
+                data = rows[1]
                 assert data["vk1"] == 100
                 assert data["vk3"] == 300
                 assert data is not None
-                data = json.loads(rows[2])
+                data = rows[2]
                 assert data[1]["k"] == 2
     finally:
         test_variant.drop(engine_testaccount)

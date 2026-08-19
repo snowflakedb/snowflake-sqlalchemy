@@ -315,31 +315,13 @@ Similarly, the `URL` helper validates the `account` and `region` values (which b
 of the connection URL authority) and percent-encodes `user`, so URL metacharacters such as
 `?`, `&`, `@`, and `#` cannot introduce additional parameters.
 
-##### Temporary compatibility: `legacy_url_params`
+##### Migration note: `legacy_url_params` removed
 
-If an existing application still relies on the previous behavior, you can re-enable it during
-migration. When enabled, the parameters above are forwarded from the URL query string as
-before and a `DeprecationWarning` is emitted for each one. This shim is temporary and will be
-removed in a future release.
-
-Enable it in either of two ways (an explicit kwarg always wins; the environment variable is a
-global fallback):
-
-```python
-# Per-engine, under application control (recommended over the env variable):
-engine = create_engine(url, legacy_url_params=True)
-```
-
-```bash
-# Global fallback for the whole process:
-export SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS=1
-```
-
-`legacy_url_params` is accepted only as an engine kwarg or the environment
-variable — it is intentionally **not** read from the URL query string, so a caller who controls
-only the URL cannot use it to relax this handling. Note that the `URL()` helper's `account` /
-`region` validation runs before any engine exists, so only the environment variable relaxes it
-at URL-construction time.
+Earlier releases provided a temporary `legacy_url_params` opt-out (engine kwarg or the
+`SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS` environment variable) that re-enabled forwarding the
+blocked parameters from the URL query string. **This shim has been removed.** Passing
+`legacy_url_params` to `create_engine()` now raises an `ArgumentError`, and the environment
+variable has no effect. Move any affected parameters to `connect_args=` as shown above.
 
 ### Opening and Closing Connection
 
@@ -924,16 +906,19 @@ Use `func.parse_json(json.dumps(value))` anywhere you would otherwise bind a dic
 
 #### Automatic JSON handling with `enable_structured_type_json`
 
-The manual `PARSE_JSON` / `json.loads` steps above can be handled automatically by opting in to
-`enable_structured_type_json` — either as a `create_engine` argument or a URL parameter:
+The manual `PARSE_JSON` / `json.loads` steps above are handled automatically by
+`enable_structured_type_json`, which is **enabled by default**. It can be controlled explicitly
+as a `create_engine` argument or a URL parameter:
 
 ```python
 from sqlalchemy import create_engine
 from snowflake.sqlalchemy import URL
 
-engine = create_engine(URL(account="myaccount", user="me", password="secret"),
-                       enable_structured_type_json=True)
-# or: create_engine("snowflake://...?enable_structured_type_json=true")
+# Enabled by default — no argument needed:
+engine = create_engine(URL(account="myaccount", user="me", password="secret"))
+# To opt out (deprecated; emits a DeprecationWarning):
+# create_engine(URL(...), enable_structured_type_json=False)
+# or: create_engine("snowflake://...?enable_structured_type_json=false")
 ```
 
 When enabled, for **semi-structured (untyped)** `VARIANT`, `OBJECT` and `ARRAY` columns:
@@ -956,8 +941,9 @@ with engine.connect() as conn:
 
 Notes:
 
-- The flag is **off by default**, so existing code that reads raw JSON strings or writes
-  pre-serialized values with the `PARSE_JSON` pattern above is unaffected.
+- The flag is **on by default**. To restore the previous behaviour (reading raw JSON strings and
+  writing pre-serialized values with the `PARSE_JSON` pattern above), set
+  `enable_structured_type_json=False`; this is deprecated and emits a `DeprecationWarning`.
 - Typed/structured columns (`OBJECT(...)` with fields, `ARRAY(<type>)`, `MAP(...)`) keep their
   native connector handling and are not wrapped in `PARSE_JSON`.
 - The engine-level `json_serializer` / `json_deserializer` (below) are used when provided.

@@ -34,10 +34,3 @@ DISCONNECT_ERROR_CODES = frozenset(
         ER_CONNECTION_IS_CLOSED,  # 250002, connection is closed (client side)
     }
 )
-
-# Set this environment variable to opt into the legacy behaviour where
-# certain connection parameters are accepted as URL query-string
-# values.  Applications relying on this should migrate to connect_args= in
-# create_engine() instead.  Interpreted with parse_url_boolean — accepts "1" or
-# "true" (case-insensitive); any other value leaves the shim disabled.
-SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS = "SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS"

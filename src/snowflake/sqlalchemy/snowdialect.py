@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import decimal
 import logging
+import warnings
 from collections import defaultdict
 from collections.abc import Collection, Sequence
 from enum import Enum
@@ -49,7 +50,6 @@ from sqlalchemy.types import FLOAT, Date, DateTime, Float, Time
 from ._constants import (
     DIALECT_NAME,
     DISCONNECT_ERROR_CODES,
-    SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS,
 )
 from .base import (
     SnowflakeCompiler,
@@ -77,8 +77,6 @@ from .parser.custom_type_parser import (
 from .sql.custom_schema.custom_table_prefix import CustomTablePrefix
 from .util import (
     _URL_QUERY_BLOCKED_KWARGS,
-    _legacy_url_params_enabled,
-    _reject_or_warn,
     _update_connection_application_name,
     escape_string_literal_interior,
     parse_url_boolean,
@@ -159,6 +157,29 @@ def _ensure_engine_log_redaction() -> None:
     h = _RedactionHandler()
     h.addFilter(SnowflakeSecretRedactionFilter())
     parent.handlers.insert(0, h)
+
+
+_README_URL = "https://github.com/snowflakedb/snowflake-sqlalchemy/blob/main/README.md"
+
+_LEGACY_URL_PARAMS_REMOVED_MSG = (
+    "The 'legacy_url_params' option was removed. Sensitive connection parameters "
+    "blocked from the URL query string must now be passed via connect_args= in "
+    f"create_engine(). See the README: {_README_URL}"
+)
+
+_FORCE_DIV_IS_FLOORDIV_DEPRECATION_MSG = (
+    "force_div_is_floordiv=True re-enables the legacy floor-division behaviour, "
+    "which is deprecated and will be removed in a future release. The default is "
+    "now False (standard true division for '/'). Remove the argument to adopt the "
+    f"new default. See the README: {_README_URL}"
+)
+
+_ENABLE_STRUCTURED_TYPE_JSON_DEPRECATION_MSG = (
+    "enable_structured_type_json=False disables native JSON handling for "
+    "structured types (VARIANT/OBJECT/ARRAY/MAP), which is now enabled by default. "
+    "Relying on this opt-out is deprecated and support will be removed in a future "
+    f"release. See the README: {_README_URL}"
+)
 
 
 class SnowflakeDialect(default.DefaultDialect):
@@ -253,44 +274,59 @@ class SnowflakeDialect(default.DefaultDialect):
 
     def __init__(
         self,
-        force_div_is_floordiv: bool = True,
+        force_div_is_floordiv: bool | None = None,
         isolation_level: str | None = SnowflakeIsolationLevel.READ_COMMITTED.value,
         enable_decfloat: bool = False,
-        enable_structured_type_json: bool = False,
+        enable_structured_type_json: bool | None = None,
         case_sensitive_identifiers: bool = False,
-        legacy_url_params: bool | None = None,
         redact_log_secrets: bool = True,
         json_serializer: Any = None,
         json_deserializer: Any = None,
         **kwargs: Any,
     ):
+        # ``legacy_url_params`` was removed in the major release.  Reject it with
+        # an actionable error instead of silently forwarding it to the connector.
+        if "legacy_url_params" in kwargs:
+            kwargs.pop("legacy_url_params")
+            raise sa_exc.ArgumentError(_LEGACY_URL_PARAMS_REMOVED_MSG)
+
         super().__init__(isolation_level=isolation_level, **kwargs)  # type: ignore[arg-type]
         # ``DefaultDialect`` does not reliably expose the configured isolation
         # level as an attribute, so keep the constructor value for telemetry.
         self._isolation_level = isolation_level
+        # ``force_div_is_floordiv`` default flipped to False (standard true
+        # division) in the major release.  Explicitly opting back into the legacy
+        # floor-division behaviour is deprecated.
+        if force_div_is_floordiv is None:
+            force_div_is_floordiv = False
+        elif force_div_is_floordiv:
+            warnings.warn(
+                _FORCE_DIV_IS_FLOORDIV_DEPRECATION_MSG,
+                DeprecationWarning,
+                stacklevel=2,
+            )
         self.force_div_is_floordiv = force_div_is_floordiv
         self.div_is_floordiv = force_div_is_floordiv
         self._case_sensitive_identifiers = case_sensitive_identifiers
         self.name_utils = _NameUtils(self.identifier_preparer)
         self._enable_decfloat = enable_decfloat
-        # Opt-in JSON (de)serialization for semi-structured columns
-        # (VARIANT/OBJECT/ARRAY/MAP). Off by default so existing code that reads
-        # raw JSON strings / writes pre-serialized values is unaffected.
+        # JSON (de)serialization for semi-structured columns
+        # (VARIANT/OBJECT/ARRAY/MAP).  Enabled by default (opt-out) since the
+        # major release; explicitly disabling it is deprecated.
+        if enable_structured_type_json is None:
+            enable_structured_type_json = True
+        elif enable_structured_type_json is False:
+            warnings.warn(
+                _ENABLE_STRUCTURED_TYPE_JSON_DEPRECATION_MSG,
+                DeprecationWarning,
+                stacklevel=2,
+            )
         self._enable_structured_type_json = enable_structured_type_json
         # Serializers used for JSON (de)serialization of semi-structured data.
         # Accepting these keeps parity with the built-in SQLAlchemy dialects so
         # ``create_engine(..., json_serializer=..., json_deserializer=...)`` works.
         self._json_serializer = json_serializer
         self._json_deserializer = json_deserializer
-        # Opt-in compatibility shim for the legacy URL/query behaviour.
-        # An explicit ``legacy_url_params`` kwarg wins; when it is left unset
-        # (None) the env variable acts as a global fallback.  It is deliberately
-        # NOT readable from the URL query string — see create_connect_args.
-        self._legacy_url_params = (
-            legacy_url_params
-            if legacy_url_params is not None
-            else _legacy_url_params_enabled()
-        )
         self._redact_log_secrets = redact_log_secrets
 
     def initialize(self, connection: Connection) -> None:
@@ -387,9 +423,14 @@ class SnowflakeDialect(default.DefaultDialect):
         # Handle enable_structured_type_json URL parameter
         enable_structured_type_json = query.pop("enable_structured_type_json", None)
         if enable_structured_type_json is not None:
-            self._enable_structured_type_json = parse_url_boolean(
-                enable_structured_type_json
-            )
+            structured_json_enabled = parse_url_boolean(enable_structured_type_json)
+            if structured_json_enabled is False:
+                warnings.warn(
+                    _ENABLE_STRUCTURED_TYPE_JSON_DEPRECATION_MSG,
+                    DeprecationWarning,
+                    stacklevel=2,
+                )
+            self._enable_structured_type_json = structured_json_enabled
 
         # Handle case_sensitive_identifiers URL parameter.  The dialect attribute
         # is the single source of truth: the preparer and name_utils both read it
@@ -400,25 +441,16 @@ class SnowflakeDialect(default.DefaultDialect):
                 case_sensitive_identifiers
             )
 
-        # URL sets the query parameter values as strings, we need to cast to expected types when necessary
-        #
-        # ``legacy_url_params`` is intentionally read only from the engine kwarg
-        # / env variable (resolved into ``self._legacy_url_params`` in __init__),
-        # never from the URL query string: honouring it as a URL param would let
-        # a caller who controls only the URL re-enable the restricted behaviour
-        # with ``?legacy_url_params=true``, skipping this handling entirely.
-        legacy = self._legacy_url_params
+        # URL sets the query parameter values as strings, we need to cast to
+        # expected types when necessary.  Sensitive connector kwargs are never
+        # accepted from the URL query string (the legacy_url_params opt-out shim
+        # was removed in the major release); they must travel via connect_args=.
         for name, value in query.items():
             if name in _URL_QUERY_BLOCKED_KWARGS:
-                _reject_or_warn(
+                raise sa_exc.ArgumentError(
                     f"Connection parameter {name!r} cannot be set via the URL "
                     "query string for safety reasons. "
-                    "Pass it via connect_args= in create_engine() instead. "
-                    "To restore the previous behaviour temporarily, pass "
-                    "legacy_url_params=True to create_engine() or set the "
-                    f"{SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS} environment variable.",
-                    legacy=legacy,
-                    stacklevel=2,
+                    "Pass it via connect_args= in create_engine() instead."
                 )
             opts[name] = self.parse_query_param_type(name, value)
 

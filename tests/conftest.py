@@ -376,9 +376,8 @@ def _without_blocked_query_params(url):
     the connector defaults, and ``host``/``port`` are unaffected because they
     live in the URL authority rather than the query.
 
-    Tests that specifically exercise the legacy URL behaviour enable
-    ``SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS`` themselves and do not use this
-    helper.
+    The legacy URL-params compatibility shim was removed in the major release,
+    so blocked query params are now always rejected — there is no opt-out.
     """
     url = make_url(url)
     query = {k: v for k, v in url.query.items() if k not in _URL_QUERY_BLOCKED_KWARGS}

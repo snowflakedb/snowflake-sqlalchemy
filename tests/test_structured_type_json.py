@@ -102,12 +102,18 @@ class TestStructuredTypeJsonResultProcessor:
 
 
 class TestEnableStructuredTypeJsonFlag:
-    def test_default_is_false(self):
-        assert SnowflakeDialect()._enable_structured_type_json is False
+    def test_default_is_true(self):
+        # New major-release default: structured-type JSON handling is opt-out.
+        assert SnowflakeDialect()._enable_structured_type_json is True
 
     def test_constructor_param_sets_flag(self):
         dialect = SnowflakeDialect(enable_structured_type_json=True)
         assert dialect._enable_structured_type_json is True
+
+    def test_constructor_false_warns_and_disables(self):
+        with pytest.warns(DeprecationWarning, match="(?i)enable_structured_type_json"):
+            dialect = SnowflakeDialect(enable_structured_type_json=False)
+        assert dialect._enable_structured_type_json is False
 
     def test_url_param_enables_flag(self):
         dialect = SnowflakeDialect()
@@ -117,11 +123,20 @@ class TestEnableStructuredTypeJsonFlag:
         dialect.create_connect_args(url)
         assert dialect._enable_structured_type_json is True
 
+    def test_url_param_false_warns_and_disables(self):
+        dialect = SnowflakeDialect()
+        url = make_url(
+            "snowflake://user:pass@account/db/schema?enable_structured_type_json=false"
+        )
+        with pytest.warns(DeprecationWarning, match="(?i)enable_structured_type_json"):
+            dialect.create_connect_args(url)
+        assert dialect._enable_structured_type_json is False
+
     def test_url_param_absent_keeps_default(self):
         dialect = SnowflakeDialect()
         url = make_url("snowflake://user:pass@account/db/schema")
         dialect.create_connect_args(url)
-        assert dialect._enable_structured_type_json is False
+        assert dialect._enable_structured_type_json is True
 
 
 class TestEnableStructuredTypeJsonFlagPersistsWithPooling:

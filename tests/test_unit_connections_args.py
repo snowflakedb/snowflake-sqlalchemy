@@ -18,7 +18,6 @@ from sqlalchemy.engine.url import URL as SAUrl
 from sqlalchemy.engine.url import make_url
 
 from snowflake.sqlalchemy import URL, base
-from snowflake.sqlalchemy._constants import SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS
 from snowflake.sqlalchemy.snowdialect import _URL_QUERY_BLOCKED_KWARGS
 
 # ---------------------------------------------------------------------------
@@ -79,8 +78,12 @@ class TestURLFieldEncoding:
 
     @pytest.fixture(autouse=True)
     def _unset_legacy_flag(self, monkeypatch):
-        """Run every test in this class with the strict (non-legacy) code path."""
-        monkeypatch.delenv(SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS, raising=False)
+        """Run every test in this class with the strict code path.
+
+        The removed shim honoured SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS; clear it
+        so a stray value in the environment cannot influence these tests.
+        """
+        monkeypatch.delenv("SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS", raising=False)
 
     # --- account fields -----------------------------------------------------
 
@@ -253,8 +256,12 @@ class TestSensitiveParamsRequireConnectArgs:
 
     @pytest.fixture(autouse=True)
     def _unset_legacy_flag(self, monkeypatch):
-        """Run every test in this class with the strict (non-legacy) code path."""
-        monkeypatch.delenv(SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS, raising=False)
+        """Run every test in this class with the strict code path.
+
+        The removed shim honoured SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS; clear it
+        so a stray value in the environment cannot influence these tests.
+        """
+        monkeypatch.delenv("SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS", raising=False)
 
     # --- sensitive params are rejected from the URL query -------------------
 
@@ -412,8 +419,12 @@ class TestConnectArgsMigration:
 
     @pytest.fixture(autouse=True)
     def _unset_legacy_flag(self, monkeypatch):
-        """Run every test in this class with the secure (non-legacy) code path."""
-        monkeypatch.delenv(SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS, raising=False)
+        """Run every test in this class with the strict code path.
+
+        The removed shim honoured SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS; clear it
+        so a stray value in the environment cannot influence these tests.
+        """
+        monkeypatch.delenv("SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS", raising=False)
 
     def test_url_with_no_blocked_params_is_accepted(self):
         """A URL carrying only safe query params must be accepted without error."""
@@ -479,31 +490,34 @@ class TestConnectArgsMigration:
         assert opts["warehouse"] == "WH"
 
 
-class TestLegacyURLParamsMode:
-    """Verify the legacy compatibility shim, enabled via the ``legacy_url_params``
-    engine kwarg or the SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS env variable.
+class TestLegacyURLParamsRemoved:
+    """The ``legacy_url_params`` compatibility shim was removed in the major
+    release.
 
-    With the shim active, blocked params must emit a DeprecationWarning and
-    still be forwarded to the connector — preserving backwards compatibility for
-    applications that have not yet migrated to connect_args=.
+    Blocked connection params are now unconditionally rejected from the URL query
+    string, passing ``legacy_url_params`` raises a clear error pointing to the
+    migration path, and the ``SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS`` environment
+    variable no longer relaxes the handling.
     """
 
     @pytest.fixture(autouse=True)
     def _clean_env(self, monkeypatch):
-        """Start each test with the env variable unset; tests opt in explicitly."""
-        monkeypatch.delenv(SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS, raising=False)
+        monkeypatch.delenv("SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS", raising=False)
 
-    @pytest.fixture(params=["kwarg", "env"])
-    def legacy_dialect(self, request, monkeypatch):
-        """A dialect with the shim enabled — once via kwarg, once via env var."""
-        if request.param == "env":
-            monkeypatch.setenv(SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS, "1")
-            return _dialect()
-        return base.dialect(legacy_url_params=True)
+    def test_kwarg_true_raises_actionable_error(self):
+        """Passing legacy_url_params=True must raise a clear ArgumentError."""
+        with pytest.raises(exc.ArgumentError, match="(?i)legacy_url_params"):
+            base.dialect(legacy_url_params=True)
+
+    def test_kwarg_false_raises_actionable_error(self):
+        """Even legacy_url_params=False is rejected; the flag no longer exists."""
+        with pytest.raises(exc.ArgumentError, match="(?i)legacy_url_params"):
+            base.dialect(legacy_url_params=False)
 
     @pytest.mark.parametrize("param,value", _ALL_BLOCKED_PARAMS)
-    def test_blocked_param_warns_and_is_forwarded(self, legacy_dialect, param, value):
-        """Each blocked param must warn and be forwarded — for both enable sources."""
+    def test_blocked_param_always_rejected(self, param, value):
+        """Blocked params raise regardless of environment; no legacy warning path."""
+        d = _dialect()
         url = SAUrl.create(
             "snowflake",
             username="u",
@@ -511,76 +525,13 @@ class TestLegacyURLParamsMode:
             host="legit-account",
             query={param: value},
         )
-        with pytest.warns(DeprecationWarning, match=re.escape(param)):
-            _, opts = legacy_dialect.create_connect_args(url)
-        assert opts.get(param) is not None, (
-            f"legacy mode: {param!r} was not forwarded to opts"
-        )
-
-    def test_kwarg_enables_shim_without_env(self):
-        """legacy_url_params=True must enable the shim with no env variable set."""
-        d = base.dialect(legacy_url_params=True)
-        url = SAUrl.create(
-            "snowflake",
-            username="u",
-            password="p",
-            host="legit-account",
-            query={"protocol": "https"},
-        )
-        with pytest.warns(DeprecationWarning):
-            d.create_connect_args(url)
-
-    def test_explicit_kwarg_false_overrides_env_fallback(self, monkeypatch):
-        """An explicit legacy_url_params=False wins over the env variable fallback."""
-        monkeypatch.setenv(SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS, "1")
-        d = base.dialect(legacy_url_params=False)
-        url = SAUrl.create(
-            "snowflake",
-            username="u",
-            password="p",
-            host="legit-account",
-            query={"protocol": "https"},
-        )
-        with pytest.raises(exc.ArgumentError, match="(?i)protocol"):
-            d.create_connect_args(url)
-
-    def test_legacy_url_params_is_not_honoured_as_url_query_param(self, monkeypatch):
-        """The shim must not be self-enabled via the URL query string.
-
-        ?legacy_url_params=true in the query string must NOT relax the handling —
-        otherwise it would be trivially avoidable by whoever controls the URL.
-        """
-        monkeypatch.delenv(SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS, raising=False)
-        d = _dialect()
-        url = SAUrl.create(
-            "snowflake",
-            username="u",
-            password="p",
-            host="legit-account",
-            query={"legacy_url_params": "true", "protocol": "https"},
-        )
-        with pytest.raises(exc.ArgumentError, match="(?i)protocol"):
+        with pytest.raises(exc.ArgumentError, match="(?i)" + re.escape(param)):
             d.create_connect_args(url)
 
     @pytest.mark.parametrize("flag_value", ["1", "true", "True", "TRUE"])
-    def test_env_flag_is_accepted_case_insensitively(self, flag_value, monkeypatch):
-        """The env variable must be recognised for all parse_url_boolean truthy values."""
-        monkeypatch.setenv(SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS, flag_value)
-        d = _dialect()
-        url = SAUrl.create(
-            "snowflake",
-            username="u",
-            password="p",
-            host="legit-account",
-            query={"protocol": "https"},
-        )
-        with pytest.warns(DeprecationWarning):
-            d.create_connect_args(url)  # must not raise
-
-    @pytest.mark.parametrize("flag_value", ["0", "false", "no", "", "garbage"])
-    def test_non_truthy_env_values_keep_blocking(self, flag_value, monkeypatch):
-        """Falsy / unrecognised env values must leave the secure block in place."""
-        monkeypatch.setenv(SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS, flag_value)
+    def test_env_variable_no_longer_relaxes_blocking(self, flag_value, monkeypatch):
+        """The removed env variable must not re-enable the shim."""
+        monkeypatch.setenv("SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS", flag_value)
         d = _dialect()
         url = SAUrl.create(
             "snowflake",
@@ -592,24 +543,8 @@ class TestLegacyURLParamsMode:
         with pytest.raises(exc.ArgumentError, match="(?i)protocol"):
             d.create_connect_args(url)
 
-    def test_neither_source_set_blocks_param(self):
-        """With neither kwarg nor env set, the param must be rejected."""
-        d = _dialect()
-        url = SAUrl.create(
-            "snowflake",
-            username="u",
-            password="p",
-            host="legit-account",
-            query={"protocol": "https"},
-        )
-        with pytest.raises(exc.ArgumentError, match="(?i)protocol"):
-            d.create_connect_args(url)
-
-    def test_account_with_metachar_warns_in_legacy_mode(self, monkeypatch):
-        """_validate_url_field must warn (not raise) for an account containing URL
-        metacharacters when the env variable is set.  URL() is a standalone builder
-        with no engine, so only the env variable (not the kwarg) can relax it at
-        build time."""
-        monkeypatch.setenv(SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS, "1")
-        with pytest.warns(DeprecationWarning):
+    def test_account_with_metachar_always_raises(self, monkeypatch):
+        """URL() must reject metachar authority fields even with the old env set."""
+        monkeypatch.setenv("SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS", "1")
+        with pytest.raises(exc.ArgumentError):
             URL(account="x?extra=1", user="u", password="pw")

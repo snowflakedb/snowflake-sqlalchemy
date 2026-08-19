@@ -22,9 +22,8 @@ def _fake_dialect(**overrides):
     attrs = {
         "_case_sensitive_identifiers": False,
         "_enable_decfloat": False,
-        "_enable_structured_type_json": False,
-        "force_div_is_floordiv": True,
-        "_legacy_url_params": False,
+        "_enable_structured_type_json": True,
+        "force_div_is_floordiv": False,
         "_isolation_level": None,
     }
     attrs.update(overrides)
@@ -158,17 +157,16 @@ def test_new_connection_payload_shape():
     payload = build_new_connection_payload(_fake_dialect(_enable_decfloat=True))
     assert payload["enable_decfloat"] is True
     assert payload["case_sensitive_identifiers"] is False
-    assert payload["enable_structured_type_json"] is False
-    assert payload["force_div_is_floordiv"] is True
-    assert payload["legacy_url_params"] is False
+    assert payload["enable_structured_type_json"] is True
+    assert payload["force_div_is_floordiv"] is False
     assert "SQLAlchemy" in payload
+    assert "legacy_url_params" not in payload
 
 
 def test_connection_parameters_payload_flags_include_isolation_and_cache():
     dialect = _fake_dialect(
         _isolation_level="AUTOCOMMIT",
         _enable_structured_type_json=True,
-        _legacy_url_params=True,
     )
     payload = build_connection_parameters_payload(
         dialect, {"cache_column_metadata": True}
@@ -178,14 +176,12 @@ def test_connection_parameters_payload_flags_include_isolation_and_cache():
     assert flags["cache_column_metadata"] is True
     # Structured event carries the full flag set (superset of the legacy event).
     assert flags["enable_structured_type_json"] is True
-    assert flags["legacy_url_params"] is True
     assert set(flags) == {
         "case_sensitive_identifiers",
         "enable_decfloat",
         "enable_structured_type_json",
         "cache_column_metadata",
         "force_div_is_floordiv",
-        "legacy_url_params",
         "isolation_level",
     }
 

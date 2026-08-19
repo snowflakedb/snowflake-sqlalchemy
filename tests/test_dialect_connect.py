@@ -2,6 +2,7 @@
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
 
+import warnings
 from sys import modules
 from types import SimpleNamespace
 from unittest import mock
@@ -26,9 +27,8 @@ from snowflake.sqlalchemy.snowdialect import (
 _DEFAULT_FLAG_PAYLOAD = {
     "case_sensitive_identifiers": False,
     "enable_decfloat": False,
-    "enable_structured_type_json": False,
-    "force_div_is_floordiv": True,
-    "legacy_url_params": False,
+    "enable_structured_type_json": True,
+    "force_div_is_floordiv": False,
 }
 
 
@@ -180,34 +180,34 @@ def _telemetry_payload(dialect, telemetry_client_mock, fake_connection):
             {"enable_decfloat": True},
         ),
         (
-            {"force_div_is_floordiv": False},
-            {"force_div_is_floordiv": False},
+            {"force_div_is_floordiv": True},
+            {"force_div_is_floordiv": True},
         ),
         (
-            {"enable_structured_type_json": True},
-            {"enable_structured_type_json": True},
+            {"enable_structured_type_json": False},
+            {"enable_structured_type_json": False},
         ),
         (
-            # All flags flipped at once
+            # All flags flipped away from their defaults at once
             {
                 "case_sensitive_identifiers": True,
                 "enable_decfloat": True,
-                "enable_structured_type_json": True,
-                "force_div_is_floordiv": False,
+                "enable_structured_type_json": False,
+                "force_div_is_floordiv": True,
             },
             {
                 "case_sensitive_identifiers": True,
                 "enable_decfloat": True,
-                "enable_structured_type_json": True,
-                "force_div_is_floordiv": False,
+                "enable_structured_type_json": False,
+                "force_div_is_floordiv": True,
             },
         ),
     ],
     ids=[
         "case_sensitive_identifiers_true",
         "enable_decfloat_true",
-        "force_div_is_floordiv_false",
-        "enable_structured_type_json_true",
+        "force_div_is_floordiv_true",
+        "enable_structured_type_json_false",
         "all_flipped",
     ],
 )
@@ -224,7 +224,13 @@ def test_connect_telemetry_records_kwarg_flags(
     mock_connect.return_value = fake_connection
 
     with mock.patch.dict(modules, {"pandas": None}):
-        dialect = SnowflakeDialect(**ctor_kwargs)
+        # Some overrides intentionally set now-deprecated legacy values
+        # (force_div_is_floordiv=True / enable_structured_type_json=False),
+        # which emit a DeprecationWarning at construction; suppress it here
+        # since this test asserts telemetry propagation, not the warnings.
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            dialect = SnowflakeDialect(**ctor_kwargs)
         message = _telemetry_payload(dialect, mock_telemetry_client, fake_connection)
 
     expected_flags = {**_DEFAULT_FLAG_PAYLOAD, **expected_overrides}
@@ -257,8 +263,6 @@ def test_connect_telemetry_records_url_driven_flag(
             query={"case_sensitive_identifiers": "True"},
         )
         # Trigger the URL-parameter application prior to connect().
-        import warnings
-
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", DeprecationWarning)
             dialect.create_connect_args(url)
@@ -520,10 +524,10 @@ def test_structured_event_records_flags_and_isolation_level(
     assert flags["case_sensitive_identifiers"] is False
     # ``cache_column_metadata`` is a connection param, sourced from cparams.
     assert flags["cache_column_metadata"] is True
-    assert flags["force_div_is_floordiv"] is True
+    # New major-release default: legacy floor-division behaviour is off.
+    assert flags["force_div_is_floordiv"] is False
     # Structured event is a superset of the legacy NEW_CONNECTION flags.
     assert flags["enable_structured_type_json"] is True
-    assert flags["legacy_url_params"] is False
 
 
 @mock.patch.object(sqla_default.DefaultDialect, "connect")

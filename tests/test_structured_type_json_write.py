@@ -2,6 +2,7 @@
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
 import re
+import warnings
 
 import pytest
 import sqlalchemy.types as sqltypes
@@ -119,7 +120,9 @@ class TestParseJsonRendering:
 
     def test_update_no_parse_json_when_off(self):
         t = self._table()
-        off = SnowflakeDialect()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            off = SnowflakeDialect(enable_structured_type_json=False)
         sql = _norm(update(t).where(t.c.id == 1).values(v="x").compile(dialect=off))
         assert "PARSE_JSON" not in sql
 
@@ -185,7 +188,9 @@ class TestInsertValuesToSelect:
 
     def test_flag_off_uses_values(self):
         t = self._table()
-        off = SnowflakeDialect()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            off = SnowflakeDialect(enable_structured_type_json=False)
         sql = _norm(insert(t).values(id=1, v="x").compile(dialect=off))
         assert "VALUES" in sql
         assert "PARSE_JSON" not in sql

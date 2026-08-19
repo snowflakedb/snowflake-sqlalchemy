@@ -3,9 +3,7 @@
 #
 from __future__ import annotations
 
-import os
 import re
-import warnings
 from collections.abc import Sequence
 from itertools import chain
 from typing import Any
@@ -28,7 +26,6 @@ from ._constants import (
     PARAM_APPLICATION,
     PARAM_INTERNAL_APPLICATION_NAME,
     PARAM_INTERNAL_APPLICATION_VERSION,
-    SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS,
     SNOWFLAKE_SQLALCHEMY_VERSION,
 )
 
@@ -68,28 +65,14 @@ _URL_QUERY_BLOCKED_KWARGS: frozenset = frozenset(
 )
 
 
-def _reject_or_warn(message: str, *, legacy: bool, stacklevel: int = 2) -> None:
-    """Raise ``ArgumentError``, or warn under the legacy shim. ``stacklevel`` is
-    relative to this helper's caller."""
-    if legacy:
-        # +1 skips this helper's own frame so the warning is attributed to the
-        # caller that supplied ``stacklevel``.
-        warnings.warn(message, DeprecationWarning, stacklevel=stacklevel + 1)
-    else:
-        raise exc.ArgumentError(message)
-
-
 def _validate_url_field(field: str, value: str) -> None:
     if not _SAFE_URL_FIELD_RE.fullmatch(value):
-        # The builder has no engine, so only the env var can relax this.
-        _reject_or_warn(
+        # The legacy_url_params opt-out shim was removed, so invalid URL
+        # authority fields are always rejected (no deprecation-warning fallback).
+        raise exc.ArgumentError(
             f"'{field}' contains characters that cannot be safely placed in the "
             f"connection URL: {value!r}. "
-            "Only alphanumeric characters, hyphens, dots, and underscores are allowed. "
-            "To restore the previous behaviour temporarily, set the "
-            f"{SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS} environment variable.",
-            legacy=_legacy_url_params_enabled(),
-            stacklevel=3,  # caller's URL(...) site
+            "Only alphanumeric characters, hyphens, dots, and underscores are allowed."
         )
 
 
@@ -202,20 +185,6 @@ def parse_url_integer(value: str | tuple[str, ...]) -> int:
         return int(raw)
     except ValueError as e:
         raise ValueError(f"Invalid int value detected: '{raw}'") from e
-
-
-def _legacy_url_params_enabled() -> bool:
-    """Whether the legacy URL-params compatibility shim is enabled.
-
-    Reuses :func:`parse_url_boolean` so the env variable is interpreted exactly
-    like every other boolean flag in the dialect (``true``/``1``, case-insensitive).
-    An unset, empty, or unrecognised value disables the shim rather than raising.
-    """
-    value = os.environ.get(SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS, "")
-    try:
-        return parse_url_boolean(value)
-    except ValueError:
-        return False
 
 
 # handle Snowflake BCR bcr-1057

@@ -2032,12 +2032,14 @@ SELECT PARSE_JSON('{{"vk1":100, "vk2":200, "vk3":300}}'),
         conn.exec_driver_sql(sql)
         results = conn.execute(select(table_reflected)).fetchall()
         assert len(results) == 2
-        data = json.loads(results[-1][27])
-        assert json.loads(results[-1][28]) == data
+        # enable_structured_type_json defaults to True, so semi-structured
+        # VARIANT/OBJECT/ARRAY columns come back as native Python values.
+        data = results[-1][27]
+        assert results[-1][28] == data
         assert data["vk1"] == 100
         assert data["vk3"] == 300
         assert data is not None
-        data = json.loads(results[-1][29])
+        data = results[-1][29]
         assert data[1]["k"] == 2
 
 
@@ -2265,12 +2267,12 @@ def test_snowflake_sqlalchemy_as_valid_client_type():
             literal(10),
             0.5,
         ],
-        [literal(5), func.sqrt(literal(10)), decimal.Decimal("1.666667")],
+        [literal(5), func.sqrt(literal(10)), 1.5811388300841895],
         [literal(4), literal(5), decimal.Decimal("0.800000")],
         [literal(2), literal(2), 1.0],
         [literal(3), literal(2), 1.5],
-        [literal(4), literal(1.5), 2.6666666666666665],
-        [literal(5.5), literal(10.7), 0.5140186915887851],
+        [literal(4), literal(1.5), 2.666667],
+        [literal(5.5), literal(10.7), 0.5140187],
         [literal(5.5), literal(8), 0.6875],
     ],
 )
@@ -2287,31 +2289,26 @@ def test_true_division_operation(engine_testaccount, operation):
 @pytest.mark.parametrize(
     "operation",
     [
-        [literal(5), literal(10), 0.5, 0.5],
-        [literal(5), func.sqrt(literal(10)), decimal.Decimal("1.666667"), 1.0],
-        [
-            literal(4),
-            literal(5),
-            decimal.Decimal("0.800000"),
-            decimal.Decimal("0.800000"),
-        ],
+        [literal(5), literal(10), 0.5, 0],
+        [literal(5), func.sqrt(literal(10)), 1.5811388300841895, 1.0],
+        [literal(4), literal(5), decimal.Decimal("0.800000"), 0],
         [literal(2), literal(2), 1.0, 1.0],
-        [literal(3), literal(2), 1.5, 1.5],
-        [literal(4), literal(1.5), 2.6666666666666665, 2.0],
-        [literal(5.5), literal(10.7), 0.5140186915887851, 0],
+        [literal(3), literal(2), 1.5, 1],
+        [literal(4), literal(1.5), 2.666667, 2.0],
+        [literal(5.5), literal(10.7), 0.5140187, 0],
         [literal(5.5), literal(8), 0.6875, 0],
     ],
 )
 def test_division_force_div_is_floordiv_default(engine_testaccount, operation):
-    expected_warning = "div_is_floordiv value will be changed to False in a future release. This will generate a behavior change on true and floor division. Please review https://docs.sqlalchemy.org/en/20/changelog/whatsnew_20.html#python-division-operator-performs-true-division-for-all-backends-added-floor-division"
-    with pytest.warns(PendingDeprecationWarning, match=expected_warning):
-        with engine_testaccount.connect() as conn:
-            eq_(
-                conn.execute(
-                    select(operation[0] / operation[1], operation[0] // operation[1])
-                ).fetchall(),
-                [(operation[2], operation[3])],
-            )
+    # New major-release default is force_div_is_floordiv=False: ``/`` performs
+    # true division and ``//`` floors, with no PendingDeprecationWarning.
+    with engine_testaccount.connect() as conn:
+        eq_(
+            conn.execute(
+                select(operation[0] / operation[1], operation[0] // operation[1])
+            ).fetchall(),
+            [(operation[2], operation[3])],
+        )
 
 
 @pytest.mark.parametrize(
