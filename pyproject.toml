@@ -104,6 +104,23 @@ features = ["development", "pandas"]
 test-dialect = "pytest -ra -vvv --tb=short --ignore=tests/sqlalchemy_test_suite tests/"
 test-compatibility = "pytest -ra -vvv --tb=short tests/sqlalchemy_test_suite tests/"
 
+# Coverage is collected per OS in the cloud-test matrix (ubuntu/macos/windows)
+# and combined on a single ubuntu runner. `relative_files` makes each job record
+# paths relative to this config instead of absolute runner paths, and
+# [tool.coverage.paths] folds the per-OS/per-install variants back onto the local
+# source tree so `coverage combine` + `coverage report` can resolve the source.
+[tool.coverage.run]
+relative_files = true
+
+[tool.coverage.paths]
+source = [
+    "src/snowflake/sqlalchemy",
+    "*/src/snowflake/sqlalchemy",
+    "*\\src\\snowflake\\sqlalchemy",
+    "*/snowflake/sqlalchemy",
+    "*\\snowflake\\sqlalchemy",
+]
+
 [tool.ruff]
 line-length = 88
 
@@ -136,6 +153,10 @@ markers = [
   "external: tests that could but should only run on our external CI",
   "feature_max_lob_size: tests that could but should only run on our external CI",
   "mypy: typing tests",
+  # sqlalchemy.testing markers (auto-applied from __backend__/__sparse_backend__ on test classes)
+  "backend: sqlalchemy.testing — class runs against the configured backend(s)",
+  "sparse_backend: sqlalchemy.testing — class runs against a sparse subset of backends",
+  "sparse_driver_backend: sqlalchemy.testing — class runs against a sparse subset of drivers",
 ]
 
 [tool.mypy]

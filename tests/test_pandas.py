@@ -112,24 +112,22 @@ def test_a_simple_read_sql(engine_testaccount):
         users.drop(engine_testaccount)
 
 
-def test_numpy_datatypes(engine_testaccount_with_numpy, db_parameters):
+def test_numpy_datatypes(engine_testaccount_with_numpy, db_table_name):
     with engine_testaccount_with_numpy.connect() as conn:
         try:
             specific_date = np.datetime64("2016-03-04T12:03:05.123456789")
             with conn.begin():
                 conn.exec_driver_sql(
-                    f"CREATE OR REPLACE TABLE {db_parameters['name']}(c1 timestamp_ntz)"
+                    f"CREATE OR REPLACE TABLE {db_table_name}(c1 timestamp_ntz)"
                 )
                 conn.exec_driver_sql(
-                    f"INSERT INTO {db_parameters['name']}(c1) values(%s)",
+                    f"INSERT INTO {db_table_name}(c1) values(%s)",
                     (specific_date,),
                 )
-                df = pd.read_sql_query(
-                    text(f"SELECT * FROM {db_parameters['name']}"), conn
-                )
+                df = pd.read_sql_query(text(f"SELECT * FROM {db_table_name}"), conn)
                 assert df.c1.values[0] == specific_date
         finally:
-            conn.exec_driver_sql(f"DROP TABLE IF EXISTS {db_parameters['name']}")
+            conn.exec_driver_sql(f"DROP TABLE IF EXISTS {db_table_name}")
             engine_testaccount_with_numpy.dispose()
 
 

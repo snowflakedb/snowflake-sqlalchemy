@@ -1235,28 +1235,20 @@ Note Snowflake DB supports DML transaction natively, but we have not figured out
 how to integrate with SQLAlchemy core API yet.
 """
 )
-def test_transaction(engine_testaccount, db_parameters):
-    engine_testaccount.execute(
-        text(f"CREATE TABLE {db_parameters['name']} (c1 number)")
-    )
+def test_transaction(engine_testaccount, db_table_name):
+    engine_testaccount.execute(text(f"CREATE TABLE {db_table_name} (c1 number)"))
     trans = engine_testaccount.connect().begin()
     try:
-        engine_testaccount.execute(
-            text(f"INSERT INTO {db_parameters['name']} VALUES(123)")
-        )
+        engine_testaccount.execute(text(f"INSERT INTO {db_table_name} VALUES(123)"))
         trans.commit()
-        engine_testaccount.execute(
-            text(f"INSERT INTO {db_parameters['name']} VALUES(456)")
-        )
+        engine_testaccount.execute(text(f"INSERT INTO {db_table_name} VALUES(456)"))
         trans.rollback()
         results = engine_testaccount.execute(
-            f"SELECT * FROM {db_parameters['name']}"
+            f"SELECT * FROM {db_table_name}"
         ).fetchall()
         assert results == [(123,)]
     finally:
-        engine_testaccount.execute(
-            text(f"DROP TABLE IF EXISTS {db_parameters['name']}")
-        )
+        engine_testaccount.execute(text(f"DROP TABLE IF EXISTS {db_table_name}"))
 
 
 def test_get_schemas(engine_testaccount):

@@ -4,27 +4,44 @@
 from sqlalchemy.testing.provision import (
     create_db,
     drop_db,
+    follower_url_from_main,
     set_default_schema_on_connection,
 )
 
 
+@follower_url_from_main.for_db("snowflake")
+def _snowflake_follower_url_from_main(url, ident):
+    """Build the per-worker (xdist) follower URL for Snowflake.
+
+    sqlalchemy.testing isolates each xdist worker by replacing the URL's
+    ``database`` with the follower ``ident``. Snowflake isolates per-worker with
+    a *schema* rather than a database (see :func:`_snowflake_create_db`), and the
+    Snowflake dialect encodes database/schema as ``"<db>/<schema>"`` in
+    ``url.database``. So keep the real database and point the follower at the
+    ``ident`` schema; otherwise the worker would connect to a database named
+    ``ident`` that does not exist, yielding "no current database" errors.
+    """
+    database = (url.database or "").split("/", 1)[0]
+    return url.set(database=f"{database}/{ident}")
+
+
 @create_db.for_db("snowflake")
 def _snowflake_create_db(cfg, eng, ident):
-    """Create a schema for the xdist worker.
+    """Create the per-worker (xdist) follower schema.
 
-    For Snowflake, we create schemas instead of databases since:
+    For Snowflake we create schemas instead of databases since:
     - Creating databases requires admin privileges
     - Schema-level isolation is sufficient for test isolation
-    - The schema name becomes the 'ident' (e.g., test_schema_gw0)
+    The schema is created in ``eng``'s current database (the real test database),
+    and :func:`_snowflake_follower_url_from_main` points the worker at it.
     """
     with eng.begin() as conn:
-        # Create schema if it does not already exist
         conn.exec_driver_sql(f"CREATE SCHEMA IF NOT EXISTS {ident}")
 
 
 @drop_db.for_db("snowflake")
 def _snowflake_drop_db(cfg, eng, ident):
-    """Drop the schema created for the xdist worker."""
+    """Drop the per-worker (xdist) follower schema."""
     with eng.begin() as conn:
         conn.exec_driver_sql(f"DROP SCHEMA IF EXISTS {ident}")
 

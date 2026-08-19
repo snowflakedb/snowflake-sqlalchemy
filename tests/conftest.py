@@ -35,6 +35,8 @@ from snowflake.sqlalchemy._constants import (
 )
 from snowflake.sqlalchemy.snowdialect import _URL_QUERY_BLOCKED_KWARGS
 
+from .util import random_string
+
 try:
     from .parameters import CONNECTION_PARAMETERS
 except ImportError:
@@ -224,6 +226,17 @@ def db_parameters():
 
 
 @pytest.fixture()
+def db_table_name() -> str:
+    """A unique scratch-table name for tests that create ad-hoc tables.
+
+    Function-scoped so each test (and each xdist worker) gets a distinct name,
+    avoiding cross-test/worker collisions. Kept separate from the connection
+    parameters so it is never sent to the driver.
+    """
+    return random_string(10, prefix="sqlalchemy_tests_")
+
+
+@pytest.fixture()
 def external_volume(engine_testaccount):
     """Create a uniquely-named external volume for the test and drop it after.
 
@@ -347,28 +360,7 @@ def get_db_parameters() -> dict:
     if "host" in ret and ret["host"] == DEFAULT_PARAMETERS["host"]:
         ret["host"] = ret["account"] + ".snowflakecomputing.com"
 
-    # a unique table name
-    ret["name"] = ("sqlalchemy_tests_" + str(uuid.uuid4())).replace("-", "_")
     ret["schema"] = TEST_SCHEMA
-
-    # This reduces a chance to exposing password in test output.
-    ret["a00"] = "dummy parameter"
-    ret["a01"] = "dummy parameter"
-    ret["a02"] = "dummy parameter"
-    ret["a03"] = "dummy parameter"
-    ret["a04"] = "dummy parameter"
-    ret["a05"] = "dummy parameter"
-    ret["a06"] = "dummy parameter"
-    ret["a07"] = "dummy parameter"
-    ret["a08"] = "dummy parameter"
-    ret["a09"] = "dummy parameter"
-    ret["a10"] = "dummy parameter"
-    ret["a11"] = "dummy parameter"
-    ret["a12"] = "dummy parameter"
-    ret["a13"] = "dummy parameter"
-    ret["a14"] = "dummy parameter"
-    ret["a15"] = "dummy parameter"
-    ret["a16"] = "dummy parameter"
 
     return ret
 
