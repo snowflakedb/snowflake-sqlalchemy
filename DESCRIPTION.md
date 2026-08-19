@@ -9,6 +9,7 @@ Source code is also available at:
 
 # Unreleased Notes
 
+- Add bare bones support for SQLA2.1
 - `enable_structured_type_json` now defaults to `True` (was `False`); explicitly setting it to `False` emits a `DeprecationWarning` (SNOW-3942921).
 - `force_div_is_floordiv` now defaults to `False` (was `True`); explicitly setting it to `True` emits a `DeprecationWarning` (SNOW-3942921).
 - `legacy_url_params` (and its `SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS` environment variable) removed; passing it now raises `ArgumentError` (SNOW-3942921).
