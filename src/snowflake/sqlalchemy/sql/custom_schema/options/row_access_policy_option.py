@@ -3,7 +3,7 @@
 #
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING
 
 from snowflake.sqlalchemy._identifiers import FQN
 from snowflake.sqlalchemy.custom_commands import NoneType
@@ -119,8 +119,4 @@ class RowAccessPolicyOption(TableOption):
         return f"RowAccessPolicyOption(policy_name='{self.policy_name}', columns={self.columns}{option_name})"
 
 
-# NB: this is a runtime value (evaluated at import), so it must use ``Union``
-# rather than ``str | FQN`` for Python 3.9 compatibility.
-RowAccessPolicyOptionType = Union[
-    RowAccessPolicyOption, tuple[Union[str, FQN], list[str]]
-]
+RowAccessPolicyOptionType = RowAccessPolicyOption | tuple[str | FQN, list[str]]

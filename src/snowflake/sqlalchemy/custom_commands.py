@@ -81,7 +81,7 @@ class MergeInto(UpdateBase):
             )
             if self.command == "INSERT":
                 sets: Any
-                sets, sets_tos = zip(*self.set.items())
+                sets, sets_tos = zip(*self.set.items(), strict=True)
                 return "WHEN NOT MATCHED{} THEN {} ({}) VALUES ({})".format(
                     case_predicate,
                     self.command,

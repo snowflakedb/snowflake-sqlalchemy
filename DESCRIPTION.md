@@ -9,10 +9,10 @@ Source code is also available at:
 
 # Unreleased Notes
 
+- **Breaking change**: raise the minimum supported Python to 3.10 (drop Python 3.9). Updates `requires-python`, the CI/build matrices, and mypy/ruff targets accordingly.
 - `enable_structured_type_json` now defaults to `True` (was `False`); explicitly setting it to `False` emits a `DeprecationWarning` (SNOW-3942921).
 - `force_div_is_floordiv` now defaults to `False` (was `True`); explicitly setting it to `True` emits a `DeprecationWarning` (SNOW-3942921).
 - `legacy_url_params` (and its `SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS` environment variable) removed; passing it now raises `ArgumentError` (SNOW-3942921).
-
 - Fix hybrid table index reflection: normalize reflected index names so unquoted identifiers round-trip in SQLAlchemy's lowercase convention (quoted/case-sensitive names preserved), preserve the caller's original schema (including `None`) in `get_multi_indexes` result keys so indexes attach when reflecting under the default schema, and return `[]` instead of `['']` for empty `INCLUDE` columns (GH #755, fixes GH #754).
 - Add `COLLATE` support: expression-level `Column.collate('<spec>')` and column-type collation (`String(collation='<spec>')`) now render the collation as a single-quoted Snowflake string literal (e.g. `COLLATE 'en-ci'`) instead of an invalid double-quoted identifier. Enables the SQLAlchemy suite `CollateTest` (SNOW-629086).
 - Add subscript access for semi-structured columns: `col["key"]` and `col[index]` on `VARIANT`, `OBJECT`, `ARRAY` and `MAP` columns now compile to Snowflake's native bracket accessor (e.g. `col['key']`, `col[0]`), including nested chains such as `col["a"]["b"]`. See [Reading keys and elements with subscript access](README.md#reading-keys-and-elements-with-subscript-access) (SNOW-1820647 / GH #546).

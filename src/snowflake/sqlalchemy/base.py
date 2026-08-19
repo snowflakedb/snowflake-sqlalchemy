@@ -912,11 +912,12 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         )
         sets: Any  # declared Any to accommodate zip-tuple and str assignments
         if merge_into_clause.command == "INSERT":
-            sets, sets_tos = zip(*merge_into_clause.set.items())
+            sets, sets_tos = zip(*merge_into_clause.set.items(), strict=True)
             sets, sets_tos = list(sets), list(sets_tos)  # type: ignore[assignment]
             if kw.get("deterministic", False):
                 sets, sets_tos = zip(
-                    *sorted(merge_into_clause.set.items(), key=operator.itemgetter(0))
+                    *sorted(merge_into_clause.set.items(), key=operator.itemgetter(0)),
+                    strict=True,
                 )
             return "WHEN NOT MATCHED{} THEN {} ({}) VALUES ({})".format(
                 case_predicate,

@@ -4,7 +4,7 @@
 
 ### Python
 
-Python 3.9 or higher is required.
+Python 3.10 or higher is required.
 
 ### Hatch
 
@@ -34,7 +34,7 @@ snowflake-sqlalchemy/
 │   ├── alembic_integration/        # Alembic-specific integration tests
 │   └── sqlalchemy_test_suite/      # SQLAlchemy compliance test suite
 ├── pyproject.toml                  # Build system, dependencies, hatch scripts, ruff/mypy config
-└── tox.ini                         # CI matrix across Python 3.9–3.14
+└── tox.ini                         # CI matrix across Python 3.10–3.14
 ```
 
 Key files:
@@ -45,7 +45,7 @@ Key files:
 
 ## Development setup
 
-Clone the repository and let Hatch build the default environment (Python 3.9, all dev and pandas extras):
+Clone the repository and let Hatch build the default environment (Python 3.10, all dev and pandas extras):
 
 ```bash
 git clone https://github.com/snowflakedb/snowflake-sqlalchemy.git

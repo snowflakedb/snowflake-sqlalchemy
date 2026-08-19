@@ -3,7 +3,7 @@
 #
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING
 
 from snowflake.sqlalchemy.custom_commands import NoneType
 
@@ -72,4 +72,4 @@ class IdentifierOption(TableOption):
         return f"IdentifierOption(value='{self.value}'{option_name})"
 
 
-IdentifierOptionType = Union[IdentifierOption, str]
+IdentifierOptionType = IdentifierOption | str

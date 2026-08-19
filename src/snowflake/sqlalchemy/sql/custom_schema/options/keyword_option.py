@@ -3,7 +3,7 @@
 #
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING
 
 from snowflake.sqlalchemy.custom_commands import NoneType
 
@@ -71,4 +71,4 @@ class KeywordOption(TableOption):
         return f"KeywordOption(value='{self.value}'{option_name})"
 
 
-KeywordOptionType = Union[KeywordOption, SnowflakeKeyword]
+KeywordOptionType = KeywordOption | SnowflakeKeyword

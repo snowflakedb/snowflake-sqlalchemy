@@ -3,7 +3,7 @@
 #
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING
 
 from snowflake.sqlalchemy.custom_commands import NoneType
 from sqlalchemy.sql import Selectable
@@ -68,4 +68,4 @@ class AsQueryOption(TableOption):
         return "AsQueryOption(%s)" % self.__get_expression()
 
 
-AsQueryOptionType = Union[AsQueryOption, str, Selectable]
+AsQueryOptionType = AsQueryOption | str | Selectable

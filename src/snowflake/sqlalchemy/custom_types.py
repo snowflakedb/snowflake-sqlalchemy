@@ -7,8 +7,9 @@ import decimal
 import json
 import keyword
 import warnings
+from collections.abc import Callable
 from datetime import date, datetime, time
-from typing import TYPE_CHECKING, Any, Callable, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import sqlalchemy.types as sqltypes
 import sqlalchemy.util as util
