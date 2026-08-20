@@ -11,7 +11,7 @@ Source code is also available at:
 
 # Release Notes
 
-- v2.0.0a1 (Aug 20, 2026)
+- v2.0.0a2 (Aug 20, 2026)
   - **Breaking change**: raise the minimum supported Python to 3.10 (drop Python 3.9). Updates `requires-python`, the CI/build matrices, and mypy/ruff targets accordingly.
   - `enable_structured_type_json` now defaults to `True` (was `False`); explicitly setting it to `False` emits a `DeprecationWarning` (SNOW-3942921).
   - `force_div_is_floordiv` now defaults to `False` (was `True`); explicitly setting it to `True` emits a `DeprecationWarning` (SNOW-3942921).
@@ -42,6 +42,8 @@ Source code is also available at:
   - Document AUTOINCREMENT and IDENTITY column usage, including Sequence vs Identity trade-offs for Hybrid tables (SNOW-1232362).
   - Document that Snowflake lacks `IS TRUE`/`IS FALSE`; use `col == true()`/`col == false()` ([#680](https://github.com/snowflakedb/snowflake-sqlalchemy/issues/680)).
   - Fix invalid `LIMIT -1` SQL generated for a `SELECT` with `OFFSET` but no `LIMIT`; the `SnowflakeCompiler` now emits `LIMIT NULL OFFSET ...` as Snowflake requires (NO-SNOW / GH #745).
+
+- v2.0.0a2 (Unreleased)
 
 - v2.0.0a0 (July 16, 2026)
   - **Breaking change**: drop SQLAlchemy 1.4 support. The dialect now requires `SQLAlchemy>=2.0.0`. Users still on SQLAlchemy 1.4 should pin to `snowflake-sqlalchemy<2.0.0`.
