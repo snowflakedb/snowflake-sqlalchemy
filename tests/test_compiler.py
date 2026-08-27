@@ -231,12 +231,13 @@ def test_division_operator_with_denominator_expr_force_div_is_floordiv_false():
 
 @pytest.mark.feature_v20
 def test_division_operator_with_force_div_is_floordiv_default_true():
+    # force_div_is_floordiv=True is the 1.x default. / must honour the flag's
+    # stated semantics and emit FLOOR(left / right); the old CAST behaviour
+    # was wrong for Snowflake (GH #756).
     col1 = column("col1", Integer)
     col2 = column("col2", Integer)
     stmt = col1 / col2
-    assert (
-        str(stmt.compile(dialect=SnowflakeDialect())) == "col1 / CAST(col2 AS NUMERIC)"
-    )
+    assert str(stmt.compile(dialect=SnowflakeDialect())) == "FLOOR(col1 / col2)"
 
 
 @pytest.mark.feature_v20
@@ -244,10 +245,7 @@ def test_division_operator_with_denominator_expr_force_div_is_floordiv_default_t
     col1 = column("col1", Integer)
     col2 = column("col2", Integer)
     stmt = col1 / func.sqrt(col2)
-    assert (
-        str(stmt.compile(dialect=SnowflakeDialect()))
-        == "col1 / CAST(sqrt(col2) AS NUMERIC)"
-    )
+    assert str(stmt.compile(dialect=SnowflakeDialect())) == "FLOOR(col1 / sqrt(col2))"
 
 
 @pytest.mark.feature_v20
@@ -274,10 +272,13 @@ def test_floor_division_operator_with_denominator_expr_force_div_is_floordiv_fal
 
 @pytest.mark.feature_v20
 def test_floor_division_operator_force_div_is_floordiv_default_true():
+    # // must always emit FLOOR(left / right) regardless of force_div_is_floordiv.
+    # With the default True, the SA base previously skipped FLOOR for
+    # Integer/Integer pairs, producing plain division instead (GH #756).
     col1 = column("col1", Integer)
     col2 = column("col2", Integer)
     stmt = col1 // col2
-    assert str(stmt.compile(dialect=SnowflakeDialect())) == "col1 / col2"
+    assert str(stmt.compile(dialect=SnowflakeDialect())) == "FLOOR(col1 / col2)"
 
 
 @pytest.mark.feature_v20

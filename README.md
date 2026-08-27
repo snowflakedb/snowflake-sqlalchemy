@@ -1199,6 +1199,32 @@ dynamic_test_table_1 = DynamicTable(
 * When using the `as_query` parameter with a string, you must explicitly define the columns. However, if you use the SQLAlchemy `select()` construct, you don’t need to explicitly define the columns.
 * Direct data insertion into Dynamic Tables is not supported.
 
+## Division operators and `force_div_is_floordiv`
+
+The `force_div_is_floordiv` flag controls how the `/` operator is compiled on
+SQLAlchemy 2.x column expressions. It has no effect on SQLAlchemy 1.4.
+
+| Python expression | `force_div_is_floordiv=True` (default) | `force_div_is_floordiv=False` |
+| --- | --- | --- |
+| `col1 / col2` | `FLOOR(col1 / col2)` | `col1 / col2` |
+| `col1 // col2` | `FLOOR(col1 / col2)` | `FLOOR(col1 / col2)` |
+
+- With the default (`True`), `/` compiles to `FLOOR(left / right)`, treating
+  integer division as floor division.
+- With `False`, `/` compiles to plain `left / right`, matching Snowflake's
+  native true-division behaviour.
+- `//` always emits `FLOOR(left / right)` regardless of the flag.
+
+Pass the flag to `create_engine` to opt into true division:
+
+```python
+create_engine(URL(...), force_div_is_floordiv=False)
+```
+
+> **Note:** `force_div_is_floordiv` will be removed in a future major release
+> (2.x defaults to `False`). Migrating now avoids a silent behaviour change on
+> upgrade.
+
 ## Verifying Package Signatures
 
 To ensure the authenticity and integrity of the Python package, follow the steps below to verify the package signature using `cosign`.

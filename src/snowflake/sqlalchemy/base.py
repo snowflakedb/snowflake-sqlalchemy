@@ -131,6 +131,8 @@ ILLEGAL_INITIAL_CHARACTERS = frozenset({d for d in string.digits}.union({"$"}))
 # used for quoting identifiers ie. table names, column names, etc.
 ILLEGAL_IDENTIFIERS = frozenset({d for d in string.digits}.union({"_"}))
 
+_DIV_README_URL = "https://github.com/snowflakedb/snowflake-sqlalchemy/blob/main/README.md#division-operators-and-force_div_is_floordiv"
+
 """
 Overwrite methods to handle Snowflake BCR change:
 https://docs.snowflake.com/en/release-notes/bcr-bundles/2023_04/bcr-1057
@@ -1009,23 +1011,57 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         )
 
     def visit_truediv_binary(self, binary, operator, **kw):
+        """Compile the true-division operator (``/``) for Snowflake.
+
+        On SA 2.x with ``force_div_is_floordiv=False``, Snowflake's native
+        ``/`` is used directly — no ``CAST`` is needed (GH #756).
+
+        On SA 2.x with ``force_div_is_floordiv=True`` (the 1.x default), the
+        operator is compiled as ``FLOOR(left / right)``, honouring the flag's
+        stated semantics.
+
+        On SA 1.4, ``/`` always emits ``left / right``.
+        """
         if self.dialect.div_is_floordiv and IS_VERSION_20:
             warnings.warn(
-                "div_is_floordiv value will be changed to False in a future release. This will generate a behavior change on true and floor division. Please review https://docs.sqlalchemy.org/en/20/changelog/whatsnew_20.html#python-division-operator-performs-true-division-for-all-backends-added-floor-division",
+                "force_div_is_floordiv=True is deprecated. When removed, '/' will "
+                "perform true division ('a / b' instead of 'FLOOR(a / b)'). "
+                f"See: {_DIV_README_URL}",
                 PendingDeprecationWarning,
                 stacklevel=2,
             )
-            return super().visit_truediv_binary(binary, operator, **kw)
+            return "FLOOR(%s)" % (
+                self.process(binary.left, **kw)
+                + " / "
+                + self.process(binary.right, **kw)
+            )
         return (
             self.process(binary.left, **kw) + " / " + self.process(binary.right, **kw)
         )
 
     def visit_floordiv_binary(self, binary, operator, **kw):
+        """Compile the floor-division operator (``//``) for Snowflake.
+
+        On SA 2.x, always emits ``FLOOR(left / right)``.  Do not delegate to
+        ``super()``: when ``div_is_floordiv=True`` the SA base omits ``FLOOR``
+        for integer/integer pairs (assuming the DB naturally floors), which is
+        wrong for Snowflake (GH #756).
+
+        On SA 1.4 the SA base implementation is used unchanged.
+        """
         if self.dialect.div_is_floordiv and IS_VERSION_20:
             warnings.warn(
-                "div_is_floordiv value will be changed to False in a future release. This will generate a behavior change on true and floor division. Please review https://docs.sqlalchemy.org/en/20/changelog/whatsnew_20.html#python-division-operator-performs-true-division-for-all-backends-added-floor-division",
+                "force_div_is_floordiv=True is deprecated. The '//' operator "
+                "always emits FLOOR(a / b) and is unaffected by this flag. "
+                f"See: {_DIV_README_URL}",
                 PendingDeprecationWarning,
                 stacklevel=2,
+            )
+        if IS_VERSION_20:
+            return "FLOOR(%s)" % (
+                self.process(binary.left, **kw)
+                + " / "
+                + self.process(binary.right, **kw)
             )
         return super().visit_floordiv_binary(binary, operator, **kw)
 
