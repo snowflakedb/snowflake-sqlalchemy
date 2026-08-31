@@ -9,6 +9,8 @@ Source code is also available at:
 
 # Unreleased Notes
 
+- Fix `/` operator to always emit true division (`left / right`). The flag gates a deprecation warning. The `//` operator continues to always emit `FLOOR(left / right)` (GH #756).
+
 # Release Notes
 
 - v1.11.0 (July 7, 2026)

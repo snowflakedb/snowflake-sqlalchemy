@@ -1201,29 +1201,33 @@ dynamic_test_table_1 = DynamicTable(
 
 ## Division operators and `force_div_is_floordiv`
 
-The `force_div_is_floordiv` flag controls how the `/` operator is compiled on
-SQLAlchemy 2.x column expressions. It has no effect on SQLAlchemy 1.4.
+The `force_div_is_floordiv` flag is **deprecated** and has **no effect** on the
+generated SQL. It only gates a `PendingDeprecationWarning` reminding you to
+remove it. The `/` and `//` operators always compile to the correct Snowflake
+SQL regardless of the flag value:
 
-| Python expression | `force_div_is_floordiv=True` (default) | `force_div_is_floordiv=False` |
+| Python expression | Generated SQL | Behaviour |
 | --- | --- | --- |
-| `col1 / col2` | `FLOOR(col1 / col2)` | `col1 / col2` |
-| `col1 // col2` | `FLOOR(col1 / col2)` | `FLOOR(col1 / col2)` |
+| `col1 / col2` | `col1 / col2` | True division (Snowflake's native `/`) |
+| `col1 // col2` | `FLOOR(col1 / col2)` | Floor division |
 
-- With the default (`True`), `/` compiles to `FLOOR(left / right)`, treating
-  integer division as floor division.
-- With `False`, `/` compiles to plain `left / right`, matching Snowflake's
-  native true-division behaviour.
-- `//` always emits `FLOOR(left / right)` regardless of the flag.
+- `/` always performs true division — Snowflake's `/` already returns a
+  fractional result, so no `CAST` or `FLOOR` is applied.
+- `//` always emits `FLOOR(left / right)` — this is correct even for
+  `Integer`/`Integer` pairs, where SQLAlchemy's base implementation would
+  otherwise skip `FLOOR()` (it assumes the database floors natively, which
+  Snowflake does not).
 
-Pass the flag to `create_engine` to opt into true division:
+The flag will be removed in a future major release (2.x). Remove it from your
+`create_engine()` call to silence the deprecation warning:
 
 ```python
-create_engine(URL(...), force_div_is_floordiv=False)
-```
+# Before (deprecated — emits a warning, no SQL effect)
+create_engine(URL(...), force_div_is_floordiv=True)
 
-> **Note:** `force_div_is_floordiv` will be removed in a future major release
-> (2.x defaults to `False`). Migrating now avoids a silent behaviour change on
-> upgrade.
+# After (recommended)
+create_engine(URL(...))
+```
 
 ## Verifying Package Signatures
 

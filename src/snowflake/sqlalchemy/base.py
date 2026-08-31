@@ -1013,27 +1013,20 @@ class SnowflakeCompiler(compiler.SQLCompiler):
     def visit_truediv_binary(self, binary, operator, **kw):
         """Compile the true-division operator (``/``) for Snowflake.
 
-        On SA 2.x with ``force_div_is_floordiv=False``, Snowflake's native
-        ``/`` is used directly — no ``CAST`` is needed (GH #756).
+        ``/`` always emits ``left / right`` — Snowflake's native ``/`` already
+        performs true division, so no ``CAST`` or ``FLOOR`` is needed regardless
+        of the deprecated ``force_div_is_floordiv`` flag (GH #756).
 
-        On SA 2.x with ``force_div_is_floordiv=True`` (the 1.x default), the
-        operator is compiled as ``FLOOR(left / right)``, honouring the flag's
-        stated semantics.
-
-        On SA 1.4, ``/`` always emits ``left / right``.
+        On SA 1.4, ``/`` also always emits ``left / right``.
         """
         if self.dialect.div_is_floordiv and IS_VERSION_20:
             warnings.warn(
-                "force_div_is_floordiv=True is deprecated. When removed, '/' will "
-                "perform true division ('a / b' instead of 'FLOOR(a / b)'). "
+                "force_div_is_floordiv=True is deprecated and has no effect on the "
+                "'/' operator, which always performs true division. Remove "
+                "force_div_is_floordiv=True from your create_engine() call. "
                 f"See: {_DIV_README_URL}",
                 PendingDeprecationWarning,
                 stacklevel=2,
-            )
-            return "FLOOR(%s)" % (
-                self.process(binary.left, **kw)
-                + " / "
-                + self.process(binary.right, **kw)
             )
         return (
             self.process(binary.left, **kw) + " / " + self.process(binary.right, **kw)
