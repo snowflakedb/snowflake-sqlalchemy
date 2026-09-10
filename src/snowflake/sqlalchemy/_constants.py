@@ -1,9 +1,10 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
-from snowflake.connector.errorcode import ER_CONNECTION_IS_CLOSED
-
 from .version import VERSION
+
+# Client-side disconnect detection (connector errno 250002).
+ER_CONNECTION_IS_CLOSED = 250002
 
 # parameters needed for usage tracking
 PARAM_APPLICATION = "application"

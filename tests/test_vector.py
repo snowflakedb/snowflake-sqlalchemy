@@ -158,7 +158,8 @@ class TestVectorIntegration:
                             f"SELECT 1, [1.0, 2.0]::VECTOR(FLOAT, 2)"
                         )
                     assert (
-                        "expression type does not match column data" in str(e).lower()
+                        "expression type does not match column data"
+                        in str(e.value).lower()
                     )
         finally:
             with engine_testaccount.connect() as conn:

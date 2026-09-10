@@ -547,12 +547,13 @@ def test_outer_lateral_join(engine_testaccount, caplog):
 
     with caplog.at_level(logging.DEBUG):
         assert [res for res in session.execute(query)]
+    log_text = caplog.text.replace("\n", "")
     assert (
         "SELECT employees.employee_id, departments.department_id FROM departments"
-        in caplog.text
+        in log_text
     ) or (
         "SELECT employees.employee_id, departments.department_id FROM employees"
-        in caplog.text
+        in log_text
     )
 
 
@@ -582,8 +583,8 @@ def test_lateral_join_without_condition(engine_testaccount, caplog):
     with caplog.at_level(logging.DEBUG):
         session.execute(query)
     assert (
-        '[SELECT "Employee".uid FROM "Employee" JOIN LATERAL flatten(PARSE_JSON("Employee"'
-        in caplog.text
+        'SELECT "Employee".uid FROM "Employee" JOIN LATERAL flatten(PARSE_JSON("Employee"'
+        in caplog.text.replace("\n", "")
     )
 
 

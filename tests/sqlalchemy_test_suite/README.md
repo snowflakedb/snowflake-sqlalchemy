@@ -3,7 +3,7 @@
 SQLAlchemy offers tests to test SQLAlchemy dialects work properly. This directory applies these tests
 to the Snowflake SQLAlchemy dialect.
 
-**Please be aware that the test suites are not collected in pytest by default** -- the directory is ignored in `tox.ini`.
+**Please be aware that the test suites are not collected in pytest by default** -- the directory is excluded from the default `test-dialect` run (via `--ignore=tests/sqlalchemy_test_suite`) and run separately by `hatch run test-dialect-compatibility`.
 There are majorly three issues with the sqlalchemy test suites:
 1. Importing sqlalchemy pytest plugin will result in Snowflake SQLAlchemy dialect specific tests not
 being collected.

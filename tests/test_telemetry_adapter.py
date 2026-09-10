@@ -1,8 +1,7 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
-"""Unit tests for the connector-version-dispatch telemetry layer."""
+"""Unit tests for the telemetry gather/send layer."""
 
-from sys import modules
 from types import SimpleNamespace
 from unittest import mock
 
@@ -13,7 +12,6 @@ from snowflake.sqlalchemy._telemetry import (
     dispatch,
     record_new_connection,
 )
-from snowflake.sqlalchemy._telemetry.legacy import Connector4Adapter
 from snowflake.sqlalchemy._telemetry.ud import Connector5Adapter
 
 
@@ -48,37 +46,23 @@ class _RecordingAdapter:
 
 
 # ---------------------------------------------------------------------------
-# dispatch: capability probe
+# dispatch: adapter selection
 # ---------------------------------------------------------------------------
 
 
-def test_probe_selects_legacy_adapter_when_internal_telemetry_absent():
-    dispatch._reset_cache()
-    with mock.patch.dict(modules, {"snowflake.connector._internal.telemetry": None}):
-        adapter = dispatch.get_adapter(connection=mock.MagicMock())
-    assert isinstance(adapter, Connector4Adapter)
-    dispatch._reset_cache()
-
-
-def test_probe_selects_ud_adapter_when_internal_telemetry_present():
-    dispatch._reset_cache()
-    with mock.patch.dict(
-        modules, {"snowflake.connector._internal.telemetry": mock.MagicMock()}
-    ):
-        adapter = dispatch.get_adapter(connection=mock.MagicMock())
-    assert isinstance(adapter, Connector5Adapter)
-    dispatch._reset_cache()
+def test_get_adapter_returns_ud_adapter():
+    """Connector 5.x is the baseline, so there is a single send adapter."""
+    assert isinstance(
+        dispatch.get_adapter(connection=mock.MagicMock()), Connector5Adapter
+    )
 
 
 def test_get_adapter_returns_fresh_instance_per_call():
-    """Version decision is cached, but a new instance is returned each call so
-    each connection gets its own client (no cross-connection state leak)."""
-    dispatch._reset_cache()
-    with mock.patch.dict(modules, {"snowflake.connector._internal.telemetry": None}):
-        a = dispatch.get_adapter(connection=mock.MagicMock())
-        b = dispatch.get_adapter(connection=mock.MagicMock())
+    """A new instance is returned each call so each connection gets its own
+    client (no cross-connection state leak)."""
+    a = dispatch.get_adapter(connection=mock.MagicMock())
+    b = dispatch.get_adapter(connection=mock.MagicMock())
     assert a is not b
-    dispatch._reset_cache()
 
 
 # ---------------------------------------------------------------------------
@@ -113,13 +97,15 @@ def test_record_does_nothing_when_disabled():
     assert adapter.flushed == 0
 
 
-def test_record_with_ud_adapter_is_noop_and_does_not_raise():
+def test_record_with_ud_adapter_no_client_is_noop_and_does_not_raise():
+    """A 5.x connection without the payload API resolves to no client, so the
+    UD adapter sends nothing and never raises."""
+    conn = SimpleNamespace(telemetry_enabled=True)  # no _telemetry* attributes
     with mock.patch(
         "snowflake.sqlalchemy._telemetry.get_adapter",
         return_value=Connector5Adapter(),
     ):
-        # Must not raise even though nothing is sent.
-        record_new_connection(_fake_dialect(), mock.MagicMock(), {"user": "x"})
+        record_new_connection(_fake_dialect(), conn, {"user": "x"})
 
 
 # ---------------------------------------------------------------------------
@@ -127,8 +113,8 @@ def test_record_with_ud_adapter_is_noop_and_does_not_raise():
 # ---------------------------------------------------------------------------
 
 
-def test_connector4_is_enabled_reads_connection_flag():
-    adapter = Connector4Adapter()
+def test_connector5_is_enabled_reads_connection_flag():
+    adapter = Connector5Adapter()
     assert (
         adapter.is_enabled(connection=SimpleNamespace(telemetry_enabled=False)) is False
     )
@@ -139,12 +125,61 @@ def test_connector4_is_enabled_reads_connection_flag():
     assert adapter.is_enabled(connection=SimpleNamespace()) is True
 
 
-def test_connector5_is_enabled_always_true_and_send_is_noop():
+class _FakeUDClient:
+    """Stand-in for the 5.x ``_common.telemetry`` client."""
+
+    def __init__(self):
+        self.sent = []
+
+    def try_add_log_to_batch(self, telemetry_data):
+        self.sent.append(telemetry_data)
+
+
+def test_connector5_register_sends_via_client_with_4x_compatible_payload():
+    """When the connection exposes the arbitrary-payload API, the UD adapter
+    forwards a ``{"type", "value"}`` message -- identical shape to the 4.x
+    adapter -- via ``try_add_log_to_batch``."""
+    client = _FakeUDClient()
+    conn = SimpleNamespace(_telemetry=client, telemetry_enabled=True)
     adapter = Connector5Adapter()
-    conn = mock.MagicMock()
-    assert adapter.is_enabled(connection=conn) is True
-    assert adapter.register("t", {"a": 1}, connection=conn) is None
+
+    adapter.register("sqlalchemy_new_connection", "the-value", connection=conn)
+
+    assert len(client.sent) == 1
+    message = client.sent[0].message
+    assert message == {"type": "sqlalchemy_new_connection", "value": "the-value"}
+    # flush is a no-op on 5.x (core owns egress) and must not raise.
     assert adapter.flush(connection=conn) is None
+
+
+def test_connector5_register_noop_when_client_lacks_payload_api():
+    """A client exposing only the connector's own instrumentation vocabulary
+    (send_api_usage) -- i.e. early betas / rc1 -- is not usable for arbitrary
+    payloads, so register no-ops."""
+
+    class _ApiUsageOnlyClient:
+        def send_api_usage(self, *a, **k):  # pragma: no cover - never called
+            raise AssertionError("must not be called")
+
+    conn = SimpleNamespace(
+        _telemetry_client=_ApiUsageOnlyClient(), telemetry_enabled=True
+    )
+    adapter = Connector5Adapter()
+    # No candidate exposes add_log_to_batch, so nothing is sent and none raises.
+    adapter.register("sqlalchemy_new_connection", "v", connection=conn)
+
+
+def test_connector5_prefers_telemetry_over_telemetry_client():
+    """``_telemetry`` (the backward-compat accessor) is preferred over the
+    concrete ``_telemetry_client`` attribute."""
+    preferred = _FakeUDClient()
+    fallback = _FakeUDClient()
+    conn = SimpleNamespace(
+        _telemetry=preferred, _telemetry_client=fallback, telemetry_enabled=True
+    )
+    Connector5Adapter().register("evt", "v", connection=conn)
+    assert len(preferred.sent) == 1
+    assert fallback.sent == []
 
 
 # ---------------------------------------------------------------------------

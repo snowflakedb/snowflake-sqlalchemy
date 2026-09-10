@@ -32,12 +32,12 @@ preview introduced each change where it matters.
 | Area | 1.x (≤ 1.11.0) | 2.x (latest: 2.0.0a2) |
 | --- | --- | --- |
 | SQLAlchemy | `>=1.4.19` (1.4 and 2.x both supported) | `>=2.0.0` (2.x only) |
-| Python | `>=3.8` | `>=3.10` (through 3.14) |
-| `snowflake-connector-python` | `<5.0.0` | `<5.0.0` (unchanged) |
+| Python | `>=3.8` | `>=3.11` (through 3.14) |
+| `snowflake-connector-python` | `<5.0.0` | `>=5.0.0rc3` (5.x required) |
 | Public API surface | — | Additive, except the temporary `legacy_url_params` shim (removed) |
 
 **The short version:** for most projects the only required action is to be on
-**SQLAlchemy 2.x** and **Python 3.10+**. Two feature-flag defaults flipped in 2.x
+**SQLAlchemy 2.x** and **Python 3.11+**. Two feature-flag defaults flipped in 2.x
 (`enable_structured_type_json` → on, `force_div_is_floordiv` → off) and the
 temporary `legacy_url_params` shim was removed — review the
 [breaking changes](#breaking-changes) and
@@ -47,9 +47,9 @@ temporary `legacy_url_params` shim was removed — review the
 
 | Your current setup | What you need to do |
 | --- | --- |
-| Already on SQLAlchemy 2.x + Python 3.10+ | Drop-in upgrade. Then skim [behavioral differences](#behavioral-differences-to-review). |
+| Already on SQLAlchemy 2.x + Python 3.11+ | Drop-in upgrade. Then skim [behavioral differences](#behavioral-differences-to-review). |
 | On SQLAlchemy 1.4 | Migrate the app to SQLAlchemy 2.0 first, then upgrade. Until then pin `snowflake-sqlalchemy<2.0.0`. |
-| On Python 3.9 or older | Upgrade the interpreter to 3.10–3.14 first. |
+| On Python 3.10 or older | Upgrade the interpreter to 3.11–3.14 first. |
 | Import `snowflake.sqlalchemy.compat` anywhere | Remove that import — the module was deleted (see [Breaking changes](#breaking-changes)). |
 | Use `regexp_match(...)` / `regexp_replace(...)` with `flags=` and are coming from a release **older than 1.10.1** | Review generated SQL — flag rendering was fixed (see [behavioral differences](#behavioral-differences-to-review)). |
 | Pass `legacy_url_params=` or set `SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS` | Remove it; move blocked connector kwargs to `connect_args=` (see [Breaking changes](#breaking-changes)). |
@@ -60,7 +60,7 @@ temporary `legacy_url_params` shim was removed — review the
 
 1. Make sure your application runs on **SQLAlchemy 2.0** (migrate from 1.4 if
    needed, using SQLAlchemy's guide linked above).
-2. Make sure you are on **Python 3.10–3.14**.
+2. Make sure you are on **Python 3.11–3.14**.
 3. Upgrade the dialect. The 2.x line is currently a **pre-release**, so pin the
    exact preview version (a plain `>=2.0.0` range skips pre-releases unless you
    add `--pre`):
@@ -88,13 +88,15 @@ See also the README's
 
 | Requirement | 1.11.0 | 2.0.0a0 | 2.0.0a2 (latest) |
 | --- | --- | --- | --- |
-| `requires-python` | `>=3.8` | `>=3.9` | `>=3.10` |
-| Python classifiers | 3.8–3.13 | 3.9–3.14 | 3.10–3.14 |
+| `requires-python` | `>=3.8` | `>=3.9` | `>=3.11` |
+| Python classifiers | 3.8–3.13 | 3.9–3.14 | 3.11–3.14 |
 | `SQLAlchemy` | `>=1.4.19` | `>=2.0.0` | `>=2.0.0` |
-| `snowflake-connector-python` | `<5.0.0` | `<5.0.0` | `<5.0.0` |
+| `snowflake-connector-python` | `<5.0.0` | `<5.0.0` | `>=5.0.0rc3` |
 
-The Python floor rose in two steps: 2.0.0a0 dropped 3.8 (floor `>=3.9`), and
-2.0.0a2 dropped 3.9 (floor `>=3.10`).
+The Python floor rose in three steps: 2.0.0a0 dropped 3.8 (floor `>=3.9`),
+2.0.0a2 dropped 3.9 (floor `>=3.10`), and the connector 5.0.0rc3 bump dropped
+3.10 too (floor `>=3.11`) — connector 5.0.0rc3 itself requires Python 3.11+,
+so pip refuses to install it (or this dialect) on 3.10 at all.
 
 ## Breaking changes
 
@@ -114,17 +116,19 @@ the dialect will fail at import/runtime.
 
 If you cannot move off SQLAlchemy 1.4 yet, pin `snowflake-sqlalchemy<2.0.0`.
 
-### Python 3.8 and 3.9 support dropped
+### Python 3.8, 3.9, and 3.10 support dropped
 
-The Python floor rose across the two 2.x previews: **2.0.0a0** raised it to
-`>=3.9` (dropping 3.8), and **2.0.0a2** raised it again to `>=3.10` (dropping
-3.9). Coming from 1.x you land on the latest, so upgrade the interpreter to
-3.10–3.14 before upgrading the dialect.
+The Python floor rose across three 2.x previews: **2.0.0a0** raised it to
+`>=3.9` (dropping 3.8), **2.0.0a2** raised it again to `>=3.10` (dropping
+3.9), and the connector 5.0.0rc3 bump raised it to `>=3.11` (dropping 3.10,
+since connector 5.0.0rc3 itself requires Python 3.11+). Coming from 1.x you
+land on the latest, so upgrade the interpreter to 3.11–3.14 before upgrading
+the dialect.
 
 ```diff
   # pyproject.toml
 - requires-python = ">=3.8"
-+ requires-python = ">=3.10"
++ requires-python = ">=3.11"
 ```
 
 ### Internal `compat` module removed
@@ -332,7 +336,7 @@ policy.
 | Symptom | Fix |
 | --- | --- |
 | Resolver installs an old dialect or errors on 1.4 | Ensure the app is on SQLAlchemy 2.0, then pin `snowflake-sqlalchemy>=2.0.0`. |
-| Resolver refuses to install 2.x on Python 3.9 | Upgrade to Python 3.10–3.14 first, then install the pinned preview: `pip install "snowflake-sqlalchemy==2.0.0a2"`. |
+| Resolver refuses to install 2.x on Python 3.10 or older | Upgrade to Python 3.11–3.14 first, then install the pinned preview: `pip install "snowflake-sqlalchemy==2.0.0a2"`. |
 | `ImportError: ... snowflake.sqlalchemy.compat` | Remove the import (see [Breaking changes](#breaking-changes)). |
 | `ArgumentError` mentions `legacy_url_params` was removed | Remove `legacy_url_params=` and pass blocked connector kwargs via `connect_args=` — see [`legacy_url_params` removed](#legacy_url_params-removed). |
 | Reflected UUID values are strings, not `uuid.UUID` | Expected; use `UUID(as_uuid=True)` — see [behavioral difference #1](#1-uuid-columns-reflect-to-a-real-type-were-nulltype). |

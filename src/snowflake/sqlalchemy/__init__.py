@@ -89,7 +89,10 @@ from .sql.custom_schema.options import (  # noqa
     TimeUnit,
 )
 from .util import _url as URL  # noqa
-from .util import create_snowflake_engine  # noqa
+from .util import (
+    create_snowflake_async_engine,  # noqa
+    create_snowflake_engine,  # noqa
+)
 
 base.dialect = dialect = snowdialect.dialect  # type: ignore[attr-defined]
 
@@ -177,7 +180,7 @@ _orm = (
     "snowflake_declarative_base",
 )
 
-_helpers = ("create_snowflake_engine", "FQN")
+_helpers = ("create_snowflake_engine", "create_snowflake_async_engine", "FQN")
 
 _secret_logging = (
     "SnowflakeSecretRedactionFilter",

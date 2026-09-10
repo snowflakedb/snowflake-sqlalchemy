@@ -179,9 +179,9 @@ def test_application_name_parameters():
         with engine.connect() as conn:
             driver_connection = conn.connection.driver_connection
             assert driver_connection.application == APPLICATION_NAME
-            assert driver_connection._internal_application_name == APPLICATION_NAME
+            assert driver_connection.config.client_app_id == APPLICATION_NAME
             assert (
-                driver_connection._internal_application_version
+                driver_connection.config.client_app_version
                 == SNOWFLAKE_SQLALCHEMY_VERSION
             )
     finally:
@@ -2198,65 +2198,43 @@ def test_reflect_schema_none_does_not_crash(engine_testaccount):
 
 @pytest.mark.pandas
 def test_snowflake_sqlalchemy_as_valid_client_type():
+    """The dialect stamps CLIENT_APP_ID with the SQLAlchemy application name
+    by default (via ``internal_application_name``) and callers can override
+    it through connect_args.
+
+    Connector 5.x's Rust-core rewrite retired two things this test used to
+    exercise: the DEFAULT_CONFIGURATION dict-based config registry (now a
+    permanently empty dict) and server-side client-type gating of
+    fetch_pandas_all()/fetch_arrow_all() for unrecognized clients (no longer
+    enforced). This test now verifies the override plumbing itself plus a
+    smoke test that pandas fetch works regardless of client_app_id.
+    """
     engine = get_engine(
         url_factory(),
         connect_args={"internal_application_name": "UnknownClient"},
     )
     with engine.connect() as conn:
-        with pytest.raises(snowflake.connector.errors.NotSupportedError):
-            conn.exec_driver_sql("select 1").cursor.fetch_pandas_all()
+        assert conn.connection.driver_connection.config.client_app_id == "UnknownClient"
+        conn.exec_driver_sql("select 1").cursor.fetch_pandas_all()
 
     engine = get_engine(url_factory())
     with engine.connect() as conn:
+        assert (
+            conn.connection.driver_connection.config.client_app_id == APPLICATION_NAME
+        )
         conn.exec_driver_sql("select 1").cursor.fetch_pandas_all()
 
     try:
         snowflake.sqlalchemy.snowdialect._ENABLE_SQLALCHEMY_AS_APPLICATION_NAME = False
-        origin_app = snowflake.connector.connection.DEFAULT_CONFIGURATION["application"]
-        origin_internal_app_name = snowflake.connector.connection.DEFAULT_CONFIGURATION[
-            "internal_application_name"
-        ]
-        origin_internal_app_version = (
-            snowflake.connector.connection.DEFAULT_CONFIGURATION[
-                "internal_application_version"
-            ]
-        )
-        snowflake.connector.connection.DEFAULT_CONFIGURATION["application"] = (
-            None,
-            (type(None), str),
-        )
-        snowflake.connector.connection.DEFAULT_CONFIGURATION[
-            "internal_application_name"
-        ] = (
-            "PythonConnector",
-            (type(None), str),
-        )
-        snowflake.connector.connection.DEFAULT_CONFIGURATION[
-            "internal_application_version"
-        ] = (
-            "3.0.0",
-            (type(None), str),
-        )
         engine = get_engine(url_factory())
         with engine.connect() as conn:
             conn.exec_driver_sql("select 1").cursor.fetch_pandas_all()
             assert (
-                conn.connection.driver_connection._internal_application_name
+                conn.connection.driver_connection.config.client_app_id
                 == "PythonConnector"
-            )
-            assert (
-                conn.connection.driver_connection._internal_application_version
-                == "3.0.0"
             )
     finally:
         snowflake.sqlalchemy.snowdialect._ENABLE_SQLALCHEMY_AS_APPLICATION_NAME = True
-        snowflake.connector.connection.DEFAULT_CONFIGURATION["application"] = origin_app
-        snowflake.connector.connection.DEFAULT_CONFIGURATION[
-            "internal_application_name"
-        ] = origin_internal_app_name
-        snowflake.connector.connection.DEFAULT_CONFIGURATION[
-            "internal_application_version"
-        ] = origin_internal_app_version
 
 
 @pytest.mark.parametrize(

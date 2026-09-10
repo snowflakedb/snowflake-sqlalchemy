@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Sequence
+from functools import lru_cache
 from itertools import chain
 from typing import Any
 from urllib.parse import quote as _url_quote
@@ -61,6 +62,12 @@ _URL_QUERY_BLOCKED_KWARGS: frozenset = frozenset(
         "crl_cache_dir",
         "unsafe_file_write",
         "unsafe_skip_file_permissions_check",
+        # Connector 5.x split ``unsafe_skip_file_permissions_check`` into these
+        # two; the old name is kept above so the block-list stays effective on
+        # 4.x.  ``ocsp_response_cache_filename`` has no 5.x counterpart (OCSP
+        # handling moved into the native core).
+        "unsafe_skip_config_file_permissions_check",
+        "crl_unsafe_skip_file_permissions_check",
     }
 )
 
@@ -167,6 +174,63 @@ def _update_connection_application_name(**conn_kwargs: Any) -> dict[str, Any]:
     if PARAM_INTERNAL_APPLICATION_VERSION not in conn_kwargs:
         conn_kwargs[PARAM_INTERNAL_APPLICATION_VERSION] = SNOWFLAKE_SQLALCHEMY_VERSION
     return conn_kwargs
+
+
+@lru_cache(maxsize=1)
+def connector_param_types() -> dict[str, tuple[type, ...]]:
+    """Map each connector connection-parameter name to its accepted types.
+
+    The authoritative source is the auto-generated ``ConnectionConfig`` dataclass.
+    The older ``DEFAULT_CONFIGURATION`` mapping (``{name: (default, types)}``) is
+    still published but is an *empty* stub, so it must never be used as a version
+    signal or read on its own: that silently yields no type information and leaves
+    every URL query parameter as a raw string.
+
+    It is still merged on top rather than ignored, because it remains mutable at
+    runtime -- callers (including this project's test fixtures) inject extra
+    entries into it, and those must keep being honoured.  Resolved once per
+    process.
+
+    Returns an empty mapping if neither source is available; callers treat an
+    absent name as "leave the value untouched".
+    """
+    resolved: dict[str, tuple[type, ...]] = {}
+
+    # Authoritative source: types come from the generated dataclass.
+    try:
+        import dataclasses
+        import typing
+
+        from snowflake.connector.connection_config import ConnectionConfig
+    except ImportError:  # no generated config on this connector build
+        pass
+    else:
+        hints = typing.get_type_hints(ConnectionConfig)
+        for field in dataclasses.fields(ConnectionConfig):
+            annotation = hints.get(field.name)
+            # ``bool | None`` -> (bool,); a bare ``str`` -> (str,).  ``NoneType``
+            # is dropped: optionality is irrelevant to casting a supplied string.
+            candidates = typing.get_args(annotation) or (annotation,)
+            types = tuple(
+                candidate
+                for candidate in candidates
+                if isinstance(candidate, type) and candidate is not type(None)
+            )
+            if types:
+                resolved[field.name] = types
+
+    # Entries injected into the legacy table at runtime win on overlap.
+    from snowflake.connector.connection import DEFAULT_CONFIGURATION
+
+    # Values are ``(default, type_or_tuple_of_types)``; the second element is a
+    # bare type on some entries, so normalise it to a tuple.  Read via ``Any`` as
+    # the published annotation varies across connector versions.
+    default_configuration: dict[str, Any] = dict(DEFAULT_CONFIGURATION)
+    for name, configuration in default_configuration.items():
+        expected = configuration[1]
+        resolved[name] = expected if isinstance(expected, tuple) else (expected,)
+
+    return resolved
 
 
 def parse_url_boolean(value: str | tuple[str, ...]) -> bool:
@@ -328,6 +392,33 @@ def _is_true_placeholder(onclause: ClauseElement | None) -> bool:
     return False
 
 
+def _snowflake_engine_url(
+    base_url: str,
+    schema: str | None = None,
+    case_sensitive_schema: bool = False,
+) -> str:
+    """Build a Snowflake SQLAlchemy URL, optionally appending a schema segment."""
+    if schema is None:
+        return base_url
+    # Case-sensitive schemas are wrapped in literal double-quotes so Snowflake
+    # preserves their case; url-quoting encodes them (" -> %22) along with any
+    # other reserved characters, so we never hand-write percent escapes.
+    schema_value = f'"{schema}"' if case_sensitive_schema else schema
+    schema_part = _url_quote(schema_value, safe="")
+    parsed = urlsplit(base_url)
+    path = parsed.path.rstrip("/")
+    if path.count("/") >= 2:
+        raise ValueError(
+            f"base_url already contains a schema component: {base_url!r}. "
+            "base_url must be in the form 'snowflake://user:pass@account/database' "
+            "with no trailing schema segment."
+        )
+    new_path = f"{path}/{schema_part}"
+    return urlunsplit(
+        (parsed.scheme, parsed.netloc, new_path, parsed.query, parsed.fragment)
+    )
+
+
 def create_snowflake_engine(
     base_url: str,
     schema: str | None = None,
@@ -362,27 +453,26 @@ def create_snowflake_engine(
     -------
     sqlalchemy.engine.Engine
     """
-    if schema is not None:
-        if case_sensitive_schema:
-            schema_part = f"%22{_url_quote(schema, safe='')}%22"
-        else:
-            schema_part = _url_quote(schema, safe="")
-        # Use urlsplit/urlunsplit to safely insert schema into path before query params
-        parsed = urlsplit(base_url)
-        path = parsed.path.rstrip("/")
-        if path.count("/") >= 2:
-            raise ValueError(
-                f"base_url already contains a schema component: {base_url!r}. "
-                "base_url must be in the form 'snowflake://user:pass@account/database' "
-                "with no trailing schema segment."
-            )
-        new_path = f"{path}/{schema_part}"
-        url = urlunsplit(
-            (parsed.scheme, parsed.netloc, new_path, parsed.query, parsed.fragment)
-        )
-    else:
-        url = base_url
+    url = _snowflake_engine_url(base_url, schema, case_sensitive_schema)
     return _sa_create_engine(url, **kwargs)
+
+
+def create_snowflake_async_engine(
+    base_url: str,
+    schema: str | None = None,
+    case_sensitive_schema: bool = False,
+    **kwargs: Any,
+):
+    """Create an async Snowflake engine with optional case-sensitive schema support.
+
+    Same URL construction rules as :func:`create_snowflake_engine`, but returns an
+    :class:`sqlalchemy.ext.asyncio.AsyncEngine` via
+    :func:`sqlalchemy.ext.asyncio.create_async_engine`.
+    """
+    from sqlalchemy.ext.asyncio import create_async_engine
+
+    url = _snowflake_engine_url(base_url, schema, case_sensitive_schema)
+    return create_async_engine(url, **kwargs)
 
 
 def escape_backslashes(value: str) -> str:

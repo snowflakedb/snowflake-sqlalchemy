@@ -7,7 +7,7 @@ import decimal
 import logging
 import warnings
 from collections import defaultdict
-from collections.abc import Collection, Sequence
+from collections.abc import Callable, Collection, Sequence
 from enum import Enum
 from logging import getLogger
 from typing import TYPE_CHECKING, Any, NamedTuple, cast
@@ -27,9 +27,32 @@ if TYPE_CHECKING:
 from urllib.parse import unquote_plus
 
 from snowflake.connector import errors as sf_errors
-from snowflake.connector.connection import DEFAULT_CONFIGURATION, SnowflakeConnection
+from snowflake.connector.connection import SnowflakeConnection
 from snowflake.connector.constants import UTF8
-from snowflake.connector.util_text import parse_account
+
+try:
+    # Removed in connector 5.x; mypy resolves against 5.x now that it is the
+    # baseline, so the attribute is legitimately absent there.
+    from snowflake.connector.util_text import (  # type: ignore[attr-defined]
+        parse_account,
+    )
+except ImportError:  # snowflake-connector-python >= 5.x removed this helper
+
+    def parse_account(account: Any) -> Any:
+        """Derive the account identifier from a host (5.x fallback).
+
+        Mirrors the connector's historical ``parse_account``: dot-based
+        parsing that preserves dashes in org-style names, with special
+        handling for ``.global`` deployment-scoped hosts.
+        """
+        url_parts = account.split(".")
+        if len(url_parts) > 1:
+            if url_parts[1] == "global":
+                account = url_parts[0][: url_parts[0].rfind("-")]
+            else:
+                account = url_parts[0]
+        return account
+
 
 import sqlalchemy.sql.sqltypes as sqltypes
 from snowflake.sqlalchemy.name_utils import _NameUtils
@@ -78,6 +101,7 @@ from .sql.custom_schema.custom_table_prefix import CustomTablePrefix
 from .util import (
     _URL_QUERY_BLOCKED_KWARGS,
     _update_connection_application_name,
+    connector_param_types,
     escape_string_literal_interior,
     parse_url_boolean,
     parse_url_integer,
@@ -101,14 +125,8 @@ logger = getLogger(__name__)
 
 # ``TelemetryEvents`` now lives in the ``_telemetry`` package; re-export it
 # here so existing imports (and tests) that reference it via ``snowdialect``
-# keep working.  ``TelemetryField`` is re-exported for tests that build or
-# inspect connector ``TelemetryData`` in mocks.
+# keep working.
 from snowflake.sqlalchemy._telemetry import TelemetryEvents  # noqa: E402,F401
-
-try:  # noqa: E402
-    from snowflake.connector.telemetry import TelemetryField  # noqa: F401
-except Exception:  # pragma: no cover - connector without a telemetry module
-    TelemetryField = None  # type: ignore[assignment,misc]
 
 
 class SnowflakeIsolationLevel(Enum):
@@ -159,6 +177,24 @@ def _ensure_engine_log_redaction() -> None:
     parent.handlers.insert(0, h)
 
 
+def _connector_supports_keepalive_autodetection() -> bool:
+    """Whether the installed connector accepts the connection parameter
+    ``enable_server_session_keep_alive_auto_detection``.
+
+    Every supported connector (5.x) exposes it, so this is a defensive guard
+    rather than a version switch: it keeps the dialect from passing an unknown
+    parameter -- which the connector warns about -- should a build omit it.
+    """
+    try:
+        from snowflake.connector.connection_config import ConnectionConfig
+    except ImportError:
+        return False
+    return hasattr(ConnectionConfig, "enable_server_session_keep_alive_auto_detection")
+
+
+_KEEPALIVE_AUTODETECT_SUPPORTED = _connector_supports_keepalive_autodetection()
+
+
 _README_URL = "https://github.com/snowflakedb/snowflake-sqlalchemy/blob/main/README.md"
 
 _LEGACY_URL_PARAMS_REMOVED_MSG = (
@@ -182,6 +218,67 @@ _ENABLE_STRUCTURED_TYPE_JSON_DEPRECATION_MSG = (
     "Relying on this opt-out is deprecated and support will be removed in a future "
     f"release. See the README: {_README_URL}"
 )
+
+
+def _split_database_namespace(database: str) -> tuple[str, str | None]:
+    """Split a URL database slot of the form ``"db"`` or ``"db/schema"``.
+
+    Each ``/``-separated part is URL-decoded. Returns ``(database, schema)``
+    where ``schema`` is ``None`` when only a database is given.
+
+    Raises:
+        sa_exc.ArgumentError: if more than two parts are present.
+    """
+    name_spaces = [unquote_plus(e) for e in database.split("/")]
+    if len(name_spaces) == 1:
+        return name_spaces[0], None
+    if len(name_spaces) == 2:
+        return name_spaces[0], name_spaces[1]
+    raise sa_exc.ArgumentError(f"Invalid name space is specified: {database}")
+
+
+def _normalized_account_host(host: str, port: Any) -> tuple[str, str, str] | None:
+    """Derive ``(account, host, port)`` from a bare Snowflake account host.
+
+    The URL host slot carries the Snowflake account identifier (possibly with a
+    region and/or ``.privatelink``/``.global`` suffix). ``account`` is required
+    by the connector (it is not derived from ``host``), so normalize it with the
+    connector's own ``parse_account`` instead of re-implementing the rules here.
+    This keeps dashes in org-style account names (e.g. ``gnamsrm-vi65876``)
+    intact and stays consistent with the driver across all notations
+    (SNOW-730644).
+
+    Returns ``None`` (no normalization) when ``host`` is already a
+    ``.snowflakecomputing.com`` FQDN or an explicit ``port`` is set.
+    """
+    if ".snowflakecomputing.com" in host or port:
+        return None
+    return parse_account(host), host + ".snowflakecomputing.com", "443"
+
+
+def _cast_query_params(
+    query: dict[str, Any],
+    parse_query_param_type: Callable[[str, Any], Any],
+) -> dict[str, Any]:
+    """Type-cast leftover URL query params into connector opts.
+
+    Sensitive connector kwargs are never accepted from the URL query string
+    (the ``legacy_url_params`` opt-out shim was removed in the major release);
+    they must travel via ``connect_args=``.
+
+    Raises:
+        sa_exc.ArgumentError: if a blocked kwarg appears in the query string.
+    """
+    casted: dict[str, Any] = {}
+    for name, value in query.items():
+        if name in _URL_QUERY_BLOCKED_KWARGS:
+            raise sa_exc.ArgumentError(
+                f"Connection parameter {name!r} cannot be set via the URL "
+                "query string for safety reasons. "
+                "Pass it via connect_args= in create_engine() instead."
+            )
+        casted[name] = parse_query_param_type(name, value)
+    return casted
 
 
 class SnowflakeDialect(default.DefaultDialect):
@@ -354,17 +451,20 @@ class SnowflakeDialect(default.DefaultDialect):
 
         return connector
 
+    @classmethod
+    def get_async_dialect_cls(cls, url: URL) -> type[SnowflakeDialect]:
+        from ._async.async_dialect import SnowflakeDialect_async, _require_async_runtime
+
+        _require_async_runtime()
+        return SnowflakeDialect_async
+
     @staticmethod
     def parse_query_param_type(
         name: str, value: str | tuple[str, ...]
     ) -> str | int | bool | tuple[str, ...]:
         """Cast param value if possible to type defined in connector-python."""
-        if not (maybe_type_configuration := DEFAULT_CONFIGURATION.get(name)):
+        if not (expected_type := connector_param_types().get(name)):
             return value
-
-        _, expected_type = maybe_type_configuration
-        if not isinstance(expected_type, tuple):
-            expected_type = (expected_type,)
 
         if isinstance(value, expected_type):
             return value
@@ -378,32 +478,21 @@ class SnowflakeDialect(default.DefaultDialect):
 
     def create_connect_args(self, url: URL) -> tuple[list[Any], dict[str, Any]]:
         opts = url.translate_connect_args(username="user")
+
         if "database" in opts:
-            name_spaces = [unquote_plus(e) for e in opts["database"].split("/")]
-            if len(name_spaces) == 1:
-                pass
-            elif len(name_spaces) == 2:
-                opts["database"] = name_spaces[0]
-                opts["schema"] = name_spaces[1]
-            else:
-                raise sa_exc.ArgumentError(
-                    f"Invalid name space is specified: {opts['database']}"
-                )
-        if (
-            "host" in opts
-            and ".snowflakecomputing.com" not in opts["host"]
-            and not opts.get("port")
-        ):
-            # The URL host slot carries the Snowflake account identifier (possibly
-            # with a region and/or ``.privatelink``/``.global`` suffix). ``account``
-            # is required by the connector (it is not derived from ``host``), so
-            # normalize it with the connector's own ``parse_account`` instead of
-            # re-implementing the rules here. This keeps dashes in org-style account
-            # names (e.g. ``gnamsrm-vi65876``) intact and stays consistent with the
-            # driver across all notations (SNOW-730644).
-            opts["account"] = parse_account(opts["host"])
-            opts["host"] = opts["host"] + ".snowflakecomputing.com"
-            opts["port"] = "443"
+            database, schema = _split_database_namespace(opts["database"])
+            # Preserve the original behavior: only a "db/schema" namespace
+            # rewrites opts; a bare database is left exactly as
+            # translate_connect_args produced it (not re-unquoted).
+            if schema is not None:
+                opts["database"] = database
+                opts["schema"] = schema
+
+        if "host" in opts:
+            normalized = _normalized_account_host(opts["host"], opts.get("port"))
+            if normalized is not None:
+                opts["account"], opts["host"], opts["port"] = normalized
+
         opts["autocommit"] = False  # autocommit is disabled by default
 
         query = dict(**url.query)  # make mutable
@@ -434,18 +523,22 @@ class SnowflakeDialect(default.DefaultDialect):
                 case_sensitive_identifiers
             )
 
-        # URL sets the query parameter values as strings, we need to cast to
-        # expected types when necessary.  Sensitive connector kwargs are never
-        # accepted from the URL query string (the legacy_url_params opt-out shim
-        # was removed in the major release); they must travel via connect_args=.
-        for name, value in query.items():
-            if name in _URL_QUERY_BLOCKED_KWARGS:
-                raise sa_exc.ArgumentError(
-                    f"Connection parameter {name!r} cannot be set via the URL "
-                    "query string for safety reasons. "
-                    "Pass it via connect_args= in create_engine() instead."
-                )
-            opts[name] = self.parse_query_param_type(name, value)
+        # URL sets the query parameter values as strings; cast the leftovers to
+        # their expected types (and reject blocked kwargs).
+        opts.update(_cast_query_params(query, self.parse_query_param_type))
+
+        # The connector leaves ``enable_server_session_keep_alive_auto_detection``
+        # unset by default and emits a FutureWarning (its default is slated to
+        # change). Pin the present default (True) explicitly so behavior stays
+        # stable when that default changes and the warning is silenced. Guarded by
+        # a capability probe so a connector build without the parameter is skipped
+        # rather than warned about. A value supplied via the URL or connect_args
+        # always takes precedence.
+        if (
+            _KEEPALIVE_AUTODETECT_SUPPORTED
+            and "enable_server_session_keep_alive_auto_detection" not in opts
+        ):
+            opts["enable_server_session_keep_alive_auto_detection"] = True
 
         return ([], opts)
 

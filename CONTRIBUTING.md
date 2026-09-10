@@ -4,7 +4,7 @@
 
 ### Python
 
-Python 3.10 or higher is required.
+Python 3.11 or higher is required.
 
 ### Hatch
 
@@ -33,25 +33,34 @@ snowflake-sqlalchemy/
 │   ├── parameters.py               # Connection credentials — created by you, never committed
 │   ├── alembic_integration/        # Alembic-specific integration tests
 │   └── sqlalchemy_test_suite/      # SQLAlchemy compliance test suite
-├── pyproject.toml                  # Build system, dependencies, hatch scripts, ruff/mypy config
-└── tox.ini                         # CI matrix across Python 3.10–3.14
+└── pyproject.toml                  # Build system, dependencies, hatch scripts, ruff/mypy config
 ```
 
 Key files:
 
-- **`pyproject.toml`** — the single source of truth for dependencies and tooling. The `[tool.hatch.envs.default.scripts]` table lists all developer commands.
-- **`tox.ini`** — used by CI to run the full matrix; mirrors the hatch scripts but covers multiple Python versions.
+- **`pyproject.toml`** — the single source of truth for dependencies and tooling. The `[tool.hatch.envs.default.scripts]` table lists all developer commands, and the `release` hatch env runs the full Python-version matrix.
 - **`src/snowflake/sqlalchemy/snowdialect.py`** — the main dialect class; most feature work touches this file.
 
 ## Development setup
 
-Clone the repository and let Hatch build the default environment (Python 3.10, all dev and pandas extras):
+Clone the repository and let Hatch build the default environment (Python 3.11, all dev and pandas extras):
 
 ```bash
 git clone https://github.com/snowflakedb/snowflake-sqlalchemy.git
 cd snowflake-sqlalchemy
 hatch env create
 ```
+
+> **Note:** the project requires `snowflake-connector-python>=5.0.0rc3`. Until the
+> internal package mirror syncs that release candidate, environment creation must
+> resolve against public PyPI:
+>
+> ```bash
+> UV_INDEX_URL=https://pypi.org/simple hatch env create
+> ```
+>
+> Connector 5.0.0rc3 requires Python >=3.11 (it dropped 3.10 support), so this
+> project's floor is 3.11 too — Python 3.10 environments cannot install it at all.
 
 Verify the installation:
 

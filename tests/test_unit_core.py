@@ -40,6 +40,7 @@ def test_create_connect_args():
                 "host": "testaccount.snowflakecomputing.com",
                 "password": "testpassword",
                 "user": "testuser",
+                "enable_server_session_keep_alive_auto_detection": True,
             },
         ),
         (
@@ -58,6 +59,7 @@ def test_create_connect_args():
                 "user": "testuser",
                 "port": "443",
                 "account": "testaccount",
+                "enable_server_session_keep_alive_auto_detection": True,
             },
         ),
         (
@@ -76,6 +78,7 @@ def test_create_connect_args():
                 "user": "testuser",
                 "port": "443",
                 "account": "testaccount",
+                "enable_server_session_keep_alive_auto_detection": True,
             },
         ),
         (
@@ -92,6 +95,7 @@ def test_create_connect_args():
                 "host": "testaccount.eu-central-1.snowflakecomputing.com",
                 "password": "testpassword",
                 "user": "testuser",
+                "enable_server_session_keep_alive_auto_detection": True,
             },
         ),
         (
@@ -109,6 +113,7 @@ def test_create_connect_args():
                 "password": "testpassword",
                 "user": "testuser",
                 "account": "testaccount",
+                "enable_server_session_keep_alive_auto_detection": True,
             },
         ),
         (
@@ -126,6 +131,7 @@ def test_create_connect_args():
                 "password": "testpassword",
                 "user": "testuser",
                 "account": "testaccount.eu-central-1",
+                "enable_server_session_keep_alive_auto_detection": True,
             },
         ),
         (
@@ -145,6 +151,7 @@ def test_create_connect_args():
                 "user": "testuser",
                 "port": 8082,
                 "account": "testaccount",
+                "enable_server_session_keep_alive_auto_detection": True,
             },
         ),
         (
@@ -162,6 +169,7 @@ def test_create_connect_args():
                 "user": "testuser",
                 "port": "443",
                 "account": "testaccount",
+                "enable_server_session_keep_alive_auto_detection": True,
             },
         ),
     ]

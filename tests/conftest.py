@@ -7,6 +7,7 @@ import base64
 import json
 import logging.handlers
 import os
+import re
 import time
 import urllib.error
 import urllib.request
@@ -19,11 +20,16 @@ import snowflake.connector
 import snowflake.connector.connection
 import snowflake.connector.errors
 from snowflake.connector.compat import IS_WINDOWS
-from snowflake.connector.network import WORKLOAD_IDENTITY_AUTHENTICATOR
+
+try:
+    from snowflake.connector.network import WORKLOAD_IDENTITY_AUTHENTICATOR
+except ImportError:  # snowflake-connector-python >= 5.x removed this constant
+    WORKLOAD_IDENTITY_AUTHENTICATOR = "WORKLOAD_IDENTITY"
 from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.exc import ProgrammingError as SAProgrammingError
 from sqlalchemy.pool import NullPool
+from syrupy.extensions.amber import AmberSnapshotExtension
 
 from snowflake.sqlalchemy import URL, dialect
 from snowflake.sqlalchemy._constants import (
@@ -59,6 +65,27 @@ snowflake.connector.connection.DEFAULT_CONFIGURATION[
 ] = (SNOWFLAKE_SQLALCHEMY_VERSION, (type(None), str))
 
 TEST_SCHEMA = f"sqlalchemy_tests_{str(uuid.uuid4()).replace('-', '_')}"
+
+
+# Connector 5.x appends per-request identifiers to server error messages, e.g.
+# ``... does not exist. (request_id=<uuid>, sfqid=<uuid>)``.  Those values are
+# unique to every execution, so any snapshot capturing an exception would be
+# unmatchable.  Strip the trailing identifier group during serialization, keeping
+# the snapshots portable across connector versions.
+_SNAPSHOT_REQUEST_IDS_RE = re.compile(r"\s*\((?:request_id|sfqid)=[^)]*\)")
+
+
+class _RequestIdNormalizingExtension(AmberSnapshotExtension):
+    """Amber serializer that drops connector request/query identifiers."""
+
+    def serialize(self, data, **kwargs) -> str:
+        return _SNAPSHOT_REQUEST_IDS_RE.sub("", super().serialize(data, **kwargs))
+
+
+@pytest.fixture
+def snapshot(snapshot):
+    """Project-wide ``snapshot`` fixture with connector identifiers normalized."""
+    return snapshot.use_extension(_RequestIdNormalizingExtension)
 
 
 def pytest_addoption(parser):

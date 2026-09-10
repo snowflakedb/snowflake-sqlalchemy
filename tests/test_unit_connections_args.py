@@ -12,13 +12,18 @@
 import re
 
 import pytest
-from snowflake.connector.connection import DEFAULT_CONFIGURATION
 from sqlalchemy import exc
 from sqlalchemy.engine.url import URL as SAUrl
 from sqlalchemy.engine.url import make_url
 
 from snowflake.sqlalchemy import URL, base
-from snowflake.sqlalchemy.snowdialect import _URL_QUERY_BLOCKED_KWARGS
+from snowflake.sqlalchemy.snowdialect import (
+    _URL_QUERY_BLOCKED_KWARGS,
+    _cast_query_params,
+    _normalized_account_host,
+    _split_database_namespace,
+)
+from snowflake.sqlalchemy.util import connector_param_types
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -55,14 +60,33 @@ _ALL_BLOCKED_PARAMS = [
     ("crl_cache_dir", "/tmp/crl"),
     ("unsafe_file_write", "true"),
     ("unsafe_skip_file_permissions_check", "true"),
+    ("unsafe_skip_config_file_permissions_check", "true"),
+    ("crl_unsafe_skip_file_permissions_check", "true"),
 ]
 
 # Blocked kwargs that were introduced in connector 4.x and are legitimately
-# absent from DEFAULT_CONFIGURATION when running against connector 3.x.
+# absent from the connector's parameter table when running against connector 3.x.
 # The dialect still blocks them on 3.x (harmless) so they stay in
 # _URL_QUERY_BLOCKED_KWARGS; this set lets the integrity test below skip the
-# DEFAULT_CONFIGURATION presence check for version-specific entries.
+# presence check for version-specific entries.
 _BLOCKED_KWARGS_4X_ONLY: frozenset = frozenset({"crl_cache_dir"})
+
+# Blocked kwargs removed or renamed by connector 5.x, hence absent from its
+# parameter table.  ``ocsp_response_cache_filename`` has no 5.x counterpart
+# (OCSP handling moved into the native core); ``unsafe_skip_file_permissions_check``
+# was split into the two 5.x names below.  Both stay blocked so the denylist
+# remains effective on 4.x.
+_BLOCKED_KWARGS_ABSENT_IN_5X: frozenset = frozenset(
+    {"ocsp_response_cache_filename", "unsafe_skip_file_permissions_check"}
+)
+
+# The 5.x replacements for the split kwarg above; absent on 4.x.
+_BLOCKED_KWARGS_5X_ONLY: frozenset = frozenset(
+    {
+        "unsafe_skip_config_file_permissions_check",
+        "crl_unsafe_skip_file_permissions_check",
+    }
+)
 
 
 class TestURLFieldEncoding:
@@ -367,31 +391,42 @@ class TestBlockedKwargsIntegrity:
     """Guard the block-list and document why an allowlist can't replace it.
 
     Every restricted name is a *valid* connector kwarg (present in the connector's
-    DEFAULT_CONFIGURATION).  That is exactly why an allowlist built from
-    DEFAULT_CONFIGURATION would not help — it would admit all of these
+    parameter table).  That is exactly why an allowlist built from that table
+    would not help — it would admit all of these
     parameters.  The denylist must therefore be explicit, and these tests keep it
     anchored to real connector kwargs so it cannot silently drift.
     """
 
     def test_every_blocked_kwarg_is_a_real_connector_kwarg(self):
-        """Each blocked name must exist in the connector's DEFAULT_CONFIGURATION.
+        """Each blocked name must exist in the connector's parameter table.
 
         Doubles as drift protection: if a future connector release renames or
         removes one of these kwargs, this test fails and prompts a review of the
         block-list rather than letting it quietly point at a non-existent name.
 
+        The table is read via ``connector_param_types()`` so it resolves on both
+        4.x (``DEFAULT_CONFIGURATION``) and 5.x (generated ``ConnectionConfig``).
+
         Kwargs listed in ``_BLOCKED_KWARGS_4X_ONLY`` were added in connector 4.x
-        and are legitimately absent when running against 3.x; they are excluded
-        from the hard assertion so the suite passes on both versions.
+        and are legitimately absent when running against 3.x; those in
+        ``_BLOCKED_KWARGS_ABSENT_IN_5X`` were removed/renamed by 5.x, those in
+        ``_BLOCKED_KWARGS_5X_ONLY`` only exist on 5.x.  All three are excluded
+        from the hard assertion so the suite passes on 3.x, 4.x and 5.x while
+        still catching *unexpected* drift.
         """
-        connector_keys = set(DEFAULT_CONFIGURATION)
+        connector_keys = set(connector_param_types())
         missing = sorted(_URL_QUERY_BLOCKED_KWARGS - connector_keys)
-        # Exclude version-specific kwargs (absent in 3.x, present in 4.x+).
-        unexpected_missing = sorted(set(missing) - _BLOCKED_KWARGS_4X_ONLY)
+        # Exclude names that are legitimately version-specific.
+        unexpected_missing = sorted(
+            set(missing)
+            - _BLOCKED_KWARGS_4X_ONLY
+            - _BLOCKED_KWARGS_ABSENT_IN_5X
+            - _BLOCKED_KWARGS_5X_ONLY
+        )
         assert not unexpected_missing, (
-            "blocked kwargs missing from connector DEFAULT_CONFIGURATION "
+            "blocked kwargs missing from the connector parameter table "
             f"(renamed/removed upstream?): {unexpected_missing}. "
-            "This also confirms an allowlist of DEFAULT_CONFIGURATION would still "
+            "This also confirms an allowlist of the parameter table would still "
             "admit the remaining blocked params."
         )
 
@@ -548,3 +583,93 @@ class TestLegacyURLParamsRemoved:
         monkeypatch.setenv("SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS", "1")
         with pytest.raises(exc.ArgumentError):
             URL(account="x?extra=1", user="u", password="pw")
+
+
+# ---------------------------------------------------------------------------
+# Extracted create_connect_args helpers (pure, no live DB)
+# ---------------------------------------------------------------------------
+
+
+class TestSplitDatabaseNamespace:
+    def test_single_part_returns_none_schema(self):
+        assert _split_database_namespace("mydb") == ("mydb", None)
+
+    def test_two_parts_split_db_schema(self):
+        assert _split_database_namespace("mydb/myschema") == ("mydb", "myschema")
+
+    def test_two_parts_are_url_decoded(self):
+        assert _split_database_namespace("my%20db/my%20schema") == (
+            "my db",
+            "my schema",
+        )
+
+    def test_more_than_two_parts_raises(self):
+        with pytest.raises(exc.ArgumentError) as ei:
+            _split_database_namespace("db/schema/extra")
+        assert "Invalid name space is specified: db/schema/extra" in str(ei.value)
+
+
+class TestNormalizedAccountHost:
+    def test_bare_account_is_normalized(self):
+        assert _normalized_account_host("myaccount", None) == (
+            "myaccount",
+            "myaccount.snowflakecomputing.com",
+            "443",
+        )
+
+    def test_org_style_dashes_preserved(self):
+        account, host, port = _normalized_account_host("gnamsrm-vi65876", None)
+        assert account == "gnamsrm-vi65876"
+        assert host == "gnamsrm-vi65876.snowflakecomputing.com"
+        assert port == "443"
+
+    def test_already_fqdn_is_noop(self):
+        assert _normalized_account_host("acct.snowflakecomputing.com", None) is None
+
+    def test_explicit_port_is_noop(self):
+        assert _normalized_account_host("myaccount", "443") is None
+
+    def test_empty_port_still_normalizes(self):
+        # Matches the original `not opts.get("port")`: a falsy port normalizes.
+        assert _normalized_account_host("myaccount", "") is not None
+
+
+class TestCastQueryParams:
+    def test_empty_query_is_empty_dict(self):
+        assert _cast_query_params({}, lambda n, v: v) == {}
+
+    def test_values_are_cast_via_callback(self):
+        out = _cast_query_params(
+            {"a": "1", "b": "x"}, lambda n, v: int(v) if n == "a" else v
+        )
+        assert out == {"a": 1, "b": "x"}
+
+    def test_blocked_kwarg_raises_exact_message(self):
+        blocked = next(iter(_URL_QUERY_BLOCKED_KWARGS))
+        with pytest.raises(exc.ArgumentError) as ei:
+            _cast_query_params({blocked: "v"}, lambda n, v: v)
+        msg = str(ei.value)
+        assert f"Connection parameter {blocked!r} cannot be set via the URL" in msg
+        assert "connect_args=" in msg
+
+
+class TestCreateConnectArgsNamespace:
+    def test_single_part_database_is_not_re_unquoted(self):
+        # A bare database keeps its exact value (original code did `pass`,
+        # never re-applying unquote_plus).
+        d = _dialect()
+        url = SAUrl.create(
+            "snowflake", username="u", password="p", host="acct", database="foo+bar"
+        )
+        _, opts = d.create_connect_args(url)
+        assert opts["database"] == "foo+bar"
+        assert "schema" not in opts
+
+    def test_two_part_database_splits_into_db_and_schema(self):
+        d = _dialect()
+        url = SAUrl.create(
+            "snowflake", username="u", password="p", host="acct", database="db/sch"
+        )
+        _, opts = d.create_connect_args(url)
+        assert opts["database"] == "db"
+        assert opts["schema"] == "sch"

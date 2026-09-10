@@ -326,7 +326,7 @@ def test_pandas_invalid_make_pd_writer(engine_testaccount):
 
     with pytest.raises(
         ProgrammingError,
-        match="Arguments 'table', 'conn', 'keys', and 'data_iter' are not supported parameters for make_pd_writer.",
+        match="conn cannot be passed to make_pd_writer; it is derived automatically.",
     ):
         test_df.to_sql(
             table_name,
@@ -337,7 +337,7 @@ def test_pandas_invalid_make_pd_writer(engine_testaccount):
 
     with pytest.raises(
         ProgrammingError,
-        match="Arguments 'conn', 'df', 'table_name', and 'schema' are not supported parameters for pd_writer.",
+        match="df cannot be passed to pd_writer; it is derived automatically.",
     ):
         test_df.to_sql(
             table_name,
