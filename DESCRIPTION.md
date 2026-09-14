@@ -9,13 +9,14 @@ Source code is also available at:
 
 # Unreleased Notes
 
+# Release Notes
+
+- v2.0.0rc1 (Sep 14, 2026)
 - **Async support**: the dialect now implements SQLAlchemy's [`asyncio` extension](https://docs.sqlalchemy.org/en/20/orm/extensions/asyncio.html). Use `create_async_engine()` with the same `snowflake://` URL as the sync dialect — there is no separate `+driver` suffix — to obtain `AsyncEngine` / `AsyncSession` for non-blocking database access.
 - **Breaking change**: require `snowflake-connector-python>=5.0` (connector 5.x), which is what provides the async driver. Connector 4.x is no longer supported.
 - **Breaking change**: raise the minimum supported Python to 3.11 (drop Python 3.10), since `snowflake-connector-python>=5.0.0rc3` itself requires Python 3.11+ (dropped 3.10). Updates `requires-python`, Python classifiers, and mypy/ruff targets accordingly.
 - The dialect now sets `enable_server_session_keep_alive_auto_detection=True` explicitly on new connections. This pins the connector's present default so behaviour stays stable when that default changes, and silences the connector's `FutureWarning`. A value supplied via the URL or `connect_args` still takes precedence.
 - Remove the `force_div_is_floordiv` dialect flag entirely. The `/` operator always performs true division (`left / right`) and `//` always performs floor division (`FLOOR(left / right)`); the flag had no SQL effect. Passing it to `create_engine()` now raises `ArgumentError` (GH #756).
-
-# Release Notes
 
 - v2.0.0a2 (Aug 20, 2026)
   - **Breaking change**: raise the minimum supported Python to 3.10 (drop Python 3.9). Updates `requires-python`, the CI/build matrices, and mypy/ruff targets accordingly.

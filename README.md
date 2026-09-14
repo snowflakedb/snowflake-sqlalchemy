@@ -126,7 +126,7 @@ pip install --upgrade snowflake-sqlalchemy
 
 ## Async Support
 
-> **Status: Experimental.** Async support requires `snowflake-connector-python` 5.x,
+> **Note:** Async support requires `snowflake-connector-python` 5.x,
 > currently a pre-release (`5.0.0rc3`). APIs may change before the connector's final
 > 5.0.0 release. Please report issues against this repo.
 
