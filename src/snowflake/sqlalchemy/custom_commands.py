@@ -32,17 +32,18 @@ def _redact_option(name, value):
     return REDACTED_SECRET if name in SECRET_OPTION_KEYS else value
 
 
-# FILE_FORMAT option keys whose values are free-form text with no Snowflake
-# backslash-escape semantics.  These receive full escaping (doubles both ' and
-# \).  All other string options use quote-only escaping (' → ''), preserving
-# legitimate backslash sequences: delimiter/escape options validated to a single
-# character by _check_delimiter (e.g. RECORD_DELIMITER='\n'), and NULL_IF
-# elements which may carry the Snowflake null token \N (SNOW-3649888).
+# FILE_FORMAT option keys whose values are free-form text or user-supplied
+# string sequences.  These receive full escaping (doubles both ' and \).
+# Delimiter/escape options validated to a single character by _check_delimiter
+# (e.g. RECORD_DELIMITER='\n') use quote-only escaping (' → ''), preserving
+# legitimate Snowflake delimiter escape sequences.
 _FULL_ESCAPE_OPTION_KEYS = frozenset(
     {
+        "BINARY_FORMAT",
         "COMPRESSION",
         "DATE_FORMAT",
         "FILE_EXTENSION",
+        "NULL_IF",
         "TIME_FORMAT",
         "TIMESTAMP_FORMAT",
     }
@@ -351,13 +352,13 @@ class CopyFormatter(ClauseElement):
         return f"FILE_FORMAT=({self.options})"
 
     @staticmethod
-    def _escape_option_str(name, value):
+    def _escape_option_str(name: str, value: str) -> str:
         """Escape the interior of a FILE_FORMAT string option value.
 
-        Free-form text options (dates, times, extensions, compression type)
-        receive full escaping (doubles both ' and \\).  Delimiter/escape options
-        and NULL_IF receive quote-only escaping (' → '') so that legitimate
-        Snowflake backslash sequences (\\n, \\134, \\N) are preserved.
+        Free-form text options (dates, times, extensions, compression type,
+        NULL_IF elements) receive full escaping (doubles both ' and \\).
+        Delimiter/escape options receive quote-only escaping (' → '') so that
+        legitimate Snowflake delimiter escape sequences (\\n, \\134) are preserved.
         """
         if name in _FULL_ESCAPE_OPTION_KEYS:
             return escape_string_literal_interior(value)
@@ -370,17 +371,18 @@ class CopyFormatter(ClauseElement):
         the corresponding visitor function (base.py/visit_copy_formatter())
         - in case of a format name: return it without quotes
         - in case of a string: enclose in quotes with interior escaping
-        - in case of a tuple of length 1: enclose the only element in brackets: (value)
-            Standard stringification of Python would append a trailing comma: (value,)
-            which is not correct in SQL
+        - in case of a tuple: enclose elements in parentheses with interior escaping
+            (single-element tuples omit Python's trailing comma)
         - otherwise: just convert to str as is: value
         """
         if name == "format_name":
             return value
         elif isinstance(value, str):
             return f"'{CopyFormatter._escape_option_str(name, value)}'"
-        elif isinstance(value, tuple) and len(value) == 1:
-            return f"('{CopyFormatter._escape_option_str(name, str(value[0]))}')"
+        elif isinstance(value, (tuple, list)):
+            escape_str = CopyFormatter._escape_option_str
+            elements = [f"'{escape_str(name, str(v))}'" for v in value]
+            return f"({', '.join(elements)})"
         else:
             return str(value)
 

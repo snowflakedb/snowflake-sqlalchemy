@@ -68,8 +68,8 @@ def test_escape_string_literal_interior(value, expected):
 
 def test_escape_single_quotes_diverges_from_interior_on_backslash():
     """escape_single_quotes must NOT double backslashes; the interior helper does.
-    This is the whole reason the quote-only variant exists (FILE_FORMAT options
-    where \\n / \\134 / \\N must be preserved)."""
+    This is the whole reason the quote-only variant exists (FILE_FORMAT delimiter
+    options where \\n / \\134 must be preserved)."""
     value = "a" + BS + "n'b"
     assert escape_single_quotes(value) == "a" + BS + "n''b"
     assert escape_string_literal_interior(value) == "a" + BS * 2 + "n''b"

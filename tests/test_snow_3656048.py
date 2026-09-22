@@ -26,6 +26,7 @@ from snowflake.sqlalchemy import (
     CreateFileFormat,
     CSVFormatter,
     GCSBucket,
+    JSONFormatter,
     SnowflakeSecretRedactionFilter,
     add_secret_redaction_filter,
     redact_secrets,
@@ -97,6 +98,58 @@ def test_snow_3656048_copy_format_single_tuple_escaping(sql_compiler):
     )
     sql = sql_compiler(copy_into)
     assert "NULL_IF=('a'') --')" in sql
+
+
+def test_snow_3656048_copy_format_null_if_backslash_quote_breakout_csv(sql_compiler):
+    r"""NULL_IF backslash-quote combinations must not break out of FILE_FORMAT.
+
+    Under ESCAPE_STRING_LITERALS=TRUE, \') in quote-only escaping turns into
+    \'') where \' is parsed as an escaped quote and the second quote closes the
+    literal early. The backslash must be doubled (\\\'') to stay inside the literal.
+    """
+    val = "x" + BS + "')) FORCE=TRUE PURGE=TRUE --"
+    copy_into = CopyIntoStorage(
+        from_=_src_table(),
+        into=AWSBucket("backup"),
+        formatter=CSVFormatter().null_if([val]),
+    )
+    sql = sql_compiler(copy_into)
+    # The backslash and quote must both be doubled: \\''
+    assert r"NULL_IF=('x\\'')) FORCE=TRUE PURGE=TRUE --')" in sql
+    # The vulnerable single-backslash form must not appear.
+    assert r"NULL_IF=('x\'')) FORCE=TRUE PURGE=TRUE --')" not in sql
+
+
+def test_snow_3656048_copy_format_null_if_backslash_quote_breakout_json(sql_compiler):
+    """JSONFormatter.null_if must also neutralize backslash-quote sequences."""
+    val = "x" + BS + "')) FORCE=TRUE PURGE=TRUE --"
+    formatter = JSONFormatter().null_if([val])
+    sql = sql_compiler(formatter)
+    assert r"NULL_IF=('x\\'')) FORCE=TRUE PURGE=TRUE --')" in sql
+    assert r"NULL_IF=('x\'')) FORCE=TRUE PURGE=TRUE --')" not in sql
+
+
+def test_snow_3656048_copy_format_null_if_multi_element_escaping(sql_compiler):
+    """Multi-element NULL_IF sequences must escape each element as SQL literals."""
+    values = ["valid", "x" + BS + "')) FORCE=TRUE --", "other'val"]
+    copy_into = CopyIntoStorage(
+        from_=_src_table(),
+        into=AWSBucket("backup"),
+        formatter=CSVFormatter().null_if(values),
+    )
+    sql = sql_compiler(copy_into)
+    assert r"NULL_IF=('valid', 'x\\'')) FORCE=TRUE --', 'other''val')" in sql
+
+
+def test_snow_3656048_create_file_format_null_if_backslash_escaping(sql_compiler):
+    """CREATE FILE FORMAT with NULL_IF must escape backslashes and quotes."""
+    val = "x" + BS + "')) FORCE=TRUE --"
+    create_format = CreateFileFormat(
+        format_name="MY_FORMAT",
+        formatter=CSVFormatter().null_if([val]),
+    )
+    sql = sql_compiler(create_format)
+    assert r"NULL_IF = ('x\\'')) FORCE=TRUE --')" in sql
 
 
 def test_snow_3656048_copy_format_plain_value_bcr(sql_compiler):

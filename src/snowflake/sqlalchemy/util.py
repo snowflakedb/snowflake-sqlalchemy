@@ -498,7 +498,7 @@ def escape_single_quotes(value: str) -> str:
     """Double single quotes only, leaving backslashes untouched.
 
     For single-quoted string-literal options where Snowflake backslash
-    sequences (``\\n``, ``\\134``, ``\\N``) must be preserved verbatim — unlike
+    sequences (``\\n``, ``\\134``) must be preserved verbatim — unlike
     ``escape_string_literal_interior``, which also doubles backslashes.
     """
     return value.replace("'", "''")
