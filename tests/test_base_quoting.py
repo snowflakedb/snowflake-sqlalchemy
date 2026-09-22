@@ -17,7 +17,7 @@
 #
 import pytest
 from sqlalchemy import Boolean, Column, Integer, MetaData, Sequence, String, Table
-from sqlalchemy.sql import select
+from sqlalchemy.sql import select, text
 from sqlalchemy.sql.elements import quoted_name
 
 from snowflake.sqlalchemy import (
@@ -391,3 +391,122 @@ def test_snow_3656026_files_plain_value_bcr(sql_compiler):
     copy_into = _copy_with_files(["data1.csv", "data2.csv"])
     sql = sql_compiler(copy_into)
     assert "FILES = ('data1.csv','data2.csv')" in sql
+
+
+class TestSnow4134196ExternalStagePathQuoting:
+    """SNOW-4134196 — ``visit_external_stage`` stage-path quoting (CWE-89).
+
+    ``visit_external_stage`` interpolated the application-supplied
+    ``ExternalStage.path`` verbatim after the (identifier-quoted) stage name.
+    Because whitespace / quotes / parens / ``--`` end the bare stage reference,
+    such a path could change the surrounding COPY grammar — e.g. redirect a
+    privileged COPY INTO or add PATTERN/FORCE/PURGE.  The fix single-quotes
+    (and escapes) the whole reference for any unsafe path, so the path can no
+    longer break out.  Builds on the SNOW-3656026 quoting/escaping helpers
+    exercised above.
+    """
+
+    def test_snow_4134196_external_stage_path_quoting(self, sql_compiler):
+        """An unsafe stage path must be wrapped in a single-quoted literal."""
+        path = "out FROM (SELECT secret FROM sensitive) OVERWRITE=TRUE --"
+        stage = ExternalStage(name="EXPORTS", namespace="DB.SCH", path=path)
+        sql = sql_compiler(stage)
+        # The entire @<stage>/<path> reference is a single string literal, so
+        # nothing in the path escapes into COPY grammar.
+        expected = "'@DB.SCH.EXPORTS/out FROM (SELECT secret FROM sensitive) OVERWRITE=TRUE --'"
+        assert sql == expected
+
+    def test_snow_4134196_external_stage_path_in_copy_into_unload(self, sql_compiler):
+        """A COPY INTO unload target path cannot break out into COPY grammar."""
+        meta = MetaData()
+        src = Table("t", meta, Column("c", Integer))
+        path = "out FROM (SELECT secret FROM sensitive) OVERWRITE=TRUE --"
+        stage = ExternalStage(name="EXPORTS", namespace="DB.SCH", path=path)
+        copy_into = CopyIntoStorage(from_=src, into=stage)
+        sql = sql_compiler(copy_into)
+        # The stage target is a quoted literal; the statement's real FROM is the
+        # table, not the subquery spelled out in the path.
+        expected_prefix = "COPY INTO '@DB.SCH.EXPORTS/out FROM (SELECT secret FROM sensitive) OVERWRITE=TRUE --' FROM t"
+        assert sql.startswith(expected_prefix)
+
+    def test_snow_4134196_external_stage_path_in_copy_into_import(self, sql_compiler):
+        """A COPY INTO import source path cannot add PATTERN/FORCE/PURGE."""
+        meta = MetaData()
+        target = Table("t", meta, Column("c", Integer))
+        path = "in PATTERN='.*' FORCE=TRUE PURGE=TRUE --"
+        stage = ExternalStage(name="IMPORTS", namespace="DB.SCH", path=path)
+        copy_into = CopyIntoStorage(from_=stage, into=target)
+        sql = sql_compiler(copy_into)
+        # The stage source is a single quoted literal; no bare PATTERN/FORCE/PURGE
+        # options appear in the statement outside that literal.
+        expected = (
+            "COPY INTO t FROM "
+            "'@DB.SCH.IMPORTS/in PATTERN=''.*'' FORCE=TRUE PURGE=TRUE --'   "
+        )
+        assert sql == expected
+
+    def test_snow_4134196_external_stage_path_in_select_from(self, sql_compiler):
+        """A staged-data SELECT ... FROM @stage cannot break out via the path."""
+        path = "x) UNION SELECT password FROM secrets --"
+        stage = ExternalStage(name="EXPORTS", namespace="DB.SCH", path=path)
+        sql = sql_compiler(select(text("$1")).select_from(stage))
+        expected = (
+            "SELECT $1 FROM '@DB.SCH.EXPORTS/x) UNION SELECT password FROM secrets --'"
+        )
+        assert sql == expected
+
+    def test_snow_4134196_external_stage_path_comment_only_quoting(self, sql_compiler):
+        """A path made only of otherwise-safe characters plus ``--`` is still quoted.
+
+        ``foo--bar`` matches the bare-path character allowlist ([A-Za-z0-9_./-])
+        on its own, so the explicit ``"--" not in path`` check is the only thing
+        stopping it from starting a SQL line comment when emitted bare.
+        """
+        stage = ExternalStage(name="EXPORTS", namespace="DB.SCH", path="foo--bar")
+        sql = sql_compiler(stage)
+        assert sql == "'@DB.SCH.EXPORTS/foo--bar'"
+
+    def test_snow_4134196_external_stage_path_single_quote_escaping(self, sql_compiler):
+        """A single quote in the path must be doubled inside the quoted literal."""
+        stage = ExternalStage(
+            name="EXPORTS", namespace="DB.SCH", path="x' OVERWRITE=TRUE --"
+        )
+        sql = sql_compiler(stage)
+        assert sql == "'@DB.SCH.EXPORTS/x'' OVERWRITE=TRUE --'"
+        assert "\\'" not in sql  # never backslash-escape a single quote
+
+    def test_snow_4134196_external_stage_path_backslash_escaping(self, sql_compiler):
+        r"""A backslash before a quote (\') in the path must be neutralised."""
+        stage = ExternalStage(
+            name="EXPORTS", namespace="DB.SCH", path="x" + BS + "' --"
+        )
+        sql = sql_compiler(stage)
+        # Python "x\\\\'' --" represents the SQL text: x\\'' --
+        assert sql == "'@DB.SCH.EXPORTS/x\\\\'' --'"
+
+    def test_snow_4134196_external_stage_path_with_file_format_quoting(
+        self, sql_compiler
+    ):
+        """An unsafe path is single-quoted even in the inline file_format form."""
+        stage = ExternalStage(
+            name="EXPORTS", namespace="DB.SCH", path="a b", file_format="my_fmt"
+        )
+        sql = sql_compiler(stage)
+        assert sql == "'@DB.SCH.EXPORTS/a b' (file_format => my_fmt)"
+
+    def test_snow_4134196_external_stage_path_plain_bcr(self, sql_compiler):
+        """BCR: an ordinary stage path keeps its historical bare rendering."""
+        stage = ExternalStage(
+            name="AZURE_STAGE", namespace="ML_POC.PUBLIC", path="testdata/out.parquet"
+        )
+        sql = sql_compiler(stage)
+        assert sql == "@ML_POC.PUBLIC.AZURE_STAGE/testdata/out.parquet"
+
+    def test_snow_4134196_external_stage_from_parent_path_quoting(self, sql_compiler):
+        """from_parent_stage sub-paths get the same treatment."""
+        root = ExternalStage(name="EXPORTS", namespace="DB.SCH")
+        child = ExternalStage.from_parent_stage(
+            root, "out PATTERN='.*' FORCE=TRUE PURGE=TRUE --"
+        )
+        sql = sql_compiler(child)
+        assert sql == "'@DB.SCH.EXPORTS/out PATTERN=''.*'' FORCE=TRUE PURGE=TRUE --'"

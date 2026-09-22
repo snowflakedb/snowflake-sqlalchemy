@@ -709,6 +709,29 @@ def _render_storage_uri(container) -> str:
     return f"'{escape_string_literal_interior(body)}'"
 
 
+# A stage path is safe to emit bare (unquoted) only when every character is
+# part of a normal path prefix.  Anything else — most importantly whitespace,
+# quotes, parentheses, semicolons and ``=`` — could terminate the bare stage
+# reference, so such paths are single-quoted.
+_SAFE_STAGE_PATH = re.compile(r"^[A-Za-z0-9_./\-]*$")
+
+
+def _render_stage_reference(prefix: str, path: str) -> str:
+    """Render ``@<prefix><path>`` so the path cannot break out.
+
+    A path made up solely of ordinary path characters (and free of the ``--``
+    comment sequence) keeps its historical bare rendering.  Otherwise the
+    whole stage reference is emitted as a single-quoted, escaped string
+    literal, which Snowflake accepts anywhere a bare stage reference is
+    accepted (COPY INTO source/target and staged-data SELECT), so the path
+    cannot alter the surrounding statement (CWE-89, SNOW-4134196).
+    """
+    reference = f"@{prefix}{path}"
+    if _SAFE_STAGE_PATH.match(path) and "--" not in path:
+        return reference
+    return f"'{escape_string_literal_interior(reference)}'"
+
+
 class SnowflakeCompiler(compiler.SQLCompiler):
     # Narrow the SA-inherited attribute to our subclass (Snowflake-specific
     # preparer helpers used in the COPY/stage visitors below).
@@ -1146,21 +1169,28 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         )
 
     def visit_external_stage(self, external_stage: ExternalStage, **kw: Any) -> str:
-        # Quote the stage's <namespace>.<name> prefix when required, consistently
-        # with CREATE STAGE, so the stage reference is always a well-formed
-        # identifier; the trailing path is a stage path, not an identifier.
+        """Render a stage reference as ``@<namespace>.<name>[/<path>]``.
+
+        The ``<namespace>.<name>`` prefix and the optional ``file_format``
+        object name are identifier-quoted when required, consistently with
+        CREATE STAGE, so the reference is always well-formed.  The trailing
+        path is a stage path rather than an identifier, so it is rendered by
+        :func:`_render_stage_reference`: ordinary bare-path values keep their
+        historical rendering, while a path containing anything outside the safe
+        bare-path character set turns the whole ``@<stage>[/<path>]`` reference
+        into an escaped, single-quoted stage location, which Snowflake accepts
+        wherever a bare reference is accepted (CWE-89, SNOW-4134196).
+        """
         prefix = self.preparer.quote_identifier_if_unsafe(
             f"{external_stage.namespace}{external_stage.name}"
         )
+        stage_reference = _render_stage_reference(prefix, external_stage.path)
         if external_stage.file_format is None:
-            return f"@{prefix}{external_stage.path}"
-        # file_format names a (possibly schema-qualified) file format object;
-        # quote any part that requires it so the stage reference stays
-        # well-formed.
+            return stage_reference
         file_format = self.preparer.quote_identifier_if_unsafe(
             external_stage.file_format
         )
-        return f"@{prefix}{external_stage.path} (file_format => {file_format})"
+        return f"{stage_reference} (file_format => {file_format})"
 
     def limit_clause(self, select: Select, **kw: Any) -> str:
         # Replica of base SQLCompiler, but with `LIMIT NULL` instead of `LIMIT -1`

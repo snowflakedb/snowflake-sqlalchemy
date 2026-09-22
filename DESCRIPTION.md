@@ -9,6 +9,8 @@ Source code is also available at:
 
 # Unreleased Notes
 
+- Improve stage reference handling in compiled `COPY INTO` and staged-file SQL (CWE-89): `ExternalStage` paths, including sub-paths created with `from_parent_stage`, are rendered safely with escaping when quoting is required. Ordinary bare-path values retain their existing rendering (SNOW-4134196).
+
 # Release Notes
 
 - v2.0.0rc1 (Sep 14, 2026)
