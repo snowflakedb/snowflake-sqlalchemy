@@ -41,6 +41,8 @@ Table of contents:
       * [DECFLOAT Precision](#decfloat-precision)
     * [VECTOR Data Type Support](#vector-data-type-support)
     * [UUID Data Type Support](#uuid-data-type-support)
+      * [UUID and DECFLOAT inside VARIANT and structured types](#uuid-and-decfloat-inside-variant-and-structured-types)
+      * [Native UUID with enable_native_uuid](#native-uuid-with-enable_native_uuid)
     * [Cache Column Metadata](#cache-column-metadata)
     * [Cross-Database Reflection](#cross-database-reflection)
     * [Reflecting Large Schemas (10,000+ objects)](#reflecting-large-schemas-10000-objects)
@@ -742,6 +744,88 @@ Column("id", UUID(as_uuid=True), primary_key=True)
 ```
 
 Note that Alembic autogenerate will render the column as `UUID(as_uuid=True)` in generated migration files, whereas the default (`as_uuid=False`) renders as `UUID()`.
+
+#### UUID and DECFLOAT inside `VARIANT` and structured types
+
+Snowflake can store `UUID` and `DECFLOAT` values directly inside `VARIANT`, `ARRAY`, `OBJECT` and
+`MAP`, so casting to `VARCHAR` first is no longer necessary. Using the explicit
+`sqlalchemy.sql.sqltypes.UUID` type as an element, key or field type works out of the box:
+
+```python
+from sqlalchemy import Column, MetaData, Table, VARCHAR
+from sqlalchemy.sql.sqltypes import UUID
+from snowflake.sqlalchemy import ARRAY, DECFLOAT, MAP, OBJECT
+
+t = Table(
+    "events",
+    MetaData(),
+    Column("ids", ARRAY(UUID())),                      # ARRAY(UUID)
+    Column("by_name", MAP(VARCHAR(), UUID())),         # MAP(VARCHAR, UUID)
+    Column("payload", OBJECT(user_id=UUID(), amt=DECFLOAT())),
+)
+```
+
+When writing a semi-structured (untyped) `VARIANT` / `OBJECT` / `ARRAY` payload,
+`decimal.Decimal` values are serialized as JSON strings so that all 38 `DECFLOAT` digits survive
+the round trip — a JSON number would be rounded through 64-bit binary floating point and lose
+precision.
+
+Reading a `DECFLOAT` back out of a semi-structured payload requires an intermediate cast to
+`VARCHAR`. Because `PARSE_JSON` stores the value as JSON text, Snowflake rejects a direct
+`TEXT` → `DECFLOAT` cast:
+
+```python
+from sqlalchemy import cast, select
+from sqlalchemy import types as sqltypes
+from snowflake.sqlalchemy import DECFLOAT
+
+# payload:amt::VARCHAR::DECFLOAT  — correct, and lossless for all 38 digits
+select(cast(cast(t.c.payload["amt"], sqltypes.VARCHAR), DECFLOAT))
+
+# payload:amt::DECFLOAT  — fails with "Cannot cast value of type TEXT[LOB] ... to DECFLOAT"
+```
+
+Set `enable_decfloat=True` as well, or the connector truncates the result to Python's default
+28-digit decimal context (see [DECFLOAT Precision](#decfloat-precision)).
+
+A `UUID` needs no intermediate cast — `payload:user_id::UUID` works directly:
+
+```python
+from sqlalchemy.sql.sqltypes import UUID
+
+select(cast(t.c.payload["user_id"], UUID))   # payload:user_id::UUID
+```
+
+Columns declared with an explicit inner type (`ARRAY(UUID())`, `OBJECT(amt=DECFLOAT())`) store real
+`UUID` / `DECFLOAT` values rather than JSON text, so a direct cast works for both.
+
+#### Native `UUID` with `enable_native_uuid`
+
+By default, SQLAlchemy's generic `Uuid` type (and the ORM annotation `Mapped[uuid.UUID]`) renders
+as `CHAR(32)` rather than Snowflake's native `UUID`. Set `enable_native_uuid=True` to render it as
+`UUID`, and to allow `uuid.UUID` objects inside semi-structured payloads:
+
+```python
+from sqlalchemy import create_engine
+
+engine = create_engine(
+    "snowflake://testuser1:0123456@abc123/testdb/public?warehouse=testwh&enable_native_uuid=true"
+)
+# or: create_engine(URL(...), enable_native_uuid=True)
+```
+
+| | `enable_native_uuid=False` (default) | `enable_native_uuid=True` |
+|---|---|---|
+| `Column("u", Uuid())` | `CHAR(32)` | `UUID` |
+| `Mapped[uuid.UUID]` | `CHAR(32)` | `UUID` |
+| `ARRAY(Uuid())` | `ARRAY(CHAR(32))` | `ARRAY(UUID)` |
+| `uuid.UUID` in a `VARIANT` payload | `TypeError` | serialized as a JSON string |
+| `Column("u", UUID())` (explicit) | `UUID` | `UUID` |
+
+**Why is `enable_native_uuid` not enabled by default?** Turning it on changes the DDL of existing
+`Uuid` / `Mapped[uuid.UUID]` columns from `CHAR(32)` to `UUID`, so tables created before enabling it
+would no longer match their model definition. The explicit `sqlalchemy.sql.sqltypes.UUID` type
+always renders as native `UUID` and is unaffected by the flag.
 
 ### Timestamp and Timezone Support
 

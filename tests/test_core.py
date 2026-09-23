@@ -1884,7 +1884,6 @@ def test_column_type_schema(engine_testaccount):
         {
             "FIXED",  # Snowflake rejects FIXED in DDL.
             "MAP",  # Requires structured type syntax not covered here.
-            "UUID",  # Snowflake stores UUID as text; no native UUID column is created.
         }
     )
     reflected_schema_type_names = frozenset(ischema_names_baseline) - types_not_created
@@ -1899,7 +1898,7 @@ CREATE TEMP TABLE {table_name} (
     C9 DECIMAL, C10 DECFLOAT, C11 DOUBLE, C12 FLOAT, C13 INT, C14 INTEGER, C15 NUMBER, C16 REAL,
     C17 BYTEINT, C18 SMALLINT, C19 STRING, C20 TEXT, C21 TIME, C22 TIMESTAMP, C23 TIMESTAMP_TZ,
     C24 TIMESTAMP_LTZ, C25 TIMESTAMP_NTZ, C26 TINYINT, C27 VARBINARY, C28 VARCHAR, C29 VARIANT,
-    C30 OBJECT, C31 ARRAY, C32 GEOGRAPHY, C33 GEOMETRY, C34 VECTOR(INT, 2)
+    C30 OBJECT, C31 ARRAY, C32 GEOGRAPHY, C33 GEOMETRY, C34 VECTOR(INT, 2), C35 UUID
 )
 """
         )

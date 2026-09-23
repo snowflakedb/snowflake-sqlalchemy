@@ -6,6 +6,7 @@ from __future__ import annotations
 import decimal
 import json
 import keyword
+import uuid
 import warnings
 from collections.abc import Callable
 from datetime import date, datetime, time
@@ -91,6 +92,36 @@ def _render_parse_json_bind_snowflake(element: _ParseJSONBind, compiler, **kw) -
     return inner
 
 
+def _json_default_factory(dialect: Dialect) -> Callable[[Any], str]:
+    """Build a ``json.dumps(default=...)`` hook for Snowflake-storable scalars.
+
+    Snowflake can store UUID and DECFLOAT values directly inside VARIANT and
+    structured types, but ``json.dumps`` rejects ``uuid.UUID`` and
+    ``decimal.Decimal`` outright.  Both are rendered as JSON strings, matching
+    what Snowflake itself returns for ``OBJECT_CONSTRUCT('k', v::UUID)`` and
+    ``::DECFLOAT``.
+
+    ``Decimal`` is deliberately *not* emitted as a JSON number: a float would
+    round through 64-bit binary and lose digits past ~17, defeating DECFLOAT's
+    38-digit precision.  ``uuid.UUID`` is gated on ``enable_native_uuid`` so the
+    default behaviour (a ``TypeError``) is unchanged unless native UUID support
+    is opted into.
+    """
+
+    native_uuid = getattr(dialect, "_enable_native_uuid", False)
+
+    def default(value: Any) -> str:
+        if isinstance(value, decimal.Decimal):
+            return str(value)
+        if native_uuid and isinstance(value, uuid.UUID):
+            return str(value)
+        raise TypeError(
+            f"Object of type {type(value).__name__} is not JSON serializable"
+        )
+
+    return default
+
+
 class _SemiStructuredJSONMixin:
     """Opt-in JSON deserialization for semi-structured columns.
 
@@ -149,7 +180,15 @@ class _SemiStructuredJSONMixin:
         if not self._json_write_enabled(dialect):
             return None
 
-        serializer = getattr(dialect, "_json_serializer", None) or json.dumps
+        # An explicitly configured serializer stays authoritative — the caller
+        # owns encoding decisions.  Only the built-in fallback gains the
+        # UUID/Decimal hook.
+        serializer = getattr(dialect, "_json_serializer", None)
+        if serializer is None:
+            default = _json_default_factory(dialect)
+
+            def serializer(obj: Any) -> str:
+                return json.dumps(obj, default=default)
 
         def process(value: Any) -> Any:
             # Serialize native Python objects to JSON text for PARSE_JSON; leave

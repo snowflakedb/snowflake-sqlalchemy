@@ -11,6 +11,7 @@ Source code is also available at:
 
 - Improve stage reference handling in compiled `COPY INTO` and staged-file SQL (CWE-89): `ExternalStage` paths, including sub-paths created with `from_parent_stage`, are rendered safely with escaping when quoting is required. Ordinary bare-path values retain their existing rendering (SNOW-4134196).
 - Fix NULL_IF backslash breakout in COPY FILE_FORMAT options (SNOW-4134195).
+- Support UUID and DECFLOAT values inside `VARIANT` and structured types. Structured type compilers now compile their inner types against the Snowflake dialect, so `ARRAY`/`MAP`/`OBJECT` element, key and field types render consistently with standalone columns. The semi-structured JSON write path serializes `decimal.Decimal` as a JSON string (preserving all 38 DECFLOAT digits, which a JSON number would truncate); reading one back requires an intermediate `::VARCHAR` cast, since Snowflake rejects a direct `TEXT` -> `DECFLOAT` cast on `PARSE_JSON` output. New opt-in `enable_native_uuid` dialect flag (URL parameter or `create_engine(..., enable_native_uuid=True)`) renders SQLAlchemy's generic `Uuid` and `Mapped[uuid.UUID]` as native Snowflake `UUID` instead of `CHAR(32)`, and allows `uuid.UUID` inside semi-structured payloads. Off by default, since enabling it changes the DDL of existing `Uuid` columns (SNOW-4081644).
 
 # Release Notes
 

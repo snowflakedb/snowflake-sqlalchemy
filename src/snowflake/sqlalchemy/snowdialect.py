@@ -375,6 +375,7 @@ class SnowflakeDialect(default.DefaultDialect):
         self,
         isolation_level: str | None = SnowflakeIsolationLevel.READ_COMMITTED.value,
         enable_decfloat: bool = False,
+        enable_native_uuid: bool = False,
         enable_structured_type_json: bool | None = None,
         case_sensitive_identifiers: bool = False,
         redact_log_secrets: bool = True,
@@ -401,6 +402,14 @@ class SnowflakeDialect(default.DefaultDialect):
         self._case_sensitive_identifiers = case_sensitive_identifiers
         self.name_utils = _NameUtils(self.identifier_preparer)
         self._enable_decfloat = enable_decfloat
+        # Render SQLAlchemy's generic ``Uuid`` (and ``Mapped[uuid.UUID]``) as the
+        # native Snowflake ``UUID`` type instead of ``CHAR(32)``, and allow
+        # ``uuid.UUID`` inside semi-structured payloads.  Opt-in: turning it on
+        # changes the DDL of existing ``Uuid`` columns, so tables created before
+        # the flag would no longer match their model.  ``supports_native_uuid`` is
+        # what SQLAlchemy's type compiler keys off, so mirror the flag onto it.
+        self._enable_native_uuid = enable_native_uuid
+        self.supports_native_uuid = enable_native_uuid
         # JSON (de)serialization for semi-structured columns
         # (VARIANT/OBJECT/ARRAY/MAP).  Enabled by default (opt-out) since the
         # major release; explicitly disabling it is deprecated.
@@ -501,6 +510,12 @@ class SnowflakeDialect(default.DefaultDialect):
         enable_decfloat = query.pop("enable_decfloat", None)
         if enable_decfloat is not None:
             self._enable_decfloat = parse_url_boolean(enable_decfloat)
+
+        # Handle enable_native_uuid URL parameter
+        enable_native_uuid = query.pop("enable_native_uuid", None)
+        if enable_native_uuid is not None:
+            self._enable_native_uuid = parse_url_boolean(enable_native_uuid)
+            self.supports_native_uuid = self._enable_native_uuid
 
         # Handle enable_structured_type_json URL parameter
         enable_structured_type_json = query.pop("enable_structured_type_json", None)

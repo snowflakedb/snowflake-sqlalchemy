@@ -1745,11 +1745,25 @@ class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
     def visit_VARIANT(self, type_: VARIANT, **kw: Any) -> str:
         return "VARIANT"
 
+    def _compile_inner_type(self, type_: sqltypes.TypeEngine) -> str:
+        """Compile a structured type's inner type against *this* dialect.
+
+        ``TypeEngine.compile()`` with no argument falls back to the type's
+        ``_default_dialect()``.  For SQLAlchemy's own types that is a generic
+        dialect, which renders Snowflake-relevant types incorrectly — notably
+        ``Uuid`` becomes ``CHAR(32)`` because the generic dialect reports
+        ``supports_native_uuid = False``, so ``ARRAY(Uuid())`` would silently
+        produce ``ARRAY(CHAR(32))`` regardless of the Snowflake dialect's own
+        setting.  Passing the real dialect keeps inner types consistent with
+        how they render as standalone columns.
+        """
+        return type_.compile(dialect=self.dialect)
+
     def visit_MAP(self, type_: MAP, **kw: Any) -> str:
         not_null = f" {NOT_NULL}" if type_.not_null else ""
-        return (
-            f"MAP({type_.key_type.compile()}, {type_.value_type.compile()}{not_null})"
-        )
+        key = self._compile_inner_type(type_.key_type)
+        value = self._compile_inner_type(type_.value_type)
+        return f"MAP({key}, {value}{not_null})"
 
     def visit_ARRAY(self, type_: ARRAY, **kw: Any) -> str:
         return "ARRAY"
@@ -1758,7 +1772,8 @@ class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
         if type_.is_semi_structured:
             return "ARRAY"
         not_null = f" {NOT_NULL}" if type_.not_null else ""
-        return f"ARRAY({type_.value_type.compile()}{not_null})"  # type: ignore[union-attr]
+        value = self._compile_inner_type(type_.value_type)  # type: ignore[arg-type]
+        return f"ARRAY({value}{not_null})"
 
     def visit_OBJECT(self, type_: OBJECT, **kw: Any) -> str:
         if type_.is_semi_structured:
@@ -1772,7 +1787,8 @@ class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
                 else:
                     inner = key
                 quoted_key = ip.quote(inner)
-                row_text = f"{quoted_key} {type_.items_types[key][0].compile()}"
+                field_type = self._compile_inner_type(type_.items_types[key][0])
+                row_text = f"{quoted_key} {field_type}"
                 # Type and not null is specified
                 if len(type_.items_types[key]) > 1:
                     row_text += f"{' NOT NULL' if type_.items_types[key][1] else ''}"
