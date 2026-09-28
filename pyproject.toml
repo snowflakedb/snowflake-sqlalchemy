@@ -38,7 +38,11 @@ classifiers = [
   "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-  "SQLAlchemy>=2.0.44",
+  # <2.1: 2.1.0 removed sqlalchemy.orm.context.ORMSelectCompileState (and other
+  # attributes the dialect/async shim import at module load time), breaking
+  # import outright. Raise the ceiling only once base.py and the async shim are
+  # updated for the 2.1 API surface.
+  "SQLAlchemy>=2.0.44,<2.1",
   # Connector 5.x is the baseline: it provides the async driver. rc3 is the floor
   # because it fixes a client-side numpy.datetime64 binding regression
   # (SNOW-4075338) present in rc2; it also carries rc2's fix for a complete
@@ -91,7 +95,7 @@ exclude = ["/.github"]
 packages = ["src/snowflake"]
 
 [tool.hatch.envs.default]
-extra-dependencies = ["SQLAlchemy>=2.0.44"]
+extra-dependencies = ["SQLAlchemy>=2.0.44,<2.1"]
 features = ["development", "pandas"]
 python = "3.11"
 installer = "uv"
@@ -110,7 +114,7 @@ check-import = "python -c 'import snowflake.sqlalchemy; print(snowflake.sqlalche
 type-check = "mypy src/snowflake/sqlalchemy/"
 
 [tool.hatch.envs.async]
-extra-dependencies = ["SQLAlchemy>=2.0.44"]
+extra-dependencies = ["SQLAlchemy>=2.0.44,<2.1"]
 features = ["development", "pandas"]
 # Pinned to 3.12 so the async suite exercises a newer interpreter than the
 # default env; the connector is 5.x in every env now.

@@ -147,7 +147,7 @@ pip install snowflake-sqlalchemy
   Python 3.10 support, which pip enforces by refusing to resolve the connector
   at all on 3.10).
 * `snowflake-connector-python` 5.x (installed as a base dependency).
-* SQLAlchemy 2.0.44+.
+* SQLAlchemy 2.0.44+ (< 2.1; see [DESCRIPTION.md](DESCRIPTION.md) for why the ceiling is pinned).
 
 ### Quick Start
 
