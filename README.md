@@ -1425,12 +1425,14 @@ fact = Table(
 
 ### Alembic Support
 
-[Alembic](http://alembic.zzzcomputing.com) is a database migration tool on top of `SQLAlchemy`. Snowflake SQLAlchemy works by adding the following code to `alembic/env.py` so that Alembic can recognize Snowflake SQLAlchemy.
+[Alembic](http://alembic.zzzcomputing.com) is a database migration tool on top of `SQLAlchemy`. As of version `2.0.0`, Snowflake SQLAlchemy automatically registers a `SnowflakeImpl`.
+
+If you wish to modify the default `SnowflakeImpl`, you can subclass it in your `alembic/env.py`:
 
 ```python
-from alembic.ddl.impl import DefaultImpl
+from snowflake.sqlalchemy.alembic_impl import SnowflakeImpl
 
-class SnowflakeImpl(DefaultImpl):
+class CustomSnowflakeImpl(SnowflakeImpl):
     __dialect__ = 'snowflake'
 ```
 
