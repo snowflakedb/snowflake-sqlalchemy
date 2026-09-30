@@ -30,6 +30,10 @@ if TYPE_CHECKING:
         UniqueConstraint,
     )
 
+# Index statuses reported by SHOW INDEXES; see the CREATE INDEX docs.
+_BUILD_IN_PROGRESS = "BUILD IN PROGRESS"
+_BUILD_FAILURES = frozenset({"BUILD FAILURE", "BUILD VALIDATION FAILURE"})
+
 
 class SnowflakeImpl(DefaultImpl):
     __dialect__ = "snowflake"
@@ -96,6 +100,12 @@ class SnowflakeImpl(DefaultImpl):
         return super()._exec(construct, *args, **kw)
 
     def _await_index_builds(self, table: Table) -> None:
+        """Wait until no index on `table` is building.
+
+        Only in-progress builds block: SUSPENDED or previously failed indexes
+        don't occupy the table's one build slot. A build this call waited on
+        that ends in a failure state raises immediately.
+        """
         if self.connection is None:  # offline mode
             return
         qualified = self.connection.dialect.identifier_preparer.format_table(table)
@@ -104,15 +114,24 @@ class SnowflakeImpl(DefaultImpl):
             if self.index_build_timeout is not None
             else None
         )
+        waited_on: set[str] = set()
         while True:
             rows = (
                 self.connection.exec_driver_sql(f"SHOW INDEXES IN TABLE {qualified}")
                 .mappings()
                 .all()
             )
-            building = [r["name"] for r in rows if r["status"] != "ACTIVE"]
+            failed = [
+                f"{r['name']} ({r['status']}: {r.get('status_info')})"
+                for r in rows
+                if r["name"] in waited_on and r["status"] in _BUILD_FAILURES
+            ]
+            if failed:
+                raise RuntimeError(f"index build(s) failed on {qualified}: {failed}")
+            building = [r["name"] for r in rows if r["status"] == _BUILD_IN_PROGRESS]
             if not building:
                 return
+            waited_on.update(building)
             if deadline is not None and time.monotonic() >= deadline:
                 raise TimeoutError(
                     f"index build(s) still in progress on {qualified} after"

@@ -163,7 +163,7 @@ class TestAwaitIndexBuilds:
     def test_polls_until_all_indexes_are_active(self, dialect):
         connection = _mock_connection(
             dialect,
-            [{"name": "IX_A", "status": "BUILDING"}],
+            [{"name": "IX_A", "status": "BUILD IN PROGRESS"}],
             [{"name": "IX_A", "status": "ACTIVE"}],
         )
         impl = _impl(dialect, connection)
@@ -175,7 +175,9 @@ class TestAwaitIndexBuilds:
         connection.exec_driver_sql.assert_called_with("SHOW INDEXES IN TABLE my_table")
 
     def test_raises_after_timeout(self, dialect):
-        connection = _mock_connection(dialect, [{"name": "IX_A", "status": "BUILDING"}])
+        connection = _mock_connection(
+            dialect, [{"name": "IX_A", "status": "BUILD IN PROGRESS"}]
+        )
         impl = _impl(dialect, connection)
         impl.index_build_timeout = 0
 
@@ -183,7 +185,7 @@ class TestAwaitIndexBuilds:
             impl._await_index_builds(_hybrid_table())
 
     def test_no_timeout_polls_until_active(self, dialect):
-        building = [{"name": "IX_A", "status": "BUILDING"}]
+        building = [{"name": "IX_A", "status": "BUILD IN PROGRESS"}]
         connection = _mock_connection(
             dialect,
             building,
@@ -198,6 +200,38 @@ class TestAwaitIndexBuilds:
         impl._await_index_builds(_hybrid_table())
 
         assert connection.exec_driver_sql.call_count == 4
+
+    @pytest.mark.parametrize("status", ["BUILD FAILURE", "BUILD VALIDATION FAILURE"])
+    def test_raises_when_awaited_build_fails(self, dialect, status):
+        connection = _mock_connection(
+            dialect,
+            [{"name": "IX_A", "status": "BUILD IN PROGRESS"}],
+            [{"name": "IX_A", "status": status, "status_info": "duplicate key"}],
+        )
+        impl = _impl(dialect, connection)
+        impl.index_build_poke_interval = 0
+
+        with pytest.raises(RuntimeError, match="IX_A.*duplicate key"):
+            impl._await_index_builds(_hybrid_table())
+
+        assert connection.exec_driver_sql.call_count == 2
+
+    @pytest.mark.parametrize(
+        "status", ["SUSPENDED", "BUILD FAILURE", "BUILD VALIDATION FAILURE"]
+    )
+    def test_non_building_indexes_do_not_block(self, dialect, status):
+        connection = _mock_connection(
+            dialect,
+            [
+                {"name": "IX_A", "status": "ACTIVE"},
+                {"name": "IX_OLD", "status": status, "status_info": None},
+            ],
+        )
+        impl = _impl(dialect, connection)
+
+        impl._await_index_builds(_hybrid_table())
+
+        assert connection.exec_driver_sql.call_count == 1
 
     def test_create_index_awaits_first(self, dialect):
         impl = _impl(dialect, MagicMock())
