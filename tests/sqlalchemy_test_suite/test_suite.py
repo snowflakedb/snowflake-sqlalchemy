@@ -18,19 +18,21 @@ from sqlalchemy.testing.suite import InsertBehaviorTest as _InsertBehaviorTest
 from sqlalchemy.testing.suite import LikeFunctionsTest as _LikeFunctionsTest
 from sqlalchemy.testing.suite import LongNameBlowoutTest as _LongNameBlowoutTest
 from sqlalchemy.testing.suite import SimpleUpdateDeleteTest as _SimpleUpdateDeleteTest
-from sqlalchemy.testing.suite import TrueDivTest as _TrueDivTest
 
 # 1. Unsupported by snowflake db
 
-del ComponentReflectionTest  # require indexes not supported by snowflake
-del HasIndexTest  # require indexes not supported by snowflake
-del QuotedNameArgumentTest  # require indexes not supported by snowflake
+# Snowflake supports indexes only on Hybrid Tables, while these upstream
+# fixtures define indexes on standard tables (rejected at CREATE time).
+del ComponentReflectionTest
+del HasIndexTest
+del QuotedNameArgumentTest
 
 
 class LongNameBlowoutTest(_LongNameBlowoutTest):
-    # The combination ("ix",) is removed due to Snowflake not supporting indexes
+    # The combination ("ix",) is removed: it creates an index on a standard
+    # table, and Snowflake supports indexes only on Hybrid Tables.
     def ix(self, metadata, connection):
-        pytest.skip("ix required index feature not supported by Snowflake")
+        pytest.skip("Indexes are only supported on Snowflake Hybrid Tables")
 
 
 class FetchLimitOffsetTest(_FetchLimitOffsetTest):
@@ -74,24 +76,6 @@ class InsertBehaviorTest(_InsertBehaviorTest):
 
     @pytest.mark.skip("Snowflake does not support returning in insert.")
     def test_no_results_for_non_returning_insert(self, connection, style, executemany):
-        pass
-
-
-class TrueDivTest(_TrueDivTest):
-    @pytest.mark.skip("`//` not supported")
-    def test_floordiv_integer_bound(self, connection):
-        """Snowflake does not provide `//` arithmetic operator.
-
-        https://docs.snowflake.com/en/sql-reference/operators-arithmetic.
-        """
-        pass
-
-    @pytest.mark.skip("`//` not supported")
-    def test_floordiv_integer(self, connection, left, right, expected):
-        """Snowflake does not provide `//` arithmetic operator.
-
-        https://docs.snowflake.com/en/sql-reference/operators-arithmetic.
-        """
         pass
 
 

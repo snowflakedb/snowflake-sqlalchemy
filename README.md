@@ -31,6 +31,7 @@ Table of contents:
       * [Using a proxy server](#using-a-proxy-server)
       * [Using session parameters](#using-session-parameters)
     * [Opening and Closing Connection](#opening-and-closing-connection)
+    * [Transactions](#transactions)
     * [Auto-increment Behavior](#auto-increment-behavior)
     * [Object Name Case Handling](#object-name-case-handling)
     * [Index Support](#index-support)
@@ -148,6 +149,16 @@ pip install snowflake-sqlalchemy
   at all on 3.10).
 * `snowflake-connector-python` 5.x (installed as a base dependency).
 * SQLAlchemy 2.0.44+ (< 2.1; see [DESCRIPTION.md](DESCRIPTION.md) for why the ceiling is pinned).
+* [`greenlet`](https://pypi.org/project/greenlet/), which SQLAlchemy's asyncio
+  extension relies on. SQLAlchemy installs it automatically only on some
+  platforms (e.g. `x86_64`, `aarch64`, `amd64`); elsewhere — notably Apple
+  Silicon macOS, which reports `arm64` — install it explicitly. Without it,
+  `create_async_engine()` raises an `ImportError` with the command below. Keep
+  the same SQLAlchemy range so pip does not move you onto 2.1:
+
+  ```shell
+  pip install "sqlalchemy[asyncio]>=2.0.44,<2.1"
+  ```
 
 ### Quick Start
 
@@ -490,6 +501,31 @@ engine = create_engine(
 > authentication failures (for example revoked credentials) are **not** flagged as disconnects,
 > because reconnecting cannot recover them — they surface as errors so the underlying problem stays
 > visible.
+
+### Transactions
+
+Connections use the `READ COMMITTED` isolation level with the connector's autocommit
+turned off, so SQLAlchemy's standard transaction APIs work as documented:
+`connection.begin()`, `engine.begin()`, commit-as-you-go (`connection.commit()` /
+`connection.rollback()`), and ORM `Session` transactions. Uncommitted changes are
+not visible to other connections, and a connection returned to the pool without a
+commit is rolled back. Use `execution_options(isolation_level="AUTOCOMMIT")` to
+commit each statement immediately instead.
+
+Two Snowflake [transaction rules](https://docs.snowflake.com/en/sql-reference/transactions)
+differ from many other databases:
+
+* **DDL commits the open transaction.** Each DDL statement (`CREATE`, `ALTER`,
+  `DROP`, …) runs in its own transaction, and any transaction that is already open
+  is committed first. DML issued before the DDL can no longer be rolled back, so
+  keep DDL out of units of work that you may need to roll back.
+* **No savepoints.** `connection.begin_nested()` and `Session.begin_nested()` raise
+  `sqlalchemy.exc.ProgrammingError`, because Snowflake rejects `SAVEPOINT`. The
+  outer transaction stays open and can still be committed or rolled back.
+
+A statement that fails inside a transaction does not end it: the changes made
+before the failure are kept or discarded by your subsequent `commit()` or
+`rollback()`.
 
 ### Auto-increment Behavior
 

@@ -9,6 +9,8 @@ Source code is also available at:
 
 # Unreleased Notes
 
+- The async dialect now checks for `greenlet` when the async engine is created and raises an `ImportError` with install instructions.
+
 # Release Notes
 
 - v2.0.0rc2 (Sep 29, 2026)

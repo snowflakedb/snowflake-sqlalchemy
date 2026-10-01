@@ -1227,30 +1227,6 @@ def test_copy(engine_testaccount):
             users.drop(engine_testaccount)
 
 
-@pytest.mark.skip(
-    """
-No transaction works yet in the core API. Use orm API or Python Connector
-directly if needed at the moment.
-Note Snowflake DB supports DML transaction natively, but we have not figured out
-how to integrate with SQLAlchemy core API yet.
-"""
-)
-def test_transaction(engine_testaccount, db_table_name):
-    engine_testaccount.execute(text(f"CREATE TABLE {db_table_name} (c1 number)"))
-    trans = engine_testaccount.connect().begin()
-    try:
-        engine_testaccount.execute(text(f"INSERT INTO {db_table_name} VALUES(123)"))
-        trans.commit()
-        engine_testaccount.execute(text(f"INSERT INTO {db_table_name} VALUES(456)"))
-        trans.rollback()
-        results = engine_testaccount.execute(
-            f"SELECT * FROM {db_table_name}"
-        ).fetchall()
-        assert results == [(123,)]
-    finally:
-        engine_testaccount.execute(text(f"DROP TABLE IF EXISTS {db_table_name}"))
-
-
 def test_get_schemas(engine_testaccount):
     """
     Tests get schemas from inspect.

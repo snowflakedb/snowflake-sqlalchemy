@@ -2,7 +2,12 @@
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
 
+import re
+import sys
+import types
 from unittest import mock
+
+import pytest
 
 
 class TestCreateSnowflakeAsyncEngine:
@@ -33,3 +38,34 @@ class TestCreateSnowflakeAsyncEngine:
             create_snowflake_async_engine(base, schema="s", case_sensitive_schema=True)
         assert mock_sync.call_args[0][0] == mock_async.call_args[0][0]
         assert mock_sync.call_args[0][0] == _snowflake_engine_url(base, "s", True)
+
+
+class TestAsyncRuntimeRequirements:
+    """greenlet is not installed by SQLAlchemy on every platform (e.g. arm64
+    macOS); without it SQLAlchemy only fails on the first connect with a
+    generic ValueError, so the dialect checks for it up front."""
+
+    def test_create_async_engine_without_greenlet_raises_hint(self, monkeypatch):
+        from sqlalchemy.ext.asyncio import create_async_engine
+
+        monkeypatch.setitem(sys.modules, "greenlet", None)
+        with pytest.raises(ImportError, match=re.escape("sqlalchemy[asyncio]")):
+            create_async_engine("snowflake://user:pass@account/database")
+
+    def test_async_entry_point_without_greenlet_raises_hint(self, monkeypatch):
+        from snowflake.sqlalchemy._async.async_dialect import SnowflakeDialect_async
+
+        monkeypatch.setitem(sys.modules, "greenlet", None)
+        with pytest.raises(ImportError, match="greenlet"):
+            SnowflakeDialect_async.import_dbapi()
+
+    def test_create_async_engine_with_greenlet_selects_async_dialect(self, monkeypatch):
+        from sqlalchemy.ext.asyncio import create_async_engine
+
+        from snowflake.sqlalchemy._async.async_dialect import SnowflakeDialect_async
+
+        # Stub greenlet so the test does not depend on the runner having it
+        # (it is absent on arm64 macOS); no connection is made here.
+        monkeypatch.setitem(sys.modules, "greenlet", types.ModuleType("greenlet"))
+        engine = create_async_engine("snowflake://user:pass@account/database")
+        assert isinstance(engine.sync_engine.dialect, SnowflakeDialect_async)
