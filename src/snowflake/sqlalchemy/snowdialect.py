@@ -123,6 +123,15 @@ _ENABLE_SQLALCHEMY_AS_APPLICATION_NAME = True
 logger = getLogger(__name__)
 
 
+# Register the SnowflakeImpl on dialect load.
+try:
+    import alembic  # noqa: F401
+except ImportError:
+    pass
+else:
+    from .alembic_impl import SnowflakeImpl  # noqa: F401
+
+
 # ``TelemetryEvents`` now lives in the ``_telemetry`` package; re-export it
 # here so existing imports (and tests) that reference it via ``snowdialect``
 # keep working.
