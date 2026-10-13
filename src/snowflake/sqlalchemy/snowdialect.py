@@ -89,6 +89,7 @@ from .custom_types import (
     _CUSTOM_DateTime,
     _CUSTOM_Float,
     _CUSTOM_Time,
+    _CUSTOM_Uuid,
 )
 from .parser.custom_type_parser import *  # noqa
 from .parser.custom_type_parser import (
@@ -116,6 +117,7 @@ colspecs = {
     DateTime: _CUSTOM_DateTime,
     Time: _CUSTOM_Time,
     Float: _CUSTOM_Float,
+    sqltypes.Uuid: _CUSTOM_Uuid,
 }
 
 _ENABLE_SQLALCHEMY_AS_APPLICATION_NAME = True

@@ -571,6 +571,47 @@ class _CUSTOM_Float(SnowflakeType, sqltypes.Float):
         return _process_float
 
 
+class _CUSTOM_Uuid(sqltypes.Uuid):
+    """Convert ``uuid.UUID`` values when ``enable_native_uuid`` is on.
+
+    With ``supports_native_uuid = True`` SQLAlchemy's ``Uuid`` assumes the
+    DBAPI binds and returns ``uuid.UUID`` itself and skips its own conversion,
+    but the Snowflake connector does neither: it rejects ``uuid.UUID`` binds and
+    returns native ``UUID`` columns as ``str``.  Outside native mode the base
+    ``CHAR(32)`` processing is used unchanged.
+    """
+
+    def _native(self, dialect: Dialect) -> bool:
+        return bool(dialect.supports_native_uuid and self.native_uuid)
+
+    def bind_processor(self, dialect: Dialect) -> Callable[[Any], Any] | None:
+        if not self._native(dialect):
+            return super().bind_processor(dialect)
+
+        def process(value: Any) -> Any:
+            if isinstance(value, uuid.UUID):
+                return str(value)
+            return value
+
+        return process
+
+    def result_processor(
+        self, dialect: Dialect, coltype: object
+    ) -> Callable[[Any], Any] | None:
+        if not self._native(dialect):
+            return super().result_processor(dialect, coltype)
+        as_uuid = self.as_uuid
+
+        def process(value: Any) -> Any:
+            if value is None:
+                return None
+            if as_uuid:
+                return value if isinstance(value, uuid.UUID) else uuid.UUID(value)
+            return str(value)
+
+        return process
+
+
 class _CUSTOM_DECIMAL(SnowflakeType, sqltypes.DECIMAL):
     def __init__(
         self,

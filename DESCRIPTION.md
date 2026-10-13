@@ -9,6 +9,7 @@ Source code is also available at:
 
 # Unreleased Notes
 
+- Fix `Uuid` columns with `enable_native_uuid=True`: `uuid.UUID` values are now bound as strings (previously `255001: Binding data in type (uuid) is not supported`), and reads honour `as_uuid` (`True` returns `uuid.UUID`, `False` returns `str`). Default `CHAR(32)` behaviour is unchanged.
 - The async dialect now checks for `greenlet` when the async engine is created and raises an `ImportError` with install instructions.
 - Fix `get_multi_indexes()` raising `TypeError` when `filter_names` is `None` (e.g. `Inspector.get_multi_indexes(schema=...)`) and the schema contains Hybrid Tables; it now returns indexes for all Hybrid Tables in the schema.
 
