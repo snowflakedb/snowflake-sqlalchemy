@@ -10,6 +10,7 @@ Source code is also available at:
 # Unreleased Notes
 
 - The async dialect now checks for `greenlet` when the async engine is created and raises an `ImportError` with install instructions.
+- Fix `get_multi_indexes()` raising `TypeError` when `filter_names` is `None` (e.g. `Inspector.get_multi_indexes(schema=...)`) and the schema contains Hybrid Tables; it now returns indexes for all Hybrid Tables in the schema.
 
 # Release Notes
 

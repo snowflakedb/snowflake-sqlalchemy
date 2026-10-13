@@ -2106,7 +2106,8 @@ class SnowflakeDialect(default.DefaultDialect):
         return [
             ((schema, table_name), table_indexes)
             for table_name, table_indexes in all_indexes.items()
-            if table_name in filter_names and table_name in hybrid_table_names  # type: ignore[operator]
+            if (filter_names is None or table_name in filter_names)
+            and table_name in hybrid_table_names
         ]
 
     def _value_or_default(self, data: Any, table: str, schema: str | None) -> list[Any]:
