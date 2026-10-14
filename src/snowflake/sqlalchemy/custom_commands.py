@@ -287,7 +287,14 @@ class CopyInto(UpdateBase):
         repr for debugging / logging purposes only. For compilation logic, see
         the corresponding visitor in base.py
         """
-        val = f"COPY INTO {self.into} FROM {repr(self.from_)}"
+        # Stages and cloud locations can't be str()-compiled by the default
+        # string compiler; their own __repr__ also masks credentials.
+        into = (
+            repr(self.into)
+            if isinstance(self.into, (ExternalStage, CloudStorageLocation))
+            else str(self.into)
+        )
+        val = f"COPY INTO {into} FROM {repr(self.from_)}"
         if self.partition_by is not None:
             val += f" PARTITION BY {self.partition_by}"
 

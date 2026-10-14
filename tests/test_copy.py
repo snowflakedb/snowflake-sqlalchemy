@@ -570,3 +570,50 @@ def test_json_formatter_validation():
         JSONFormatter().strip_outer_array("no")
     with pytest.raises(TypeError):
         JSONFormatter().null_if(123)
+
+
+@pytest.mark.parametrize(
+    "location, rendered, secrets",
+    [
+        (
+            AWSBucket.from_uri("s3://bucket/path")
+            .credentials(aws_key_id="AKIA_TEST_ID", aws_secret_key="aws_secret_value")
+            .encryption_aws_cse("aws_master_key_value"),
+            "'s3://bucket/path' CREDENTIALS=(AWS_SECRET_KEY='***' AWS_KEY_ID='***')"
+            " ENCRYPTION=(TYPE='AWS_CSE' MASTER_KEY='***')",
+            ["AKIA_TEST_ID", "aws_secret_value", "aws_master_key_value"],
+        ),
+        (
+            AzureContainer.from_uri("azure://acct.blob.core.windows.net/c/path")
+            .credentials("azure_sas_token_value")
+            .encryption_azure_cse("azure_master_key_value"),
+            "'azure://acct.blob.core.windows.net/c/path' CREDENTIALS=(AZURE_SAS_TOKEN='***')"
+            " ENCRYPTION=(TYPE='AZURE_CSE' MASTER_KEY='***')",
+            ["azure_sas_token_value", "azure_master_key_value"],
+        ),
+        (
+            GCSBucket.from_uri("gcs://bucket/path").encryption_gcs_sse_kms(
+                "gcs_kms_key_value"
+            ),
+            "'gcs://bucket/path' ENCRYPTION=(TYPE='GCS_SSE_KMS' KMS_KEY_ID='gcs_kms_key_value')",
+            [],
+        ),
+        (
+            ExternalStage(name="stage", path="path", namespace="ns"),
+            "@ns.stage/path (None)",
+            [],
+        ),
+    ],
+)
+def test_copy_into_storage_repr_masks_secrets(location, rendered, secrets):
+    table = Table("t", MetaData(), Column("id", Integer))
+    unload = CopyIntoStorage(from_=table, into=location, formatter=CSVFormatter())
+    load = CopyIntoStorage(from_=location, into=table, formatter=CSVFormatter())
+
+    assert repr(unload) == (
+        f"COPY INTO {rendered} FROM {table!r} FILE_FORMAT=({{}}) ({{}})"
+    )
+    assert repr(load) == f"COPY INTO t FROM {rendered} FILE_FORMAT=({{}}) ({{}})"
+    for secret in secrets:
+        assert secret not in repr(unload)
+        assert secret not in repr(load)
