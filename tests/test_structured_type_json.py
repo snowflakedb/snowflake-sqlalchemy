@@ -31,7 +31,7 @@ def _semi_structured_types():
 
 
 def _structured_types():
-    # Typed/structured forms keep native connector handling (no deserialization).
+    # Typed/structured forms: the connector returns their JSON text too.
     return [
         MAP(sqltypes.VARCHAR(), sqltypes.VARCHAR()),
         OBJECT(name=sqltypes.VARCHAR()),
@@ -89,10 +89,18 @@ class TestStructuredTypeJsonResultProcessor:
         assert seen == ['{"a": 1}']
 
     @pytest.mark.parametrize("typ", _structured_types())
-    def test_structured_types_not_deserialized(self, typ):
-        # Typed/structured columns keep native connector handling even flag-on,
-        # matching the write path and documented scope.
-        assert typ.result_processor(_Dialect(enabled=True), None) is None
+    def test_structured_types_deserialized_when_flag_on(self, typ):
+        # The connector returns typed MAP/ARRAY/OBJECT values as JSON text, the
+        # same as the untyped forms, so they are decoded the same way.
+        proc = typ.result_processor(_Dialect(enabled=True), None)
+        assert proc is not None
+        assert proc('{\n  "k": 1\n}') == {"k": 1}
+        assert proc("[\n  1,\n  2\n]") == [1, 2]
+        assert proc(None) is None
+
+    @pytest.mark.parametrize("typ", _structured_types())
+    def test_structured_types_no_processor_when_flag_off(self, typ):
+        assert typ.result_processor(_Dialect(enabled=False), None) is None
 
     def test_malformed_json_propagates(self):
         # Corrupt JSON surfaces as JSONDecodeError rather than being swallowed.

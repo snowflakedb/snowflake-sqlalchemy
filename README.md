@@ -1177,8 +1177,10 @@ Notes:
 * The flag is **on by default**. To restore the previous behaviour (reading raw JSON strings and
   writing pre-serialized values with the `PARSE_JSON` pattern above), set
   `enable_structured_type_json=False`; this is deprecated and emits a `DeprecationWarning`.
-* Typed/structured columns (`OBJECT(...)` with fields, `ARRAY(<type>)`, `MAP(...)`) keep their
-  native connector handling and are not wrapped in `PARSE_JSON`.
+* Typed/structured columns (`OBJECT(...)` with fields, `ARRAY(<type>)`, `MAP(...)`) are handled the
+  same way, except the value is also cast to the declared type (`CAST(PARSE_JSON(...) AS MAP(...))`),
+  since Snowflake rejects a plain `VARIANT` for them. See
+  [Structured Data Types Support](#structured-data-types-support).
 * The engine-level `json_serializer` / `json_deserializer` (below) are used when provided.
 * `RETURNING` is not supported for inserts into semi-structured columns while this flag is on.
 * **`executemany` (2+ parameter sets) is not supported** while this flag is on. Passing a list of
@@ -1261,6 +1263,21 @@ engine = create_engine(
 This module defines custom SQLAlchemy types for Snowflake structured data, specifically for **Iceberg tables**.
 The types —**MAP**, **OBJECT**, and **ARRAY**— allow you to store complex data structures in your SQLAlchemy models.
 For detailed information, refer to the Snowflake [Structured data types](https://docs.snowflake.com/en/sql-reference/data-types-structured) documentation.
+
+With [`enable_structured_type_json`](#automatic-json-handling-with-enable_structured_type_json) (the
+default), these columns accept Python `dict`/`list` values on insert and update, and return
+`dict`/`list` on read:
+
+```python
+conn.execute(t.insert().values(id=1, map_col={"k": 1}, array_col=["a", "b"]))
+# INSERT INTO t (id, map_col, array_col)
+#   SELECT ?, CAST(PARSE_JSON(?) AS MAP(...)), CAST(PARSE_JSON(?) AS ARRAY(...))
+```
+
+The same limitations as the untyped path apply (no `RETURNING`, no `executemany`, no
+`literal_binds`). Read values are decoded from JSON and are not converted to the declared element
+types: for example, `MAP(NUMBER, ...)` keys are returned as strings and `DATE` elements as ISO
+strings.
 
 ---
 

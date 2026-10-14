@@ -776,7 +776,8 @@ class SnowflakeCompiler(compiler.SQLCompiler):
     def _insert_targets_semi_structured(self, insert_stmt: Any) -> bool:
         """Whether the INSERT writes to a semi-structured column.
 
-        Such columns have a ``PARSE_JSON``-wrapped value (see
+        Such columns (including typed MAP / ARRAY / OBJECT) have a
+        ``PARSE_JSON``-wrapped value (see
         ``_SemiStructuredJSONMixin.bind_expression``); Snowflake rejects
         functions in a ``VALUES`` clause, so those inserts must be rendered as
         ``INSERT ... SELECT`` instead.
@@ -789,11 +790,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
                 col = table.c[name_or_col]
             else:
                 col = name_or_col
-            col_type = getattr(col, "type", None)
-            return (
-                isinstance(col_type, _SemiStructuredJSONMixin)
-                and col_type._is_untyped_semi_structured()
-            )
+            return isinstance(getattr(col, "type", None), _SemiStructuredJSONMixin)
 
         table = insert_stmt.table
         values = getattr(insert_stmt, "_values", None)

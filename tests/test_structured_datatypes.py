@@ -13,7 +13,6 @@ from sqlalchemy import (
     Sequence,
     Table,
     cast,
-    exc,
     inspect,
     text,
 )
@@ -135,10 +134,11 @@ def test_insert_map_orm(
         )
         instance = TestIcebergTableOrm(id=0, map_id=cast_expr)
         session.add(instance)
-        with pytest.raises(exc.ProgrammingError) as programming_error:
-            session.commit()
-        # TODO: Support variant in insert statement
-        assert str(programming_error.value.orig) == snapshot
+        # The insert is rendered as INSERT ... SELECT, where Snowflake accepts
+        # the cast expression (it rejects it in a VALUES clause).
+        session.commit()
+        stored = session.get(TestIcebergTableOrm, 0)
+        assert stored.map_id == {"100": "item1", "200": "item2"}
     finally:
         Base.metadata.drop_all(engine_testaccount)
 
@@ -306,10 +306,11 @@ def test_insert_array_orm(
         cast_expr = cast(text("['item1','item2']"), ARRAY(TEXT(16777216)))
         instance = TestIcebergTableOrm(id=0, array_col=cast_expr)
         session.add(instance)
-        with pytest.raises(exc.ProgrammingError) as programming_error:
-            session.commit()
-        # TODO: Support variant in insert statement
-        assert str(programming_error.value.orig) == snapshot
+        # The insert is rendered as INSERT ... SELECT, where Snowflake accepts
+        # the cast expression (it rejects it in a VALUES clause).
+        session.commit()
+        stored = session.get(TestIcebergTableOrm, 0)
+        assert stored.array_col == ["item1", "item2"]
     finally:
         Base.metadata.drop_all(engine_testaccount)
 
@@ -389,10 +390,11 @@ def test_insert_structured_object_orm(
         )
         instance = TestIcebergTableOrm(id=0, object_col=cast_expr)
         session.add(instance)
-        with pytest.raises(exc.ProgrammingError) as programming_error:
-            session.commit()
-        # TODO: Support variant in insert statement
-        assert str(programming_error.value.orig) == snapshot
+        # The insert is rendered as INSERT ... SELECT, where Snowflake accepts
+        # the cast expression (it rejects it in a VALUES clause).
+        session.commit()
+        stored = session.get(TestIcebergTableOrm, 0)
+        assert stored.object_col == {"key1": 1, "key2": "item1"}
     finally:
         Base.metadata.drop_all(engine_testaccount)
 

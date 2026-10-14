@@ -271,9 +271,12 @@ class TestSemiStructuredJsonWrite:
         "type_",
         [ARRAY(UUID()), MAP(sqltypes.VARCHAR(), UUID()), OBJECT(u=UUID())],
     )
-    def test_typed_structured_columns_keep_native_handling(self, type_):
-        """Typed columns bypass the JSON path and go straight to the connector."""
-        assert type_.bind_processor(_dialect(native_uuid=True)) is None
+    def test_typed_structured_columns_use_json_path(self, type_):
+        """Typed columns are serialized like the untyped forms (the connector
+        cannot bind a dict/list), including the ``uuid.UUID`` hook."""
+        process = type_.bind_processor(_dialect(native_uuid=True))
+        assert process is not None
+        assert json.loads(process({"u": SAMPLE_UUID})) == {"u": SAMPLE_UUID_STR}
 
 
 class TestReflection:

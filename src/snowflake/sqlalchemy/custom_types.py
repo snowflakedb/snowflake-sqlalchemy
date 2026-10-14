@@ -63,6 +63,11 @@ class _ParseJSONBind(ColumnElement):
     ``enable_structured_type_json`` set it renders ``PARSE_JSON(<inner>)``;
     otherwise (flag off, or a non-Snowflake dialect) it renders the bare value,
     so the presence of this wrapper is a no-op by default.
+
+    For typed structured columns (``MAP``, ``ARRAY(<type>)``, ``OBJECT(...)``)
+    ``cast_type`` is the declared type and the value renders as
+    ``CAST(PARSE_JSON(<inner>) AS <type>)``: Snowflake rejects a bare VARIANT
+    for a structured column ("incompatible types").
     """
 
     inherit_cache = True
@@ -72,10 +77,16 @@ class _ParseJSONBind(ColumnElement):
     # (bind_expression wraps unconditionally). Traversing ``wrapped`` keeps such
     # statements cacheable; the dialect flag is fixed per engine, so it need not
     # be part of the key.
-    _cache_key_traversal = [("wrapped", InternalTraversal.dp_clauseelement)]
+    _cache_key_traversal = [
+        ("wrapped", InternalTraversal.dp_clauseelement),
+        ("cast_type", InternalTraversal.dp_type),
+    ]
 
-    def __init__(self, wrapped: ColumnElement) -> None:
+    def __init__(
+        self, wrapped: ColumnElement, cast_type: TypeEngine | None = None
+    ) -> None:
         self.wrapped = wrapped
+        self.cast_type = cast_type
         self.type = sqltypes.NULLTYPE
 
 
@@ -87,9 +98,12 @@ def _render_parse_json_bind_default(element: _ParseJSONBind, compiler, **kw) -> 
 @compiles(_ParseJSONBind, "snowflake")
 def _render_parse_json_bind_snowflake(element: _ParseJSONBind, compiler, **kw) -> str:
     inner = compiler.process(element.wrapped, **kw)
-    if getattr(compiler.dialect, "_enable_structured_type_json", False):
+    if not getattr(compiler.dialect, "_enable_structured_type_json", False):
+        return inner
+    if element.cast_type is None:
         return f"PARSE_JSON({inner})"
-    return inner
+    type_sql = compiler.dialect.type_compiler_instance.process(element.cast_type)
+    return f"CAST(PARSE_JSON({inner}) AS {type_sql})"
 
 
 def _json_default_factory(dialect: Dialect) -> Callable[[Any], str]:
@@ -139,11 +153,6 @@ class _SemiStructuredJSONMixin:
     ) -> Callable[[Any], Any] | None:
         if not getattr(dialect, "_enable_structured_type_json", False):
             return None
-        # Scope deserialization to the semi-structured (untyped) form, matching
-        # the write path and the documented behavior. Typed/structured columns
-        # (OBJECT(a=...), ARRAY(<type>), MAP) keep their native connector handling.
-        if not self._is_untyped_semi_structured():
-            return None
 
         deserializer = getattr(dialect, "_json_deserializer", None) or json.loads
 
@@ -159,7 +168,7 @@ class _SemiStructuredJSONMixin:
     def _is_untyped_semi_structured(self) -> bool:
         # Semi-structured (untyped) when no element/field/key typing is declared:
         # VARIANT, OBJECT() and ARRAY(). Typed forms — OBJECT(a=...), ARRAY(<type>)
-        # and MAP(k, v) — are structured and keep their native connector handling.
+        # and MAP(k, v) — are structured and need a cast to their declared type.
         if getattr(self, "items_types", None):
             return False
         if getattr(self, "value_type", None) is not None:
@@ -169,12 +178,7 @@ class _SemiStructuredJSONMixin:
         return True
 
     def _json_write_enabled(self, dialect: Dialect) -> bool:
-        # The PARSE_JSON write path only applies to the semi-structured (untyped)
-        # form; typed/structured columns keep their native connector handling.
-        return (
-            getattr(dialect, "_enable_structured_type_json", False)
-            and self._is_untyped_semi_structured()
-        )
+        return bool(getattr(dialect, "_enable_structured_type_json", False))
 
     def bind_processor(self, dialect: Dialect) -> Callable[[Any], Any] | None:
         if not self._json_write_enabled(dialect):
@@ -225,10 +229,11 @@ class _SemiStructuredJSONMixin:
 
     def bind_expression(self, bindvalue: Any) -> Any:
         # Wrap so the compiler renders PARSE_JSON(:p) on Snowflake when the flag
-        # is on. Skipped for typed/structured columns (see _json_write_enabled).
-        if not self._is_untyped_semi_structured():
-            return bindvalue
-        return _ParseJSONBind(bindvalue)
+        # is on; typed/structured columns also cast to their declared type.
+        cast_type = None
+        if isinstance(self, TypeEngine) and not self._is_untyped_semi_structured():
+            cast_type = self
+        return _ParseJSONBind(bindvalue, cast_type)
 
 
 class VARIANT(_SemiStructuredJSONMixin, sqltypes.Indexable, SnowflakeType):
@@ -383,6 +388,22 @@ class OBJECT(StructuredType):
             adapted.items_types = dict(self.items_types)
             adapted.is_semi_structured = self.is_semi_structured
         return adapted
+
+    @util.memoized_property
+    def _static_cache_key(self) -> tuple[Any, ...]:
+        # The default key only covers named ``__init__`` params, so it would
+        # miss the ``**items_types`` field spec and give OBJECT(x=...) and
+        # OBJECT(y=...) the same key, although they render different CASTs.
+        return (
+            self.__class__,
+            (
+                "items_types",
+                tuple(
+                    (name, field_type._static_cache_key, not_null)
+                    for name, (field_type, not_null) in self.items_types.items()
+                ),
+            ),
+        )
 
     @property
     def python_type(self) -> type:

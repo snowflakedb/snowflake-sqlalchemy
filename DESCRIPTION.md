@@ -11,6 +11,7 @@ Source code is also available at:
 
 - Fix `Uuid` columns with `enable_native_uuid=True`: `uuid.UUID` values are now bound as strings (previously `255001: Binding data in type (uuid) is not supported`), and reads honour `as_uuid` (`True` returns `uuid.UUID`, `False` returns `str`). Default `CHAR(32)` behaviour is unchanged.
 - The async dialect now checks for `greenlet` when the async engine is created and raises an `ImportError` with install instructions.
+- `enable_structured_type_json` now also covers typed structured columns (`MAP(...)`, `ARRAY(<type>)`, `OBJECT(...)` with fields). Writing a Python `dict`/`list` renders `CAST(PARSE_JSON(...) AS <declared type>)` (inserts use the same `INSERT ... SELECT` rewrite as the untyped path), instead of failing with `255001: Binding data in type (dict) is not supported`; reads return `dict`/`list` instead of JSON text. Element values are not converted to the declared types: they come back as JSON decodes them (for example `MAP(NUMBER, ...)` keys stay strings and `DATE` elements stay ISO strings). Code that calls `json.loads` on these values must drop it, or set `enable_structured_type_json=False`.
 - Fix `get_multi_indexes()` raising `TypeError` when `filter_names` is `None` (e.g. `Inspector.get_multi_indexes(schema=...)`) and the schema contains Hybrid Tables; it now returns indexes for all Hybrid Tables in the schema.
 
 # Release Notes
