@@ -347,8 +347,10 @@ class TestNativeUuidValueConversion:
 
     def test_bind_string_passes_through(self):
         bind, _ = self._processors(Uuid(as_uuid=False), native_uuid=True)
-        value = bind(SAMPLE_UUID_STR) if bind else SAMPLE_UUID_STR
-        assert value == SAMPLE_UUID_STR
+        assert bind is not None
+        assert bind(SAMPLE_UUID_STR) == SAMPLE_UUID_STR
+        assert bind(SAMPLE_UUID) == SAMPLE_UUID_STR
+        assert bind(None) is None
 
     def test_result_as_uuid_true_returns_uuid(self):
         _, result = self._processors(Uuid(as_uuid=True), native_uuid=True)
@@ -358,8 +360,9 @@ class TestNativeUuidValueConversion:
 
     def test_result_as_uuid_false_returns_str(self):
         _, result = self._processors(Uuid(as_uuid=False), native_uuid=True)
-        value = result(SAMPLE_UUID_STR) if result else SAMPLE_UUID_STR
-        assert value == SAMPLE_UUID_STR
+        assert result is not None
+        assert result(SAMPLE_UUID_STR) == SAMPLE_UUID_STR
+        assert result(None) is None
 
     def test_explicit_uuid_type_binds_when_enabled(self):
         bind, result = self._processors(UUID(), native_uuid=True)
