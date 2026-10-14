@@ -112,6 +112,12 @@ test-dialect-aws = "pytest -m \"aws\" -ra -vvv --tb=short --cov snowflake.sqlalc
 gh-cache-sum = "python -VV | sha256sum | cut -d' ' -f1"
 check-import = "python -c 'import snowflake.sqlalchemy; print(snowflake.sqlalchemy.__version__)'"
 type-check = "mypy src/snowflake/sqlalchemy/"
+# CI ops scripts (SLO metrics). Each supports --dry-run for local use.
+ci-parse-junit = "python -m ci.scripts.parse_junit_to_csv {args}"
+ci-test-summary = "python -m ci.scripts.upload_test_summary {args}"
+ci-version-lag = "python -m ci.scripts.check_version_lag {args}"
+ci-parse-cves = "python -m ci.scripts.parse_cves {args}"
+ci-cve-tickets = "python -m ci.scripts.create_cve_tickets {args}"
 
 [tool.hatch.envs.async]
 extra-dependencies = ["SQLAlchemy>=2.0.44,<2.1"]
