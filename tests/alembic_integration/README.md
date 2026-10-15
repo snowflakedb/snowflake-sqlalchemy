@@ -6,16 +6,7 @@ For development setup and connection configuration, see [CONTRIBUTING.md](../../
 
 ## Shared Setup
 
-These tests rely on a shared pytest setup in `tests/alembic_integration/conftest.py` that registers Alembic's Snowflake implementation:
-
-```python
-from alembic.ddl.impl import DefaultImpl
-
-class SnowflakeImpl(DefaultImpl):
-    __dialect__ = "snowflake"
-```
-
-This mirrors the Snowflake Alembic integration. Without that registration, direct `MigrationContext.configure(...)` calls fail with `KeyError: "snowflake"`.
+No shared setup is needed: loading the dialect registers Alembic's Snowflake implementation (`snowflake.sqlalchemy.alembic_impl.SnowflakeImpl`), so direct `MigrationContext.configure(...)` calls work out of the box. Don't define another `SnowflakeImpl` here — it would replace the built-in one and the tests would no longer exercise it.
 
 ## Running the Tests
 

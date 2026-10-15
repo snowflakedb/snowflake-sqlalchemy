@@ -55,6 +55,7 @@ temporary `legacy_url_params` shim was removed — review the
 | Pass `legacy_url_params=` or set `SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS` | Remove it; move blocked connector kwargs to `connect_args=` (see [Breaking changes](#breaking-changes)). |
 | Read semi-structured `VARIANT`/`OBJECT`/`ARRAY` values with `json.loads(...)` | Values now come back as `dict`/`list` by default — see [behavioral difference #5](#5-automatic-json-handling-is-on-by-default-enable_structured_type_json). |
 | Use `/` or `//` on column expressions and assert the compiled SQL or results | Generated SQL changed — see [behavioral difference #6](#6-force_div_is_floordiv-removed). |
+| Define your own `SnowflakeImpl` in `alembic/env.py` | Remove it, or subclass the new `SnowflakeImpl` — see [Alembic implementation](#alembic-implementation). |
 
 ## Step-by-step upgrade
 
@@ -175,6 +176,36 @@ parameters** from the URL query string. **This shim was removed in 2.0.0a2:**
 
 Details: [Sensitive connection parameters](README.md#sensitive-connection-parameters)
 and [Connection Parameters](README.md#connection-parameters).
+
+### Alembic implementation
+
+*Since 2.0.0rc3.* 2.x now comes with its own Alembic implementation that is eagerly loaded.
+This was added to provide out-of-the-box behaviors that assist Alembic's
+auto-generation of migrations and to support index creation for hybrid tables.
+
+In effect, this means that users are no longer required to create their own
+`SnowflakeImpl` inside of their `alembic/env.py` files.
+
+Depending on import order, the new `SnowflakeImpl` may cause your existing
+`SnowflakeImpl` in your `alembic/env.py` to be overridden; alternatively, your
+`SnowflakeImpl` may override the `snowflake-sqlalchemy` managed `SnowflakeImpl`.
+Either way, this happens silently.
+
+If your `SnowflakeImpl` does not have any custom logic in it (e.g. it's the
+snippet the README previously recommended), we suggest removing
+it from your `alembic/env.py` and relying on the `snowflake-sqlalchemy` managed
+`SnowflakeImpl`.
+
+If your `SnowflakeImpl` has custom logic that you need to preserve, you should
+subclass the new `SnowflakeImpl` inside of your `alembic/env.py` (instead of
+subclassing the `DefaultImpl`):
+
+```python
+from snowflake.sqlalchemy.alembic_impl import SnowflakeImpl
+
+class CustomSnowflakeImpl(SnowflakeImpl):
+    __dialect__ = 'snowflake'
+```
 
 ## Behavioral differences to review
 
@@ -344,6 +375,7 @@ policy.
 | `REGEXP_*` SQL changed | Expected; see [behavioral difference #4](#4-regexp_match--regexp_replace-flags-render-as-literals). |
 | Semi-structured reads return `dict`/`list`, or `json.loads(...)` now raises `TypeError` | Expected; drop the manual JSON parsing, or opt out with `enable_structured_type_json=False` (deprecated) — see [behavioral difference #5](#5-automatic-json-handling-is-on-by-default-enable_structured_type_json). |
 | `/` or `//` compiled SQL / results changed | Expected; update expectations, or set `force_div_is_floordiv=True` (deprecated) — see [behavioral difference #6](#6-force_div_is_floordiv-removed). |
+| Custom Alembic behavior stopped running after upgrading | Subclass the new `SnowflakeImpl` — see [Alembic implementation](#alembic-implementation). |
 
 ## Further reading
 
