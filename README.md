@@ -449,6 +449,49 @@ blocked parameters from the URL query string. **This shim has been removed.** Pa
 `legacy_url_params` to `create_engine()` now raises an `ArgumentError`, and the environment
 variable has no effect. Move any affected parameters to `connect_args=` as shown above.
 
+#### Strict host-name mode
+
+Set `SNOWFLAKE_SQLALCHEMY_STRICT_HOST_NAMES=true` (or pass `strict_host_names=True` to `create_engine`) to stop the dialect from inferring or appending any domain to host names. In this mode the dialect forwards connection parameters (host, port, authentication, `connection_name`, ...) to the Snowflake Connector for Python unchanged and does not validate them; connection establishment, including how a missing parameter is handled, is the connector's responsibility. When strict mode is disabled (the default), existing behaviour is unchanged.
+
+All connection parameters supplied through SQLAlchemy:
+
+```python
+from sqlalchemy import create_engine
+
+engine = create_engine(
+    "snowflake://",
+    strict_host_names=True,
+    connect_args={
+        "account": "myaccount",
+        "host": "myaccount.snowflake.example.com",
+        "port": 443,
+        "user": "myuser",
+        "authenticator": "SNOWFLAKE_JWT",
+        "private_key_file": "/path/to/rsa_key.p8",
+        "database": "mydb",
+        "schema": "public",
+        "warehouse": "mywh",
+    },
+)
+```
+
+A named profile from the connector's `connections.toml`:
+
+```python
+from sqlalchemy import create_engine
+from snowflake.sqlalchemy import URL
+
+engine = create_engine(
+    URL(account=""),
+    strict_host_names=True,
+    connect_args={"connection_name": "my_profile"},
+)
+```
+
+The dialect passes the profile name to the connector, which reads and applies `connections.toml` itself.
+
+`AzureContainer` accepts an explicit `endpoint` (e.g. `endpoint="blob.storage.example.com"`); in strict mode an `AzureContainer` without one fails at SQL compilation instead of defaulting to `.blob.core.windows.net`.
+
 ### Opening and Closing Connection
 
 Open a connection by executing `engine.connect()`; avoid using `engine.execute()`. Make certain to close the connection by executing `connection.close()` before

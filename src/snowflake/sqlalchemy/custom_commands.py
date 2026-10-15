@@ -907,10 +907,17 @@ class AzureContainer(CloudStorageLocation):
 
     __visit_name__ = "azure_container"
 
-    def __init__(self, account: str, container: str, path: str | None = None) -> None:
+    def __init__(
+        self,
+        account: str,
+        container: str,
+        path: str | None = None,
+        endpoint: str | None = None,
+    ) -> None:
         self.account = account
         self.container = container
         self.path = path
+        self.endpoint = endpoint
         self.encryption_used: dict[str, Any] = {}
         self.credentials_used: dict[str, Any] = {}
 
@@ -918,15 +925,23 @@ class AzureContainer(CloudStorageLocation):
     def from_uri(cls, uri: str) -> AzureContainer:
         if uri[0:8] != "azure://":
             raise ValueError(f"Invalid Azure Container URI: {uri}")
-        account, uri = uri[8:].split(".", 1)
-        if uri[0:22] != "blob.core.windows.net/":
+        # Parse azure://<account>.<endpoint>/<container>[/<path>]
+        # The endpoint is everything between the first dot and the first slash
+        # after the scheme, e.g. "blob.core.windows.net" or "blob.storage.example.com".
+        rest = uri[8:]
+        dot_pos = rest.find(".")
+        slash_pos = rest.find("/")
+        if dot_pos < 0 or slash_pos < 0 or dot_pos >= slash_pos:
             raise ValueError(f"Invalid Azure Container URI: {uri}")
-        b = uri[22:].split("/", 1)
+        account = rest[:dot_pos]
+        endpoint = rest[dot_pos + 1 : slash_pos]
+        remainder = rest[slash_pos + 1 :]
+        b = remainder.split("/", 1)
         if len(b) == 1:
             container, path = b[0], None
         else:
             container, path = b
-        return cls(account, container, path)
+        return cls(account, container, path, endpoint=endpoint)
 
     def __repr__(self) -> str:
         credentials = "CREDENTIALS=({})".format(
@@ -941,8 +956,12 @@ class AzureContainer(CloudStorageLocation):
                 for n, v in self.encryption_used.items()
             )
         )
-        uri = "'azure://{}.blob.core.windows.net/{}{}'".format(
-            self.account, self.container, f"/{self.path}" if self.path else ""
+        blob_endpoint = self.endpoint or "blob.core.windows.net"
+        uri = "'azure://{}.{}/{}{}'".format(
+            self.account,
+            blob_endpoint,
+            self.container,
+            f"/{self.path}" if self.path else "",
         )
         return "{}{}{}".format(
             uri,

@@ -110,6 +110,15 @@ def _url(**db_parameters: Any) -> str:
             port=db_parameters["port"] if "port" in db_parameters else 443,
         )
         specified_parameters += ["user", "password", "host", "port"]
+    elif db_parameters["account"] == "":
+        # Profile-only mode (SNOW-4248737): the caller intends
+        # to supply connection_name via connect_args and does not need a real
+        # account in the URL.  Produce a valid URL with an empty authority.
+        ret = "snowflake://{user}:{password}@/".format(
+            user=user,
+            password=_rfc_1738_quote(db_parameters.get("password", "")),
+        )
+        specified_parameters += ["user", "password", "account"]
     elif "region" not in db_parameters:
         account = db_parameters["account"]
         _validate_url_field("account", account)

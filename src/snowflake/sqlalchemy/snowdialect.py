@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import decimal
 import logging
+import os
 import warnings
 from collections import defaultdict
 from collections.abc import Callable, Collection, Sequence
@@ -239,6 +240,18 @@ def _split_database_namespace(database: str) -> tuple[str, str | None]:
     raise sa_exc.ArgumentError(f"Invalid name space is specified: {database}")
 
 
+# ---------------------------------------------------------------------------
+# Strict host-name mode (SNOW-4248737)
+# ---------------------------------------------------------------------------
+
+
+def _is_strict_host_names() -> bool:
+    return os.environ.get("SNOWFLAKE_SQLALCHEMY_STRICT_HOST_NAMES", "").lower() in (
+        "true",
+        "1",
+    )
+
+
 def _normalized_account_host(host: str, port: Any) -> tuple[str, str, str] | None:
     """Derive ``(account, host, port)`` from a bare Snowflake account host.
 
@@ -383,6 +396,7 @@ class SnowflakeDialect(default.DefaultDialect):
         redact_log_secrets: bool = True,
         json_serializer: Any = None,
         json_deserializer: Any = None,
+        strict_host_names: bool | None = None,
         **kwargs: Any,
     ):
         # ``legacy_url_params`` was removed in the major release.  Reject it with
@@ -430,6 +444,17 @@ class SnowflakeDialect(default.DefaultDialect):
         self._json_serializer = json_serializer
         self._json_deserializer = json_deserializer
         self._redact_log_secrets = redact_log_secrets
+        # Strict host-name mode: when enabled, the dialect never infers or
+        # appends `.snowflakecomputing.com` and requires an explicit FQDN host
+        # (SNOW-4248737).  Enabled via kwarg or env var.
+        if strict_host_names is None:
+            strict_host_names = _is_strict_host_names()
+        self._strict_host_names = strict_host_names
+
+    @property
+    def strict_host_names(self) -> bool:
+        """Whether strict host-name mode is active."""
+        return self._strict_host_names
 
     def initialize(self, connection: Connection) -> None:
         super().initialize(connection)
@@ -500,9 +525,17 @@ class SnowflakeDialect(default.DefaultDialect):
                 opts["schema"] = schema
 
         if "host" in opts:
-            normalized = _normalized_account_host(opts["host"], opts.get("port"))
-            if normalized is not None:
-                opts["account"], opts["host"], opts["port"] = normalized
+            if self._strict_host_names:
+                # Strict mode: derive account but do NOT append
+                # .snowflakecomputing.com.  The connector requires account
+                # (it is not derived from host), so parse it from the URL
+                # host the same way _normalized_account_host would.
+                if not opts.get("account"):
+                    opts["account"] = parse_account(opts["host"])
+            else:
+                normalized = _normalized_account_host(opts["host"], opts.get("port"))
+                if normalized is not None:
+                    opts["account"], opts["host"], opts["port"] = normalized
 
         opts["autocommit"] = False  # autocommit is disabled by default
 
@@ -2201,6 +2234,21 @@ class SnowflakeDialect(default.DefaultDialect):
     def connect(self, *cargs: Any, **cparams: Any) -> SnowflakeConnection:  # type: ignore[override]
         if _ENABLE_SQLALCHEMY_AS_APPLICATION_NAME:
             cparams = _update_connection_application_name(**cparams)
+
+        # --- Named-profile pass-through ------------------------------
+        # connect_args are merged into cparams by SQLAlchemy *after*
+        # create_connect_args(), so this is the first point where we see the
+        # final parameter set including connection_name.  Host, port and
+        # authentication are not validated here; the connector owns them.
+        connection_name = cparams.get("connection_name")
+        if connection_name is not None:
+            # Named-profile mode: the connector loads the profile from
+            # connections.toml.  Strip any empty/placeholder host or account
+            # that create_connect_args synthesized from an empty URL so they
+            # do not conflict with the profile's own values.
+            for key in ("host", "account"):
+                if key in cparams and not cparams[key]:
+                    del cparams[key]
 
         # Set decimal precision for full DECFLOAT support (38 digits)
         if self._enable_decfloat:

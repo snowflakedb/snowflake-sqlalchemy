@@ -680,21 +680,34 @@ def _render_storage_encryption(encryption_used, deterministic: bool = False) -> 
     )
 
 
-def _render_storage_uri(container) -> str:
+def _render_storage_uri(container, *, strict: bool = False) -> str:
     """Return the escaped, single-quoted storage location literal for a container.
 
     The bucket/path/account components originate from caller-supplied URIs
     (``*.from_uri``), so the assembled body is escaped before being wrapped in
     quotes — a single-quote in any component would otherwise escape the
     location literal (SNOW-3649816 / SNOW-3649858).
+
+    When *strict* is ``True``, an ``AzureContainer`` without an explicit
+    ``endpoint`` is rejected so the commercial ``.blob.core.windows.net``
+    default is never emitted (SNOW-4248737).
     """
     if isinstance(container, AWSBucket):
         body = "s3://{}{}".format(
             container.bucket, f"/{container.path}" if container.path else ""
         )
     elif isinstance(container, AzureContainer):
-        body = "azure://{}.blob.core.windows.net/{}{}".format(
+        if strict and not container.endpoint:
+            raise sa_exc.CompileError(
+                "Strict host-name mode is enabled but no explicit Azure Blob "
+                "endpoint was provided for AzureContainer.  Supply "
+                "endpoint='blob.example.com' (or the appropriate "
+                "endpoint) to avoid the .blob.core.windows.net commercial default."
+            )
+        blob_endpoint = container.endpoint or "blob.core.windows.net"
+        body = "azure://{}.{}/{}{}".format(
             container.account,
+            blob_endpoint,
             container.container,
             f"/{container.path}" if container.path else "",
         )
@@ -1132,9 +1145,16 @@ class SnowflakeCompiler(compiler.SQLCompiler):
     def visit_azure_container(
         self, azure_container: AzureContainer, **kw: Any
     ) -> tuple[str, str, str]:
+        """Compile an :class:`AzureContainer` into a ``(uri, credentials, encryption)`` triple.
+
+        In strict host-name mode, an ``AzureContainer`` without an explicit
+        ``endpoint`` is rejected at compile time so the commercial
+        ``.blob.core.windows.net`` default is never emitted (SNOW-4248737).
+        """
+        strict = getattr(self.dialect, "strict_host_names", False)
         deterministic = kw.get("deterministic", False)
         return (
-            _render_storage_uri(azure_container),
+            _render_storage_uri(azure_container, strict=strict),
             (
                 _render_storage_credentials(
                     azure_container.credentials_used, deterministic
@@ -1588,7 +1608,8 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
         # (SNOW-3649858).
         container = create_stage.container
         deterministic = kw.get("deterministic", False)
-        uri = _render_storage_uri(container)
+        strict = getattr(self.dialect, "strict_host_names", False)
+        uri = _render_storage_uri(container, strict=strict)
         # credentials_used / encryption_used exist on CloudStorageLocation
         # subclasses (buckets) but not on ExternalStage; read defensively so the
         # union type checks and an ExternalStage container renders no creds.
