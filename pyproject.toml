@@ -43,16 +43,9 @@ dependencies = [
   # import outright. Raise the ceiling only once base.py and the async shim are
   # updated for the 2.1 API surface.
   "SQLAlchemy>=2.0.44,<2.1",
-  # Connector 5.x is the baseline: it provides the async driver. rc3 is the floor
-  # because it fixes a client-side numpy.datetime64 binding regression
-  # (SNOW-4075338) present in rc2; it also carries rc2's fix for a complete
-  # connection-parameter table (earlier RCs leave URL query parameters uncast).
-  # Naming the pre-release here is what allows resolvers to select it.
-  # NOTE: until the internal mirror syncs rc3, installs need an index override,
-  # e.g. UV_INDEX_URL=https://pypi.org/simple (PIP_INDEX_URL for pip).
-  # Connector 5.0.0rc3 itself requires Python >=3.11 (dropped 3.10), which is why
-  # this project's own requires-python floor is 3.11 too.
-  "snowflake-connector-python>=5.0.0rc3",
+  # Connector 5.x is the baseline: it provides the async driver. It requires
+  # Python >=3.11, which sets this project's requires-python floor.
+  "snowflake-connector-python>=5.0.0",
 ]
 
 [tool.hatch.version]

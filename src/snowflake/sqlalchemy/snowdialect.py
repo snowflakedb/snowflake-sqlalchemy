@@ -212,7 +212,7 @@ _FORCE_DIV_IS_FLOORDIV_REMOVED_MSG = (
     "(FLOOR(left / right)); no flag is needed. Remove the argument from your "
     "create_engine() call. See the migration guide: "
     "https://github.com/snowflakedb/snowflake-sqlalchemy/blob/main/MIGRATING.md"
-    "#6-force_div_is_floordiv-removed"
+    "#4-force_div_is_floordiv-removed"
 )
 
 _ENABLE_STRUCTURED_TYPE_JSON_DEPRECATION_MSG = (

@@ -51,16 +51,8 @@ cd snowflake-sqlalchemy
 hatch env create
 ```
 
-> **Note:** the project requires `snowflake-connector-python>=5.0.0rc3`. Until the
-> internal package mirror syncs that release candidate, environment creation must
-> resolve against public PyPI:
->
-> ```bash
-> UV_INDEX_URL=https://pypi.org/simple hatch env create
-> ```
->
-> Connector 5.0.0rc3 requires Python >=3.11 (it dropped 3.10 support), so this
-> project's floor is 3.11 too — Python 3.10 environments cannot install it at all.
+> **Note:** the project requires `snowflake-connector-python>=5.0.0`; the supported
+> Python versions (3.11+) follow from the connector's own requirements.
 
 Verify the installation:
 

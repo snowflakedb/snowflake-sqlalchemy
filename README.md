@@ -8,7 +8,7 @@
 
 Snowflake SQLAlchemy runs on the top of the Snowflake Connector for Python as a [dialect](http://docs.sqlalchemy.org/en/latest/dialects/) to bridge a Snowflake database and SQLAlchemy applications.
 
-> **v1.11.0 — Sensitive connection parameters:** We curated a set of connector parameters (`host`, `protocol`, `token_file_path`, `private_key_file`, `ocsp_response_cache_filename`, `connection_diag_log_path`, `crl_cache_dir`, `unsafe_file_write`, `unsafe_skip_file_permissions_check`) that can no longer be supplied through the URL query string — pass them via `connect_args` in `create_engine()` instead. If you encounter a possible behavioral change, set `SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS=1` and follow the instructions in [Sensitive connection parameters](#sensitive-connection-parameters).
+> **v1.11.0 — Sensitive connection parameters:** We curated a set of connector parameters (`host`, `protocol`, `token_file_path`, `private_key_file`, `ocsp_response_cache_filename`, `connection_diag_log_path`, `crl_cache_dir`, `unsafe_file_write`, `unsafe_skip_file_permissions_check`) that can no longer be supplied through the URL query string — pass them via `connect_args` in `create_engine()` instead. See [Sensitive connection parameters](#sensitive-connection-parameters). The temporary `SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS` / `legacy_url_params` opt-out that 1.11.x offered was **removed in 2.x** and no longer has any effect.
 
 ---
 
@@ -91,13 +91,16 @@ pip install --upgrade snowflake-sqlalchemy
 
 `pip` automatically installs all required modules, including the Snowflake Connector for Python.
 
+2.x requires Python 3.11+, SQLAlchemy `>=2.0.44,<2.1` and `snowflake-connector-python>=5.0.0`.
+If you are upgrading from 1.x, see the [1.x → 2.x migration guide](MIGRATING.md).
+
 ## Verifying Your Installation
 
 1. Create a file (e.g. `validate.py`) that contains the following Python sample code,
    which connects to Snowflake and displays the Snowflake version:
 
     ```python
-    from sqlalchemy import create_engine
+    from sqlalchemy import create_engine, text
 
     engine = create_engine(
         'snowflake://{user}:{password}@{account}/'.format(
@@ -108,7 +111,7 @@ pip install --upgrade snowflake-sqlalchemy
     )
     try:
         connection = engine.connect()
-        results = connection.execute('select current_version()').fetchone()
+        results = connection.execute(text('select current_version()')).fetchone()
         print(results[0])
     finally:
         connection.close()
@@ -129,10 +132,6 @@ pip install --upgrade snowflake-sqlalchemy
 
 ## Async Support
 
-> **Note:** Async support requires `snowflake-connector-python` 5.x,
-> currently a pre-release (`5.0.0rc3`). APIs may change before the connector's final
-> 5.0.0 release. Please report issues against this repo.
-
 Snowflake SQLAlchemy supports SQLAlchemy's [`asyncio` extension](https://docs.sqlalchemy.org/en/20/orm/extensions/asyncio.html),
 letting you use `AsyncEngine` / `AsyncSession` for non-blocking database access.
 
@@ -144,7 +143,7 @@ pip install snowflake-sqlalchemy
 
 **Requirements:**
 
-* Python **3.11+** (the connector requires 3.11+ as of `5.0.0rc3`; it dropped
+* Python **3.11+** (connector 5.x requires 3.11+; it dropped
   Python 3.10 support, which pip enforces by refusing to resolve the connector
   at all on 3.10).
 * `snowflake-connector-python` 5.x (installed as a base dependency).
@@ -237,10 +236,9 @@ Snowflake-specific, but worth restating here:
 
 ### Known Limitations
 
-* The connector dependency is a **pre-release** (`5.0.0rc3`); expect possible
-  breaking changes before final 5.0.0.
-* Test coverage in this repo currently focuses on PUT/GET file-transfer
-  operations; broad ORM/session behavior is inherited from SQLAlchemy's
+* Async test coverage in this repo covers PUT/GET file transfers and basic ORM
+  operations (CRUD, rollback, eager loading, cascades, `VARIANT` round-trips,
+  reflection); other ORM/session behavior is inherited from SQLAlchemy's
   generic asyncio machinery rather than independently verified here.
 * No async-aware Alembic migration runner — Alembic migrations should
   continue to use a sync engine/connection.
@@ -412,7 +410,8 @@ local files, or relax a connector safety check:
 
 `host`, `protocol`, `token_file_path`, `private_key_file`, `ocsp_response_cache_filename`,
 `connection_diag_log_path`, `crl_cache_dir`, `unsafe_file_write`,
-`unsafe_skip_file_permissions_check`.
+`unsafe_skip_file_permissions_check`, `unsafe_skip_config_file_permissions_check`,
+`crl_unsafe_skip_file_permissions_check`.
 
 Passing any of these in the URL query string raises `sqlalchemy.exc.ArgumentError`. Supply
 them through the `connect_args` parameter of `create_engine` instead, which is fully under
@@ -446,8 +445,9 @@ of the connection URL authority) and percent-encodes `user`, so URL metacharacte
 Earlier releases provided a temporary `legacy_url_params` opt-out (engine kwarg or the
 `SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS` environment variable) that re-enabled forwarding the
 blocked parameters from the URL query string. **This shim has been removed.** Passing
-`legacy_url_params` to `create_engine()` now raises an `ArgumentError`, and the environment
-variable has no effect. Move any affected parameters to `connect_args=` as shown above.
+`legacy_url_params` as a `create_engine()` keyword now raises
+`TypeError: Invalid argument(s) 'legacy_url_params' sent to create_engine()`; as a URL query
+parameter it is not rejected but has no effect, and the environment variable has no effect. Move any affected parameters to `connect_args=` as shown above.
 
 #### Strict host-name mode
 
