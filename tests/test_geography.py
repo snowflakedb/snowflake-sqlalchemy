@@ -5,29 +5,25 @@
 from json import loads
 
 from sqlalchemy import Column, Integer, MetaData, Table
+from sqlalchemy.schema import CreateTable
 from sqlalchemy.sql import select
 
 from snowflake.sqlalchemy import GEOGRAPHY
 
 
-def test_create_table_geography_datatypes(engine_testaccount):
+def test_create_table_geography_datatypes(sql_compiler):
     """
     Create table including geography data types
     """
-
     metadata = MetaData()
-    table_name = "test_geography0"
     test_geography = Table(
-        table_name,
+        "test_geography0",
         metadata,
         Column("id", Integer, primary_key=True),
         Column("geo", GEOGRAPHY),
     )
-    metadata.create_all(engine_testaccount)
-    try:
-        assert test_geography is not None
-    finally:
-        test_geography.drop(engine_testaccount)
+    ddl = sql_compiler(CreateTable(test_geography))
+    assert "geo GEOGRAPHY" in ddl, ddl
 
 
 def test_inspect_geography_datatypes(engine_testaccount):

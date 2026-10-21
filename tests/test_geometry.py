@@ -4,28 +4,25 @@
 from json import loads
 
 from sqlalchemy import Column, Integer, MetaData, Table
+from sqlalchemy.schema import CreateTable
 from sqlalchemy.sql import select
 
 from snowflake.sqlalchemy import GEOMETRY
 
 
-def test_create_table_geometry_datatypes(engine_testaccount):
+def test_create_table_geometry_datatypes(sql_compiler):
     """
     Create table including geometry data types
     """
     metadata = MetaData()
-    table_name = "test_geometry0"
     test_geometry = Table(
-        table_name,
+        "test_geometry0",
         metadata,
         Column("id", Integer, primary_key=True),
         Column("geom", GEOMETRY),
     )
-    metadata.create_all(engine_testaccount)
-    try:
-        assert test_geometry is not None
-    finally:
-        test_geometry.drop(engine_testaccount)
+    ddl = sql_compiler(CreateTable(test_geometry))
+    assert "geom GEOMETRY" in ddl, ddl
 
 
 def test_inspect_geometry_datatypes(engine_testaccount):

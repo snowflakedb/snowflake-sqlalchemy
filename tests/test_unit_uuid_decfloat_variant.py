@@ -401,6 +401,7 @@ def native_uuid_engine(request):
     return engine
 
 
+@pytest.mark.integ
 class TestIntegration:
     """Round-trips against a real Snowflake account."""
 

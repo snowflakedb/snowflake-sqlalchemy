@@ -4,6 +4,7 @@
 import pytest
 from sqlalchemy import Integer, testing
 from sqlalchemy import types as sql_types
+from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.schema import Column, Sequence, Table
 from sqlalchemy.testing import config
 from sqlalchemy.testing.assertions import eq_
@@ -18,6 +19,7 @@ from sqlalchemy.testing.suite import InsertBehaviorTest as _InsertBehaviorTest
 from sqlalchemy.testing.suite import LikeFunctionsTest as _LikeFunctionsTest
 from sqlalchemy.testing.suite import LongNameBlowoutTest as _LongNameBlowoutTest
 from sqlalchemy.testing.suite import SimpleUpdateDeleteTest as _SimpleUpdateDeleteTest
+from sqlalchemy.testing.suite import TrueDivTest as _TrueDivTest
 
 # 1. Unsupported by snowflake db
 
@@ -77,6 +79,34 @@ class InsertBehaviorTest(_InsertBehaviorTest):
     @pytest.mark.skip("Snowflake does not support returning in insert.")
     def test_no_results_for_non_returning_insert(self, connection, style, executemany):
         pass
+
+
+class TrueDivTest(_TrueDivTest):
+    """Upstream true-division tests, with wide-scale NUMERIC cases xfailed.
+
+    SQLAlchemy 2.1 added wide-scale NUMERIC division cases, later backported
+    to 2.0.x (present in 2.0.55, absent in 2.0.44), so match by case id, not
+    by version. Snowflake before 10.39 rejects them ("Invalid intermediate
+    datatype: NUMBER(61,40)"); 10.39+ accepts them. Non-strict xfail limited
+    to that rejection until every test deployment is on 10.39+.
+    """
+
+    _UNSUPPORTED_CASES = ("numeric_many_decimals", "numeric_tiny_divisor")
+
+    @pytest.fixture(autouse=True)
+    def _xfail_wide_scale_division_before_10_39(self, request):
+        callspec = getattr(request.node, "callspec", None)
+        if callspec is not None and any(
+            case in callspec.id for case in self._UNSUPPORTED_CASES
+        ):
+            request.node.add_marker(
+                pytest.mark.xfail(
+                    raises=ProgrammingError,
+                    strict=False,
+                    reason="Snowflake before 10.39 rejects wide-scale NUMBER "
+                    "division (intermediate NUMBER(61,40)); 10.39+ accepts it",
+                )
+            )
 
 
 # 2. Patched Tests

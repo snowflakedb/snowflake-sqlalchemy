@@ -102,6 +102,11 @@ test-dialect = "pytest -ra -vvv --tb=short --cov snowflake.sqlalchemy --cov-appe
 test-dialect-compatibility = "pytest -ra -vvv --tb=short --cov snowflake.sqlalchemy --cov-append --junitxml ./junit.xml tests/sqlalchemy_test_suite"
 test-dialect-async-sync = "pytest -ra -vvv --tb=short --cov snowflake.sqlalchemy --cov-append --junitxml ./junit.xml tests_async/"
 test-dialect-aws = "pytest -m \"aws\" -ra -vvv --tb=short --cov snowflake.sqlalchemy --cov-append --junitxml ./junit.xml --ignore=tests/sqlalchemy_test_suite tests/"
+# Selections by marker; ``unit``/``integ`` are auto-applied by tests/conftest.py.
+# ``-m`` replaces the addopts expression, so its exclusions are repeated here.
+test-unit = "pytest -ra -vvv --tb=short --cov snowflake.sqlalchemy --cov-append --junitxml ./junit.xml -m \"unit and not feature_max_lob_size and not aws and not requires_external_volume\" --ignore=tests/sqlalchemy_test_suite tests/"
+test-integration = "pytest -ra -vvv --tb=short --cov snowflake.sqlalchemy --cov-append --junitxml ./junit.xml -m \"integ and not feature_max_lob_size and not aws and not requires_external_volume\" --ignore=tests/sqlalchemy_test_suite tests/"
+test-multicloud = "pytest -ra -vvv --tb=short --cov snowflake.sqlalchemy --cov-append --junitxml ./junit.xml -m \"multicloud and not feature_max_lob_size and not aws and not requires_external_volume\" --ignore=tests/sqlalchemy_test_suite tests/"
 gh-cache-sum = "python -VV | sha256sum | cut -d' ' -f1"
 check-import = "python -c 'import snowflake.sqlalchemy; print(snowflake.sqlalchemy.__version__)'"
 type-check = "mypy src/snowflake/sqlalchemy/"
@@ -113,7 +118,9 @@ ci-parse-cves = "python -m ci.scripts.parse_cves {args}"
 ci-cve-tickets = "python -m ci.scripts.create_cve_tickets {args}"
 
 [tool.hatch.envs.async]
-extra-dependencies = ["SQLAlchemy>=2.0.44,<2.1"]
+# ``[asyncio]`` pulls in greenlet on every platform; plain SQLAlchemy skips it
+# on e.g. arm64 macOS, where the async dialect then refuses to start.
+extra-dependencies = ["SQLAlchemy[asyncio]>=2.0.44,<2.1"]
 features = ["development", "pandas"]
 # Pinned to 3.12 so the async suite exercises a newer interpreter than the
 # default env; the connector is 5.x in every env now.
@@ -124,7 +131,7 @@ installer = "uv"
 COVERAGE_FILE = "coverage.xml"
 
 [tool.hatch.envs.async.scripts]
-test-dialect-async-sync = "pytest -ra -vvv --tb=short --cov snowflake.sqlalchemy --cov-append --junitxml ./junit.xml tests_async/"
+test-dialect-async-sync = "pytest -ra -vvv --tb=short --cov snowflake.sqlalchemy --cov-append --junitxml ./junit.xml tests_async/ {args}"
 test-dialect-async = "SNOWFLAKE_ASYNC_TESTS=1 pytest -ra -vvv --tb=short --cov snowflake.sqlalchemy --cov-append --junitxml ./junit.xml tests_async/"
 test-dialect-compatibility-async = "SNOWFLAKE_ASYNC_TESTS=1 pytest -ra -vvv --tb=short tests/sqlalchemy_test_suite tests_async/"
 
@@ -179,8 +186,9 @@ markers = [
   "azure: tests for Azure Cloud storage",
   "gcp: tests for Google Cloud storage",
   # Test type markers
-  "integ: integration tests",
-  "unit: unit tests",
+  "integ: needs a live Snowflake account; auto-applied by tests/conftest.py from the fixtures used (mark explicitly when connecting in the test body)",
+  "unit: runs without a Snowflake connection; auto-applied by tests/conftest.py to every test not marked integ",
+  "multicloud: exercises cloud storage (PUT/GET, COPY INTO); run on every cloud provider",
   "skipolddriver: skip for old driver tests",
   # Other markers
   "timeout: tests that need a timeout time",

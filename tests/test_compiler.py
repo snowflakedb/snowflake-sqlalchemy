@@ -226,7 +226,7 @@ class TestSnowflakeCompiler(AssertsCompiledSQL):
         )
 
 
-def test_quoted_name_label(engine_testaccount):
+def test_quoted_name_label():
     test_cases = [
         # quote name
         {

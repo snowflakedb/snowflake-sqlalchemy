@@ -38,7 +38,7 @@ def test_external_stage(sql_compiler):
     )
 
 
-def test_copy_into_location(engine_testaccount, sql_compiler):
+def _food_items_table():
     meta = MetaData()
     food_items = Table(
         "python_tests_foods",
@@ -47,7 +47,11 @@ def test_copy_into_location(engine_testaccount, sql_compiler):
         Column("name", String),
         Column("quantity", Integer),
     )
-    meta.create_all(engine_testaccount)
+    return food_items
+
+
+def _copy_into_location_statements(food_items):
+    """COPY INTO statements that are also submitted to Snowflake."""
     copy_stmt_1 = CopyIntoStorage(
         from_=food_items,
         into=AWSBucket.from_uri("s3://backup").encryption_aws_sse_kms(
@@ -58,18 +62,43 @@ def test_copy_into_location(engine_testaccount, sql_compiler):
         .escape(None)
         .null_if(["null", "Null"]),
     )
-    assert (
-        sql_compiler(copy_stmt_1)
-        == "COPY INTO 's3://backup' FROM python_tests_foods  FILE_FORMAT=(TYPE=csv "
-        "ESCAPE=None NULL_IF=('null', 'Null') RECORD_DELIMITER='|')  ENCRYPTION="
-        "(KMS_KEY_ID='1234abcd-12ab-34cd-56ef-1234567890ab' TYPE='AWS_SSE_KMS')"
-    )
     copy_stmt_2 = CopyIntoStorage(
         from_=select(food_items).where(food_items.c.id == 1),  # Test sub-query
         into=AWSBucket.from_uri("s3://backup")
         .credentials(aws_role="some_iam_role")
         .encryption_aws_sse_s3(),
         formatter=JSONFormatter().file_extension("json").compression("zstd"),
+    )
+    copy_stmt_3 = CopyIntoStorage(
+        from_=food_items,
+        into=AzureContainer.from_uri(
+            "azure://snowflake.blob.core.windows.net/snowpile/backup"
+        ).credentials("token"),
+        formatter=PARQUETFormatter().snappy_compression(True),
+    )
+    copy_stmt_4 = CopyIntoStorage(
+        from_=AWSBucket.from_uri("s3://backup").encryption_aws_sse_kms(
+            "1234abcd-12ab-34cd-56ef-1234567890ab"
+        ),
+        into=food_items,
+        formatter=CSVFormatter()
+        .record_delimiter("|")
+        .escape(None)
+        .null_if(["null", "Null"]),
+    )
+    return copy_stmt_1, copy_stmt_2, copy_stmt_3, copy_stmt_4
+
+
+def test_copy_into_location(sql_compiler):
+    food_items = _food_items_table()
+    copy_stmt_1, copy_stmt_2, copy_stmt_3, copy_stmt_4 = _copy_into_location_statements(
+        food_items
+    )
+    assert (
+        sql_compiler(copy_stmt_1)
+        == "COPY INTO 's3://backup' FROM python_tests_foods  FILE_FORMAT=(TYPE=csv "
+        "ESCAPE=None NULL_IF=('null', 'Null') RECORD_DELIMITER='|')  ENCRYPTION="
+        "(KMS_KEY_ID='1234abcd-12ab-34cd-56ef-1234567890ab' TYPE='AWS_SSE_KMS')"
     )
     assert (
         sql_compiler(copy_stmt_2)
@@ -78,13 +107,6 @@ def test_copy_into_location(engine_testaccount, sql_compiler):
         "WHERE python_tests_foods.id = 1)  FILE_FORMAT=(TYPE=json COMPRESSION='zstd' "
         "FILE_EXTENSION='json')  CREDENTIALS=(AWS_ROLE='some_iam_role') "
         "ENCRYPTION=(TYPE='AWS_SSE_S3')"
-    )
-    copy_stmt_3 = CopyIntoStorage(
-        from_=food_items,
-        into=AzureContainer.from_uri(
-            "azure://snowflake.blob.core.windows.net/snowpile/backup"
-        ).credentials("token"),
-        formatter=PARQUETFormatter().snappy_compression(True),
     )
     assert (
         sql_compiler(copy_stmt_3)
@@ -102,16 +124,6 @@ def test_copy_into_location(engine_testaccount, sql_compiler):
         "CREDENTIALS=(AZURE_SAS_TOKEN='token')"
     )
 
-    copy_stmt_4 = CopyIntoStorage(
-        from_=AWSBucket.from_uri("s3://backup").encryption_aws_sse_kms(
-            "1234abcd-12ab-34cd-56ef-1234567890ab"
-        ),
-        into=food_items,
-        formatter=CSVFormatter()
-        .record_delimiter("|")
-        .escape(None)
-        .null_if(["null", "Null"]),
-    )
     assert (
         sql_compiler(copy_stmt_4)
         == "COPY INTO python_tests_foods FROM 's3://backup'  FILE_FORMAT=(TYPE=csv "
@@ -183,6 +195,16 @@ def test_copy_into_location(engine_testaccount, sql_compiler):
     assert (
         sql_compiler(copy_stmt_10) == "COPY INTO @stage_name FROM python_tests_foods   "
     )
+
+
+@pytest.mark.multicloud
+def test_copy_into_location_execute(engine_testaccount):
+    food_items = _food_items_table()
+    copy_stmt_1, copy_stmt_2, copy_stmt_3, copy_stmt_4 = _copy_into_location_statements(
+        food_items
+    )
+    copy_stmt_3.maxfilesize(50000000)
+    food_items.metadata.create_all(engine_testaccount)
 
     # NOTE Other than expect known compiled text, submit it to RegressionTests environment and expect them to fail, but
     # because of the right reasons

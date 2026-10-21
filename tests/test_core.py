@@ -9,7 +9,7 @@ import string
 import textwrap
 import uuid
 from datetime import date, datetime
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 import pytz
@@ -109,6 +109,7 @@ def verify_engine_connection(engine):
         assert results is not None
 
 
+@pytest.mark.integ
 def test_connect_args():
     """
     Tests connect string
@@ -129,6 +130,7 @@ def test_connect_args():
         engine.dispose()
 
 
+@pytest.mark.integ
 def test_connect_args_password():
     """The explicit ``user:password@`` connect string.
 
@@ -172,6 +174,7 @@ def test_connect_args_password():
         engine.dispose()
 
 
+@pytest.mark.integ
 def test_application_name_parameters():
     """The dialect stamps the Snowflake application-name parameters on every connection."""
     engine = get_engine(url_factory())
@@ -199,6 +202,7 @@ def test_get_server_version_info(engine_testaccount):
     )
 
 
+@pytest.mark.integ
 def test_boolean_query_argument_parsing():
     engine = get_engine(url_factory(validate_default_parameters=True))
     try:
@@ -210,6 +214,7 @@ def test_boolean_query_argument_parsing():
         engine.dispose()
 
 
+@pytest.mark.integ
 def test_query_tag_appears_in_query_history():
     """
     Tests that query_tag actually appears in Snowflake's query history.
@@ -248,6 +253,7 @@ def test_query_tag_appears_in_query_history():
         engine.dispose()
 
 
+@pytest.mark.integ
 def test_query_tag_per_query():
     """
     Tests setting query_tag dynamically per query or per set of SQL actions
@@ -1198,10 +1204,7 @@ def test_create_table_with_schema(engine_testaccount, db_parameters):
             conn.execute(text(f'DROP SCHEMA IF EXISTS "{new_schema}"'))
 
 
-@pytest.mark.skipif(
-    os.getenv("SNOWFLAKE_GCP") is not None,
-    reason="PUT and GET is not supported for GCP yet",
-)
+@pytest.mark.multicloud
 def test_copy(engine_testaccount):
     """
     COPY must be in a transaction
@@ -1709,16 +1712,8 @@ def test_autoincrement(engine_testaccount):
         metadata.drop_all(engine_testaccount)
 
 
-def test_for_exception_in_query_all_columns(engine_testaccount, db_parameters):
+def test_for_exception_in_query_all_columns():
     """This tests whether a too many column error actually triggers the more granular table version"""
-    # Set up a single table
-    metadata = MetaData()
-
-    metadata.create_all(engine_testaccount)
-    inspector = inspect(engine_testaccount)
-    # Do test
-    connection = inspector.bind.connect()
-
     exception_instance = DBAPIError.instance(
         """
         SELECT /* sqlalchemy:_get_schema_columns */
@@ -1748,16 +1743,8 @@ def test_for_exception_in_query_all_columns(engine_testaccount, db_parameters):
         ismulti=None,
     )
 
-    def mock_helper(connection, schema, **args):
-        raise exception_instance
-
-    with patch.object(engine_testaccount, "connect") as conn:
-        conn.return_value = connection
-        with patch.object(connection, "execute", side_effect=mock_helper):
-            assert inspector.dialect._query_all_columns_info(connection, "DB.X") is None
-
-    # Clean up
-    metadata.drop_all(engine_testaccount)
+    connection = Mock(execute=Mock(side_effect=exception_instance))
+    assert SnowflakeDialect()._query_all_columns_info(connection, "DB.X") is None
 
 
 def test_too_many_columns_detection(engine_testaccount, db_parameters):
@@ -2172,6 +2159,7 @@ def test_reflect_schema_none_does_not_crash(engine_testaccount):
 
 
 @pytest.mark.pandas
+@pytest.mark.integ
 def test_snowflake_sqlalchemy_as_valid_client_type():
     """The dialect stamps CLIENT_APP_ID with the SQLAlchemy application name
     by default (via ``internal_application_name``) and callers can override

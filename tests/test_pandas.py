@@ -7,6 +7,7 @@ import random
 import string
 import textwrap
 import uuid
+from unittest.mock import Mock
 
 import numpy as np
 import pytest
@@ -320,31 +321,23 @@ def test_pandas_make_pd_writer(
             conn.exec_driver_sql(f"DROP TABLE IF EXISTS {table_name}")
 
 
-def test_pandas_invalid_make_pd_writer(engine_testaccount):
-    table_name = f"test_table_{uuid.uuid4().hex}".upper()
+def test_pandas_invalid_make_pd_writer():
+    # The connector rejects these arguments as soon as pandas calls the writer,
+    # before anything is sent to Snowflake.
     test_df = pd.DataFrame({"a": range(10), "b": range(10, 20)})
+    writer_args = (Mock(), Mock(), ["a", "b"], iter([]))
 
     with pytest.raises(
         ProgrammingError,
         match="conn cannot be passed to make_pd_writer; it is derived automatically.",
     ):
-        test_df.to_sql(
-            table_name,
-            engine_testaccount,
-            index=False,
-            method=make_pd_writer(conn=engine_testaccount),
-        )
+        make_pd_writer(conn=Mock())(*writer_args)
 
     with pytest.raises(
         ProgrammingError,
         match="df cannot be passed to pd_writer; it is derived automatically.",
     ):
-        test_df.to_sql(
-            table_name,
-            engine_testaccount,
-            index=False,
-            method=make_pd_writer(df=test_df),
-        )
+        make_pd_writer(df=test_df)(*writer_args)
 
 
 def test_percent_signs(engine_testaccount):

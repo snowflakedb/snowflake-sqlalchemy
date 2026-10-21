@@ -152,6 +152,7 @@ class TestDECFLOATStringConversion:
         assert str(DECFLOAT()) == "DECFLOAT"
 
 
+@pytest.mark.integ
 class TestDECFLOATIntegration:
     """Integration tests for DECFLOAT type against real Snowflake database."""
 

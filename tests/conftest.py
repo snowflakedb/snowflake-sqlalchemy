@@ -13,6 +13,7 @@ import urllib.error
 import urllib.request
 import uuid
 from logging import getLogger
+from pathlib import Path
 from typing import Literal
 
 import pytest
@@ -506,8 +507,8 @@ def engine_testaccount_with_qmark(request):
     snowflake.connector.paramstyle = "pyformat"
 
 
-@pytest.fixture(scope="session", autouse=True)
-def init_test_schema(request, db_parameters):
+@pytest.fixture(scope="session")
+def init_test_schema(request):
     # Fetch parameters fresh (rather than reusing the session-scoped
     # ``db_parameters``) so the raw-connector connection uses a currently-valid
     # WIF token.  The teardown runs at the end of a long session, well after the
@@ -524,6 +525,58 @@ def init_test_schema(request, db_parameters):
             con1.cursor().execute(f"DROP SCHEMA IF EXISTS {TEST_SCHEMA}")
 
     request.addfinalizer(fin)
+
+
+@pytest.fixture(autouse=True)
+def _test_schema_for_integration(request):
+    # Create the session schema lazily, only once an integration test runs, so
+    # unit tests need neither credentials nor a Snowflake round-trip.
+    if request.node.get_closest_marker("integ"):
+        request.getfixturevalue("init_test_schema")
+
+
+# Fixtures that need a live Snowflake account (directly or via
+# ``get_db_parameters``).  Tests requesting any of them are marked ``integ``.
+CONNECTION_FIXTURES = frozenset(
+    {
+        "db_parameters",
+        "init_test_schema",
+        "engine_testaccount",
+        "engine_testaccount_case_sensitive",
+        "engine_testaccount_with_numpy",
+        "engine_testaccount_with_qmark",
+        "external_volume",
+        "external_stage",
+        "default_warehouse",
+        "base_location",
+    }
+)
+# Directories whose tests always run against a live account.
+INTEGRATION_DIRS = frozenset({"sqlalchemy_test_suite", "alembic_integration"})
+
+
+def _is_integration(fixturenames, path, has_integ_marker: bool) -> bool:
+    """Whether a test needs a live Snowflake connection."""
+    if has_integ_marker or CONNECTION_FIXTURES.intersection(fixturenames):
+        return True
+    return bool(INTEGRATION_DIRS.intersection(Path(path).parts))
+
+
+@pytest.hookimpl(tryfirst=True)  # before ``-m`` deselection reads the markers
+def pytest_collection_modifyitems(config, items):
+    """Mark every test ``integ`` or ``unit`` so the two can be run separately.
+
+    Tests that connect inside their body (``get_engine``/``url_factory``)
+    rather than through a fixture must be marked ``@pytest.mark.integ``
+    explicitly.
+    """
+    for item in items:
+        integ = _is_integration(
+            getattr(item, "fixturenames", ()),
+            item.path,
+            item.get_closest_marker("integ") is not None,
+        )
+        item.add_marker(pytest.mark.integ if integ else pytest.mark.unit)
 
 
 @pytest.fixture(scope="session")
