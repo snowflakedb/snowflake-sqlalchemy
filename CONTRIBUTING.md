@@ -102,6 +102,22 @@ hatch run test-dialect-compatibility
 
 The compliance tests live in `tests/sqlalchemy_test_suite/` and are intentionally excluded from the default run — see [`tests/sqlalchemy_test_suite/README.md`](tests/sqlalchemy_test_suite/README.md) for the reason.
 
+### SQLAlchemy 2.0 and 2.1
+
+The dialect supports `SQLAlchemy>=2.0.44,<2.2`. The `default` env tests the latest line (`>=2.1.0rc2,<2.2`; the RC-inclusive floor covers package indexes that do not yet mirror stable 2.1). The `sa20` env is the same env pinned to the 2.0 line (`>=2.0.44,<2.1`), for backward compatibility:
+
+```bash
+hatch run check-sa-version                  # latest line
+hatch run sa20:check-sa-version             # 2.0 line
+hatch run sa20:test-dialect
+hatch run sa20:test-dialect-compatibility
+hatch run sa20:test-dialect-async           # any default script works in sa20
+```
+
+The test suites need a live Snowflake account (`tests/parameters.py`). If an existing env still reports SQLAlchemy 2.0 after pulling, run `hatch env prune`.
+
+GitHub Actions cloud jobs run the `default` env (latest line). The 2.0 line runs on demand locally, and in Jenkins on every `main` build (`sa20` stages in the Python 3.11 job). The wheel import check in `build_test.yml` installs both lines.
+
 ### Alembic integration tests
 
 ```bash

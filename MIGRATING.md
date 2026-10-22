@@ -378,8 +378,16 @@ purely additive — existing sync code is unaffected.
 There is **no separate `+driver` suffix**: async uses the same `snowflake://` URL as
 the sync dialect, and SQLAlchemy selects the async dialect when you call
 `create_async_engine()`. It needs [`greenlet`](https://pypi.org/project/greenlet/),
-which SQLAlchemy installs automatically only on some platforms; without it
-`create_async_engine()` raises an `ImportError` with install instructions.
+so install the `[async]` extra: `pip install "snowflake-sqlalchemy[async]"`.
+Without it, async engine creation raises an `ImportError` with install
+instructions.
+
+> **Upgrading an async app from 2.0.0 to 2.1:** snowflake-sqlalchemy 2.0.0 capped
+> SQLAlchemy below 2.1, where greenlet still came by default on common
+> platforms. snowflake-sqlalchemy 2.1 allows SQLAlchemy 2.1, which no longer
+> installs greenlet, so an upgrade that does not add the `[async]` extra
+> installs cleanly but fails at async engine creation. Switch your requirement to
+> `snowflake-sqlalchemy[async]`.
 
 ```python
 from sqlalchemy.ext.asyncio import create_async_engine

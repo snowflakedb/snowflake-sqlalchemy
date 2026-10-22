@@ -14,13 +14,14 @@ from sqlalchemy.sql.sqltypes import (
     DATETIME,
     DECIMAL,
     FLOAT,
-    INTEGER,
+    INTEGER,  # noqa: F401  re-exported via star-import / inspect tests
     REAL,
     SMALLINT,
     TIME,
     TIMESTAMP,
     UUID,
     VARCHAR,
+    Integer,
     NullType,
 )
 from sqlalchemy.sql.type_api import TypeEngine
@@ -56,8 +57,8 @@ ischema_names = {
     "DOUBLE": DOUBLE,
     "FIXED": DECIMAL,
     "FLOAT": FLOAT,  # Snowflake FLOAT datatype doesn't have parameters
-    "INT": INTEGER,
-    "INTEGER": INTEGER,
+    "INT": Integer,
+    "INTEGER": Integer,
     "NUMBER": _CUSTOM_DECIMAL,
     "REAL": REAL,
     "BYTEINT": SMALLINT,

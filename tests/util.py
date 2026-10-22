@@ -19,12 +19,12 @@ from sqlalchemy.types import (
     DATETIME,
     DECIMAL,
     FLOAT,
-    INTEGER,
     REAL,
     SMALLINT,
     TIME,
     TIMESTAMP,
     VARCHAR,
+    Integer,
 )
 
 from snowflake.sqlalchemy.custom_types import (
@@ -56,8 +56,8 @@ ischema_names_baseline = {
     "DOUBLE": FLOAT,
     "FIXED": DECIMAL,
     "FLOAT": FLOAT,
-    "INT": INTEGER,
-    "INTEGER": INTEGER,
+    "INT": Integer,
+    "INTEGER": Integer,
     "NUMBER": DECIMAL,
     # 'OBJECT': ?
     "REAL": REAL,

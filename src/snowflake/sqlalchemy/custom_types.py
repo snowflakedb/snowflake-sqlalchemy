@@ -647,4 +647,9 @@ class _CUSTOM_DECIMAL(SnowflakeType, sqltypes.DECIMAL):
 
     @util.memoized_property
     def _type_affinity(self) -> type:
-        return sqltypes.INTEGER if self.scale == 0 else sqltypes.DECIMAL
+        """Use generic ``Integer`` affinity for scale-0 numbers.
+
+        SA 2.1's TableViaSelectTest compares ``_type_affinity`` to Integer;
+        INTEGER is a distinct class there (an alias of Integer on 2.0).
+        """
+        return sqltypes.Integer if self.scale == 0 else sqltypes.DECIMAL

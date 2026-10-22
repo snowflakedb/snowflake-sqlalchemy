@@ -66,6 +66,29 @@ class TestSnowflakeCompiler(AssertsCompiledSQL):
             dialect="snowflake",
         )
 
+    def test_window_rows_between_uses_integer_literals(self):
+        """Snowflake requires numeric ROWS BETWEEN bounds as literals.
+
+        Mirrors SA 2.1 WindowFunctionTest (MSSQL-style ``literal_execute``).
+        """
+        some_table = table(
+            "some_table", column("col1", Integer), column("col2", Integer)
+        )
+        statement = select(
+            func.max(some_table.c.col2).over(
+                order_by=[some_table.c.col1],
+                rows=(5, 20),
+            )
+        )
+        self.assert_compile(
+            statement,
+            "SELECT max(some_table.col2) OVER (ORDER BY some_table.col1 "
+            "ROWS BETWEEN 5 FOLLOWING AND 20 FOLLOWING) AS anon_1 "
+            "FROM some_table",
+            dialect="snowflake",
+            render_postcompile=True,
+        )
+
     def test_collate_order_by(self):
         # Snowflake requires the collation spec as a single-quoted string
         # literal, not a double-quoted identifier (SNOW-629086).

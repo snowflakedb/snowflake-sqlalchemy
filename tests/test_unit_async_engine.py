@@ -5,11 +5,20 @@
 import re
 import sys
 import types
+from importlib.util import find_spec
 from unittest import mock
 
 import pytest
 
+# On SQLAlchemy 2.1 importing sqlalchemy.ext.asyncio itself needs greenlet, so
+# these tests only run where the [async] extra is installed.
+requires_greenlet = pytest.mark.skipif(
+    find_spec("greenlet") is None,
+    reason="needs greenlet: install snowflake-sqlalchemy[async]",
+)
 
+
+@requires_greenlet
 class TestCreateSnowflakeAsyncEngine:
     def test_encodes_case_sensitive_schema(self):
         from snowflake.sqlalchemy.util import create_snowflake_async_engine
@@ -45,6 +54,7 @@ class TestAsyncRuntimeRequirements:
     macOS); without it SQLAlchemy only fails on the first connect with a
     generic ValueError, so the dialect checks for it up front."""
 
+    @requires_greenlet
     def test_create_async_engine_without_greenlet_raises_hint(self, monkeypatch):
         from sqlalchemy.ext.asyncio import create_async_engine
 
@@ -59,6 +69,7 @@ class TestAsyncRuntimeRequirements:
         with pytest.raises(ImportError, match="greenlet"):
             SnowflakeDialect_async.import_dbapi()
 
+    @requires_greenlet
     def test_create_async_engine_with_greenlet_selects_async_dialect(self, monkeypatch):
         from sqlalchemy.ext.asyncio import create_async_engine
 
@@ -69,3 +80,12 @@ class TestAsyncRuntimeRequirements:
         monkeypatch.setitem(sys.modules, "greenlet", types.ModuleType("greenlet"))
         engine = create_async_engine("snowflake://user:pass@account/database")
         assert isinstance(engine.sync_engine.dialect, SnowflakeDialect_async)
+
+    def test_create_snowflake_async_engine_without_greenlet_raises_hint(
+        self, monkeypatch
+    ):
+        from snowflake.sqlalchemy.util import create_snowflake_async_engine
+
+        monkeypatch.setitem(sys.modules, "greenlet", None)
+        with pytest.raises(ImportError, match=re.escape("snowflake-sqlalchemy[async]")):
+            create_snowflake_async_engine("snowflake://user:pass@account/db")

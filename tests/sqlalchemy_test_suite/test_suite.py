@@ -2,7 +2,7 @@
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
 import pytest
-from sqlalchemy import Integer, testing
+from sqlalchemy import Integer, func, select, testing
 from sqlalchemy import types as sql_types
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.schema import Column, Sequence, Table
@@ -20,6 +20,11 @@ from sqlalchemy.testing.suite import LikeFunctionsTest as _LikeFunctionsTest
 from sqlalchemy.testing.suite import LongNameBlowoutTest as _LongNameBlowoutTest
 from sqlalchemy.testing.suite import SimpleUpdateDeleteTest as _SimpleUpdateDeleteTest
 from sqlalchemy.testing.suite import TrueDivTest as _TrueDivTest
+
+try:
+    from sqlalchemy.testing.suite import WindowFunctionTest as _WindowFunctionTest
+except ImportError:  # SQLAlchemy 2.0
+    _WindowFunctionTest = None
 
 # 1. Unsupported by snowflake db
 
@@ -86,9 +91,10 @@ class TrueDivTest(_TrueDivTest):
 
     SQLAlchemy 2.1 added wide-scale NUMERIC division cases, later backported
     to 2.0.x (present in 2.0.55, absent in 2.0.44), so match by case id, not
-    by version. Snowflake before 10.39 rejects them ("Invalid intermediate
-    datatype: NUMBER(61,40)"); 10.39+ accepts them. Non-strict xfail limited
-    to that rejection until every test deployment is on 10.39+.
+    by version. Snowflake 10.38 rejects them ("Invalid intermediate datatype:
+    NUMBER(61,40)"); 10.39+ accepts them. Non-strict xfail limited to that
+    rejection until every test deployment is on 10.39+; see
+    tests/test_numeric_division_limits.py.
     """
 
     _UNSUPPORTED_CASES = ("numeric_many_decimals", "numeric_tiny_divisor")
@@ -103,11 +109,42 @@ class TrueDivTest(_TrueDivTest):
                 pytest.mark.xfail(
                     raises=ProgrammingError,
                     strict=False,
-                    reason="Snowflake before 10.39 rejects wide-scale NUMBER "
-                    "division (intermediate NUMBER(61,40)); 10.39+ accepts it",
+                    reason="Snowflake 10.38 rejects wide-scale NUMBER division "
+                    "(intermediate NUMBER(61,40)); 10.39+ accepts it",
                 )
             )
 
+
+if _WindowFunctionTest is not None:
+
+    class WindowFunctionTest(_WindowFunctionTest):
+        def test_window_rows_between_w_caching(self, connection):
+            """Compare window values in col1 order.
+
+            Upstream omits ORDER BY on the SELECT, and Snowflake does not
+            guarantee row order.
+            """
+            some_table = self.tables.some_table
+            for _ in range(3):
+                for rows, expected in [
+                    (
+                        (5, 20),
+                        list(range(105, 245, 5)) + ([245] * 16) + [None] * 5,
+                    ),
+                    (
+                        (20, 30),
+                        list(range(155, 245, 5)) + ([245] * 11) + [None] * 20,
+                    ),
+                ]:
+                    result_rows = connection.execute(
+                        select(
+                            func.max(some_table.c.col2).over(
+                                order_by=[some_table.c.col1],
+                                rows=rows,
+                            )
+                        ).order_by(some_table.c.col1)
+                    ).all()
+                    eq_(result_rows, [(value,) for value in expected])
 
 # 2. Patched Tests
 

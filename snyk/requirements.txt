@@ -1,2 +1,2 @@
-SQLAlchemy>=2.0.44,<2.1
-snowflake-connector-python>=5.0.0
+SQLAlchemy>=2.0.44,<2.2
+snowflake-connector-python>=5.1.0,<6.0

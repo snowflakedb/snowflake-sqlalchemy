@@ -8,6 +8,8 @@
 
 Snowflake SQLAlchemy runs on the top of the Snowflake Connector for Python as a [dialect](http://docs.sqlalchemy.org/en/latest/dialects/) to bridge a Snowflake database and SQLAlchemy applications.
 
+> **v2.1.0 — Async is opt-in:** SQLAlchemy 2.1 no longer installs `greenlet`, so the base install is sync-only. Async applications must install the extra, `pip install "snowflake-sqlalchemy[async]"`; without it the install succeeds but `create_async_engine()` raises an `ImportError`. Install the extra on SQLAlchemy 2.0 too: it installs `greenlet` only on some platforms (not on Apple Silicon macOS). See [Async Support](#async-support).
+
 > **v1.11.0 — Sensitive connection parameters:** We curated a set of connector parameters (`host`, `protocol`, `token_file_path`, `private_key_file`, `ocsp_response_cache_filename`, `connection_diag_log_path`, `crl_cache_dir`, `unsafe_file_write`, `unsafe_skip_file_permissions_check`) that can no longer be supplied through the URL query string — pass them via `connect_args` in `create_engine()` instead. See [Sensitive connection parameters](#sensitive-connection-parameters). The temporary `SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS` / `legacy_url_params` opt-out that 1.11.x offered was **removed in 2.x** and no longer has any effect.
 
 ---
@@ -135,11 +137,17 @@ If you are upgrading from 1.x, see the [1.x → 2.x migration guide](MIGRATING.m
 Snowflake SQLAlchemy supports SQLAlchemy's [`asyncio` extension](https://docs.sqlalchemy.org/en/20/orm/extensions/asyncio.html),
 letting you use `AsyncEngine` / `AsyncSession` for non-blocking database access.
 
-Async support is part of the standard install:
+Async support is opt-in: install the `[async]` extra, which pulls
+`SQLAlchemy[asyncio]` and with it [`greenlet`](https://pypi.org/project/greenlet/).
+The base install is sync-only.
 
 ```shell
-pip install snowflake-sqlalchemy
+pip install "snowflake-sqlalchemy[async]"
 ```
+
+SQLAlchemy 2.1 no longer installs greenlet by default. SQLAlchemy 2.0 does so only
+on some platforms (e.g. `x86_64`, `aarch64`, `amd64`, but not Apple Silicon macOS,
+which reports `arm64`), so install the extra on 2.0 too rather than relying on it.
 
 **Requirements:**
 
@@ -147,17 +155,12 @@ pip install snowflake-sqlalchemy
   Python 3.10 support, which pip enforces by refusing to resolve the connector
   at all on 3.10).
 * `snowflake-connector-python` 5.x (installed as a base dependency).
-* SQLAlchemy 2.0.44+ (< 2.1; see [DESCRIPTION.md](DESCRIPTION.md) for why the ceiling is pinned).
-* [`greenlet`](https://pypi.org/project/greenlet/), which SQLAlchemy's asyncio
-  extension relies on. SQLAlchemy installs it automatically only on some
-  platforms (e.g. `x86_64`, `aarch64`, `amd64`); elsewhere — notably Apple
-  Silicon macOS, which reports `arm64` — install it explicitly. Without it,
-  `create_async_engine()` raises an `ImportError` with the command below. Keep
-  the same SQLAlchemy range so pip does not move you onto 2.1:
-
-  ```shell
-  pip install "sqlalchemy[asyncio]>=2.0.44,<2.1"
-  ```
+* SQLAlchemy 2.0.44 through 2.1.x (`SQLAlchemy>=2.0.44,<2.2`).
+* `greenlet`, via the `[async]` extra. Without it, async engine creation raises an
+  `ImportError`: `create_snowflake_async_engine()` names
+  `snowflake-sqlalchemy[async]`; on SQLAlchemy 2.1, importing
+  `sqlalchemy.ext.asyncio` itself fails first with SQLAlchemy's own
+  `sqlalchemy[asyncio]` hint. Either install fixes it.
 
 ### Quick Start
 
@@ -210,7 +213,7 @@ engine = create_snowflake_async_engine(
 * **DBAPI shim over `snowflake.connector.aio`.** Internally, the dialect wraps
   the connector's native async driver behind a synchronous-looking PEP-249
   facade, bridging blocking calls onto the running event loop via greenlets
-  (`await_only`). This is the same strategy used by SQLAlchemy's own
+  (`await_`). This is the same strategy used by SQLAlchemy's own
   `aiomysql`/`asyncmy`/`aiosqlite` dialects.
 
 ### Usage Notes
@@ -228,11 +231,12 @@ Snowflake-specific, but worth restating here:
 * **Dispose engines across event loops.** An `AsyncEngine` (and its pool)
   should not be reused across unrelated event loops without
   `await engine.dispose()` first.
-* **`?async_fallback=true`** on the URL switches the pool implementation to
-  `FallbackAsyncAdaptedQueuePool` instead of the default
-  `AsyncAdaptedQueuePool` — only needed for the same edge cases SQLAlchemy
-  documents for other async dialects (a real running event loop isn't always
-  guaranteed at pool-checkout time).
+* **`?async_fallback=true`** on the URL is SQLAlchemy **2.0 only**. It switches
+  the pool to `FallbackAsyncAdaptedQueuePool` instead of `AsyncAdaptedQueuePool`
+  for the edge cases SQLAlchemy documents for other async dialects (a real
+  running event loop isn't always guaranteed at pool-checkout time). SQLAlchemy
+  2.1 removed fallback mode; the dialect raises `NotImplementedError` if the
+  flag is set.
 
 ### Known Limitations
 

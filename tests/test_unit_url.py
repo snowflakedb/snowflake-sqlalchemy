@@ -59,6 +59,27 @@ def test_url():
             account="testaccount",
             user="admin",
             password="test",
+            database='"a/b/c"',
+            schema='"d/e/f"',
+        )
+        == "snowflake://admin:test@testaccount/%22a%2Fb%2Fc%22/%22d%2Fe%2Ff%22"
+    )
+
+    assert (
+        URL(
+            account="testaccount",
+            user="admin",
+            password="test",
+            database='"my db"',
+        )
+        == "snowflake://admin:test@testaccount/%22my%20db%22"
+    )
+
+    assert (
+        URL(
+            account="testaccount",
+            user="admin",
+            password="test",
             database="testdb",
             schema="testschema",
             warehouse="testwh",

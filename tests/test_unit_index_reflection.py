@@ -64,6 +64,7 @@ class TestParseIndexRows:
         parsed = dialect._parse_index_rows(_show_indexes_result([_PLAIN_INDEX_ROW]))
         (index,) = parsed["my_table"]
         assert index["include_columns"] == []
+        assert index["dialect_options"]["snowflake_include"] == []
 
     def test_columns_unique_flag_and_include_columns_normalized(self, dialect):
         parsed = dialect._parse_index_rows(_show_indexes_result([_UNIQUE_INDEX_ROW]))
@@ -71,6 +72,8 @@ class TestParseIndexRows:
         assert index["unique"] is True
         assert index["column_names"] == ["val"]
         assert index["include_columns"] == ["other"]
+        # SA 2.0 reads include_columns; SA 2.1 prefers dialect_options.
+        assert index["dialect_options"]["snowflake_include"] == ["other"]
 
     def test_pk_sentinel_is_filtered(self, dialect):
         parsed = dialect._parse_index_rows(

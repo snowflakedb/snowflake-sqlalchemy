@@ -9,6 +9,13 @@ Source code is also available at:
 
 # Unreleased Notes
 
+- Support SQLAlchemy 2.0.44 through 2.1.x (`SQLAlchemy>=2.0.44,<2.2`).
+  - The dialect feature-detects SQLAlchemy 2.1 API changes at import time; no user action is needed beyond upgrading.
+  - URL database/schema slots now follow Snowflake quoted-identifier rules on both 2.0 and 2.1: slashes inside `"..."` are part of the name, not a delimiter.
+  - Reflected `NUMBER(..., 0)` / `INTEGER` columns report SQLAlchemy's generic `Integer` type affinity.
+  - Window `ROWS`/`RANGE` bounds are compiled as integer literals (no bind-parameter conflicts).
+- **Async is opt-in:** install `snowflake-sqlalchemy[async]` (or `sqlalchemy[asyncio]`) for `create_async_engine()`. SQLAlchemy 2.1 no longer bundles `greenlet`; without the extra the install succeeds but async engine creation raises an `ImportError` with the install command.
+
 # Release Notes
 
 - v2.0.0 (Oct 19, 2026)

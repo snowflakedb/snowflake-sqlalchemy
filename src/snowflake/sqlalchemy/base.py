@@ -82,6 +82,20 @@ from .util import (
     split_identifier_parts,
 )
 
+
+def _orm_select_compile_state_base() -> Any:
+    """Return the ORM select compile-state base class.
+
+    SA 2.1 privatised ``ORMSelectCompileState`` as ``_ORMSelectCompileState``.
+    """
+    private = getattr(context, "_ORMSelectCompileState", None)
+    if private is not None:
+        return private
+    return context.ORMSelectCompileState  # type: ignore[attr-defined,unused-ignore]
+
+
+_ORMSelectCompileStateBase: Any = _orm_select_compile_state_base()
+
 RESERVED_WORDS = frozenset(
     [
         "ALL",  # ANSI Reserved words
@@ -283,9 +297,10 @@ class SnowflakeSelectState(SelectState):
 
 # handle Snowflake BCR bcr-1057
 @sql.base.CompileState.plugin_for("orm", "select")
-class SnowflakeORMSelectCompileState(context.ORMSelectCompileState):
+class SnowflakeORMSelectCompileState(_ORMSelectCompileStateBase):
     # Set by _init_global_attributes (always called on SA 2.x).
     _is_snowflake = False
+    from_clauses: Any
 
     def _init_global_attributes(self, statement: Any, compiler: Any, **kw: Any) -> None:
         """SA 2.x per-compilation setup hook for ORMSelectCompileState.
@@ -461,7 +476,7 @@ class SnowflakeORMSelectCompileState(context.ORMSelectCompileState):
             left_clause = self.from_clauses[replace_from_obj_index]
 
             self.from_clauses = (
-                self.from_clauses[:replace_from_obj_index]  # type: ignore[operator]
+                self.from_clauses[:replace_from_obj_index]
                 + [
                     _Snowflake_ORMJoin(  # handle Snowflake BCR bcr-1057
                         left_clause,
@@ -485,7 +500,7 @@ class SnowflakeORMSelectCompileState(context.ORMSelectCompileState):
             else:
                 left_clause = left
 
-            self.from_clauses = self.from_clauses + [  # type: ignore[operator]
+            self.from_clauses = self.from_clauses + [
                 _Snowflake_ORMJoin(  # handle Snowflake BCR bcr-1057
                     left_clause,
                     r_info,
@@ -752,6 +767,28 @@ class SnowflakeCompiler(compiler.SQLCompiler):
 
     def visit_sequence(self, sequence: Sequence, **kw: Any) -> str:
         return self.dialect.identifier_preparer.format_sequence(sequence) + ".nextval"
+
+    def visit_frame_clause(self, frameclause: Any, **kw: Any) -> str:
+        """Render ROWS/RANGE bounds as inline integer literals (SQLAlchemy 2.1).
+
+        Snowflake's pyformat ``%(name)s`` collides with ``%`` modulo, and the
+        service requires literals here.
+        """
+        kw["literal_execute"] = True
+        return super().visit_frame_clause(frameclause, **kw)  # type: ignore[misc,unused-ignore]
+
+    def _format_frame_clause(self, range_: Any, **kw: Any) -> str:
+        """Render ROWS/RANGE bounds as inline integer literals (SQLAlchemy 2.0).
+
+        SQLAlchemy 2.0 compiles frames here; 2.1 uses ``visit_frame_clause``.
+        """
+        kw["literal_execute"] = True
+        format_frame = getattr(compiler.SQLCompiler, "_format_frame_clause", None)
+        if format_frame is None:
+            raise NotImplementedError(
+                "Window frame compilation requires SQLAlchemy 2.0 _format_frame_clause"
+            )
+        return format_frame(self, range_, **kw)
 
     def visit_now_func(self, now: functions.GenericFunction, **kw: Any) -> str:
         return "CURRENT_TIMESTAMP"
@@ -1717,13 +1754,24 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
 
 class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
     def _render_string_type(
-        self, name: str, length: int | None, collation: str | None
+        self,
+        name: str,
+        length: int | None,
+        collation: str | None,
+        collation_schema: str | None = None,
+        identifier_preparer: Any = None,
+        **kw: Any,
     ) -> str:
         """Render a string type, emitting collation as a Snowflake literal.
 
         Snowflake renders column collation as a single-quoted string literal
         (e.g. ``VARCHAR(100) COLLATE 'en-ci'``); SQLAlchemy's default emits a
         double-quoted identifier, which is invalid Snowflake syntax.
+
+        ``collation_schema`` / ``identifier_preparer`` are accepted for
+        SQLAlchemy 2.1 compatibility (2.1 passes them positionally from
+        ``visit_VARCHAR``/``visit_CHAR``).  Snowflake has no schema-qualified
+        collations, so ``collation_schema`` is ignored.
         """
         text = name
         if length:

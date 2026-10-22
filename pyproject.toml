@@ -38,20 +38,24 @@ classifiers = [
   "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-  # <2.1: 2.1.0 removed sqlalchemy.orm.context.ORMSelectCompileState (and other
-  # attributes the dialect/async shim import at module load time), breaking
-  # import outright. Raise the ceiling only once base.py and the async shim are
-  # updated for the 2.1 API surface.
-  "SQLAlchemy>=2.0.44,<2.1",
+  # Dual support for SQLAlchemy 2.0.44 through 2.1.x. 2.1 privatised
+  # ORMSelectCompileState and dropped async_fallback; the dialect feature-detects
+  # those APIs. Ceiling is <2.2 so later 2.1.x (2.1.1, …) resolve. Hatch env
+  # ``default`` tests the latest line; ``sa20`` tests the 2.0 line.
+  "SQLAlchemy>=2.0.44,<2.2",
   # Connector 5.x is the baseline: it provides the async driver. It requires
   # Python >=3.11, which sets this project's requires-python floor.
-  "snowflake-connector-python>=5.0.0",
+  "snowflake-connector-python>=5.1.0,<6.0",
 ]
 
 [tool.hatch.version]
 path = "src/snowflake/sqlalchemy/version.py"
 
 [project.optional-dependencies]
+# SQLAlchemy 2.1 no longer installs greenlet by default. Connector 5.x (the
+# native aio driver) stays a base dependency; this extra only pulls
+# SQLAlchemy[asyncio] so create_async_engine() has greenlet on both 2.0 and 2.1.
+async = ["SQLAlchemy[asyncio]>=2.0.44,<2.2"]
 development = [
   "alembic",
   "mypy>=1.0,<2.0",
@@ -88,8 +92,12 @@ exclude = ["/.github"]
 packages = ["src/snowflake"]
 
 [tool.hatch.envs.default]
-extra-dependencies = ["SQLAlchemy>=2.0.44,<2.1"]
-features = ["development", "pandas"]
+# Latest SQLAlchemy line (<2.2). The explicit floor, rather than the base
+# dependency alone, makes hatch upgrade envs created on 2.0 instead of keeping
+# them, and stops an index without a final 2.1 from silently resolving 2.0.
+# ``sa20`` and ``testing`` inherit from this env via ``template``/matrix.
+extra-dependencies = ["SQLAlchemy>=2.1.0,<2.2"]
+features = ["development", "pandas", "async"]
 python = "3.11"
 installer = "uv"
 
@@ -98,15 +106,18 @@ COVERAGE_FILE = "coverage.xml"
 
 [tool.hatch.envs.default.scripts]
 check = "pre-commit run --all-files"
-test-dialect = "pytest -ra -vvv --tb=short --cov snowflake.sqlalchemy --cov-append --junitxml ./junit.xml --ignore=tests/sqlalchemy_test_suite tests/"
-test-dialect-compatibility = "pytest -ra -vvv --tb=short --cov snowflake.sqlalchemy --cov-append --junitxml ./junit.xml tests/sqlalchemy_test_suite"
-test-dialect-async-sync = "pytest -ra -vvv --tb=short --cov snowflake.sqlalchemy --cov-append --junitxml ./junit.xml tests_async/"
-test-dialect-aws = "pytest -m \"aws\" -ra -vvv --tb=short --cov snowflake.sqlalchemy --cov-append --junitxml ./junit.xml --ignore=tests/sqlalchemy_test_suite tests/"
+test-dialect = "pytest -ra -vvv --tb=short --ignore=tests/sqlalchemy_test_suite tests/"
+test-dialect-compatibility = "pytest -ra -vvv --tb=short tests/sqlalchemy_test_suite"
+test-dialect-async-sync = "pytest -ra -vvv --tb=short tests_async/"
+test-dialect-async = "SNOWFLAKE_ASYNC_TESTS=1 pytest -ra -vvv --tb=short tests_async/"
+test-dialect-compatibility-async = "SNOWFLAKE_ASYNC_TESTS=1 pytest -ra -vvv --tb=short tests/sqlalchemy_test_suite tests_async/"
+test-dialect-aws = "pytest -m \"aws\" -ra -vvv --tb=short --ignore=tests/sqlalchemy_test_suite tests/"
 # Selections by marker; ``unit``/``integ`` are auto-applied by tests/conftest.py.
 # ``-m`` replaces the addopts expression, so its exclusions are repeated here.
-test-unit = "pytest -ra -vvv --tb=short --cov snowflake.sqlalchemy --cov-append --junitxml ./junit.xml -m \"unit and not feature_max_lob_size and not aws and not requires_external_volume\" --ignore=tests/sqlalchemy_test_suite tests/"
-test-integration = "pytest -ra -vvv --tb=short --cov snowflake.sqlalchemy --cov-append --junitxml ./junit.xml -m \"integ and not feature_max_lob_size and not aws and not requires_external_volume\" --ignore=tests/sqlalchemy_test_suite tests/"
-test-multicloud = "pytest -ra -vvv --tb=short --cov snowflake.sqlalchemy --cov-append --junitxml ./junit.xml -m \"multicloud and not feature_max_lob_size and not aws and not requires_external_volume\" --ignore=tests/sqlalchemy_test_suite tests/"
+test-unit = "pytest -ra -vvv --tb=short -m \"unit and not feature_max_lob_size and not aws and not requires_external_volume\" --ignore=tests/sqlalchemy_test_suite tests/"
+test-integration = "pytest -ra -vvv --tb=short -m \"integ and not feature_max_lob_size and not aws and not requires_external_volume\" --ignore=tests/sqlalchemy_test_suite tests/"
+test-multicloud = "pytest -ra -vvv --tb=short -m \"multicloud and not feature_max_lob_size and not aws and not requires_external_volume\" --ignore=tests/sqlalchemy_test_suite tests/"
+check-sa-version = 'python -c "import sqlalchemy; print(sqlalchemy.__version__)"'
 gh-cache-sum = "python -VV | sha256sum | cut -d' ' -f1"
 check-import = "python -c 'import snowflake.sqlalchemy; print(snowflake.sqlalchemy.__version__)'"
 type-check = "mypy src/snowflake/sqlalchemy/"
@@ -117,29 +128,21 @@ ci-version-lag = "python -m ci.scripts.check_version_lag {args}"
 ci-parse-cves = "python -m ci.scripts.parse_cves {args}"
 ci-cve-tickets = "python -m ci.scripts.create_cve_tickets {args}"
 
-[tool.hatch.envs.async]
-# ``[asyncio]`` pulls in greenlet on every platform; plain SQLAlchemy skips it
-# on e.g. arm64 macOS, where the async dialect then refuses to start.
+# SQLAlchemy 2.0 line, for backward compatibility: same features, python and
+# scripts as ``default``; only the SA pin differs. On 2.0, SQLAlchemy[asyncio]
+# installs greenlet by default. Run on demand (``hatch run sa20:<script>``)
+# and by the daily Jenkins RT-SQLAlchemy job on Python 3.11.
+[tool.hatch.envs.sa20]
+template = "default"
 extra-dependencies = ["SQLAlchemy[asyncio]>=2.0.44,<2.1"]
-features = ["development", "pandas"]
-# Pinned to 3.12 so the async suite exercises a newer interpreter than the
-# default env; the connector is 5.x in every env now.
-python = "3.12"
-installer = "uv"
 
-[tool.hatch.envs.async.env-vars]
-COVERAGE_FILE = "coverage.xml"
-
-[tool.hatch.envs.async.scripts]
-test-dialect-async-sync = "pytest -ra -vvv --tb=short --cov snowflake.sqlalchemy --cov-append --junitxml ./junit.xml tests_async/ {args}"
-test-dialect-async = "SNOWFLAKE_ASYNC_TESTS=1 pytest -ra -vvv --tb=short --cov snowflake.sqlalchemy --cov-append --junitxml ./junit.xml tests_async/"
-test-dialect-compatibility-async = "SNOWFLAKE_ASYNC_TESTS=1 pytest -ra -vvv --tb=short tests/sqlalchemy_test_suite tests_async/"
-
-[[tool.hatch.envs.release.matrix]]
+# Multi-Python matrix for the daily Jenkins RT-SQLAlchemy jobs. Scripts inherit
+# from ``default`` except test-compatibility, which combines both suites.
+[[tool.hatch.envs.testing.matrix]]
 python = ["3.11", "3.12", "3.13", "3.14"]
-features = ["development", "pandas"]
+features = ["development", "pandas", "async"]
 
-[tool.hatch.envs.release.scripts]
+[tool.hatch.envs.testing.scripts]
 test-dialect = "pytest -ra -vvv --tb=short --ignore=tests/sqlalchemy_test_suite tests/"
 test-compatibility = "pytest -ra -vvv --tb=short tests/sqlalchemy_test_suite tests/"
 
