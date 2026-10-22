@@ -58,7 +58,7 @@ path = "src/snowflake/sqlalchemy/version.py"
 async = ["SQLAlchemy[asyncio]>=2.0.44,<2.2"]
 development = [
   "alembic",
-  "mypy>=1.0,<2.0",
+  "mypy>=1.0,<3.0",
   "pre-commit",
   "pytest",
   "setuptools",
