@@ -3,9 +3,12 @@
 #
 import urllib.parse
 
+from sqlalchemy.engine.url import URL as SAUrl
 from sqlalchemy.engine.url import make_url
 
 from snowflake.sqlalchemy import URL, base
+
+from .util import sa20_only, sa21_only
 
 
 def test_url():
@@ -251,3 +254,31 @@ def test_account_parsing_global_removes_only_external_id():
     dialect = base.dialect()
     opts = dialect.create_connect_args(url)[1]
     assert opts["account"] == "orgname-account"
+
+
+# SQLAlchemy 2.1 escapes the URL "database" portion on parse and stringify.
+# BCR only for code calling make_url / str(URL) directly; values reaching the
+# connector are covered in test_unit_connections_args.py.
+
+
+@sa20_only
+def test_make_url_database_sa20():
+    assert make_url("snowflake://u:p@acct/db%3Fname").database == "db%3Fname"
+
+
+@sa21_only
+def test_make_url_database_sa21():
+    assert make_url("snowflake://u:p@acct/db%3Fname").database == "db?name"
+
+
+@sa20_only
+def test_str_url_create_database_sa20():
+    url = SAUrl.create("snowflake", database='"a/b"/sch')
+    assert str(url) == 'snowflake:///"a/b"/sch'
+
+
+@sa21_only
+def test_str_url_create_database_sa21():
+    url = SAUrl.create("snowflake", database='"a/b"/sch')
+    assert str(url) == "snowflake:///%22a/b%22/sch"
+    assert make_url(str(url)).database == '"a/b"/sch'

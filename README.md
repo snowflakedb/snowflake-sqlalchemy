@@ -93,7 +93,9 @@ pip install --upgrade snowflake-sqlalchemy
 
 `pip` automatically installs all required modules, including the Snowflake Connector for Python.
 
-2.x requires Python 3.11+, SQLAlchemy `>=2.0.44,<2.1` and `snowflake-connector-python>=5.0.0`.
+2.x requires Python 3.11+. 2.1 requires SQLAlchemy `>=2.0.44,<2.2` and `snowflake-connector-python>=5.1.0,<6.0` (2.0.0 requires SQLAlchemy `>=2.0.44,<2.1` and `snowflake-connector-python>=5.0.0`).
+
+2.1 is a pre-release, so a plain `pip install` does not select it. Install it with `pip install "snowflake-sqlalchemy==2.1.0rc0"`, or allow pre-releases with `pip install --pre snowflake-sqlalchemy`. It is required for SQLAlchemy 2.1.
 If you are upgrading from 1.x, see the [1.x → 2.x migration guide](MIGRATING.md).
 
 ## Verifying Your Installation
@@ -323,6 +325,16 @@ engine = create_engine(URL(
 
 **Note**:
 After login, the initial database, schema, warehouse and role specified in the connection string can always be changed for the session.
+
+#### Special characters in database and schema names
+
+The URL path holds `database` or `database/schema`. A `/` outside double quotes separates the two; inside a quoted identifier such as `"a/b"` it is part of the name.
+
+- **`snowflake.sqlalchemy.URL` helper (recommended):** pass names as you would write them in SQL, e.g. `database='"my db"', schema='"a/b"'`. The helper percent-encodes them and the connector receives the original values on SQLAlchemy 2.0 and 2.1.
+- **`sqlalchemy.engine.URL.create(...)`:** on SQLAlchemy 2.1, values are used as passed, so `database='my%20db'` stays `my%20db`. On 2.0 the dialect cannot tell a `URL.create` value from a parsed URL string, so a name that contains `%` and no raw `"` is percent-decoded (`my%20db` becomes `my db`); `database='"a%20b"'` stays `"a%20b"` on both. To keep a literal `%` on 2.0, quote the name or write the `%` as `%25`.
+- **Hand-written URL strings:** percent-encode reserved characters in each name with `urllib.parse.quote(name, safe="")`, including the double quotes. SQLAlchemy 2.1 decodes the path itself; on 2.0 the dialect decodes each database/schema name that has no raw `"` (unquoted Snowflake identifiers cannot contain `%`, so such a `%` is always an encoding). A name containing a raw `"` is treated as unencoded on 2.0; the other name in the path is still decoded.
+
+Since 2.1 support was added, the helper encodes a space as `%20` rather than `+` (SQLAlchemy 2.1 does not decode `+` in the path). For URLs built with the helper, the resulting connection values are unchanged; only the generated URL string differs. Hand-written URLs are read differently than in 2.0.0: a `+` in the path stays `+` (it used to become a space), and an encoded `%2F` outside quotes separates the database from the schema. See the [migration guide](MIGRATING.md#9-url-database-and-schema-path-decoding-21).
 
 The following example calls the `create_engine` method with the user name `testuser1`, password `0123456`, account name `abc123`, database `testdb`, schema `public`, warehouse `testwh`, and role `myrole`:
 

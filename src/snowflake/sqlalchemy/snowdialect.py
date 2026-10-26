@@ -91,6 +91,7 @@ from .custom_types import (
     _CUSTOM_Date,
     _CUSTOM_DateTime,
     _CUSTOM_Float,
+    _CUSTOM_Interval,
     _CUSTOM_Time,
     _CUSTOM_Uuid,
 )
@@ -123,6 +124,7 @@ colspecs = {
     DateTime: _CUSTOM_DateTime,
     Time: _CUSTOM_Time,
     Float: _CUSTOM_Float,
+    sqltypes.Interval: _CUSTOM_Interval,
     sqltypes.Uuid: _CUSTOM_Uuid,
 }
 
@@ -259,44 +261,62 @@ def _split_on_unquoted_slash(text: str) -> list[str]:
     return parts
 
 
-def _decode_url_path_sa20(database: str) -> str:
-    """Percent-decode the URL database slot once.
+def _url_path_identifiers_sa20(path: str) -> list[str]:
+    """Return the identifiers in the URL database path, each decoded once.
 
-    SQLAlchemy 2.0 ``make_url`` leaves the path percent-encoded. Use
-    ``unquote``, not ``unquote_plus``: a literal ``+`` must stay ``+``.
+    SQLAlchemy 2.0 ``make_url`` leaves the path percent-encoded, while
+    ``URL.create`` stores raw values; the ``URL`` object does not say which.
+    Snowflake identifier syntax tells them apart per identifier: unquoted
+    identifiers cannot contain ``%``, and an encoded identifier (e.g. from
+    ``snowflake.sqlalchemy.URL``) has ``"`` as ``%22``. So a part with ``%`` and
+    no raw ``"`` is an encoding, and a part with a raw ``"`` is a raw value
+    whose ``%`` is literal. Deciding per part keeps a raw ``"db"`` from
+    disabling decoding of an encoded schema (and vice versa).
+
+    Splitting before decoding is safe: an encoded part has no raw ``"`` or
+    ``/``. A decoded part is split again because an encoded ``%2F`` outside
+    quotes is still the namespace separator.
+
+    Use ``unquote``, not ``unquote_plus``: a literal ``+`` must stay ``+``.
     """
-    return unquote(database)
+    parts: list[str] = []
+    for part in _split_on_unquoted_slash(path):
+        if '"' in part or "%" not in part:
+            parts.append(part)
+        else:
+            parts.extend(_split_on_unquoted_slash(unquote(part)))
+    return parts
 
 
-def _decode_url_path_sa21(database: str) -> str:
-    """Return the URL database slot unchanged.
+def _url_path_identifiers_sa21(path: str) -> list[str]:
+    """Return the identifiers in the URL database path without decoding them.
 
     SQLAlchemy 2.1 ``make_url`` already percent-decodes the path; decoding again
     would corrupt quoted identifiers that contain a literal ``%`` (``"a%20b"``
     would become ``"a b"``).
     """
-    return database
+    return _split_on_unquoted_slash(path)
 
 
 # SQLAlchemy 2.1 percent-decodes the URL path in make_url; 2.0 does not.
 _SA_DECODES_URL_PATH = tuple(map(int, _sa_version.split(".")[:2])) >= (2, 1)
-_decode_url_path: Callable[[str], str] = (
-    _decode_url_path_sa21 if _SA_DECODES_URL_PATH else _decode_url_path_sa20
+_url_path_identifiers: Callable[[str], list[str]] = (
+    _url_path_identifiers_sa21 if _SA_DECODES_URL_PATH else _url_path_identifiers_sa20
 )
 
 
 def _split_database_namespace(database: str) -> tuple[str, str | None]:
     """Split a URL database slot of the form ``db`` or ``db/schema``.
 
-    The slot is decoded with the SQLAlchemy-version specific
-    ``_decode_url_path`` so both versions share the same Snowflake grammar:
+    The identifiers come from the SQLAlchemy-version specific
+    ``_url_path_identifiers`` so both versions share the same Snowflake grammar:
     unquoted ``/`` is the namespace separator, ``/`` inside ``"..."`` is part of
     the identifier.
 
     Raises:
         sa_exc.ArgumentError: if more than two parts are present.
     """
-    name_spaces = _split_on_unquoted_slash(_decode_url_path(database))
+    name_spaces = _url_path_identifiers(database)
     if len(name_spaces) == 1:
         return name_spaces[0], None
     if len(name_spaces) == 2:

@@ -8,17 +8,19 @@ import re
 import string
 import textwrap
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from unittest.mock import Mock, patch
 
 import pytest
 import pytz
 import snowflake.connector.errors
+import sqlalchemy as sa
 from snowflake.connector import Error, ProgrammingError, connect
 from sqlalchemy import (
     REAL,
     Boolean,
     Column,
+    Date,
     DateTime,
     ForeignKey,
     Integer,
@@ -43,7 +45,7 @@ from sqlalchemy.sql.ddl import CreateTable
 from sqlalchemy.testing.assertions import eq_
 
 import snowflake.sqlalchemy.snowdialect
-from snowflake.sqlalchemy import URL, MergeInto, dialect
+from snowflake.sqlalchemy import TIMESTAMP_NTZ, URL, MergeInto, dialect
 from snowflake.sqlalchemy._constants import (
     APPLICATION_NAME,
     SNOWFLAKE_SQLALCHEMY_VERSION,
@@ -51,7 +53,7 @@ from snowflake.sqlalchemy._constants import (
 from snowflake.sqlalchemy.snowdialect import SnowflakeDialect
 
 from .conftest import get_db_parameters, get_engine, url_factory
-from .util import ischema_names_baseline, random_string
+from .util import ischema_names_baseline, random_string, sa21_only
 
 THIS_DIR = os.path.dirname(os.path.realpath(__file__))
 
@@ -2249,3 +2251,233 @@ def test_division_default(engine_testaccount, operation):
             ).fetchall(),
             [(operation[2], operation[3])],
         )
+
+
+# ---------------------------------------------------------------------------
+# SQLAlchemy 2.1 follow-ups verified against a live account: SQL that unit
+# tests pin must also be accepted by Snowflake.
+# ---------------------------------------------------------------------------
+
+
+def _sa21_name(prefix: str) -> str:
+    return f"{prefix}_{uuid.uuid4().hex[:8]}"
+
+
+@pytest.fixture
+def sa21_daily(engine_testaccount):
+    """Table with one row per day and amount 1..5."""
+    m = MetaData()
+    t = Table(
+        _sa21_name("tmp_daily"),
+        m,
+        Column("d", Date),
+        Column("ts", TIMESTAMP_NTZ),
+        Column("amount", Integer),
+    )
+    m.create_all(engine_testaccount)
+    base = date(2024, 1, 1)
+    with engine_testaccount.begin() as conn:
+        conn.execute(
+            t.insert(),
+            [
+                {
+                    "d": base + timedelta(days=i),
+                    "ts": datetime(2024, 1, 1) + timedelta(days=i),
+                    "amount": i + 1,
+                }
+                for i in range(5)
+            ],
+        )
+    yield t
+    m.drop_all(engine_testaccount)
+
+
+@sa21_only
+def test_range_frame_interval_on_date(engine_testaccount, sa21_daily):
+    stmt = select(
+        func.sum(sa21_daily.c.amount).over(
+            order_by=sa21_daily.c.d,
+            range_=sa.FrameClause(
+                start=timedelta(days=2),
+                end=None,
+                start_frame_type=sa.FrameClauseType.PRECEDING,
+                end_frame_type=sa.FrameClauseType.CURRENT,
+            ),
+        )
+    ).order_by(sa21_daily.c.d)
+    with engine_testaccount.connect() as conn:
+        assert conn.execute(stmt).scalars().all() == [1, 3, 6, 9, 12]
+
+
+@sa21_only
+def test_range_frame_interval_on_timestamp(engine_testaccount, sa21_daily):
+    stmt = select(
+        func.sum(sa21_daily.c.amount).over(
+            order_by=sa21_daily.c.ts,
+            range_=sa.FrameClause(
+                start=timedelta(hours=36),
+                end=None,
+                start_frame_type=sa.FrameClauseType.PRECEDING,
+                end_frame_type=sa.FrameClauseType.CURRENT,
+            ),
+        )
+    ).order_by(sa21_daily.c.ts)
+    with engine_testaccount.connect() as conn:
+        assert conn.execute(stmt).scalars().all() == [1, 3, 5, 7, 9]
+
+
+@sa21_only
+def test_range_frame_float(engine_testaccount, sa21_daily):
+    stmt = select(
+        func.sum(sa21_daily.c.amount).over(
+            order_by=sa21_daily.c.amount,
+            range_=sa.FrameClause(
+                start=1.5,
+                end=None,
+                start_frame_type=sa.FrameClauseType.PRECEDING,
+                end_frame_type=sa.FrameClauseType.CURRENT,
+            ),
+        )
+    ).order_by(sa21_daily.c.amount)
+    with engine_testaccount.connect() as conn:
+        assert conn.execute(stmt).scalars().all() == [1, 3, 5, 7, 9]
+
+
+@pytest.fixture
+def sa21_users_addresses(engine_testaccount):
+    m = MetaData()
+    users = Table(
+        _sa21_name("tmp_users"), m, Column("id", Integer), Column("name", String)
+    )
+    addrs = Table(
+        _sa21_name("tmp_addr"),
+        m,
+        Column("id", Integer),
+        Column("user_id", Integer),
+        Column("email", String),
+    )
+    m.create_all(engine_testaccount)
+    with engine_testaccount.begin() as conn:
+        conn.execute(users.insert(), [{"id": i, "name": f"u{i}"} for i in (1, 2, 3)])
+        conn.execute(
+            addrs.insert(),
+            [
+                {"id": 1, "user_id": 1, "email": "x"},
+                {"id": 2, "user_id": 2, "email": "y"},
+            ],
+        )
+    yield users, addrs
+    m.drop_all(engine_testaccount)
+
+
+def _sa21_remaining(conn, users):
+    return conn.execute(select(users.c.id).order_by(users.c.id)).scalars().all()
+
+
+@sa21_only
+def test_delete_using_join_with_aliased_target(
+    engine_testaccount, sa21_users_addresses
+):
+    """Users without an address (id 3) are deleted via an outer join."""
+    users, addrs = sa21_users_addresses
+    u2 = users.alias("u2")
+    with engine_testaccount.begin() as conn:
+        with pytest.raises(sa.exc.CompileError, match="duplicate alias"):
+            conn.execute(
+                sa.delete(users)
+                .using(users.outerjoin(addrs, users.c.id == addrs.c.user_id))
+                .where(addrs.c.id.is_(None))
+            )
+    with engine_testaccount.begin() as conn:
+        conn.execute(
+            sa.delete(users)
+            .using(u2.outerjoin(addrs, u2.c.id == addrs.c.user_id))
+            .where(users.c.id == u2.c.id, addrs.c.id.is_(None))
+        )
+        assert _sa21_remaining(conn, users) == [1, 2]
+
+
+@pytest.fixture
+def sa21_source_table(engine_testaccount):
+    m = MetaData()
+    t = Table(_sa21_name("tmp_src"), m, Column("id", Integer), Column("name", String))
+    m.create_all(engine_testaccount)
+    with engine_testaccount.begin() as conn:
+        conn.execute(t.insert(), [{"id": 1, "name": "a"}, {"id": 2, "name": "b"}])
+    yield t
+    m.drop_all(engine_testaccount)
+
+
+@sa21_only
+@pytest.mark.parametrize("kwargs", [{}, {"or_replace": True}, {"temporary": True}])
+def test_create_view_sa21(engine_testaccount, sa21_source_table, kwargs):
+    name = _sa21_name("tmp_view")
+    view = sa.CreateView(
+        select(sa21_source_table).where(sa21_source_table.c.id == 2), name, **kwargs
+    )
+    with engine_testaccount.begin() as conn:
+        conn.execute(view)
+        try:
+            assert conn.execute(select(view.table.c.name)).scalars().all() == ["b"]
+        finally:
+            conn.execute(text(f"DROP VIEW IF EXISTS {name}"))
+
+
+@sa21_only
+@pytest.mark.parametrize("kwargs", [{}, {"temporary": True}, {"if_not_exists": True}])
+def test_create_table_as_sa21(engine_testaccount, sa21_source_table, kwargs):
+    name = _sa21_name("tmp_ctas")
+    ctas = sa.CreateTableAs(select(sa21_source_table.c.id), name, **kwargs)
+    with engine_testaccount.begin() as conn:
+        conn.execute(ctas)
+        try:
+            assert sorted(conn.execute(select(ctas.table.c.id)).scalars()) == [1, 2]
+        finally:
+            conn.execute(text(f"DROP TABLE IF EXISTS {name}"))
+
+
+@sa21_only
+def test_select_into_sa21(engine_testaccount, sa21_source_table):
+    name = _sa21_name("tmp_into")
+    with engine_testaccount.begin() as conn:
+        conn.execute(select(sa21_source_table.c.name).into(name))
+        try:
+            assert sorted(conn.execute(text(f"SELECT name FROM {name}")).scalars()) == [
+                "a",
+                "b",
+            ]
+        finally:
+            conn.execute(text(f"DROP TABLE IF EXISTS {name}"))
+
+
+@pytest.mark.parametrize(
+    "prefix",
+    [
+        "tmp q/x y%20 %",
+        pytest.param(
+            'tmp "q',
+            marks=pytest.mark.xfail(
+                strict=True,
+                reason="Snowflake server limitation: login schemaName does not "
+                'unescape "" inside a quoted identifier (USE SCHEMA works)',
+            ),
+        ),
+    ],
+)
+def test_url_helper_quoted_schema_special_characters(engine_testaccount, prefix):
+    schema = _sa21_name(prefix)
+    quoted = '"' + schema.replace('"', '""') + '"'
+    with engine_testaccount.begin() as conn:
+        conn.execute(text(f"CREATE SCHEMA {quoted}"))
+    try:
+        params = get_db_parameters()
+        params["schema"] = quoted
+        engine = get_engine(URL(**params))
+        try:
+            with engine.connect() as conn:
+                assert conn.execute(text("SELECT CURRENT_SCHEMA()")).scalar() == schema
+        finally:
+            engine.dispose()
+    finally:
+        with engine_testaccount.begin() as conn:
+            conn.execute(text(f"DROP SCHEMA IF EXISTS {quoted}"))

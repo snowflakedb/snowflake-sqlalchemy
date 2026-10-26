@@ -21,11 +21,11 @@ from snowflake.sqlalchemy import URL, base
 from snowflake.sqlalchemy.snowdialect import (
     _URL_QUERY_BLOCKED_KWARGS,
     _cast_query_params,
-    _decode_url_path,
-    _decode_url_path_sa20,
-    _decode_url_path_sa21,
     _normalized_account_host,
     _split_database_namespace,
+    _url_path_identifiers,
+    _url_path_identifiers_sa20,
+    _url_path_identifiers_sa21,
 )
 from snowflake.sqlalchemy.util import connector_param_types
 
@@ -607,7 +607,7 @@ def _connect_database(raw_url: str) -> tuple[str, str | None]:
 
 
 class TestSplitDatabaseNamespace:
-    """Snowflake ``db/schema`` grammar on an already-decoded database slot."""
+    """Snowflake ``db/schema`` grammar on the URL database path."""
 
     def test_single_part_returns_none_schema(self):
         assert _split_database_namespace("mydb") == ("mydb", None)
@@ -641,25 +641,47 @@ class TestSplitDatabaseNamespace:
         assert _split_database_namespace('db/"c/d"') == ("db", '"c/d"')
 
 
-class TestDecodeUrlPath:
+class TestUrlPathIdentifiers:
     """Per-SQLAlchemy-version decoding of the URL database slot."""
 
     def test_sa20_decodes_once(self):
-        assert _decode_url_path_sa20("%22a%2Fb%22/my%20schema") == '"a/b"/my schema'
+        assert _url_path_identifiers_sa20("%22a%2Fb%22/my%20schema") == [
+            '"a/b"',
+            "my schema",
+        ]
 
     def test_sa20_does_not_plus_decode(self):
-        assert _decode_url_path_sa20("a+b") == "a+b"
+        assert _url_path_identifiers_sa20("a+b") == ["a+b"]
 
-    def test_sa21_is_identity(self):
-        assert _decode_url_path_sa21('"a%20b"/sch') == '"a%20b"/sch'
+    def test_sa20_raw_quoted_value_keeps_literal_percent(self):
+        """A raw ``"`` means a raw (``URL.create``) value; its ``%`` is literal."""
+        assert _url_path_identifiers_sa20('"a%20b"/sch') == ['"a%20b"', "sch"]
+
+    def test_sa20_value_without_percent_is_unchanged(self):
+        assert _url_path_identifiers_sa20('"a/b"/sch') == ['"a/b"', "sch"]
+
+    def test_sa20_raw_quoted_database_does_not_block_encoded_schema(self):
+        assert _url_path_identifiers_sa20('"db"/%22a%20b%22') == ['"db"', '"a b"']
+
+    def test_sa20_raw_quoted_schema_does_not_block_encoded_database(self):
+        assert _url_path_identifiers_sa20('%22a%20b%22/"schema"') == [
+            '"a b"',
+            '"schema"',
+        ]
+
+    def test_sa20_encoded_unquoted_slash_still_separates(self):
+        assert _url_path_identifiers_sa20("a%2Fb") == ["a", "b"]
+
+    def test_sa21_splits_without_decoding(self):
+        assert _url_path_identifiers_sa21('"a%20b"/sch') == ['"a%20b"', "sch"]
 
     def test_active_decoder_matches_installed_sqlalchemy(self):
         expected = (
-            _decode_url_path_sa21
+            _url_path_identifiers_sa21
             if SQLALCHEMY_VERSION >= (2, 1)
-            else _decode_url_path_sa20
+            else _url_path_identifiers_sa20
         )
-        assert _decode_url_path is expected
+        assert _url_path_identifiers is expected
 
 
 class TestUrlDatabasePath:
@@ -688,6 +710,29 @@ class TestUrlDatabasePath:
             '"a+b"',
             '"c+d"',
         )
+
+    def test_raw_quoted_database_with_encoded_schema(self):
+        """Each identifier is decoded on its own (raw ``"db"``, encoded schema)."""
+        assert _connect_database('snowflake://u:p@acct/"db"/%22a%20b%22') == (
+            '"db"',
+            '"a b"',
+        )
+
+    def test_encoded_database_with_raw_quoted_schema(self):
+        assert _connect_database('snowflake://u:p@acct/%22a%20b%22/"schema"') == (
+            '"a b"',
+            '"schema"',
+        )
+
+    def test_raw_quoted_database_with_encoded_quoted_slash_schema(self):
+        assert _connect_database('snowflake://u:p@acct/"db"/%22a%2Fb%22') == (
+            '"db"',
+            '"a/b"',
+        )
+
+    def test_encoded_unquoted_slash_after_raw_part_is_too_many_parts(self):
+        with pytest.raises(exc.ArgumentError):
+            _connect_database('snowflake://u:p@acct/"x"/a%2Fb')
 
     def test_literal_percent_in_quoted_name_is_decoded_only_once(self):
         """``%2520`` is a literal ``%20`` inside the quoted name.
@@ -765,6 +810,26 @@ class TestCreateConnectArgsNamespace:
             None,
         )
 
+    def test_url_create_bare_database_with_literal_percent_is_verbatim(self):
+        """``URL.create`` values are raw; a literal ``%20`` must not be decoded."""
+        url = SAUrl.create(
+            "snowflake", username="u", password="p", host="acct", database='"a%20b"'
+        )
+        _, opts = _dialect().create_connect_args(url)
+        assert opts["database"] == '"a%20b"'
+        assert "schema" not in opts
+
+    def test_url_create_database_and_schema_with_literal_percent_is_verbatim(self):
+        url = SAUrl.create(
+            "snowflake",
+            username="u",
+            password="p",
+            host="acct",
+            database='"a%20b"/"c%20d"',
+        )
+        _, opts = _dialect().create_connect_args(url)
+        assert (opts["database"], opts["schema"]) == ('"a%20b"', '"c%20d"')
+
     def test_two_part_database_splits_into_db_and_schema(self):
         d = _dialect()
         url = SAUrl.create(
@@ -802,3 +867,27 @@ class TestCreateConnectArgsNamespace:
         _, opts = _dialect().create_connect_args(make_url(generated))
         assert opts["database"] == '"my db"'
         assert opts["schema"] == '"a+b"'
+
+    @pytest.mark.parametrize(
+        "database, schema",
+        [
+            ("MYDB", None),
+            ("MYDB", "PUBLIC"),
+            ('"my db"', None),
+            ('"my db"', '"s s"'),
+            ('"a/b"', None),
+            ('"a/b"', '"c/d"'),
+            ('"a+b"', None),
+            ('"a+b"', '"c+d"'),
+            ('"a%b"', None),
+            ('"a%20b"', '"c%20d"'),
+            ("db", '"x y"'),
+        ],
+    )
+    def test_url_helper_roundtrips_unchanged(self, database, schema):
+        """``create_engine(URL(...))`` hands the connector the original values."""
+        params = dict(account="acct", user="u", password="p", database=database)
+        if schema is not None:
+            params["schema"] = schema
+        _, opts = _dialect().create_connect_args(make_url(URL(**params)))
+        assert (opts["database"], opts.get("schema")) == (database, schema)

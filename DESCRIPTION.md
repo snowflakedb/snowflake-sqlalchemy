@@ -11,9 +11,13 @@ Source code is also available at:
 
 - Support SQLAlchemy 2.0.44 through 2.1.x (`SQLAlchemy>=2.0.44,<2.2`).
   - The dialect feature-detects SQLAlchemy 2.1 API changes at import time; no user action is needed beyond upgrading.
-  - URL database/schema slots now follow Snowflake quoted-identifier rules on both 2.0 and 2.1: slashes inside `"..."` are part of the name, not a delimiter.
+  - URL database/schema slots now follow Snowflake quoted-identifier rules on both 2.0 and 2.1: slashes inside `"..."` are part of the name, not a delimiter. For hand-written URLs, a `+` in the path is no longer read as a space, and an encoded `%2F` outside quotes now separates the database from the schema (previously it stayed in the database name). See the [migration guide](MIGRATING.md#9-url-database-and-schema-path-decoding-21).
+  - Database/schema names built with `snowflake.sqlalchemy.URL` round-trip unchanged on SQLAlchemy 2.0 and 2.1, including a database-only quoted name with special characters (previously left percent-encoded). On SQLAlchemy 2.1, `URL.create(...)` values are no longer percent-decoded; on 2.0, a database or schema name containing `%` and no raw `"` is still decoded. See [Special characters in database and schema names](README.md#special-characters-in-database-and-schema-names).
   - Reflected `NUMBER(..., 0)` / `INTEGER` columns report SQLAlchemy's generic `Integer` type affinity.
   - Window `ROWS`/`RANGE` bounds are compiled as integer literals (no bind-parameter conflicts).
+  - Snowflake custom types declare SQLAlchemy 2.1 `operator_classes`, so expressions on them no longer emit `SADeprecationWarning` ("does not refer to an OperatorClass").
+  - `timedelta` literals render as Snowflake `INTERVAL '...'` constants, so SQLAlchemy 2.1 `FrameClause` RANGE bounds such as `timedelta(days=7)` compile to `RANGE BETWEEN INTERVAL '7 DAYS' PRECEDING`; `literal_binds` date arithmetic no longer raises `CompileError`. Negative intervals raise a `CompileError` (Snowflake interval constants are unsigned). Bound (non-literal) `timedelta` parameters are unchanged.
+  - SQLAlchemy 2.1 `Delete.using()` joins that contain the DELETE target table raise a `CompileError` with guidance (Snowflake rejects them as "duplicate alias"); join an alias of the target or use a subquery instead.
 - **Async is opt-in:** install `snowflake-sqlalchemy[async]` (or `sqlalchemy[asyncio]`) for `create_async_engine()`. SQLAlchemy 2.1 no longer bundles `greenlet`; without the extra the install succeeds but async engine creation raises an `ImportError` with the install command.
 
 # Release Notes

@@ -9,15 +9,21 @@ import keyword
 import uuid
 import warnings
 from collections.abc import Callable
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import sqlalchemy.types as sqltypes
 import sqlalchemy.util as util
+from sqlalchemy import exc
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.sql.expression import ColumnElement
 from sqlalchemy.sql.visitors import InternalTraversal
 from sqlalchemy.types import TypeEngine
+
+try:  # SQLAlchemy 2.1+
+    from sqlalchemy.types import OperatorClass
+except ImportError:  # SQLAlchemy 2.0: no operator-class validation
+    OperatorClass = None  # type: ignore[assignment,misc,unused-ignore]
 
 if TYPE_CHECKING:
     from sqlalchemy.engine.interfaces import Dialect
@@ -46,6 +52,20 @@ def _process_float(value: float | None) -> float | str | None:
     elif value is not None:
         return float(value)
     return value
+
+
+def _operator_classes(*names: str) -> Any:
+    """OR together ``OperatorClass`` members by name; ``None`` on SQLAlchemy 2.0.
+
+    SQLAlchemy 2.1 validates operators against ``TypeEngine.operator_classes``
+    and warns (later: raises) for types that leave it unspecified.
+    """
+    if OperatorClass is None:
+        return None
+    result = getattr(OperatorClass, names[0])
+    for name in names[1:]:
+        result |= getattr(OperatorClass, name)
+    return result
 
 
 class SnowflakeType(sqltypes.TypeEngine):
@@ -239,6 +259,10 @@ class _SemiStructuredJSONMixin:
 class VARIANT(_SemiStructuredJSONMixin, sqltypes.Indexable, SnowflakeType):
     __visit_name__ = "VARIANT"
 
+    # VARIANT holds any value and Snowflake casts it implicitly, so every
+    # operator that compiled before 2.1 stays valid.
+    operator_classes = _operator_classes("ANY")
+
     # Enable subscript access (``col["key"]`` / ``col[index]``) with JSON
     # semantics; the compiler renders it as Snowflake's bracket accessor.
     comparator_factory = sqltypes.JSON.Comparator
@@ -258,6 +282,8 @@ class VECTOR(SnowflakeType):
     """
 
     __visit_name__ = "VECTOR"
+    # Snowflake supports comparisons on VECTOR but no arithmetic operators.
+    operator_classes = _operator_classes("BASE", "COMPARISON")
     _VALID_ELEMENT_TYPES: ClassVar[set[str]] = {"INT", "FLOAT"}
 
     def __init__(
@@ -325,6 +351,7 @@ class StructuredType(_SemiStructuredJSONMixin, sqltypes.Indexable, SnowflakeType
     # semantics on OBJECT / ARRAY / MAP; the compiler renders it as
     # Snowflake's bracket accessor.
     comparator_factory = sqltypes.JSON.Comparator
+    operator_classes = _operator_classes("JSON")
 
     def __init__(self, is_semi_structured: bool = False) -> None:
         self.is_semi_structured = is_semi_structured
@@ -444,6 +471,7 @@ class ARRAY(StructuredType):
 
 class TIMESTAMP_TZ(SnowflakeType):
     __visit_name__ = "TIMESTAMP_TZ"
+    operator_classes = _operator_classes("DATETIME")
 
     @property
     def python_type(self) -> type:
@@ -452,6 +480,7 @@ class TIMESTAMP_TZ(SnowflakeType):
 
 class TIMESTAMP_LTZ(SnowflakeType):
     __visit_name__ = "TIMESTAMP_LTZ"
+    operator_classes = _operator_classes("DATETIME")
 
     @property
     def python_type(self) -> type:
@@ -460,6 +489,7 @@ class TIMESTAMP_LTZ(SnowflakeType):
 
 class TIMESTAMP_NTZ(SnowflakeType):
     __visit_name__ = "TIMESTAMP_NTZ"
+    operator_classes = _operator_classes("DATETIME")
 
     @property
     def python_type(self) -> type:
@@ -468,6 +498,9 @@ class TIMESTAMP_NTZ(SnowflakeType):
 
 class GEOGRAPHY(SnowflakeType):
     __visit_name__ = "GEOGRAPHY"
+    # COMPARISON is needed for IS [NOT] NULL; Snowflake rejects =, <, IN on
+    # geospatial values server-side (use ST_EQUALS etc.).
+    operator_classes = _operator_classes("BASE", "COMPARISON")
 
     @property
     def python_type(self) -> type:
@@ -476,6 +509,7 @@ class GEOGRAPHY(SnowflakeType):
 
 class GEOMETRY(SnowflakeType):
     __visit_name__ = "GEOMETRY"
+    operator_classes = _operator_classes("BASE", "COMPARISON")
 
     @property
     def python_type(self) -> type:
@@ -507,6 +541,7 @@ class DECFLOAT(SnowflakeType):
     """
 
     __visit_name__ = "DECFLOAT"
+    operator_classes = _operator_classes("NUMERIC")
     _warned_precision: ClassVar[bool] = False
 
     @property
@@ -590,6 +625,47 @@ class _CUSTOM_Time(SnowflakeType, sqltypes.Time):
 class _CUSTOM_Float(SnowflakeType, sqltypes.Float):
     def bind_processor(self, dialect: Dialect) -> Callable[[Any], float | str | None]:
         return _process_float
+
+
+def _render_interval(value: timedelta) -> str:
+    """Render a ``timedelta`` as a Snowflake interval constant.
+
+    Snowflake interval constants are unsigned
+    (https://docs.snowflake.com/en/sql-reference/data-types-datetime#interval-constants);
+    subtract a positive interval instead of adding a negative one.
+    """
+    if value < timedelta(0):
+        raise exc.CompileError(
+            f"Cannot render negative interval {value!r} as a Snowflake INTERVAL "
+            "constant; subtract a positive timedelta instead."
+        )
+    parts = [
+        f"{amount} {unit}"
+        for amount, unit in (
+            (value.days, "DAYS"),
+            (value.seconds, "SECONDS"),
+            (value.microseconds, "MICROSECONDS"),
+        )
+        if amount
+    ]
+    return f"INTERVAL '{', '.join(parts) or '0 SECONDS'}'"
+
+
+class _CUSTOM_Interval(sqltypes.Interval):
+    """Internal Interval type: renders ``timedelta`` literals as INTERVAL.
+
+    Used by ``literal_binds`` and by SQLAlchemy 2.1 ``FrameClause`` bounds,
+    which the compiler renders inline (``RANGE BETWEEN INTERVAL '7 DAYS'
+    PRECEDING``).
+    """
+
+    cache_ok = True
+
+    def literal_processor(self, dialect: Dialect) -> Callable[[Any], str | None]:  # type: ignore[override]
+        def process(value: timedelta | None) -> str | None:
+            return None if value is None else _render_interval(value)
+
+        return process
 
 
 class _CUSTOM_Uuid(sqltypes.Uuid):

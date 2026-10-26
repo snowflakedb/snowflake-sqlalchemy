@@ -26,6 +26,7 @@ from sqlalchemy.schema import (
     UniqueConstraint,
 )
 from sqlalchemy.sql import compiler, crud, expression, functions, sqltypes
+from sqlalchemy.sql import util as sql_util
 from sqlalchemy.sql.base import CompileState
 from sqlalchemy.sql.ddl import DropColumnComment, DropTableComment
 from sqlalchemy.sql.elements import BinaryExpression, BindParameter, Label, quoted_name
@@ -769,10 +770,12 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         return self.dialect.identifier_preparer.format_sequence(sequence) + ".nextval"
 
     def visit_frame_clause(self, frameclause: Any, **kw: Any) -> str:
-        """Render ROWS/RANGE bounds as inline integer literals (SQLAlchemy 2.1).
+        """Render ROWS/RANGE bounds as inline literals (SQLAlchemy 2.1).
 
         Snowflake's pyformat ``%(name)s`` collides with ``%`` modulo, and the
-        service requires literals here.
+        service requires constants here. This covers 2.1 ``FrameClause``
+        bounds too: numbers render as-is, ``timedelta`` as
+        ``INTERVAL '...'`` (via the dialect's Interval colspec).
         """
         kw["literal_execute"] = True
         return super().visit_frame_clause(frameclause, **kw)  # type: ignore[misc,unused-ignore]
@@ -1265,6 +1268,22 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         from_hints: Any,
         **kw: Any,
     ) -> str:
+        # SQLAlchemy 2.1 ``Delete.using(target.join(...))`` puts the target
+        # itself in USING; Snowflake rejects that ("duplicate alias").
+        # ``surface_selectables_only`` does not descend into subqueries, and an
+        # alias of the target is a different selectable, so both stay allowed.
+        if any(
+            from_table in elem._cloned_set
+            for extra_from in extra_froms
+            for elem in sql_util.surface_selectables_only(extra_from)
+        ):
+            raise sa_exc.CompileError(
+                "Snowflake does not allow the DELETE target table inside "
+                "DELETE ... USING (duplicate alias). Join an alias of the target "
+                "and correlate on a key, e.g. u2 = users.alias(); "
+                "delete(users).using(u2.outerjoin(addresses, ...))"
+                ".where(users.c.id == u2.c.id, ...), or use a NOT EXISTS subquery."
+            )
         return "USING " + ", ".join(
             t._compiler_dispatch(self, asfrom=True, fromhints=from_hints, **kw)
             for t in extra_froms
