@@ -1,7 +1,12 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
+import importlib
 import io
+import subprocess
+import sys
+import tomllib
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -66,6 +71,28 @@ def _hybrid_table():
 
 
 class TestRegistration:
+    def test_entry_point_references_snowflake_impl(self):
+        # Read from pyproject.toml rather than importlib.metadata, which goes
+        # stale in an editable install until the package is reinstalled.
+        pyproject = Path(__file__).parent.parent / "pyproject.toml"
+        entry_points = tomllib.loads(pyproject.read_text())["project"]["entry-points"]
+        module_name, _, attr = entry_points["alembic.dialects"][
+            SnowflakeDialect.name
+        ].partition(":")
+        assert getattr(importlib.import_module(module_name), attr) is SnowflakeImpl
+
+    def test_loading_dialect_does_not_import_impl(self):
+        # Needs a fresh interpreter: this module already imported the impl.
+        code = (
+            "import sys\n"
+            "import snowflake.sqlalchemy\n"
+            "from sqlalchemy.dialects import registry\n"
+            "registry.load('snowflake')\n"
+            "assert 'snowflake.sqlalchemy.alembic_impl' not in sys.modules\n"
+            "assert 'alembic' not in sys.modules\n"
+        )
+        subprocess.run([sys.executable, "-c", code], check=True)
+
     def test_registered_for_snowflake_dialect(self, dialect):
         assert DefaultImpl.get_by_dialect(dialect) is SnowflakeImpl
 

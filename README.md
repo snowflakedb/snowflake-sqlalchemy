@@ -1537,7 +1537,7 @@ fact = Table(
 
 ### Alembic Support
 
-[Alembic](http://alembic.zzzcomputing.com) is a database migration tool on top of `SQLAlchemy`. As of version `2.0.0`, Snowflake SQLAlchemy automatically registers a `SnowflakeImpl`.
+[Alembic](http://alembic.zzzcomputing.com) is a database migration tool on top of `SQLAlchemy`. As of version `2.2.0`, Snowflake SQLAlchemy automatically registers a `SnowflakeImpl` with Alembic 1.21+.
 
 If you wish to modify the default `SnowflakeImpl`, you can subclass it in your `alembic/env.py`:
 

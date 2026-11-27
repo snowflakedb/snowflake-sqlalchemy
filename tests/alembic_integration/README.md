@@ -6,7 +6,7 @@ For development setup and connection configuration, see [CONTRIBUTING.md](../../
 
 ## Shared Setup
 
-No shared setup is needed: loading the dialect registers Alembic's Snowflake implementation (`snowflake.sqlalchemy.alembic_impl.SnowflakeImpl`), so direct `MigrationContext.configure(...)` calls work out of the box. Don't define another `SnowflakeImpl` here — it would replace the built-in one and the tests would no longer exercise it.
+`conftest.py` imports `snowflake.sqlalchemy.alembic_impl.SnowflakeImpl`, the same way a user's `alembic/env.py` would, which registers it for the `snowflake` dialect so direct `MigrationContext.configure(...)` calls work. Loading the dialect alone does not register it. Don't define another `SnowflakeImpl` here — it would replace the built-in one and the tests would no longer exercise it.
 
 ## Running the Tests
 

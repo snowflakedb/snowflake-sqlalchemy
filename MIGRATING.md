@@ -67,7 +67,7 @@ written as `dict`/`list`), and two options were removed (`legacy_url_params`,
 | Read semi-structured `VARIANT`/`OBJECT`/`ARRAY` values with `json.loads(...)`, or write them with `PARSE_JSON` | Values now come back as `dict`/`list` and can be written directly — see [behavioral difference #5](#5-automatic-json-handling-is-on-by-default-enable_structured_type_json). |
 | Read or write typed `MAP(...)` / `ARRAY(<type>)` / `OBJECT(...)` columns | These also return/accept `dict`/`list` by default — see [behavioral difference #5](#5-automatic-json-handling-is-on-by-default-enable_structured_type_json). |
 | Store `decimal.Decimal` values inside `VARIANT`/`OBJECT`/`ARRAY` payloads | They are stored as JSON strings — see [behavioral difference #6](#6-decimal-values-in-semi-structured-payloads-are-stored-as-json-strings). |
-| Define your own `SnowflakeImpl` in `alembic/env.py` | Remove it, or subclass the new `SnowflakeImpl` — see [Alembic implementation](#alembic-implementation). |
+| Define your own `SnowflakeImpl` in `alembic/env.py` | Remove it, or subclass the new `SnowflakeImpl` added in `2.2` — see [Alembic implementation](#alembic-implementation). |
 
 ## Step-by-step upgrade
 
@@ -215,22 +215,25 @@ and [Connection Parameters](README.md#connection-parameters).
 
 ### Alembic implementation
 
-*Since 2.0.0rc3.* 2.x now comes with its own Alembic implementation that is eagerly loaded.
+*Since 2.2.* - `snowflake-sqlalchemy` now comes with its own Alembic implementation.
 This was added to provide out-of-the-box behaviors that assist Alembic's
 auto-generation of migrations and to support index creation for hybrid tables.
 
 In effect, this means that users are no longer required to create their own
 `SnowflakeImpl` inside of their `alembic/env.py` files.
 
-Depending on import order, the new `SnowflakeImpl` may cause your existing
-`SnowflakeImpl` in your `alembic/env.py` to be overridden; alternatively, your
-`SnowflakeImpl` may override the `snowflake-sqlalchemy` managed `SnowflakeImpl`.
-Either way, this happens silently.
-
 If your `SnowflakeImpl` does not have any custom logic in it (e.g. it's the
 snippet the README previously recommended), we suggest removing
 it from your `alembic/env.py` and relying on the `snowflake-sqlalchemy` managed
 `SnowflakeImpl`.
+
+*If you are using Alembic ≥ 1.21* - Remove `SnowflakeImpl` from your Alembic `env.py` entirely.
+
+*If you are using Alembic < 1.21* - Import `SnowflakeImpl` into your `env.py`:
+
+```python
+from snowflake.sqlalchemy.alembic_impl import SnowflakeImpl  # noqa: F401
+```
 
 If your `SnowflakeImpl` has custom logic that you need to preserve, you should
 subclass the new `SnowflakeImpl` inside of your `alembic/env.py` (instead of

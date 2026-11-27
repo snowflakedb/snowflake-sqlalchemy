@@ -9,6 +9,12 @@ Source code is also available at:
 
 # Unreleased Notes
 
+- **Features**
+  - Added Alembic implementation `SnowflakeImpl`.
+    - Users no longer need to create their own `SnowflakeImpl` in `env.py`.
+    - For Alembic 1.21+, the is automatically loaded via an entry point.
+    - The Alembic integration adds type synonyms and also fixes issues relating to index handling.
+
 # Release Notes
 
 - v2.1.0 (Oct 26, 2026)

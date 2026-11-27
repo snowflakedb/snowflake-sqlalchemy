@@ -10,7 +10,7 @@ smooth migrations:
 - Awaiting index builds
 - Ignoring hybrid tables' implicit foreign key backing indexes.
 
-This module is automatically loaded via the `sqlalchemy.dialects` entry-point
+This module is automatically loaded via the `alembic.dialects` entry-point
 to automatically register this.
 """
 
