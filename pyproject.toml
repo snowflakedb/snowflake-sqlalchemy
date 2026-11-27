@@ -78,6 +78,9 @@ pandas = ["snowflake-connector-python[pandas]"]
 snowflake = "snowflake.sqlalchemy:dialect"
 "snowflake.snowflake_async" = "snowflake.sqlalchemy._async.async_dialect:SnowflakeDialect_async"
 
+[project.entry-points."alembic.dialects"]
+snowflake = "snowflake.sqlalchemy.alembic_impl:SnowflakeImpl"
+
 [project.urls]
 Changelog = "https://github.com/snowflakedb/snowflake-sqlalchemy/blob/main/DESCRIPTION.md"
 Documentation = "https://docs.snowflake.com/en/user-guide/sqlalchemy.html"

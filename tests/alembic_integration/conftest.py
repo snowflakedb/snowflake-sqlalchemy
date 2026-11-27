@@ -1,14 +1,7 @@
 #
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
-from alembic.ddl.impl import DefaultImpl
-
-
-class SnowflakeImpl(DefaultImpl):
-    """Register the Snowflake dialect with Alembic's migration runtime.
-
-    Without this, direct ``MigrationContext.configure(...)`` calls on a
-    Snowflake connection fail with ``KeyError: "snowflake"``.
-    """
-
-    __dialect__ = "snowflake"
+# Stands in for a user's ``alembic/env.py``: importing the implementation is
+# what registers it for the ``snowflake`` dialect. Loading the dialect alone
+# does not.
+from snowflake.sqlalchemy.alembic_impl import SnowflakeImpl  # noqa: F401
