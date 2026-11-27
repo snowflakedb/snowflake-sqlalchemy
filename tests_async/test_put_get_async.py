@@ -18,10 +18,7 @@ import pytest
 from sqlalchemy.testing import fixtures
 
 
-@pytest.mark.skipif(
-    os.getenv("SNOWFLAKE_GCP") is not None,
-    reason="PUT and GET are not supported for GCP",
-)
+@pytest.mark.multicloud
 @pytest.mark.skipif(
     os.name == "nt",
     reason="PUT/GET file:// path handling differs on Windows",

@@ -22,36 +22,18 @@
 # ---
 # name: test_insert_array
   list([
-    (1, '[\n  "item1",\n  "item2"\n]'),
+    (1, ['item1', 'item2']),
   ])
-# ---
-# name: test_insert_array_orm
-  '''
-  002014 (22000): SQL compilation error:
-  Invalid expression [CAST(ARRAY_CONSTRUCT('item1', 'item2') AS ARRAY(VARCHAR(16777216)))] in VALUES clause
-  '''
 # ---
 # name: test_insert_map
   list([
-    (1, '{\n  "100": "item1",\n  "200": "item2"\n}'),
+    (1, {'100': 'item1', '200': 'item2'}),
   ])
-# ---
-# name: test_insert_map_orm
-  '''
-  002014 (22000): SQL compilation error:
-  Invalid expression [CAST(OBJECT_CONSTRUCT('100', 'item1', '200', 'item2') AS MAP(NUMBER(10,0), VARCHAR(16777216)))] in VALUES clause
-  '''
 # ---
 # name: test_insert_structured_object
   list([
-    (1, '{\n  "key1": "item1",\n  "key2": 15\n}'),
+    (1, {'key1': 'item1', 'key2': 15}),
   ])
-# ---
-# name: test_insert_structured_object_orm
-  '''
-  002014 (22000): SQL compilation error:
-  Invalid expression [CAST(OBJECT_CONSTRUCT('key1', 1, 'key2', 'item1') AS OBJECT(key1 NUMBER(10,0), key2 VARCHAR(16777216)))] in VALUES clause
-  '''
 # ---
 # name: test_inspect_structured_data_types[structured_type0-MAP]
   list([
@@ -223,14 +205,14 @@
 # ---
 # name: test_select_array_orm
   list([
-    (1, '[\n  "item3",\n  "item4"\n]'),
-    (2, '[\n  "item1",\n  "item2"\n]'),
+    (1, ['item3', 'item4']),
+    (2, ['item1', 'item2']),
   ])
 # ---
 # name: test_select_map_orm
   list([
-    (1, '{\n  "100": "item1",\n  "200": "item2"\n}'),
-    (2, '{\n  "100": "item1",\n  "200": "item2"\n}'),
+    (1, {'100': 'item1', '200': 'item2'}),
+    (2, {'100': 'item1', '200': 'item2'}),
   ])
 # ---
 # name: test_select_map_orm.1
@@ -243,7 +225,7 @@
 # ---
 # name: test_select_structured_object_orm
   list([
-    (1, '{\n  "key1": "value2",\n  "key2": 2\n}'),
-    (2, '{\n  "key1": "value1",\n  "key2": 1\n}'),
+    (1, {'key1': 'value2', 'key2': 2}),
+    (2, {'key1': 'value1', 'key2': 1}),
   ])
 # ---

@@ -9,6 +9,8 @@ import re
 import string
 from collections.abc import Sequence
 
+import pytest
+import sqlalchemy
 from sqlalchemy.sql.sqltypes import UUID
 from sqlalchemy.types import (
     BIGINT,
@@ -19,12 +21,12 @@ from sqlalchemy.types import (
     DATETIME,
     DECIMAL,
     FLOAT,
-    INTEGER,
     REAL,
     SMALLINT,
     TIME,
     TIMESTAMP,
     VARCHAR,
+    Integer,
 )
 
 from snowflake.sqlalchemy.custom_types import (
@@ -56,8 +58,8 @@ ischema_names_baseline = {
     "DOUBLE": FLOAT,
     "FIXED": DECIMAL,
     "FLOAT": FLOAT,
-    "INT": INTEGER,
-    "INTEGER": INTEGER,
+    "INT": Integer,
+    "INTEGER": Integer,
     "NUMBER": DECIMAL,
     # 'OBJECT': ?
     "REAL": REAL,
@@ -113,3 +115,20 @@ def compile_type(type_instance):
 
     dialect = snowdialect.dialect()
     return dialect.type_compiler.process(type_instance)
+
+
+SQLALCHEMY_VERSION = tuple(map(int, sqlalchemy.__version__.split(".")[:2]))
+SA21 = SQLALCHEMY_VERSION >= (2, 1)
+
+# Mark a test that pins behaviour of one SQLAlchemy line (2.0 or 2.1); the
+# other line has a same-named ``*_sa20`` / ``*_sa21`` counterpart.
+sa21_only = pytest.mark.skipif(not SA21, reason="SQLAlchemy 2.1 behaviour/API")
+sa20_only = pytest.mark.skipif(SA21, reason="SQLAlchemy 2.0 behaviour")
+
+
+def compile_sql(stmt, dialect, literal_binds: bool = False) -> str:
+    """Compile ``stmt`` for ``dialect`` and collapse whitespace."""
+    compiled = stmt.compile(
+        dialect=dialect, compile_kwargs={"literal_binds": literal_binds}
+    )
+    return " ".join(str(compiled).split())

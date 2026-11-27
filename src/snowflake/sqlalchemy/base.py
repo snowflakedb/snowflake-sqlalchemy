@@ -26,6 +26,7 @@ from sqlalchemy.schema import (
     UniqueConstraint,
 )
 from sqlalchemy.sql import compiler, crud, expression, functions, sqltypes
+from sqlalchemy.sql import util as sql_util
 from sqlalchemy.sql.base import CompileState
 from sqlalchemy.sql.ddl import DropColumnComment, DropTableComment
 from sqlalchemy.sql.elements import BinaryExpression, BindParameter, Label, quoted_name
@@ -81,6 +82,20 @@ from .util import (
     requires_quotes,
     split_identifier_parts,
 )
+
+
+def _orm_select_compile_state_base() -> Any:
+    """Return the ORM select compile-state base class.
+
+    SA 2.1 privatised ``ORMSelectCompileState`` as ``_ORMSelectCompileState``.
+    """
+    private = getattr(context, "_ORMSelectCompileState", None)
+    if private is not None:
+        return private
+    return context.ORMSelectCompileState  # type: ignore[attr-defined,unused-ignore]
+
+
+_ORMSelectCompileStateBase: Any = _orm_select_compile_state_base()
 
 RESERVED_WORDS = frozenset(
     [
@@ -283,9 +298,10 @@ class SnowflakeSelectState(SelectState):
 
 # handle Snowflake BCR bcr-1057
 @sql.base.CompileState.plugin_for("orm", "select")
-class SnowflakeORMSelectCompileState(context.ORMSelectCompileState):
+class SnowflakeORMSelectCompileState(_ORMSelectCompileStateBase):
     # Set by _init_global_attributes (always called on SA 2.x).
     _is_snowflake = False
+    from_clauses: Any
 
     def _init_global_attributes(self, statement: Any, compiler: Any, **kw: Any) -> None:
         """SA 2.x per-compilation setup hook for ORMSelectCompileState.
@@ -461,7 +477,7 @@ class SnowflakeORMSelectCompileState(context.ORMSelectCompileState):
             left_clause = self.from_clauses[replace_from_obj_index]
 
             self.from_clauses = (
-                self.from_clauses[:replace_from_obj_index]  # type: ignore[operator]
+                self.from_clauses[:replace_from_obj_index]
                 + [
                     _Snowflake_ORMJoin(  # handle Snowflake BCR bcr-1057
                         left_clause,
@@ -485,7 +501,7 @@ class SnowflakeORMSelectCompileState(context.ORMSelectCompileState):
             else:
                 left_clause = left
 
-            self.from_clauses = self.from_clauses + [  # type: ignore[operator]
+            self.from_clauses = self.from_clauses + [
                 _Snowflake_ORMJoin(  # handle Snowflake BCR bcr-1057
                     left_clause,
                     r_info,
@@ -680,21 +696,34 @@ def _render_storage_encryption(encryption_used, deterministic: bool = False) -> 
     )
 
 
-def _render_storage_uri(container) -> str:
+def _render_storage_uri(container, *, strict: bool = False) -> str:
     """Return the escaped, single-quoted storage location literal for a container.
 
     The bucket/path/account components originate from caller-supplied URIs
     (``*.from_uri``), so the assembled body is escaped before being wrapped in
     quotes — a single-quote in any component would otherwise escape the
     location literal (SNOW-3649816 / SNOW-3649858).
+
+    When *strict* is ``True``, an ``AzureContainer`` without an explicit
+    ``endpoint`` is rejected so the commercial ``.blob.core.windows.net``
+    default is never emitted (SNOW-4248737).
     """
     if isinstance(container, AWSBucket):
         body = "s3://{}{}".format(
             container.bucket, f"/{container.path}" if container.path else ""
         )
     elif isinstance(container, AzureContainer):
-        body = "azure://{}.blob.core.windows.net/{}{}".format(
+        if strict and not container.endpoint:
+            raise sa_exc.CompileError(
+                "Strict host-name mode is enabled but no explicit Azure Blob "
+                "endpoint was provided for AzureContainer.  Supply "
+                "endpoint='blob.example.com' (or the appropriate "
+                "endpoint) to avoid the .blob.core.windows.net commercial default."
+            )
+        blob_endpoint = container.endpoint or "blob.core.windows.net"
+        body = "azure://{}.{}/{}{}".format(
             container.account,
+            blob_endpoint,
             container.container,
             f"/{container.path}" if container.path else "",
         )
@@ -740,6 +769,30 @@ class SnowflakeCompiler(compiler.SQLCompiler):
     def visit_sequence(self, sequence: Sequence, **kw: Any) -> str:
         return self.dialect.identifier_preparer.format_sequence(sequence) + ".nextval"
 
+    def visit_frame_clause(self, frameclause: Any, **kw: Any) -> str:
+        """Render ROWS/RANGE bounds as inline literals (SQLAlchemy 2.1).
+
+        Snowflake's pyformat ``%(name)s`` collides with ``%`` modulo, and the
+        service requires constants here. This covers 2.1 ``FrameClause``
+        bounds too: numbers render as-is, ``timedelta`` as
+        ``INTERVAL '...'`` (via the dialect's Interval colspec).
+        """
+        kw["literal_execute"] = True
+        return super().visit_frame_clause(frameclause, **kw)  # type: ignore[misc,unused-ignore]
+
+    def _format_frame_clause(self, range_: Any, **kw: Any) -> str:
+        """Render ROWS/RANGE bounds as inline integer literals (SQLAlchemy 2.0).
+
+        SQLAlchemy 2.0 compiles frames here; 2.1 uses ``visit_frame_clause``.
+        """
+        kw["literal_execute"] = True
+        format_frame = getattr(compiler.SQLCompiler, "_format_frame_clause", None)
+        if format_frame is None:
+            raise NotImplementedError(
+                "Window frame compilation requires SQLAlchemy 2.0 _format_frame_clause"
+            )
+        return format_frame(self, range_, **kw)
+
     def visit_now_func(self, now: functions.GenericFunction, **kw: Any) -> str:
         return "CURRENT_TIMESTAMP"
 
@@ -776,7 +829,8 @@ class SnowflakeCompiler(compiler.SQLCompiler):
     def _insert_targets_semi_structured(self, insert_stmt: Any) -> bool:
         """Whether the INSERT writes to a semi-structured column.
 
-        Such columns have a ``PARSE_JSON``-wrapped value (see
+        Such columns (including typed MAP / ARRAY / OBJECT) have a
+        ``PARSE_JSON``-wrapped value (see
         ``_SemiStructuredJSONMixin.bind_expression``); Snowflake rejects
         functions in a ``VALUES`` clause, so those inserts must be rendered as
         ``INSERT ... SELECT`` instead.
@@ -789,11 +843,7 @@ class SnowflakeCompiler(compiler.SQLCompiler):
                 col = table.c[name_or_col]
             else:
                 col = name_or_col
-            col_type = getattr(col, "type", None)
-            return (
-                isinstance(col_type, _SemiStructuredJSONMixin)
-                and col_type._is_untyped_semi_structured()
-            )
+            return isinstance(getattr(col, "type", None), _SemiStructuredJSONMixin)
 
         table = insert_stmt.table
         values = getattr(insert_stmt, "_values", None)
@@ -1135,9 +1185,16 @@ class SnowflakeCompiler(compiler.SQLCompiler):
     def visit_azure_container(
         self, azure_container: AzureContainer, **kw: Any
     ) -> tuple[str, str, str]:
+        """Compile an :class:`AzureContainer` into a ``(uri, credentials, encryption)`` triple.
+
+        In strict host-name mode, an ``AzureContainer`` without an explicit
+        ``endpoint`` is rejected at compile time so the commercial
+        ``.blob.core.windows.net`` default is never emitted (SNOW-4248737).
+        """
+        strict = getattr(self.dialect, "strict_host_names", False)
         deterministic = kw.get("deterministic", False)
         return (
-            _render_storage_uri(azure_container),
+            _render_storage_uri(azure_container, strict=strict),
             (
                 _render_storage_credentials(
                     azure_container.credentials_used, deterministic
@@ -1211,6 +1268,22 @@ class SnowflakeCompiler(compiler.SQLCompiler):
         from_hints: Any,
         **kw: Any,
     ) -> str:
+        # SQLAlchemy 2.1 ``Delete.using(target.join(...))`` puts the target
+        # itself in USING; Snowflake rejects that ("duplicate alias").
+        # ``surface_selectables_only`` does not descend into subqueries, and an
+        # alias of the target is a different selectable, so both stay allowed.
+        if any(
+            from_table in elem._cloned_set
+            for extra_from in extra_froms
+            for elem in sql_util.surface_selectables_only(extra_from)
+        ):
+            raise sa_exc.CompileError(
+                "Snowflake does not allow the DELETE target table inside "
+                "DELETE ... USING (duplicate alias). Join an alias of the target "
+                "and correlate on a key, e.g. u2 = users.alias(); "
+                "delete(users).using(u2.outerjoin(addresses, ...))"
+                ".where(users.c.id == u2.c.id, ...), or use a NOT EXISTS subquery."
+            )
         return "USING " + ", ".join(
             t._compiler_dispatch(self, asfrom=True, fromhints=from_hints, **kw)
             for t in extra_froms
@@ -1591,7 +1664,8 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
         # (SNOW-3649858).
         container = create_stage.container
         deterministic = kw.get("deterministic", False)
-        uri = _render_storage_uri(container)
+        strict = getattr(self.dialect, "strict_host_names", False)
+        uri = _render_storage_uri(container, strict=strict)
         # credentials_used / encryption_used exist on CloudStorageLocation
         # subclasses (buckets) but not on ExternalStage; read defensively so the
         # union type checks and an ExternalStage container renders no creds.
@@ -1699,13 +1773,24 @@ class SnowflakeDDLCompiler(compiler.DDLCompiler):
 
 class SnowflakeTypeCompiler(compiler.GenericTypeCompiler):
     def _render_string_type(
-        self, name: str, length: int | None, collation: str | None
+        self,
+        name: str,
+        length: int | None,
+        collation: str | None,
+        collation_schema: str | None = None,
+        identifier_preparer: Any = None,
+        **kw: Any,
     ) -> str:
         """Render a string type, emitting collation as a Snowflake literal.
 
         Snowflake renders column collation as a single-quoted string literal
         (e.g. ``VARCHAR(100) COLLATE 'en-ci'``); SQLAlchemy's default emits a
         double-quoted identifier, which is invalid Snowflake syntax.
+
+        ``collation_schema`` / ``identifier_preparer`` are accepted for
+        SQLAlchemy 2.1 compatibility (2.1 passes them positionally from
+        ``visit_VARCHAR``/``visit_CHAR``).  Snowflake has no schema-qualified
+        collations, so ``collation_schema`` is ignored.
         """
         text = name
         if length:

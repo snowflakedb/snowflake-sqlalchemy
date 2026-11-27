@@ -37,7 +37,8 @@ def _semi_structured_types():
 
 
 def _structured_types():
-    # Typed / structured forms (Iceberg) are intentionally excluded.
+    # Typed / structured forms get the same JSON serialization, plus a cast to
+    # the declared type (see TestTypedStructuredWrite).
     return [
         MAP(sqltypes.VARCHAR(), sqltypes.VARCHAR()),
         OBJECT(name=sqltypes.VARCHAR()),
@@ -69,9 +70,19 @@ class TestBindProcessor:
         assert proc('{"a": 1}') == '{"a": 1}'
 
     @pytest.mark.parametrize("typ", _structured_types())
-    def test_structured_types_excluded(self, typ):
-        # Typed structured columns keep their native handling; no PARSE_JSON path.
-        assert typ.bind_processor(_Dialect(enabled=True)) is None
+    def test_structured_types_serialize_python_objects(self, typ):
+        # The connector cannot bind a dict/list (255001), so typed structured
+        # columns serialize like the untyped forms.
+        proc = typ.bind_processor(_Dialect(enabled=True))
+        assert proc is not None
+        assert proc({"a": 1}) == '{"a": 1}'
+        assert proc([1, 2]) == "[1, 2]"
+        assert proc(None) is None
+        assert proc('{"a": 1}') == '{"a": 1}'
+
+    @pytest.mark.parametrize("typ", _structured_types())
+    def test_structured_types_off_returns_none(self, typ):
+        assert typ.bind_processor(_Dialect(enabled=False)) is None
 
     def test_uses_dialect_json_serializer(self):
         proc = VARIANT().bind_processor(
@@ -133,11 +144,24 @@ class TestParseJsonRendering:
         assert "PARSE_JSON(%(v_1)s)" in sql
         assert "'{" not in sql
 
-    def test_structured_map_not_wrapped_when_on(self):
+    def test_structured_map_wrapped_with_cast_when_on(self):
+        # Snowflake rejects a bare PARSE_JSON (VARIANT) for a typed column
+        # ("incompatible types"), so the value is cast to the declared type.
         t = self._table()
         on = SnowflakeDialect(enable_structured_type_json=True)
-        sql = _norm(update(t).where(t.c.id == 1).values(m="x").compile(dialect=on))
+        sql = _norm(
+            update(t).where(t.c.id == 1).values(m={"k": "x"}).compile(dialect=on)
+        )
+        assert "SET m=CAST(PARSE_JSON(%(m)s) AS MAP(VARCHAR, VARCHAR))" in sql
+
+    def test_structured_map_not_wrapped_when_off(self):
+        t = self._table()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            off = SnowflakeDialect(enable_structured_type_json=False)
+        sql = _norm(update(t).where(t.c.id == 1).values(m="x").compile(dialect=off))
         assert "PARSE_JSON" not in sql
+        assert "CAST" not in sql
 
 
 class TestInsertValuesToSelect:
@@ -447,3 +471,152 @@ class TestObjectTypeCopyInvariance:
         # The base-class constructor param must never surface as a field.
         assert "is_semi_structured" not in OBJECT().copy().items_types
         assert "is_semi_structured" not in OBJECT(x=String()).copy().items_types
+
+
+class TestTypedStructuredWrite:
+    """Typed MAP / ARRAY / OBJECT columns accept Python ``dict``/``list`` values.
+
+    Snowflake cannot bind a dict/list (255001) and rejects a bare
+    ``PARSE_JSON`` (VARIANT) for a typed column, so the value is rendered as
+    ``CAST(PARSE_JSON(:p) AS <declared type>)`` inside ``INSERT ... SELECT``.
+    """
+
+    @staticmethod
+    def _table():
+        meta = MetaData()
+        return Table(
+            "t",
+            meta,
+            Column("id", Integer),
+            Column("m", MAP(String(), Integer())),
+            Column("a", ARRAY(Integer())),
+            Column("o", OBJECT(x=(Integer(), False))),
+        )
+
+    @staticmethod
+    def _on(**kw):
+        return SnowflakeDialect(enable_structured_type_json=True, **kw)
+
+    def test_single_row_insert_renders_select_with_casts(self):
+        t = self._table()
+        sql = _norm(
+            insert(t)
+            .values(id=1, m={"k": 1}, a=[1, 2], o={"x": 1})
+            .compile(dialect=self._on())
+        )
+        assert sql == (
+            "INSERT INTO t (id, m, a, o) SELECT %(id)s, "
+            "CAST(PARSE_JSON(%(m)s) AS MAP(VARCHAR, INTEGER)), "
+            "CAST(PARSE_JSON(%(a)s) AS ARRAY(INTEGER)), "
+            "CAST(PARSE_JSON(%(o)s) AS OBJECT(x INTEGER))"
+        )
+
+    def test_insert_binds_serialized_json(self):
+        t = self._table()
+        compiled = (
+            insert(t)
+            .values(id=1, m={"k": 1}, a=[1, 2], o={"x": 1})
+            .compile(dialect=self._on())
+        )
+        params = compiled.construct_params()
+        processors = compiled._bind_processors
+        assert processors["m"](params["m"]) == '{"k": 1}'
+        assert processors["a"](params["a"]) == "[1, 2]"
+        assert processors["o"](params["o"]) == '{"x": 1}'
+
+    def test_multi_row_insert_renders_union_all_with_casts(self):
+        t = self._table()
+        sql = _norm(
+            insert(t)
+            .values([{"id": 1, "m": {"k": 1}}, {"id": 2, "m": {"k": 2}}])
+            .compile(dialect=self._on())
+        )
+        assert "UNION ALL" in sql
+        assert sql.count("CAST(PARSE_JSON(") == 2
+        assert "VALUES" not in sql
+
+    def test_qmark_insert_renders_positional_cast(self):
+        t = self._table()
+        compiled = (
+            insert(t)
+            .values(id=1, m={"k": 1})
+            .compile(dialect=self._on(paramstyle="qmark"))
+        )
+        assert "SELECT ?, CAST(PARSE_JSON(?) AS MAP(VARCHAR, INTEGER))" in _norm(
+            compiled
+        )
+        assert list(compiled.positiontup) == ["id", "m"]
+
+    def test_nested_types_cast_to_full_declared_type(self):
+        meta = MetaData()
+        t = Table(
+            "t",
+            meta,
+            Column("id", Integer),
+            Column("n", MAP(String(), ARRAY(Integer()))),
+            Column(
+                "o", OBJECT(**{"my field": String(), "inner": MAP(String(), Integer())})
+            ),
+        )
+        sql = _norm(
+            insert(t)
+            .values(id=1, n={"a": [1]}, o={"my field": "v", "inner": {"k": 1}})
+            .compile(dialect=self._on())
+        )
+        assert "CAST(PARSE_JSON(%(n)s) AS MAP(VARCHAR, ARRAY(INTEGER)))" in sql
+        assert (
+            'CAST(PARSE_JSON(%(o)s) AS OBJECT("my field" VARCHAR, '
+            "inner MAP(VARCHAR, INTEGER)))" in sql
+        )
+
+    def test_where_equality_casts(self):
+        t = self._table()
+        sql = _norm(select(t.c.id).where(t.c.m == {"k": 1}).compile(dialect=self._on()))
+        assert "t.m = CAST(PARSE_JSON(%(m_1)s) AS MAP(VARCHAR, INTEGER))" in sql
+
+    def test_subscript_comparison_not_cast(self):
+        # ``col["k"] == 5`` binds 5 with its own (Integer) type: no wrapping.
+        t = self._table()
+        sql = _norm(select(t.c.id).where(t.c.m["k"] == 5).compile(dialect=self._on()))
+        assert "PARSE_JSON" not in sql
+        assert "CAST" not in sql
+
+    def test_flag_off_uses_values_without_cast(self):
+        t = self._table()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            off = SnowflakeDialect(enable_structured_type_json=False)
+        sql = _norm(insert(t).values(id=1, m="x").compile(dialect=off))
+        assert "VALUES" in sql
+        assert "PARSE_JSON" not in sql
+        assert "CAST" not in sql
+
+    def test_non_snowflake_dialect_renders_bare_bind(self):
+        from sqlalchemy.dialects import sqlite
+
+        t = self._table()
+        sql = _norm(insert(t).values(id=1, m="x").compile(dialect=sqlite.dialect()))
+        assert "PARSE_JSON" not in sql
+        assert "CAST" not in sql
+
+    def test_literal_binds_raises(self):
+        t = self._table()
+        with pytest.raises(CompileError):
+            insert(t).values(id=1, m={"k": 1}).compile(
+                dialect=self._on(), compile_kwargs={"literal_binds": True}
+            )
+
+    def test_object_field_spec_is_part_of_cache_key(self):
+        # The rendered CAST depends on OBJECT's fields, so two OBJECT columns
+        # with different fields must not share a statement cache entry.
+        def key(typ):
+            return typ._static_cache_key
+
+        assert key(OBJECT(x=Integer())) != key(OBJECT(y=Integer()))
+        assert key(OBJECT(x=Integer())) != key(OBJECT(x=String()))
+        assert key(OBJECT(x=(Integer(), True))) != key(OBJECT(x=(Integer(), False)))
+        assert key(OBJECT(x=Integer())) == key(OBJECT(x=Integer()))
+        assert key(OBJECT()) != key(OBJECT(x=Integer()))
+
+        t = Table("t", MetaData(), Column("o", OBJECT(x=Integer())))
+        assert insert(t).values(o={"x": 1})._generate_cache_key() is not None

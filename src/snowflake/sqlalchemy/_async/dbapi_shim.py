@@ -7,8 +7,8 @@ SQLAlchemy's async dialects do not talk to an async DBAPI directly. Instead
 they wrap an async driver in a set of adapter objects (defined in
 ``sqlalchemy.connectors.asyncio``) that expose a *synchronous* PEP-249 surface
 whose blocking calls are bridged onto the running event loop via greenlets
-(``await_only`` / ``await_fallback``). This is the same strategy used by the
-first-party ``aiomysql``/``asyncmy``/``aiosqlite`` dialects.
+(``await_`` / historically ``await_only``). This is the same strategy used by
+the first-party ``aiomysql``/``asyncmy``/``aiosqlite`` dialects.
 
 This module provides:
 
@@ -22,15 +22,54 @@ This module provides:
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
+from sqlalchemy.connectors import asyncio as sa_asyncio
 from sqlalchemy.connectors.asyncio import (
     AsyncAdapt_dbapi_connection,
     AsyncAdapt_dbapi_cursor,
     AsyncAdapt_dbapi_ss_cursor,
-    AsyncAdaptFallback_dbapi_connection,
 )
-from sqlalchemy.util.concurrency import await_only
+from sqlalchemy.util import concurrency as sa_concurrency
+
+# SA 2.0 only; async_fallback was removed in SA 2.1.
+AsyncAdaptFallback_dbapi_connection: Any = getattr(
+    sa_asyncio, "AsyncAdaptFallback_dbapi_connection", None
+)
+
+
+def _sa_await() -> Any:
+    """Return SQLAlchemy's greenlet bridge.
+
+    SA 2.1 renamed ``await_only`` to ``await_`` (``await_only`` remains an alias
+    until 2.2).
+    """
+    renamed = getattr(sa_concurrency, "await_", None)
+    if renamed is not None:
+        return renamed
+    return sa_concurrency.await_only
+
+
+await_: Any = _sa_await()
+
+# SA 2.0 only: fallback connections are opened and driven with await_fallback.
+await_fallback: Any = getattr(sa_concurrency, "await_fallback", None)
+
+
+def _await(adapter: Any, awaitable: Any) -> Any:
+    """Bridge ``awaitable`` with the adapter's own hook when it has one.
+
+    SA 2.0 sets ``await_`` per adapter (``await_only``, or ``await_fallback`` on
+    fallback connections); SA 2.1 removed that hook for the module-level
+    ``await_``.
+    """
+    hook = getattr(adapter, "await_", None)
+    return await_(awaitable) if hook is None else hook(awaitable)
+
+
+ASYNC_FALLBACK_REMOVED_MSG: Literal["async_fallback was removed in SQLAlchemy 2.1"] = (
+    "async_fallback was removed in SQLAlchemy 2.1"
+)
 
 
 class _AwaitCursorFactoryMixin:
@@ -47,7 +86,7 @@ class _AwaitCursorFactoryMixin:
     def _make_new_cursor(self, connection: Any) -> Any:
         cursor = connection.cursor()
         if hasattr(cursor, "__await__"):  # awaitable: bridge it
-            return self.await_(cursor)  # type: ignore[attr-defined]
+            return _await(self, cursor)
         return cursor  # already a cursor
 
 
@@ -60,7 +99,7 @@ class AsyncAdapt_snowflake_cursor(_AwaitCursorFactoryMixin, AsyncAdapt_dbapi_cur
     def setinputsizes(self, *inputsizes: Any) -> None:
         result = self._cursor.setinputsizes(*inputsizes)
         if hasattr(result, "__await__"):
-            self.await_(result)
+            _await(self, result)
 
 
 class AsyncAdapt_snowflake_ss_cursor(
@@ -74,7 +113,7 @@ class AsyncAdapt_snowflake_ss_cursor(
     def setinputsizes(self, *inputsizes: Any) -> None:
         result = self._cursor.setinputsizes(*inputsizes)
         if hasattr(result, "__await__"):
-            self.await_(result)
+            _await(self, result)
 
 
 class AsyncAdapt_snowflake_connection(AsyncAdapt_dbapi_connection):
@@ -98,7 +137,7 @@ class AsyncAdapt_snowflake_connection(AsyncAdapt_dbapi_connection):
         # 5.x: Connection.autocommit is a coroutine; 4.x: plain method.
         result = self._connection.autocommit(value)
         if hasattr(result, "__await__"):
-            return self.await_(result)
+            return _await(self, result)
         return result
 
     def __getattr__(self, name: str) -> Any:
@@ -112,10 +151,19 @@ class AsyncAdapt_snowflake_connection(AsyncAdapt_dbapi_connection):
         return getattr(self._connection, name)
 
 
-class AsyncAdaptFallback_snowflake_connection(
-    AsyncAdaptFallback_dbapi_connection, AsyncAdapt_snowflake_connection
-):
-    __slots__ = ()
+def _fallback_snowflake_connection_cls() -> Any:
+    if AsyncAdaptFallback_dbapi_connection is None:
+        return None
+
+    class _AsyncAdaptFallback_snowflake_connection(
+        AsyncAdaptFallback_dbapi_connection, AsyncAdapt_snowflake_connection
+    ):
+        __slots__ = ()
+
+    return _AsyncAdaptFallback_snowflake_connection
+
+
+AsyncAdaptFallback_snowflake_connection: Any = _fallback_snowflake_connection_cls()
 
 
 class AsyncAdapt_snowflake_dbapi:
@@ -137,14 +185,18 @@ class AsyncAdapt_snowflake_dbapi:
     def connect(self, *arg: Any, **kw: Any) -> AsyncAdapt_dbapi_connection:
         creator_fn = kw.pop("async_creator_fn", self.connector_aio.connect)
         if kw.pop("async_fallback", False):
+            if AsyncAdaptFallback_snowflake_connection is None:
+                raise NotImplementedError(ASYNC_FALLBACK_REMOVED_MSG)
             connection_cls: type[AsyncAdapt_dbapi_connection] = (
                 AsyncAdaptFallback_snowflake_connection
             )
+            bridge = await_fallback
         else:
             connection_cls = AsyncAdapt_snowflake_connection
+            bridge = await_
         # ``connector.aio.connect(**kw)`` returns a HybridCoroutineContextManager
         # that is awaitable; awaiting it yields the live async connection.
-        return connection_cls(self, await_only(creator_fn(*arg, **kw)))
+        return connection_cls(self, bridge(creator_fn(*arg, **kw)))
 
     def __getattr__(self, name: str) -> Any:
         """Fall back to the sync connector module for exceptions, Binary,

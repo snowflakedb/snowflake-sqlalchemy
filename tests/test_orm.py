@@ -21,7 +21,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Session, declarative_base, relationship
 
-from snowflake.sqlalchemy import HybridTable
+from snowflake.sqlalchemy import HybridTable, dialect
 
 
 def test_basic_orm(engine_testaccount):
@@ -451,14 +451,8 @@ def test_schema_including_dot(engine_testaccount, db_parameters):
     )
 
 
-def test_schema_translate_map(engine_testaccount, db_parameters):
-    """
-    Test schema translate map execution option works replaces schema correctly
-    """
+def _schema_translate_user_model(namespace, schema_map):
     Base = declarative_base()
-
-    namespace = f"{db_parameters['database']}.{db_parameters['schema']}"
-    schema_map = "A"
 
     class User(Base):
         __tablename__ = "users"
@@ -469,6 +463,28 @@ def test_schema_translate_map(engine_testaccount, db_parameters):
         )
         name = Column(String)
         fullname = Column(String)
+
+    return Base, User
+
+
+def test_schema_translate_map_compiles_with_placeholder_schema():
+    """The compiled query keeps the schema_map placeholder, not the real schema."""
+    schema_map = "A"
+    _, User = _schema_translate_user_model("db.schema", schema_map)
+
+    query = Session().query(User)
+    assert str(query.statement.compile(dialect=dialect())).startswith(
+        f'SELECT "{schema_map}".{User.__tablename__}'
+    )
+
+
+def test_schema_translate_map(engine_testaccount, db_parameters):
+    """
+    Test schema translate map execution option works replaces schema correctly
+    """
+    namespace = f"{db_parameters['database']}.{db_parameters['schema']}"
+    schema_map = "A"
+    Base, User = _schema_translate_user_model(namespace, schema_map)
 
     with engine_testaccount.connect().execution_options(
         schema_translate_map={schema_map: db_parameters["schema"]}
@@ -486,11 +502,6 @@ def test_schema_translate_map(engine_testaccount, db_parameters):
                     )
                 )
 
-                # assert the precompiled query contains the schema_map and not the actual schema
-                assert str(query).startswith(
-                    f'SELECT "{schema_map}".{User.__tablename__}'
-                )
-
                 # run query and see that schema translation was done corectly
                 results = query.all()
                 assert len(results) == 1
@@ -502,7 +513,7 @@ def test_schema_translate_map(engine_testaccount, db_parameters):
                 Base.metadata.drop_all(con)
 
 
-def test_outer_lateral_join(engine_testaccount, caplog):
+def _employee_department_models():
     Base = declarative_base()
 
     class Employee(Base):
@@ -517,19 +528,21 @@ def test_outer_lateral_join(engine_testaccount, caplog):
         department_id = Column(Integer, primary_key=True)
         name = Column(String)
 
-    Base.metadata.create_all(engine_testaccount)
-    session = Session(bind=engine_testaccount)
-    e1 = Employee(employee_id=101, last_name="Richards")
-    d1 = Department(department_id=1, name="Engineering")
-    session.add_all([e1, d1])
-    session.commit()
+    return Base, Employee, Department
 
+
+def _outer_lateral_join_query(Employee, Department):
     sub = select(Department).lateral()
-    query = (
+    return (
         select(Employee.employee_id, Department.department_id)
         .select_from(Employee)
         .outerjoin(sub)
     )
+
+
+def test_outer_lateral_join_compiles():
+    _, Employee, Department = _employee_department_models()
+    query = _outer_lateral_join_query(Employee, Department)
     compiled_stmts = (
         # v1.x
         "SELECT employees.employee_id, departments.department_id "
@@ -542,9 +555,21 @@ def test_outer_lateral_join(engine_testaccount, caplog):
         "(SELECT departments.department_id AS department_id, departments.name AS name "
         "FROM departments) AS anon_1, departments",
     )
-    compiled_stmt = str(query.compile(engine_testaccount)).replace("\n", "")
+    compiled_stmt = str(query.compile(dialect=dialect())).replace("\n", "")
     assert compiled_stmt in compiled_stmts
 
+
+def test_outer_lateral_join(engine_testaccount, caplog):
+    Base, Employee, Department = _employee_department_models()
+
+    Base.metadata.create_all(engine_testaccount)
+    session = Session(bind=engine_testaccount)
+    e1 = Employee(employee_id=101, last_name="Richards")
+    d1 = Department(department_id=1, name="Engineering")
+    session.add_all([e1, d1])
+    session.commit()
+
+    query = _outer_lateral_join_query(Employee, Department)
     with caplog.at_level(logging.DEBUG):
         assert [res for res in session.execute(query)]
     log_text = caplog.text.replace("\n", "")
@@ -557,7 +582,7 @@ def test_outer_lateral_join(engine_testaccount, caplog):
     )
 
 
-def test_lateral_join_without_condition(engine_testaccount, caplog):
+def _lateral_flatten_query():
     Base = declarative_base()
 
     class Employee(Base):
@@ -567,7 +592,6 @@ def test_lateral_join_without_condition(engine_testaccount, caplog):
         uid = Column(Integer)
         content = Column(String)
 
-    Base.metadata.create_all(engine_testaccount)
     lateral_table = func.flatten(
         func.PARSE_JSON(Employee.content), outer=False
     ).lateral()
@@ -579,13 +603,22 @@ def test_lateral_join_without_condition(engine_testaccount, caplog):
         .join(lateral_table)
         .where(Employee.uid == "123")
     )
-    session = Session(bind=engine_testaccount)
-    with caplog.at_level(logging.DEBUG):
-        session.execute(query)
+    return Base, query
+
+
+def test_lateral_join_without_condition_compiles():
+    _, query = _lateral_flatten_query()
     assert (
         'SELECT "Employee".uid FROM "Employee" JOIN LATERAL flatten(PARSE_JSON("Employee"'
-        in caplog.text.replace("\n", "")
+        in str(query.compile(dialect=dialect())).replace("\n", "")
     )
+
+
+def test_lateral_join_without_condition(engine_testaccount):
+    Base, query = _lateral_flatten_query()
+    Base.metadata.create_all(engine_testaccount)
+    session = Session(bind=engine_testaccount)
+    session.execute(query)
 
 
 @pytest.mark.feature_max_lob_size

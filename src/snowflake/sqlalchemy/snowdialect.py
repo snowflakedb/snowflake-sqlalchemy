@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import decimal
 import logging
+import os
 import warnings
 from collections import defaultdict
 from collections.abc import Callable, Collection, Sequence
@@ -24,7 +25,7 @@ if TYPE_CHECKING:
         ReflectedTableComment,
     )
 
-from urllib.parse import unquote_plus
+from urllib.parse import unquote
 
 from snowflake.connector import errors as sf_errors
 from snowflake.connector.connection import SnowflakeConnection
@@ -57,6 +58,7 @@ except ImportError:  # snowflake-connector-python >= 5.x removed this helper
 import sqlalchemy.sql.sqltypes as sqltypes
 from snowflake.sqlalchemy.name_utils import _NameUtils
 from snowflake.sqlalchemy.structured_type_info_manager import _StructuredTypeInfoManager
+from sqlalchemy import __version__ as _sa_version
 from sqlalchemy import event as sa_vnt
 from sqlalchemy import exc as sa_exc
 from sqlalchemy import util as sa_util
@@ -66,6 +68,7 @@ from sqlalchemy.engine.interfaces import (
     ReflectedUniqueConstraint,
 )
 from sqlalchemy.schema import Table
+from sqlalchemy.sql import compiler as _sa_sql_compiler
 from sqlalchemy.sql import text
 from sqlalchemy.sql.sqltypes import NullType
 from sqlalchemy.types import FLOAT, Date, DateTime, Float, Time
@@ -88,7 +91,9 @@ from .custom_types import (
     _CUSTOM_Date,
     _CUSTOM_DateTime,
     _CUSTOM_Float,
+    _CUSTOM_Interval,
     _CUSTOM_Time,
+    _CUSTOM_Uuid,
 )
 from .parser.custom_type_parser import *  # noqa
 from .parser.custom_type_parser import (
@@ -107,6 +112,9 @@ from .util import (
     parse_url_integer,
 )
 
+# SQLAlchemy 2.1; absent on 2.0.
+_AggregateOrderByStyle: Any = getattr(_sa_sql_compiler, "AggregateOrderByStyle", None)
+
 # Type aliases for the schema-wide reflection caches: {table_name: constraint}
 _PKIndex = dict[str, ReflectedPrimaryKeyConstraint]
 _UKIndex = dict[str, list[ReflectedUniqueConstraint]]
@@ -116,6 +124,8 @@ colspecs = {
     DateTime: _CUSTOM_DateTime,
     Time: _CUSTOM_Time,
     Float: _CUSTOM_Float,
+    sqltypes.Interval: _CUSTOM_Interval,
+    sqltypes.Uuid: _CUSTOM_Uuid,
 }
 
 _ENABLE_SQLALCHEMY_AS_APPLICATION_NAME = True
@@ -218,7 +228,7 @@ _FORCE_DIV_IS_FLOORDIV_REMOVED_MSG = (
     "(FLOOR(left / right)); no flag is needed. Remove the argument from your "
     "create_engine() call. See the migration guide: "
     "https://github.com/snowflakedb/snowflake-sqlalchemy/blob/main/MIGRATING.md"
-    "#6-force_div_is_floordiv-removed"
+    "#4-force_div_is_floordiv-removed"
 )
 
 _ENABLE_STRUCTURED_TYPE_JSON_DEPRECATION_MSG = (
@@ -229,21 +239,110 @@ _ENABLE_STRUCTURED_TYPE_JSON_DEPRECATION_MSG = (
 )
 
 
-def _split_database_namespace(database: str) -> tuple[str, str | None]:
-    """Split a URL database slot of the form ``"db"`` or ``"db/schema"``.
+def _split_on_unquoted_slash(text: str) -> list[str]:
+    """Split ``text`` on ``/`` that are not inside double-quoted identifiers.
 
-    Each ``/``-separated part is URL-decoded. Returns ``(database, schema)``
-    where ``schema`` is ``None`` when only a database is given.
+    Snowflake unquoted identifiers cannot contain ``/``, so an unquoted slash
+    is always the database/schema delimiter. Quoted identifiers may contain
+    slashes (and doubled ``""`` escapes). See
+    https://docs.snowflake.com/en/sql-reference/identifiers-syntax
+    """
+    parts: list[str] = []
+    buf: list[str] = []
+    in_quote = False
+    idx = 0
+    while idx < len(text):
+        char = text[idx]
+        if char == '"':
+            if in_quote and idx + 1 < len(text) and text[idx + 1] == '"':
+                buf.append('""')
+                idx += 2
+                continue
+            in_quote = not in_quote
+            buf.append(char)
+        elif char == "/" and not in_quote:
+            parts.append("".join(buf))
+            buf = []
+        else:
+            buf.append(char)
+        idx += 1
+    parts.append("".join(buf))
+    return parts
+
+
+def _url_path_identifiers_sa20(path: str) -> list[str]:
+    """Return the identifiers in the URL database path, each decoded once.
+
+    SQLAlchemy 2.0 ``make_url`` leaves the path percent-encoded, while
+    ``URL.create`` stores raw values; the ``URL`` object does not say which.
+    Snowflake identifier syntax tells them apart per identifier: unquoted
+    identifiers cannot contain ``%``, and an encoded identifier (e.g. from
+    ``snowflake.sqlalchemy.URL``) has ``"`` as ``%22``. So a part with ``%`` and
+    no raw ``"`` is an encoding, and a part with a raw ``"`` is a raw value
+    whose ``%`` is literal. Deciding per part keeps a raw ``"db"`` from
+    disabling decoding of an encoded schema (and vice versa).
+
+    Splitting before decoding is safe: an encoded part has no raw ``"`` or
+    ``/``. A decoded part is split again because an encoded ``%2F`` outside
+    quotes is still the namespace separator.
+
+    Use ``unquote``, not ``unquote_plus``: a literal ``+`` must stay ``+``.
+    """
+    parts: list[str] = []
+    for part in _split_on_unquoted_slash(path):
+        if '"' in part or "%" not in part:
+            parts.append(part)
+        else:
+            parts.extend(_split_on_unquoted_slash(unquote(part)))
+    return parts
+
+
+def _url_path_identifiers_sa21(path: str) -> list[str]:
+    """Return the identifiers in the URL database path without decoding them.
+
+    SQLAlchemy 2.1 ``make_url`` already percent-decodes the path; decoding again
+    would corrupt quoted identifiers that contain a literal ``%`` (``"a%20b"``
+    would become ``"a b"``).
+    """
+    return _split_on_unquoted_slash(path)
+
+
+# SQLAlchemy 2.1 percent-decodes the URL path in make_url; 2.0 does not.
+_SA_DECODES_URL_PATH = tuple(map(int, _sa_version.split(".")[:2])) >= (2, 1)
+_url_path_identifiers: Callable[[str], list[str]] = (
+    _url_path_identifiers_sa21 if _SA_DECODES_URL_PATH else _url_path_identifiers_sa20
+)
+
+
+def _split_database_namespace(database: str) -> tuple[str, str | None]:
+    """Split a URL database slot of the form ``db`` or ``db/schema``.
+
+    The identifiers come from the SQLAlchemy-version specific
+    ``_url_path_identifiers`` so both versions share the same Snowflake grammar:
+    unquoted ``/`` is the namespace separator, ``/`` inside ``"..."`` is part of
+    the identifier.
 
     Raises:
         sa_exc.ArgumentError: if more than two parts are present.
     """
-    name_spaces = [unquote_plus(e) for e in database.split("/")]
+    name_spaces = _url_path_identifiers(database)
     if len(name_spaces) == 1:
         return name_spaces[0], None
     if len(name_spaces) == 2:
         return name_spaces[0], name_spaces[1]
     raise sa_exc.ArgumentError(f"Invalid name space is specified: {database}")
+
+
+# ---------------------------------------------------------------------------
+# Strict host-name mode (SNOW-4248737)
+# ---------------------------------------------------------------------------
+
+
+def _is_strict_host_names() -> bool:
+    return os.environ.get("SNOWFLAKE_SQLALCHEMY_STRICT_HOST_NAMES", "").lower() in (
+        "true",
+        "1",
+    )
 
 
 def _normalized_account_host(host: str, port: Any) -> tuple[str, str, str] | None:
@@ -311,6 +410,13 @@ class SnowflakeDialect(default.DefaultDialect):
 
     # target database treats the / division operator as “floor division”
     div_is_floordiv = False
+
+    # SQLAlchemy 2.1 added aggregate_order_by(); Snowflake requires
+    # ``agg(x) WITHIN GROUP (ORDER BY y)`` and rejects the default INLINE form
+    # ``agg(x ORDER BY y)`` with a SQL compilation error.  Attribute is absent
+    # on SA 2.0, where the construct does not exist.
+    if _AggregateOrderByStyle is not None:
+        aggregate_order_by_style = _AggregateOrderByStyle.WITHIN_GROUP
 
     # all str types must be converted in Unicode
     convert_unicode = True
@@ -390,6 +496,7 @@ class SnowflakeDialect(default.DefaultDialect):
         redact_log_secrets: bool = True,
         json_serializer: Any = None,
         json_deserializer: Any = None,
+        strict_host_names: bool | None = None,
         **kwargs: Any,
     ):
         # ``legacy_url_params`` was removed in the major release.  Reject it with
@@ -437,6 +544,17 @@ class SnowflakeDialect(default.DefaultDialect):
         self._json_serializer = json_serializer
         self._json_deserializer = json_deserializer
         self._redact_log_secrets = redact_log_secrets
+        # Strict host-name mode: when enabled, the dialect never infers or
+        # appends `.snowflakecomputing.com` and requires an explicit FQDN host
+        # (SNOW-4248737).  Enabled via kwarg or env var.
+        if strict_host_names is None:
+            strict_host_names = _is_strict_host_names()
+        self._strict_host_names = strict_host_names
+
+    @property
+    def strict_host_names(self) -> bool:
+        """Whether strict host-name mode is active."""
+        return self._strict_host_names
 
     def initialize(self, connection: Connection) -> None:
         super().initialize(connection)
@@ -499,17 +617,22 @@ class SnowflakeDialect(default.DefaultDialect):
 
         if "database" in opts:
             database, schema = _split_database_namespace(opts["database"])
-            # Preserve the original behavior: only a "db/schema" namespace
-            # rewrites opts; a bare database is left exactly as
-            # translate_connect_args produced it (not re-unquoted).
+            opts["database"] = database
             if schema is not None:
-                opts["database"] = database
                 opts["schema"] = schema
 
         if "host" in opts:
-            normalized = _normalized_account_host(opts["host"], opts.get("port"))
-            if normalized is not None:
-                opts["account"], opts["host"], opts["port"] = normalized
+            if self._strict_host_names:
+                # Strict mode: derive account but do NOT append
+                # .snowflakecomputing.com.  The connector requires account
+                # (it is not derived from host), so parse it from the URL
+                # host the same way _normalized_account_host would.
+                if not opts.get("account"):
+                    opts["account"] = parse_account(opts["host"])
+            else:
+                normalized = _normalized_account_host(opts["host"], opts.get("port"))
+                if normalized is not None:
+                    opts["account"], opts["host"], opts["port"] = normalized
 
         opts["autocommit"] = False  # autocommit is disabled by default
 
@@ -2115,7 +2238,8 @@ class SnowflakeDialect(default.DefaultDialect):
         return [
             ((schema, table_name), table_indexes)
             for table_name, table_indexes in all_indexes.items()
-            if table_name in filter_names and table_name in hybrid_table_names  # type: ignore[operator]
+            if (filter_names is None or table_name in filter_names)
+            and table_name in hybrid_table_names
         ]
 
     def _value_or_default(self, data: Any, table: str, schema: str | None) -> list[Any]:
@@ -2144,6 +2268,12 @@ class SnowflakeDialect(default.DefaultDialect):
             ):
                 continue
             table_name = self.normalize_name(str(row[name_to_index_map["table"]]))
+            include_columns = [
+                self.normalize_name(column)
+                for column in parse_index_columns(
+                    row[name_to_index_map["included_columns"]]
+                )
+            ]
             indexes[table_name].append(
                 {
                     "name": self.normalize_name(row[name_to_index_map["name"]]),
@@ -2154,13 +2284,10 @@ class SnowflakeDialect(default.DefaultDialect):
                             row[name_to_index_map["columns"]]
                         )
                     ],
-                    "include_columns": [
-                        self.normalize_name(column)
-                        for column in parse_index_columns(
-                            row[name_to_index_map["included_columns"]]
-                        )
-                    ],
-                    "dialect_options": {},
+                    # SA 2.0 Inspector still reads include_columns; SA 2.1 moved
+                    # INCLUDE lists to dialect_options["{dialect}_include"].
+                    "include_columns": include_columns,
+                    "dialect_options": {"snowflake_include": include_columns},
                 }
             )
         return dict(indexes)  # type: ignore[arg-type]
@@ -2207,6 +2334,21 @@ class SnowflakeDialect(default.DefaultDialect):
     def connect(self, *cargs: Any, **cparams: Any) -> SnowflakeConnection:  # type: ignore[override]
         if _ENABLE_SQLALCHEMY_AS_APPLICATION_NAME:
             cparams = _update_connection_application_name(**cparams)
+
+        # --- Named-profile pass-through ------------------------------
+        # connect_args are merged into cparams by SQLAlchemy *after*
+        # create_connect_args(), so this is the first point where we see the
+        # final parameter set including connection_name.  Host, port and
+        # authentication are not validated here; the connector owns them.
+        connection_name = cparams.get("connection_name")
+        if connection_name is not None:
+            # Named-profile mode: the connector loads the profile from
+            # connections.toml.  Strip any empty/placeholder host or account
+            # that create_connect_args synthesized from an empty URL so they
+            # do not conflict with the profile's own values.
+            for key in ("host", "account"):
+                if key in cparams and not cparams[key]:
+                    del cparams[key]
 
         # Set decimal precision for full DECFLOAT support (38 digits)
         if self._enable_decfloat:

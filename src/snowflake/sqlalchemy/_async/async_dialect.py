@@ -14,30 +14,37 @@ compliance suite and other tooling that selects the async dialect via
 
 from __future__ import annotations
 
-import sys
 from typing import Any
 
 from sqlalchemy import pool, util
 from sqlalchemy.engine.url import URL
 
 from ..snowdialect import SnowflakeDialect
-from .dbapi_shim import AsyncAdapt_snowflake_dbapi
+from .dbapi_shim import ASYNC_FALLBACK_REMOVED_MSG, AsyncAdapt_snowflake_dbapi
 
-_MIN_PYTHON = (3, 10)
-_ASYNC_EXTRA_HINT = (
-    "Async Snowflake SQLAlchemy requires Python >= 3.10 and "
-    "snowflake-connector-python 5.x. Install with: "
-    "pip install 'snowflake-sqlalchemy[async]'"
+_GREENLET_HINT = (
+    "Async Snowflake SQLAlchemy requires the greenlet library, which SQLAlchemy "
+    "installs by default only on some platforms (not, e.g., on arm64 macOS). "
+    "Install it with: pip install 'snowflake-sqlalchemy[async]' (or 'sqlalchemy[asyncio]')"
 )
 
 
+def _import_greenlet() -> None:
+    """Import greenlet so missing SQLAlchemy[asyncio] fails with our extra hint."""
+    import greenlet  # noqa: F401
+
+
 def _require_async_runtime() -> None:
-    if sys.version_info < _MIN_PYTHON:
-        raise ImportError(_ASYNC_EXTRA_HINT)
+    """Fail at engine creation if ``greenlet`` is missing.
+
+    Without ``greenlet``, SQLAlchemy defers the failure to the first connect and
+    raises a generic ``ValueError``; raise an ``ImportError`` with the install
+    command instead.
+    """
     try:
-        from snowflake.connector import aio  # noqa: F401
+        _import_greenlet()
     except ImportError as exc:
-        raise ImportError(_ASYNC_EXTRA_HINT) from exc
+        raise ImportError(_GREENLET_HINT) from exc
 
 
 class SnowflakeDialect_async(SnowflakeDialect):
@@ -73,7 +80,13 @@ class SnowflakeDialect_async(SnowflakeDialect):
     def get_pool_class(cls, url: URL) -> Any:
         async_fallback = url.query.get("async_fallback", False)
         if util.asbool(async_fallback):
-            return pool.FallbackAsyncAdaptedQueuePool
+            # async_fallback (and FallbackAsyncAdaptedQueuePool) was removed in
+            # SQLAlchemy 2.1. Raise the same error as connect() so URL handling
+            # and the DBAPI shim stay consistent across 2.0 and 2.1.
+            fallback_pool = getattr(pool, "FallbackAsyncAdaptedQueuePool", None)
+            if fallback_pool is None:
+                raise NotImplementedError(ASYNC_FALLBACK_REMOVED_MSG)
+            return fallback_pool
         return pool.AsyncAdaptedQueuePool
 
     def get_driver_connection(self, connection: Any) -> Any:

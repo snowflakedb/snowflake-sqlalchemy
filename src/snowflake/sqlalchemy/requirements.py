@@ -16,17 +16,17 @@ class Requirements(SuiteRequirements):
     - isolation_level: snowflake only supports read committed
       - ref docs: https://docs.snowflake.com/en/sql-reference/transactions.html#label-txn-autocommit
                   https://docs.sqlalchemy.org/en/14/core/connections.html#setting-transaction-isolation-levels-including-dbapi-autocommit
-    - index_ddl_if_exists: index not supported in snowflake
+    - index_ddl_if_exists: indexes are only supported on hybrid tables in snowflake
     - non_updating_cascade: updating cascade supported
     - empty_inserts: not supported in snowflake
     - full_returning: not supported in snowflake
     - insert_executemany_returning: not supported in snowflake
     - returning: not supported in snowflake
-    - indexes_with_expressions: index not supported in snowflake
+    - indexes_with_expressions: indexes are only supported on hybrid tables in snowflake
     - check_constraint_reflection: not supported in snowflake
     - reflect_tables_no_columns: not supported in snowflake
     - server_side_cursors: no supported in snowflake
-    - index_reflects_included_columns: index not supported in snowflake
+    - index_reflects_included_columns: indexes are only supported on hybrid tables in snowflake
     - savepoints: not supported in snowflake
     - two_phase_transactions: not supported in snowflake
     - async_dialect: no await used

@@ -16,6 +16,7 @@ from sqlalchemy import (
     Column,
     Integer,
     MetaData,
+    String,
     Table,
     create_engine,
     insert,
@@ -24,7 +25,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Session, declarative_base
 
-from snowflake.sqlalchemy import ARRAY, OBJECT, VARIANT
+from snowflake.sqlalchemy import ARRAY, MAP, OBJECT, VARIANT
 
 from .conftest import url_factory
 
@@ -161,3 +162,76 @@ def test_orm_session_add_roundtrip(engine_json, orm_annotation_model):
         assert obj.meta_data == {"x_val": "2020-07-05", "load_type": 1}
         assert obj.tags == [1, 2, 3]
         assert obj.payload == {"nested": {"a": 1}}
+
+
+@pytest.fixture()
+def typed_structured_table(engine_json):
+    meta = MetaData()
+    table = Table(
+        f"json_typed_rt_{uuid.uuid4().hex}",
+        meta,
+        Column("id", Integer, primary_key=True),
+        Column("m", MAP(String(), Integer())),
+        Column("a", ARRAY(Integer())),
+        Column("o", OBJECT(x=(Integer(), False), name=String())),
+        Column("n", MAP(String(), ARRAY(Integer()))),
+    )
+    table.create(engine_json)
+    try:
+        yield table
+    finally:
+        table.drop(engine_json)
+
+
+def test_typed_structured_single_row_roundtrip(engine_json, typed_structured_table):
+    """Typed MAP/ARRAY/OBJECT accept Python dict/list on insert (previously
+    "255001: Binding data in type (dict) is not supported") and read back as
+    dict/list (previously JSON text)."""
+    t = typed_structured_table
+    with engine_json.begin() as conn:
+        conn.execute(
+            insert(t).values(
+                id=1,
+                m={"k": 1},
+                a=[1, 2],
+                o={"x": 1, "name": "n"},
+                n={"p": [3, 4]},
+            )
+        )
+        conn.execute(insert(t).values(id=2, m=None))
+    with engine_json.connect() as conn:
+        rows = conn.execute(select(t).order_by(t.c.id)).all()
+    assert rows[0].m == {"k": 1}
+    assert rows[0].a == [1, 2]
+    assert rows[0].o == {"x": 1, "name": "n"}
+    assert rows[0].n == {"p": [3, 4]}
+    assert rows[1].m is None
+
+
+def test_typed_structured_multivalues_and_update_roundtrip(
+    engine_json, typed_structured_table
+):
+    t = typed_structured_table
+    with engine_json.begin() as conn:
+        conn.execute(
+            insert(t).values([{"id": 3, "m": {"a": 3}}, {"id": 4, "m": {"a": 4}}])
+        )
+        conn.execute(update(t).where(t.c.id == 4).values(m={"b": 5}, a=[9]))
+    with engine_json.connect() as conn:
+        rows = conn.execute(
+            select(t.c.m, t.c.a).where(t.c.id.in_([3, 4])).order_by(t.c.id)
+        ).all()
+        matched = conn.execute(select(t.c.id).where(t.c.m == {"b": 5})).scalars()
+        assert list(matched) == [4]
+    assert [(r.m, r.a) for r in rows] == [({"a": 3}, None), ({"b": 5}, [9])]
+
+
+def test_typed_structured_json_string_bind_still_works(
+    engine_json, typed_structured_table
+):
+    """Pre-serialized JSON text is passed through (not double-encoded)."""
+    t = typed_structured_table
+    with engine_json.begin() as conn:
+        conn.execute(insert(t).values(id=5, m='{"s": 7}'))
+    with engine_json.connect() as conn:
+        assert conn.execute(select(t.c.m).where(t.c.id == 5)).scalar_one() == {"s": 7}

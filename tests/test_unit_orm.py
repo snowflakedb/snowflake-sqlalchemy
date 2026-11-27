@@ -10,8 +10,18 @@ No database connection required — these tests use in-memory SQLite.
 from unittest import mock
 
 import pytest
-from sqlalchemy import JSON, Column, Integer, String, func, text
-from sqlalchemy.orm import Session, declarative_base
+from sqlalchemy import JSON, Column, ForeignKey, Integer, String, func, select, text
+from sqlalchemy.orm import (
+    DeclarativeBase,
+    Mapped,
+    Session,
+    declarative_base,
+    mapped_column,
+)
+
+from snowflake.sqlalchemy.snowdialect import SnowflakeDialect
+
+from .util import compile_sql, sa20_only, sa21_only
 
 # ---------------------------------------------------------------------------
 # Helpers — model builders
@@ -409,3 +419,54 @@ class TestPublicExports:
         import snowflake.sqlalchemy as sf
 
         assert "snowflake_declarative_base" in sf.__all__
+
+
+# ---------------------------------------------------------------------------
+# SQLAlchemy 2.1: filter_by() searches all FROM entities (through the
+# dialect's ORM select compile-state plugin).
+# ---------------------------------------------------------------------------
+
+
+class _FilterByBase(DeclarativeBase):
+    pass
+
+
+class _FilterByParent(_FilterByBase):
+    __tablename__ = "parent"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str]
+
+
+class _FilterByChild(_FilterByBase):
+    __tablename__ = "child"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    parent_id: Mapped[int] = mapped_column(ForeignKey("parent.id"))
+    name: Mapped[str]
+    other: Mapped[str]
+
+
+def _filter_by_joined():
+    return select(_FilterByParent).join(
+        _FilterByChild, _FilterByParent.id == _FilterByChild.parent_id
+    )
+
+
+def test_filter_by_attribute_only_on_joined_entity():
+    sql = compile_sql(_filter_by_joined().filter_by(other="z"), SnowflakeDialect())
+    assert sql.endswith("WHERE child.other = %(other_1)s")
+
+
+@sa20_only
+def test_filter_by_ambiguous_attribute_sa20():
+    """2.0 silently uses the last joined entity (child.name, not parent.name)."""
+    sql = compile_sql(_filter_by_joined().filter_by(name="z"), SnowflakeDialect())
+    assert sql.endswith("WHERE child.name = %(name_1)s")
+
+
+@sa21_only
+def test_filter_by_ambiguous_attribute_sa21():
+    """BCR (SQLAlchemy core): ambiguous names now raise."""
+    from sqlalchemy.exc import AmbiguousColumnError  # SQLAlchemy 2.1+
+
+    with pytest.raises(AmbiguousColumnError, match="ambiguous"):
+        compile_sql(_filter_by_joined().filter_by(name="z"), SnowflakeDialect())

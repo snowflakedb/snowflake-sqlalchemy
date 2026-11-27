@@ -8,7 +8,9 @@
 
 Snowflake SQLAlchemy runs on the top of the Snowflake Connector for Python as a [dialect](http://docs.sqlalchemy.org/en/latest/dialects/) to bridge a Snowflake database and SQLAlchemy applications.
 
-> **v1.11.0 — Sensitive connection parameters:** We curated a set of connector parameters (`host`, `protocol`, `token_file_path`, `private_key_file`, `ocsp_response_cache_filename`, `connection_diag_log_path`, `crl_cache_dir`, `unsafe_file_write`, `unsafe_skip_file_permissions_check`) that can no longer be supplied through the URL query string — pass them via `connect_args` in `create_engine()` instead. If you encounter a possible behavioral change, set `SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS=1` and follow the instructions in [Sensitive connection parameters](#sensitive-connection-parameters).
+> **v2.1.0 — Async is opt-in:** SQLAlchemy 2.1 no longer installs `greenlet`, so the base install is sync-only. Async applications must install the extra, `pip install "snowflake-sqlalchemy[async]"`; without it the install succeeds but `create_async_engine()` raises an `ImportError`. Install the extra on SQLAlchemy 2.0 too: it installs `greenlet` only on some platforms (not on Apple Silicon macOS). See [Async Support](#async-support).
+
+> **v1.11.0 — Sensitive connection parameters:** We curated a set of connector parameters (`host`, `protocol`, `token_file_path`, `private_key_file`, `ocsp_response_cache_filename`, `connection_diag_log_path`, `crl_cache_dir`, `unsafe_file_write`, `unsafe_skip_file_permissions_check`) that can no longer be supplied through the URL query string — pass them via `connect_args` in `create_engine()` instead. See [Sensitive connection parameters](#sensitive-connection-parameters). The temporary `SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS` / `legacy_url_params` opt-out that 1.11.x offered was **removed in 2.x** and no longer has any effect.
 
 ---
 
@@ -31,6 +33,7 @@ Table of contents:
       * [Using a proxy server](#using-a-proxy-server)
       * [Using session parameters](#using-session-parameters)
     * [Opening and Closing Connection](#opening-and-closing-connection)
+    * [Transactions](#transactions)
     * [Auto-increment Behavior](#auto-increment-behavior)
     * [Object Name Case Handling](#object-name-case-handling)
     * [Index Support](#index-support)
@@ -90,13 +93,18 @@ pip install --upgrade snowflake-sqlalchemy
 
 `pip` automatically installs all required modules, including the Snowflake Connector for Python.
 
+2.x requires Python 3.11+. 2.1 requires SQLAlchemy `>=2.0.44,<2.2` and `snowflake-connector-python>=5.1.0,<6.0` (2.0.0 requires SQLAlchemy `>=2.0.44,<2.1` and `snowflake-connector-python>=5.0.0`).
+
+2.1 is a pre-release, so a plain `pip install` does not select it. Install it with `pip install "snowflake-sqlalchemy==2.1.0rc0"`, or allow pre-releases with `pip install --pre snowflake-sqlalchemy`. It is required for SQLAlchemy 2.1.
+If you are upgrading from 1.x, see the [1.x → 2.x migration guide](MIGRATING.md).
+
 ## Verifying Your Installation
 
 1. Create a file (e.g. `validate.py`) that contains the following Python sample code,
    which connects to Snowflake and displays the Snowflake version:
 
     ```python
-    from sqlalchemy import create_engine
+    from sqlalchemy import create_engine, text
 
     engine = create_engine(
         'snowflake://{user}:{password}@{account}/'.format(
@@ -107,7 +115,7 @@ pip install --upgrade snowflake-sqlalchemy
     )
     try:
         connection = engine.connect()
-        results = connection.execute('select current_version()').fetchone()
+        results = connection.execute(text('select current_version()')).fetchone()
         print(results[0])
     finally:
         connection.close()
@@ -128,26 +136,33 @@ pip install --upgrade snowflake-sqlalchemy
 
 ## Async Support
 
-> **Note:** Async support requires `snowflake-connector-python` 5.x,
-> currently a pre-release (`5.0.0rc3`). APIs may change before the connector's final
-> 5.0.0 release. Please report issues against this repo.
-
 Snowflake SQLAlchemy supports SQLAlchemy's [`asyncio` extension](https://docs.sqlalchemy.org/en/20/orm/extensions/asyncio.html),
 letting you use `AsyncEngine` / `AsyncSession` for non-blocking database access.
 
-Async support is part of the standard install:
+Async support is opt-in: install the `[async]` extra, which pulls
+`SQLAlchemy[asyncio]` and with it [`greenlet`](https://pypi.org/project/greenlet/).
+The base install is sync-only.
 
 ```shell
-pip install snowflake-sqlalchemy
+pip install "snowflake-sqlalchemy[async]"
 ```
+
+SQLAlchemy 2.1 no longer installs greenlet by default. SQLAlchemy 2.0 does so only
+on some platforms (e.g. `x86_64`, `aarch64`, `amd64`, but not Apple Silicon macOS,
+which reports `arm64`), so install the extra on 2.0 too rather than relying on it.
 
 **Requirements:**
 
-* Python **3.11+** (the connector requires 3.11+ as of `5.0.0rc3`; it dropped
+* Python **3.11+** (connector 5.x requires 3.11+; it dropped
   Python 3.10 support, which pip enforces by refusing to resolve the connector
   at all on 3.10).
 * `snowflake-connector-python` 5.x (installed as a base dependency).
-* SQLAlchemy 2.0.44+ (< 2.1; see [DESCRIPTION.md](DESCRIPTION.md) for why the ceiling is pinned).
+* SQLAlchemy 2.0.44 through 2.1.x (`SQLAlchemy>=2.0.44,<2.2`).
+* `greenlet`, via the `[async]` extra. Without it, async engine creation raises an
+  `ImportError`: `create_snowflake_async_engine()` names
+  `snowflake-sqlalchemy[async]`; on SQLAlchemy 2.1, importing
+  `sqlalchemy.ext.asyncio` itself fails first with SQLAlchemy's own
+  `sqlalchemy[asyncio]` hint. Either install fixes it.
 
 ### Quick Start
 
@@ -200,7 +215,7 @@ engine = create_snowflake_async_engine(
 * **DBAPI shim over `snowflake.connector.aio`.** Internally, the dialect wraps
   the connector's native async driver behind a synchronous-looking PEP-249
   facade, bridging blocking calls onto the running event loop via greenlets
-  (`await_only`). This is the same strategy used by SQLAlchemy's own
+  (`await_`). This is the same strategy used by SQLAlchemy's own
   `aiomysql`/`asyncmy`/`aiosqlite` dialects.
 
 ### Usage Notes
@@ -218,18 +233,18 @@ Snowflake-specific, but worth restating here:
 * **Dispose engines across event loops.** An `AsyncEngine` (and its pool)
   should not be reused across unrelated event loops without
   `await engine.dispose()` first.
-* **`?async_fallback=true`** on the URL switches the pool implementation to
-  `FallbackAsyncAdaptedQueuePool` instead of the default
-  `AsyncAdaptedQueuePool` — only needed for the same edge cases SQLAlchemy
-  documents for other async dialects (a real running event loop isn't always
-  guaranteed at pool-checkout time).
+* **`?async_fallback=true`** on the URL is SQLAlchemy **2.0 only**. It switches
+  the pool to `FallbackAsyncAdaptedQueuePool` instead of `AsyncAdaptedQueuePool`
+  for the edge cases SQLAlchemy documents for other async dialects (a real
+  running event loop isn't always guaranteed at pool-checkout time). SQLAlchemy
+  2.1 removed fallback mode; the dialect raises `NotImplementedError` if the
+  flag is set.
 
 ### Known Limitations
 
-* The connector dependency is a **pre-release** (`5.0.0rc3`); expect possible
-  breaking changes before final 5.0.0.
-* Test coverage in this repo currently focuses on PUT/GET file-transfer
-  operations; broad ORM/session behavior is inherited from SQLAlchemy's
+* Async test coverage in this repo covers PUT/GET file transfers and basic ORM
+  operations (CRUD, rollback, eager loading, cascades, `VARIANT` round-trips,
+  reflection); other ORM/session behavior is inherited from SQLAlchemy's
   generic asyncio machinery rather than independently verified here.
 * No async-aware Alembic migration runner — Alembic migrations should
   continue to use a sync engine/connection.
@@ -310,6 +325,16 @@ engine = create_engine(URL(
 
 **Note**:
 After login, the initial database, schema, warehouse and role specified in the connection string can always be changed for the session.
+
+#### Special characters in database and schema names
+
+The URL path holds `database` or `database/schema`. A `/` outside double quotes separates the two; inside a quoted identifier such as `"a/b"` it is part of the name.
+
+- **`snowflake.sqlalchemy.URL` helper (recommended):** pass names as you would write them in SQL, e.g. `database='"my db"', schema='"a/b"'`. The helper percent-encodes them and the connector receives the original values on SQLAlchemy 2.0 and 2.1.
+- **`sqlalchemy.engine.URL.create(...)`:** on SQLAlchemy 2.1, values are used as passed, so `database='my%20db'` stays `my%20db`. On 2.0 the dialect cannot tell a `URL.create` value from a parsed URL string, so a name that contains `%` and no raw `"` is percent-decoded (`my%20db` becomes `my db`); `database='"a%20b"'` stays `"a%20b"` on both. To keep a literal `%` on 2.0, quote the name or write the `%` as `%25`.
+- **Hand-written URL strings:** percent-encode reserved characters in each name with `urllib.parse.quote(name, safe="")`, including the double quotes. SQLAlchemy 2.1 decodes the path itself; on 2.0 the dialect decodes each database/schema name that has no raw `"` (unquoted Snowflake identifiers cannot contain `%`, so such a `%` is always an encoding). A name containing a raw `"` is treated as unencoded on 2.0; the other name in the path is still decoded.
+
+Since 2.1 support was added, the helper encodes a space as `%20` rather than `+` (SQLAlchemy 2.1 does not decode `+` in the path). For URLs built with the helper, the resulting connection values are unchanged; only the generated URL string differs. Hand-written URLs are read differently than in 2.0.0: a `+` in the path stays `+` (it used to become a space), and an encoded `%2F` outside quotes separates the database from the schema. See the [migration guide](MIGRATING.md#9-url-database-and-schema-path-decoding-21).
 
 The following example calls the `create_engine` method with the user name `testuser1`, password `0123456`, account name `abc123`, database `testdb`, schema `public`, warehouse `testwh`, and role `myrole`:
 
@@ -401,7 +426,8 @@ local files, or relax a connector safety check:
 
 `host`, `protocol`, `token_file_path`, `private_key_file`, `ocsp_response_cache_filename`,
 `connection_diag_log_path`, `crl_cache_dir`, `unsafe_file_write`,
-`unsafe_skip_file_permissions_check`.
+`unsafe_skip_file_permissions_check`, `unsafe_skip_config_file_permissions_check`,
+`crl_unsafe_skip_file_permissions_check`.
 
 Passing any of these in the URL query string raises `sqlalchemy.exc.ArgumentError`. Supply
 them through the `connect_args` parameter of `create_engine` instead, which is fully under
@@ -435,8 +461,52 @@ of the connection URL authority) and percent-encodes `user`, so URL metacharacte
 Earlier releases provided a temporary `legacy_url_params` opt-out (engine kwarg or the
 `SNOWFLAKE_SQLALCHEMY_LEGACY_URL_PARAMS` environment variable) that re-enabled forwarding the
 blocked parameters from the URL query string. **This shim has been removed.** Passing
-`legacy_url_params` to `create_engine()` now raises an `ArgumentError`, and the environment
-variable has no effect. Move any affected parameters to `connect_args=` as shown above.
+`legacy_url_params` as a `create_engine()` keyword now raises
+`TypeError: Invalid argument(s) 'legacy_url_params' sent to create_engine()`; as a URL query
+parameter it is not rejected but has no effect, and the environment variable has no effect. Move any affected parameters to `connect_args=` as shown above.
+
+#### Strict host-name mode
+
+Set `SNOWFLAKE_SQLALCHEMY_STRICT_HOST_NAMES=true` (or pass `strict_host_names=True` to `create_engine`) to stop the dialect from inferring or appending any domain to host names. In this mode the dialect forwards connection parameters (host, port, authentication, `connection_name`, ...) to the Snowflake Connector for Python unchanged and does not validate them; connection establishment, including how a missing parameter is handled, is the connector's responsibility. When strict mode is disabled (the default), existing behaviour is unchanged.
+
+All connection parameters supplied through SQLAlchemy:
+
+```python
+from sqlalchemy import create_engine
+
+engine = create_engine(
+    "snowflake://",
+    strict_host_names=True,
+    connect_args={
+        "account": "myaccount",
+        "host": "myaccount.snowflake.example.com",
+        "port": 443,
+        "user": "myuser",
+        "authenticator": "SNOWFLAKE_JWT",
+        "private_key_file": "/path/to/rsa_key.p8",
+        "database": "mydb",
+        "schema": "public",
+        "warehouse": "mywh",
+    },
+)
+```
+
+A named profile from the connector's `connections.toml`:
+
+```python
+from sqlalchemy import create_engine
+from snowflake.sqlalchemy import URL
+
+engine = create_engine(
+    URL(account=""),
+    strict_host_names=True,
+    connect_args={"connection_name": "my_profile"},
+)
+```
+
+The dialect passes the profile name to the connector, which reads and applies `connections.toml` itself.
+
+`AzureContainer` accepts an explicit `endpoint` (e.g. `endpoint="blob.storage.example.com"`); in strict mode an `AzureContainer` without one fails at SQL compilation instead of defaulting to `.blob.core.windows.net`.
 
 ### Opening and Closing Connection
 
@@ -490,6 +560,31 @@ engine = create_engine(
 > authentication failures (for example revoked credentials) are **not** flagged as disconnects,
 > because reconnecting cannot recover them — they surface as errors so the underlying problem stays
 > visible.
+
+### Transactions
+
+Connections use the `READ COMMITTED` isolation level with the connector's autocommit
+turned off, so SQLAlchemy's standard transaction APIs work as documented:
+`connection.begin()`, `engine.begin()`, commit-as-you-go (`connection.commit()` /
+`connection.rollback()`), and ORM `Session` transactions. Uncommitted changes are
+not visible to other connections, and a connection returned to the pool without a
+commit is rolled back. Use `execution_options(isolation_level="AUTOCOMMIT")` to
+commit each statement immediately instead.
+
+Two Snowflake [transaction rules](https://docs.snowflake.com/en/sql-reference/transactions)
+differ from many other databases:
+
+* **DDL commits the open transaction.** Each DDL statement (`CREATE`, `ALTER`,
+  `DROP`, …) runs in its own transaction, and any transaction that is already open
+  is committed first. DML issued before the DDL can no longer be rolled back, so
+  keep DDL out of units of work that you may need to roll back.
+* **No savepoints.** `connection.begin_nested()` and `Session.begin_nested()` raise
+  `sqlalchemy.exc.ProgrammingError`, because Snowflake rejects `SAVEPOINT`. The
+  outer transaction stays open and can still be committed or rolled back.
+
+A statement that fails inside a transaction does not end it: the changes made
+before the failure are kept or discarded by your subsequent `commit()` or
+`rollback()`.
 
 ### Auto-increment Behavior
 
@@ -1141,8 +1236,10 @@ Notes:
 * The flag is **on by default**. To restore the previous behaviour (reading raw JSON strings and
   writing pre-serialized values with the `PARSE_JSON` pattern above), set
   `enable_structured_type_json=False`; this is deprecated and emits a `DeprecationWarning`.
-* Typed/structured columns (`OBJECT(...)` with fields, `ARRAY(<type>)`, `MAP(...)`) keep their
-  native connector handling and are not wrapped in `PARSE_JSON`.
+* Typed/structured columns (`OBJECT(...)` with fields, `ARRAY(<type>)`, `MAP(...)`) are handled the
+  same way, except the value is also cast to the declared type (`CAST(PARSE_JSON(...) AS MAP(...))`),
+  since Snowflake rejects a plain `VARIANT` for them. See
+  [Structured Data Types Support](#structured-data-types-support).
 * The engine-level `json_serializer` / `json_deserializer` (below) are used when provided.
 * `RETURNING` is not supported for inserts into semi-structured columns while this flag is on.
 * **`executemany` (2+ parameter sets) is not supported** while this flag is on. Passing a list of
@@ -1225,6 +1322,21 @@ engine = create_engine(
 This module defines custom SQLAlchemy types for Snowflake structured data, specifically for **Iceberg tables**.
 The types —**MAP**, **OBJECT**, and **ARRAY**— allow you to store complex data structures in your SQLAlchemy models.
 For detailed information, refer to the Snowflake [Structured data types](https://docs.snowflake.com/en/sql-reference/data-types-structured) documentation.
+
+With [`enable_structured_type_json`](#automatic-json-handling-with-enable_structured_type_json) (the
+default), these columns accept Python `dict`/`list` values on insert and update, and return
+`dict`/`list` on read:
+
+```python
+conn.execute(t.insert().values(id=1, map_col={"k": 1}, array_col=["a", "b"]))
+# INSERT INTO t (id, map_col, array_col)
+#   SELECT ?, CAST(PARSE_JSON(?) AS MAP(...)), CAST(PARSE_JSON(?) AS ARRAY(...))
+```
+
+The same limitations as the untyped path apply (no `RETURNING`, no `executemany`, no
+`literal_binds`). Read values are decoded from JSON and are not converted to the declared element
+types: for example, `MAP(NUMBER, ...)` keys are returned as strings and `DATE` elements as ISO
+strings.
 
 ---
 

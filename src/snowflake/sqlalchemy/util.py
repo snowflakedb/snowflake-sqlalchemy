@@ -110,6 +110,15 @@ def _url(**db_parameters: Any) -> str:
             port=db_parameters["port"] if "port" in db_parameters else 443,
         )
         specified_parameters += ["user", "password", "host", "port"]
+    elif db_parameters["account"] == "":
+        # Profile-only mode (SNOW-4248737): the caller intends
+        # to supply connection_name via connect_args and does not need a real
+        # account in the URL.  Produce a valid URL with an empty authority.
+        ret = "snowflake://{user}:{password}@/".format(
+            user=user,
+            password=_rfc_1738_quote(db_parameters.get("password", "")),
+        )
+        specified_parameters += ["user", "password", "account"]
     elif "region" not in db_parameters:
         account = db_parameters["account"]
         _validate_url_field("account", account)
@@ -133,10 +142,14 @@ def _url(**db_parameters: Any) -> str:
         specified_parameters += ["user", "password", "account", "region"]
 
     if "database" in db_parameters:
-        ret += quote_plus(db_parameters["database"])
+        # RFC 3986 ``quote`` (space as ``%20``, ``+`` as ``%2B``), not
+        # ``quote_plus``. SQLAlchemy 2.1 decodes the path with ``unquote``,
+        # which does not treat ``+`` as space, so plus-encoding would make
+        # spaces and literal ``+`` indistinguishable.
+        ret += _url_quote(db_parameters["database"], safe="")
         specified_parameters += ["database"]
         if "schema" in db_parameters:
-            ret += "/" + quote_plus(db_parameters["schema"])
+            ret += "/" + _url_quote(db_parameters["schema"], safe="")
             specified_parameters += ["schema"]
     elif "schema" in db_parameters:
         raise exc.ArgumentError("schema cannot be specified without database")
@@ -430,9 +443,9 @@ def create_snowflake_engine(
 
     When ``case_sensitive_schema=True`` the schema name is wrapped in URL-encoded
     double-quotes (``%22``) so that Snowflake treats the name as case-sensitive.
-    ``create_connect_args`` calls ``unquote_plus`` on the database/schema
-    component, which turns ``%22myschema%22`` back into ``'"myschema"'`` (with
-    literal double-quotes) before forwarding to the Snowflake connector.
+    ``create_connect_args`` percent-decodes the database/schema path when
+    encodings remain, turning ``%22myschema%22`` back into ``'"myschema"'``
+    (literal double-quotes) before forwarding to the Snowflake connector.
 
     Parameters
     ----------
@@ -469,6 +482,11 @@ def create_snowflake_async_engine(
     :class:`sqlalchemy.ext.asyncio.AsyncEngine` via
     :func:`sqlalchemy.ext.asyncio.create_async_engine`.
     """
+    # Check greenlet first: on SA 2.1 importing sqlalchemy.ext.asyncio already
+    # fails without it, which would hide the snowflake-sqlalchemy[async] hint.
+    from ._async.async_dialect import _require_async_runtime
+
+    _require_async_runtime()
     from sqlalchemy.ext.asyncio import create_async_engine
 
     url = _snowflake_engine_url(base_url, schema, case_sensitive_schema)

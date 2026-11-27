@@ -2,9 +2,11 @@
 # Copyright (c) 2012-2023 Snowflake Computing Inc. All rights reserved.
 #
 
+import datetime as datetime_
 from datetime import datetime
 
 import pytest
+import sqlalchemy as sa
 from sqlalchemy import (
     Boolean,
     Column,
@@ -19,7 +21,7 @@ from sqlalchemy import (
     insert,
     select,
 )
-from sqlalchemy.schema import DropColumnComment, DropTableComment
+from sqlalchemy.schema import CreateTable, DropColumnComment, DropTableComment
 from sqlalchemy.sql import column, quoted_name, table
 from sqlalchemy.testing.assertions import AssertsCompiledSQL
 
@@ -33,6 +35,8 @@ from snowflake.sqlalchemy import (
     snowdialect,
 )
 from src.snowflake.sqlalchemy.snowdialect import SnowflakeDialect
+
+from .util import compile_sql, sa20_only, sa21_only
 
 table1 = table(
     "table1", column("id", Integer), column("name", String), column("value", Integer)
@@ -64,6 +68,29 @@ class TestSnowflakeCompiler(AssertsCompiledSQL):
             statement,
             "SELECT CURRENT_TIMESTAMP AS now_1",
             dialect="snowflake",
+        )
+
+    def test_window_rows_between_uses_integer_literals(self):
+        """Snowflake requires numeric ROWS BETWEEN bounds as literals.
+
+        Mirrors SA 2.1 WindowFunctionTest (MSSQL-style ``literal_execute``).
+        """
+        some_table = table(
+            "some_table", column("col1", Integer), column("col2", Integer)
+        )
+        statement = select(
+            func.max(some_table.c.col2).over(
+                order_by=[some_table.c.col1],
+                rows=(5, 20),
+            )
+        )
+        self.assert_compile(
+            statement,
+            "SELECT max(some_table.col2) OVER (ORDER BY some_table.col1 "
+            "ROWS BETWEEN 5 FOLLOWING AND 20 FOLLOWING) AS anon_1 "
+            "FROM some_table",
+            dialect="snowflake",
+            render_postcompile=True,
         )
 
     def test_collate_order_by(self):
@@ -226,7 +253,7 @@ class TestSnowflakeCompiler(AssertsCompiledSQL):
         )
 
 
-def test_quoted_name_label(engine_testaccount):
+def test_quoted_name_label():
     test_cases = [
         # quote name
         {
@@ -785,3 +812,314 @@ class TestStructuredTypeGetItem(AssertsCompiledSQL):
             dialect="snowflake",
             checkparams={"mp_int_1": 1},
         )
+
+
+# ---------------------------------------------------------------------------
+# SQLAlchemy 2.1 migration guide: compiler-level changes.
+# https://docs.sqlalchemy.org/en/21/changelog/migration_21.html
+# ``*_sa20`` / ``*_sa21`` pairs pin a behaviour change between the lines.
+# ---------------------------------------------------------------------------
+
+_SF = SnowflakeDialect()
+_frame_t = table("t", column("x", Integer), column("d", sa.Date))
+
+
+def _sf_sql(stmt, literal_binds=False):
+    return compile_sql(stmt, _SF, literal_binds=literal_binds)
+
+
+def _frame(start, order_by=None):
+    return func.sum(_frame_t.c.x).over(
+        order_by=_frame_t.c.x if order_by is None else order_by,
+        range_=sa.FrameClause(
+            start=start,
+            end=None,
+            start_frame_type=sa.FrameClauseType.PRECEDING,
+            end_frame_type=sa.FrameClauseType.CURRENT,
+        ),
+    )
+
+
+class TestFloatLiteralCast:
+    """Python float literals render as DOUBLE in CAST (not a BCR: DOUBLE is a
+    Snowflake synonym of FLOAT)."""
+
+    @sa20_only
+    def test_cast_to_float_literal_type_sa20(self):
+        stmt = select(sa.cast(_frame_t.c.x, sa.literal(1.5).type))
+        assert _sf_sql(stmt) == "SELECT CAST(t.x AS FLOAT) AS x FROM t"
+
+    @sa21_only
+    def test_cast_to_float_literal_type_sa21(self):
+        stmt = select(sa.cast(_frame_t.c.x, sa.literal(1.5).type))
+        assert _sf_sql(stmt) == "SELECT CAST(t.x AS DOUBLE) AS x FROM t"
+
+    def test_division_by_float_is_not_cast(self):
+        stmt = select(_frame_t.c.x / 5.0)
+        assert _sf_sql(stmt, literal_binds=True) == "SELECT t.x / 5.0 AS anon_1 FROM t"
+
+    def test_double_and_float_ddl(self):
+        ddl = CreateTable(
+            Table("dd", MetaData(), Column("a", sa.Double), Column("b", sa.Float))
+        )
+        assert _sf_sql(ddl) == "CREATE TABLE dd ( a DOUBLE, b FLOAT )"
+
+
+class TestWindowFrameBounds:
+    """Frame bounds render as inline literals; 2.1 adds non-integer RANGE."""
+
+    def test_rows_integer_bounds(self):
+        stmt = select(func.sum(_frame_t.c.x).over(order_by=_frame_t.c.x, rows=(-2, 0)))
+        assert _sf_sql(stmt, literal_binds=True) == (
+            "SELECT sum(t.x) OVER (ORDER BY t.x ROWS BETWEEN 2 PRECEDING "
+            "AND CURRENT ROW) AS anon_1 FROM t"
+        )
+
+    def test_range_integer_bounds(self):
+        stmt = select(
+            func.sum(_frame_t.c.x).over(order_by=_frame_t.c.x, range_=(None, 10))
+        )
+        assert _sf_sql(stmt, literal_binds=True) == (
+            "SELECT sum(t.x) OVER (ORDER BY t.x RANGE BETWEEN UNBOUNDED "
+            "PRECEDING AND 10 FOLLOWING) AS anon_1 FROM t"
+        )
+
+    @sa20_only
+    def test_range_float_tuple_sa20(self):
+        """2.0 silently truncates float bounds: -1.5 becomes 1 PRECEDING."""
+        stmt = select(
+            func.sum(_frame_t.c.x).over(order_by=_frame_t.c.x, range_=(-1.5, 0))
+        )
+        assert _sf_sql(stmt, literal_binds=True) == (
+            "SELECT sum(t.x) OVER (ORDER BY t.x RANGE BETWEEN 1 PRECEDING "
+            "AND CURRENT ROW) AS anon_1 FROM t"
+        )
+
+    @sa21_only
+    def test_range_float_tuple_sa21(self):
+        """BCR (SQLAlchemy core): 2.1 raises instead of truncating."""
+        with pytest.raises(sa.exc.ArgumentError, match="only integer or none"):
+            func.sum(_frame_t.c.x).over(order_by=_frame_t.c.x, range_=(-1.5, 0))
+
+    @sa21_only
+    @pytest.mark.parametrize("start, rendered", [(1.5, "1.5"), (3, "3")])
+    def test_frame_clause_numeric_bound(self, start, rendered):
+        assert _sf_sql(select(_frame(start)), literal_binds=True) == (
+            f"SELECT sum(t.x) OVER (ORDER BY t.x RANGE BETWEEN {rendered} "
+            "PRECEDING AND CURRENT ROW) AS anon_1 FROM t"
+        )
+
+    @sa21_only
+    def test_frame_clause_interval_bound(self):
+        stmt = select(_frame(datetime_.timedelta(days=7), order_by=_frame_t.c.d))
+        expected = (
+            "SELECT sum(t.x) OVER (ORDER BY t.d RANGE BETWEEN INTERVAL '7 DAYS' "
+            "PRECEDING AND CURRENT ROW) AS anon_1 FROM t"
+        )
+        assert _sf_sql(stmt, literal_binds=True) == expected
+        # Bounds are literal_execute: render them as execution does.
+        compiled = stmt.compile(dialect=_SF)
+        executed = compiled._process_parameters_for_postcompile(
+            compiled.construct_params()
+        ).statement
+        assert " ".join(executed.split()) == expected
+
+
+class TestForeignKeyDuplicateColumns:
+    """2.1 accepts FOREIGN KEY (a, a) and rejects column-count mismatches."""
+
+    def _create(self, local, remote):
+        m = MetaData()
+        Table("r", m, Column("x", Integer), Column("y", Integer))
+        t = Table(
+            "fk",
+            m,
+            Column("a", Integer),
+            Column("b", Integer),
+            sa.ForeignKeyConstraint(local, remote),
+        )
+        return _sf_sql(CreateTable(t))
+
+    @sa20_only
+    def test_duplicate_local_column_sa20(self):
+        with pytest.raises(sa.exc.ArgumentError, match="duplicate source column"):
+            self._create(["a", "a"], ["r.x", "r.y"])
+
+    @sa21_only
+    def test_duplicate_local_column_sa21(self):
+        assert self._create(["a", "a"], ["r.x", "r.y"]).endswith(
+            "FOREIGN KEY(a, a) REFERENCES r (x, y) )"
+        )
+
+    @sa20_only
+    def test_column_count_mismatch_sa20(self):
+        """2.0 accepts the mismatch and silently drops a column."""
+        assert self._create(["a", "a"], ["r.x"]).endswith(
+            "FOREIGN KEY(a) REFERENCES r (x) )"
+        )
+
+    @sa21_only
+    def test_column_count_mismatch_sa21(self):
+        """BCR (SQLAlchemy core): the silently-wrong 2.0 form now raises."""
+        with pytest.raises(sa.exc.ArgumentError, match="must match the number"):
+            self._create(["a", "a"], ["r.x"])
+
+    def test_duplicate_remote_column(self):
+        assert self._create(["a", "b"], ["r.x", "r.x"]).endswith(
+            "FOREIGN KEY(a, b) REFERENCES r (x, x) )"
+        )
+
+
+_del_users = table("users", column("id"), column("name"))
+_del_addresses = table("addresses", column("id"), column("user_id"), column("email"))
+
+
+class TestDeleteUsing:
+    """DELETE ... USING; ``Delete.using()`` is new in 2.1."""
+
+    def test_implicit_extra_from_renders_using(self):
+        stmt = sa.delete(_del_users).where(_del_users.c.id == _del_addresses.c.user_id)
+        assert _sf_sql(stmt) == (
+            "DELETE FROM users USING addresses WHERE users.id = addresses.user_id"
+        )
+
+    @sa21_only
+    def test_explicit_using_table(self):
+        stmt = (
+            sa.delete(_del_users)
+            .using(_del_addresses)
+            .where(_del_users.c.id == _del_addresses.c.user_id)
+        )
+        assert _sf_sql(stmt) == (
+            "DELETE FROM users USING addresses WHERE users.id = addresses.user_id"
+        )
+
+    @sa21_only
+    def test_explicit_using_join_with_target_is_rejected(self):
+        """Snowflake rejects the target inside USING ("duplicate alias")."""
+        stmt = (
+            sa.delete(_del_users)
+            .using(
+                _del_users.outerjoin(
+                    _del_addresses, _del_users.c.id == _del_addresses.c.user_id
+                )
+            )
+            .where(_del_addresses.c.email == "e")
+        )
+        with pytest.raises(sa.exc.CompileError, match="duplicate alias"):
+            _sf_sql(stmt)
+
+    @sa21_only
+    def test_explicit_using_join_with_aliased_target(self):
+        u2 = _del_users.alias("u2")
+        stmt = (
+            sa.delete(_del_users)
+            .using(u2.outerjoin(_del_addresses, u2.c.id == _del_addresses.c.user_id))
+            .where(_del_users.c.id == u2.c.id, _del_addresses.c.id.is_(None))
+        )
+        assert _sf_sql(stmt) == (
+            "DELETE FROM users USING users AS u2 LEFT OUTER JOIN addresses "
+            "ON u2.id = addresses.user_id "
+            "WHERE users.id = u2.id AND addresses.id IS NULL"
+        )
+
+    @sa21_only
+    def test_explicit_using_join_without_target(self):
+        other = table("other", column("addr_id"))
+        stmt = (
+            sa.delete(_del_users)
+            .using(_del_addresses.join(other, _del_addresses.c.id == other.c.addr_id))
+            .where(_del_users.c.id == _del_addresses.c.user_id)
+        )
+        assert _sf_sql(stmt) == (
+            "DELETE FROM users USING addresses JOIN other "
+            "ON addresses.id = other.addr_id WHERE users.id = addresses.user_id"
+        )
+
+    @sa21_only
+    def test_explicit_using_subquery_containing_target(self):
+        sub = (
+            select(_del_users.c.id)
+            .outerjoin(_del_addresses, _del_users.c.id == _del_addresses.c.user_id)
+            .where(_del_addresses.c.id.is_(None))
+            .subquery("s")
+        )
+        stmt = sa.delete(_del_users).using(sub).where(_del_users.c.id == sub.c.id)
+        assert _sf_sql(stmt) == (
+            "DELETE FROM users USING (SELECT users.id AS id FROM users "
+            "LEFT OUTER JOIN addresses ON users.id = addresses.user_id "
+            "WHERE addresses.id IS NULL) AS s WHERE users.id = s.id"
+        )
+
+
+@sa21_only
+class TestCreateViewAndTableAs:
+    """2.1 CreateView / CreateTableAs / Select.into(): generic DDL is valid
+    Snowflake syntax."""
+
+    def _table(self):
+        m = MetaData()
+        return m, Table("ua", m, Column("id", Integer), Column("name", String))
+
+    def test_create_view(self):
+        m, ua = self._table()
+        view = sa.CreateView(select(ua).where(ua.c.name == "x"), "v1", metadata=m)
+        assert _sf_sql(view) == (
+            "CREATE VIEW v1 AS SELECT ua.id, ua.name FROM ua WHERE ua.name = 'x'"
+        )
+
+    @pytest.mark.parametrize(
+        "kwargs, prefix",
+        [
+            ({"or_replace": True}, "CREATE OR REPLACE VIEW v1 AS"),
+            ({"materialized": True}, "CREATE MATERIALIZED VIEW v1 AS"),
+            ({"temporary": True}, "CREATE TEMPORARY VIEW v1 AS"),
+        ],
+    )
+    def test_create_view_options(self, kwargs, prefix):
+        _, ua = self._table()
+        assert _sf_sql(sa.CreateView(select(ua), "v1", **kwargs)).startswith(prefix)
+
+    def test_create_table_as(self):
+        _, ua = self._table()
+        assert _sf_sql(sa.CreateTableAs(select(ua.c.id), "t2")) == (
+            "CREATE TABLE t2 AS SELECT ua.id FROM ua"
+        )
+
+    def test_select_into(self):
+        _, ua = self._table()
+        assert _sf_sql(select(ua.c.id).into("t3")) == (
+            "CREATE TABLE t3 AS SELECT ua.id FROM ua"
+        )
+
+
+@sa21_only
+def test_syntax_extension_post_body():
+    """2.1 SyntaxExtension / Select.ext() compiles with the Snowflake compiler."""
+    from sqlalchemy.ext.compiler import compiles
+    from sqlalchemy.sql import ClauseElement, SyntaxExtension, visitors
+
+    class _Comment(SyntaxExtension, ClauseElement):
+        _traverse_internals = [("text", visitors.InternalTraversal.dp_string)]
+
+        def __init__(self, text: str):
+            self.text = text
+
+        def apply_to_select(self, select_stmt) -> None:
+            select_stmt.apply_syntax_extension_point(
+                self.append_replacing_same_type, "post_body"
+            )
+
+    @compiles(_Comment)
+    def _compile(element, compiler, **kw):
+        return f"/* {element.text} */"
+
+    stmt = select(_frame_t.c.x).ext(_Comment("tag"))
+    assert _sf_sql(stmt) == "SELECT t.x FROM t /* tag */"
+
+
+def test_params_binds_value():
+    """2.1 reimplemented Executable.params(); output is unchanged."""
+    stmt = select(_frame_t).where(_frame_t.c.x == sa.bindparam("p")).params(p=1)
+    assert _sf_sql(stmt) == "SELECT t.x, t.d FROM t WHERE t.x = %(p)s"
+    assert stmt.compile(dialect=_SF).params == {"p": 1}

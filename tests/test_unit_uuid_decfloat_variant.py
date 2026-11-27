@@ -271,9 +271,12 @@ class TestSemiStructuredJsonWrite:
         "type_",
         [ARRAY(UUID()), MAP(sqltypes.VARCHAR(), UUID()), OBJECT(u=UUID())],
     )
-    def test_typed_structured_columns_keep_native_handling(self, type_):
-        """Typed columns bypass the JSON path and go straight to the connector."""
-        assert type_.bind_processor(_dialect(native_uuid=True)) is None
+    def test_typed_structured_columns_use_json_path(self, type_):
+        """Typed columns are serialized like the untyped forms (the connector
+        cannot bind a dict/list), including the ``uuid.UUID`` hook."""
+        process = type_.bind_processor(_dialect(native_uuid=True))
+        assert process is not None
+        assert json.loads(process({"u": SAMPLE_UUID})) == {"u": SAMPLE_UUID_STR}
 
 
 class TestReflection:
@@ -329,6 +332,57 @@ class TestReadPath:
         assert "AS UUID)" in compiled
 
 
+class TestNativeUuidValueConversion:
+    """With native UUID enabled, the connector neither binds nor returns
+    ``uuid.UUID``, so the dialect must convert values itself."""
+
+    @staticmethod
+    def _processors(type_, *, native_uuid):
+        dialect = _dialect(native_uuid=native_uuid)
+        impl = type_.dialect_impl(dialect)
+        return impl.bind_processor(dialect), impl.result_processor(dialect, None)
+
+    def test_bind_uuid_as_string(self):
+        bind, _ = self._processors(Uuid(as_uuid=True), native_uuid=True)
+        assert bind is not None
+        assert bind(SAMPLE_UUID) == SAMPLE_UUID_STR
+        assert bind(None) is None
+
+    def test_bind_string_passes_through(self):
+        bind, _ = self._processors(Uuid(as_uuid=False), native_uuid=True)
+        assert bind is not None
+        assert bind(SAMPLE_UUID_STR) == SAMPLE_UUID_STR
+        assert bind(SAMPLE_UUID) == SAMPLE_UUID_STR
+        assert bind(None) is None
+
+    def test_result_as_uuid_true_returns_uuid(self):
+        _, result = self._processors(Uuid(as_uuid=True), native_uuid=True)
+        assert result is not None
+        assert result(SAMPLE_UUID_STR) == SAMPLE_UUID
+        assert result(None) is None
+
+    def test_result_as_uuid_false_returns_str(self):
+        _, result = self._processors(Uuid(as_uuid=False), native_uuid=True)
+        assert result is not None
+        assert result(SAMPLE_UUID_STR) == SAMPLE_UUID_STR
+        assert result(None) is None
+
+    def test_explicit_uuid_type_binds_when_enabled(self):
+        bind, result = self._processors(UUID(), native_uuid=True)
+        assert bind(SAMPLE_UUID) == SAMPLE_UUID_STR
+        assert result(SAMPLE_UUID_STR) == SAMPLE_UUID
+
+    def test_default_char32_behaviour_unchanged(self):
+        bind, result = self._processors(Uuid(as_uuid=True), native_uuid=False)
+        assert bind(SAMPLE_UUID) == SAMPLE_UUID.hex
+        assert result(SAMPLE_UUID.hex) == SAMPLE_UUID
+
+    def test_ddl_unchanged(self):
+        assert "c UUID" in _render(Uuid(), native_uuid=True)
+        assert "c CHAR(32)" in _render(Uuid(), native_uuid=False)
+        assert "c UUID" in _render(UUID(), native_uuid=False)
+
+
 @pytest.fixture()
 def native_uuid_engine(request):
     """An engine with ``enable_native_uuid=True``."""
@@ -347,6 +401,7 @@ def native_uuid_engine(request):
     return engine
 
 
+@pytest.mark.integ
 class TestIntegration:
     """Round-trips against a real Snowflake account."""
 
@@ -447,3 +502,43 @@ class TestIntegration:
             assert amt_out == DECFLOAT_38
         finally:
             metadata.drop_all(engine_testaccount)
+
+    def test_native_uuid_column_bind_and_as_uuid(self, native_uuid_engine):
+        """``uuid.UUID`` binds to a native UUID column and reads honour ``as_uuid``."""
+        table_name = "test_native_uuid_bind_" + random_string(5)
+        metadata = MetaData()
+        table = Table(
+            table_name,
+            metadata,
+            Column("id", sqltypes.Integer, primary_key=True),
+            Column("u", Uuid(as_uuid=True)),
+            Column("s", Uuid(as_uuid=False)),
+        )
+        metadata.create_all(native_uuid_engine)
+        try:
+            with native_uuid_engine.begin() as conn:
+                conn.execute(
+                    table.insert().values(id=1, u=SAMPLE_UUID, s=SAMPLE_UUID_STR)
+                )
+                conn.execute(
+                    table.insert(),
+                    [
+                        {"id": 2, "u": SAMPLE_UUID, "s": SAMPLE_UUID_STR},
+                        {"id": 3, "u": None, "s": None},
+                    ],
+                )
+            with native_uuid_engine.connect() as conn:
+                rows = conn.execute(
+                    select(table.c.u, table.c.s).order_by(table.c.id)
+                ).fetchall()
+                found = conn.execute(
+                    select(table.c.id).where(table.c.u == SAMPLE_UUID)
+                ).fetchall()
+            assert rows[0] == (SAMPLE_UUID, SAMPLE_UUID_STR)
+            assert isinstance(rows[0][0], uuid.UUID)
+            assert isinstance(rows[0][1], str)
+            assert rows[1] == (SAMPLE_UUID, SAMPLE_UUID_STR)
+            assert rows[2] == (None, None)
+            assert sorted(r[0] for r in found) == [1, 2]
+        finally:
+            metadata.drop_all(native_uuid_engine)
